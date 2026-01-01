@@ -4,6 +4,7 @@ mod error;
 mod license;
 mod lockfile;
 mod markdown;
+mod ports;
 mod sbom_generation;
 mod shared;
 
