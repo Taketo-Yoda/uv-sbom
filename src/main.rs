@@ -64,33 +64,50 @@ fn run() -> Result<()> {
         }
     })?;
 
-    let packages = lockfile::parse_lockfile(&lockfile_content).map_err(|e| {
-        SbomError::LockfileParseError {
-            path: lockfile_path.clone(),
-            details: e.to_string(),
-        }
-    })?;
+    // Parse lockfile based on output format
+    let output_content = if matches!(args.format, OutputFormat::Markdown) {
+        // Markdown format: parse with dependency information
+        eprintln!("📊 Parsing dependency information...");
 
-    eprintln!("✅ Detected {} package(s)", packages.len());
+        // Try to get project name from pyproject.toml
+        let project_name = get_project_name(&project_path)?;
 
-    // Fetch license information
-    eprintln!("🔍 Fetching license information...");
-    let packages_with_licenses = license::fetch_licenses(packages)?;
+        let dep_info = lockfile::parse_lockfile_with_deps(&lockfile_content, &project_name)
+            .map_err(|e| SbomError::LockfileParseError {
+                path: lockfile_path.clone(),
+                details: e.to_string(),
+            })?;
 
-    // Generate output according to format
-    let format_name = match args.format {
-        OutputFormat::Json => "CycloneDX JSON",
-        OutputFormat::Markdown => "Markdown",
-    };
-    eprintln!("📝 Generating {} format output...", format_name);
+        eprintln!("✅ Detected {} package(s)", dep_info.all_packages.len());
+        eprintln!("   - Direct dependencies: {}", dep_info.direct_dependencies.len());
+        eprintln!("   - Transitive dependencies: {}",
+                  dep_info.transitive_dependencies.values().map(|v| v.len()).sum::<usize>());
 
-    let output_content = match args.format {
-        OutputFormat::Json => {
-            let bom = cyclonedx::generate_bom(packages_with_licenses)
-                .context("Failed to generate CycloneDX BOM")?;
-            serde_json::to_string_pretty(&bom).context("Failed to serialize JSON")?
-        }
-        OutputFormat::Markdown => markdown::generate_table(packages_with_licenses),
+        // Fetch license information
+        eprintln!("🔍 Fetching license information...");
+        let packages_with_licenses = license::fetch_licenses(dep_info.all_packages.clone())?;
+
+        eprintln!("📝 Generating Markdown format output...");
+        markdown::generate_detailed_table(dep_info, packages_with_licenses)
+    } else {
+        // JSON format: parse without dependency information
+        let packages = lockfile::parse_lockfile(&lockfile_content).map_err(|e| {
+            SbomError::LockfileParseError {
+                path: lockfile_path.clone(),
+                details: e.to_string(),
+            }
+        })?;
+
+        eprintln!("✅ Detected {} package(s)", packages.len());
+
+        // Fetch license information
+        eprintln!("🔍 Fetching license information...");
+        let packages_with_licenses = license::fetch_licenses(packages)?;
+
+        eprintln!("📝 Generating CycloneDX JSON format output...");
+        let bom = cyclonedx::generate_bom(packages_with_licenses)
+            .context("Failed to generate CycloneDX BOM")?;
+        serde_json::to_string_pretty(&bom).context("Failed to serialize JSON")?
     };
 
     // Determine output destination
@@ -143,6 +160,28 @@ fn validate_project_path(path: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn get_project_name(project_path: &Path) -> Result<String> {
+    let pyproject_path = project_path.join("pyproject.toml");
+
+    if !pyproject_path.exists() {
+        anyhow::bail!("pyproject.toml not found in project directory");
+    }
+
+    let pyproject_content = fs::read_to_string(&pyproject_path)
+        .context("Failed to read pyproject.toml")?;
+
+    let pyproject: toml::Value = toml::from_str(&pyproject_content)
+        .context("Failed to parse pyproject.toml")?;
+
+    let project_name = pyproject
+        .get("project")
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .context("Project name not found in pyproject.toml")?;
+
+    Ok(project_name.to_string())
 }
 
 #[cfg(test)]

@@ -1,5 +1,7 @@
-use crate::lockfile::Package;
+use crate::lockfile::{DependencyInfo, Package};
+use std::collections::HashMap;
 
+#[allow(dead_code)]
 pub fn generate_table(packages: Vec<Package>) -> String {
     let mut output = String::new();
 
@@ -22,6 +24,102 @@ pub fn generate_table(packages: Vec<Package>) -> String {
             "| {} | {} | {} | {} |\n",
             pkg.name, pkg.version, license, description
         ));
+    }
+
+    output
+}
+
+pub fn generate_detailed_table(dep_info: DependencyInfo, packages: Vec<Package>) -> String {
+    let mut output = String::new();
+
+    // Create package lookup map
+    let package_map: HashMap<String, &Package> = packages
+        .iter()
+        .map(|p| (p.name.clone(), p))
+        .collect();
+
+    // Header
+    output.push_str("# Software Bill of Materials (SBOM)\n\n");
+
+    // Component Inventory Section
+    output.push_str("## Component Inventory\n\n");
+    output.push_str("A comprehensive list of all software components and libraries included in this project.\n\n");
+    output.push_str("| Package | Version | License | Description |\n");
+    output.push_str("|---------|---------|---------|-------------|\n");
+
+    for pkg_name in &dep_info.all_packages {
+        if let Some(pkg) = package_map.get(&pkg_name.name) {
+            let license = pkg.license.as_deref().unwrap_or("N/A");
+            let description = pkg
+                .description
+                .as_deref()
+                .unwrap_or("")
+                .replace('|', "\\|")
+                .replace('\n', " ");
+
+            output.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                pkg.name, pkg.version, license, description
+            ));
+        }
+    }
+
+    // Direct Dependencies Section
+    output.push_str("\n## Direct Dependencies\n\n");
+    output.push_str("Primary packages explicitly defined in the project configuration(e.g., pyproject.toml).\n\n");
+    output.push_str("| Package | Version | License | Description |\n");
+    output.push_str("|---------|---------|---------|-------------|\n");
+
+    for dep_name in &dep_info.direct_dependencies {
+        if let Some(pkg) = package_map.get(dep_name) {
+            let license = pkg.license.as_deref().unwrap_or("N/A");
+            let description = pkg
+                .description
+                .as_deref()
+                .unwrap_or("")
+                .replace('|', "\\|")
+                .replace('\n', " ");
+
+            output.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                pkg.name, pkg.version, license, description
+            ));
+        }
+    }
+
+    // Transitive Dependencies Section
+    if !dep_info.transitive_dependencies.is_empty() {
+        output.push_str("\n## Transitive Dependencies\n\n");
+        output.push_str("Secondary dependencies introduced by the primary packages.\n\n");
+
+        for (direct_dep, trans_deps) in &dep_info.transitive_dependencies {
+            if trans_deps.is_empty() {
+                continue;
+            }
+
+            output.push_str(&format!("### Dependencies for {}\n\n", direct_dep));
+            output.push_str("| Package | Version | License | Description |\n");
+            output.push_str("|---------|---------|---------|-------------|\n");
+
+            for trans_dep_name in trans_deps {
+                if let Some(pkg) = package_map.get(trans_dep_name) {
+                    let license = pkg.license.as_deref().unwrap_or("N/A");
+                    let description = pkg
+                        .description
+                        .as_deref()
+                        .unwrap_or("")
+                        .replace('|', "\\|")
+                        .replace('\n', " ");
+
+                    output.push_str(&format!(
+                        "| {} | {} | {} | {} |\n",
+                        pkg.name, pkg.version, license, description
+                    ));
+                }
+            }
+
+            output.push('\n');
+        }
     }
 
     output

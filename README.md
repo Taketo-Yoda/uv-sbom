@@ -8,7 +8,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 🔍 Automatically fetches license information from PyPI with retry logic
 - 📊 Outputs in multiple formats:
   - **CycloneDX 1.6** JSON format (standard SBOM format)
-  - **Markdown** table format with package details
+  - **Markdown** format with direct and transitive dependencies clearly separated
 - 🚀 Fast and standalone - written in Rust
 - 💾 Output to stdout or file
 - 🛡️ Robust error handling with helpful error messages and suggestions
@@ -74,7 +74,7 @@ uv-sbom
 
 ### Output formats
 
-Generate a Markdown table:
+Generate a Markdown table with direct and transitive dependencies:
 
 ```bash
 uv-sbom --format markdown
@@ -127,10 +127,35 @@ Options:
 ```markdown
 # Software Bill of Materials (SBOM)
 
+## Component Inventory
+
+A comprehensive list of all software components and libraries included in this project.
+
 | Package | Version | License | Description |
 |---------|---------|---------|-------------|
-| requests | 2.31.0 | Apache 2.0 | HTTP library for Python |
-| numpy | 1.24.0 | BSD License | Fundamental package for array computing |
+| janome | 0.5.0 | AL2 | Japanese morphological analysis engine. |
+| pydantic | 2.12.5 | N/A | Data validation using Python type hints |
+| ...additional packages... |
+
+## Direct Dependencies
+
+Primary packages explicitly defined in the project configuration(e.g., pyproject.toml).
+
+| Package | Version | License | Description |
+|---------|---------|---------|-------------|
+| janome | 0.5.0 | AL2 | Japanese morphological analysis engine. |
+| pydantic | 2.12.5 | N/A | Data validation using Python type hints |
+
+## Transitive Dependencies
+
+Secondary dependencies introduced by the primary packages.
+
+### Dependencies for pydantic
+
+| Package | Version | License | Description |
+|---------|---------|---------|-------------|
+| annotated-types | 0.7.0 | MIT License | Reusable constraint types to use with typing.Annotated |
+| pydantic-core | 2.41.5 | N/A | Core functionality for Pydantic validation and serialization |
 ```
 
 ### CycloneDX JSON format
