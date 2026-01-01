@@ -1,1 +1,5 @@
-// Services will be implemented in Phase 1.3
+mod dependency_analyzer;
+mod sbom_generator;
+
+pub use dependency_analyzer::DependencyAnalyzer;
+pub use sbom_generator::SbomGenerator;
