@@ -1,3 +1,4 @@
+mod adapters;
 mod application;
 mod cli;
 mod cyclonedx;
