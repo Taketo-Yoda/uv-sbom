@@ -4,10 +4,12 @@ mod error;
 mod license;
 mod lockfile;
 mod markdown;
+mod shared;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
 use cli::{Args, OutputFormat};
-use error::SbomError;
+use shared::error::SbomError;
+use shared::Result;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
