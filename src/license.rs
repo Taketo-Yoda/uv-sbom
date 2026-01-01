@@ -13,6 +13,8 @@ struct PyPiInfo {
     #[serde(default)]
     license: Option<String>,
     #[serde(default)]
+    license_expression: Option<String>,
+    #[serde(default)]
     summary: Option<String>,
     #[serde(default)]
     classifiers: Vec<String>,
@@ -109,11 +111,17 @@ fn fetch_from_pypi(
 
     let package_info: PyPiPackageInfo = response.json()?;
 
-    // Retrieve license information (from license field or classifiers)
+    // Retrieve license information (priority: license field -> license_expression -> classifiers)
     let license = package_info
         .info
         .license
         .filter(|l| !l.is_empty() && l != "UNKNOWN")
+        .or_else(|| {
+            package_info
+                .info
+                .license_expression
+                .filter(|l| !l.is_empty())
+        })
         .or_else(|| extract_license_from_classifiers(&package_info.info.classifiers));
 
     Ok((license, package_info.info.summary))
