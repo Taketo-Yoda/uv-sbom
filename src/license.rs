@@ -31,14 +31,14 @@ pub fn fetch_licenses(packages: Vec<Package>) -> Result<Vec<Package>> {
 
     for (idx, mut package) in packages.into_iter().enumerate() {
         eprint!(
-            "\r   進捗: {}/{} ({:.1}%) - {}",
+            "\r   Progress: {}/{} ({:.1}%) - {}",
             idx + 1,
             total,
             ((idx + 1) as f64 / total as f64) * 100.0,
             package.name
         );
 
-        // PyPI APIから情報を取得（リトライ付き）
+        // Fetch information from PyPI API (with retry)
         match fetch_from_pypi_with_retry(&client, &package.name, &package.version) {
             Ok((license, summary)) => {
                 package.license = license;
@@ -47,11 +47,11 @@ pub fn fetch_licenses(packages: Vec<Package>) -> Result<Vec<Package>> {
             }
             Err(e) => {
                 eprintln!(
-                    "\n   ⚠️  警告: {}のライセンス情報取得に失敗: {}",
+                    "\n   ⚠️  Warning: Failed to fetch license information for {}: {}",
                     package.name, e
                 );
                 failed += 1;
-                // 失敗してもパッケージは含める（ライセンス情報なしで）
+                // Include package even if failed (without license information)
             }
         }
 
@@ -60,7 +60,7 @@ pub fn fetch_licenses(packages: Vec<Package>) -> Result<Vec<Package>> {
 
     eprintln!();
     eprintln!(
-        "✅ ライセンス情報取得完了: 成功 {}/{}, 失敗 {}",
+        "✅ License information retrieval complete: {} succeeded out of {}, {} failed",
         successful, total, failed
     );
 
@@ -81,7 +81,7 @@ fn fetch_from_pypi_with_retry(
             Err(e) => {
                 last_error = Some(e);
                 if attempt < MAX_RETRIES {
-                    // 短い待機時間を設けてリトライ
+                    // Retry after a short wait
                     std::thread::sleep(Duration::from_millis(100 * attempt as u64));
                 }
             }
@@ -102,14 +102,14 @@ fn fetch_from_pypi(
 
     if !response.status().is_success() {
         anyhow::bail!(
-            "PyPI APIがステータスコード{}を返しました",
+            "PyPI API returned status code {}",
             response.status()
         );
     }
 
     let package_info: PyPiPackageInfo = response.json()?;
 
-    // ライセンス情報の取得（license フィールドまたは classifiers から）
+    // Retrieve license information (from license field or classifiers)
     let license = package_info
         .info
         .license

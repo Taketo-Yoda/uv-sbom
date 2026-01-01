@@ -152,12 +152,12 @@ uv-sbom provides detailed error messages with helpful suggestions:
 
 Example error message:
 ```
-❌ エラーが発生しました:
+❌ An error occurred:
 
-uv.lockファイルが見つかりません: /path/to/project/uv.lock
+uv.lock file not found: /path/to/project/uv.lock
 
-💡 ヒント: プロジェクトディレクトリ「/path/to/project」にuv.lockファイルが存在しません。
-   uvプロジェクトのルートディレクトリで実行するか、--pathオプションで正しいパスを指定してください。
+💡 Hint: uv.lock file does not exist in project directory "/path/to/project".
+   Please run in the root directory of a uv project, or specify the correct path with the --path option.
 ```
 
 ## Troubleshooting

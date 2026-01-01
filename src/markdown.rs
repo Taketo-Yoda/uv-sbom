@@ -71,4 +71,58 @@ mod tests {
 
         assert!(table.contains("Description with \\| pipe"));
     }
+
+    #[test]
+    fn test_generate_table_removes_newlines() {
+        let packages = vec![Package {
+            name: "test".to_string(),
+            version: "1.0.0".to_string(),
+            description: Some("Description with\nmultiple\nlines".to_string()),
+            license: Some("MIT".to_string()),
+        }];
+
+        let table = generate_table(packages);
+
+        assert!(table.contains("Description with multiple lines"));
+        assert!(!table.contains("Description with\nmultiple"));
+    }
+
+    #[test]
+    fn test_generate_table_empty_packages() {
+        let packages = vec![];
+        let table = generate_table(packages);
+
+        assert!(table.contains("# Software Bill of Materials (SBOM)"));
+        assert!(table.contains("| Package | Version | License | Description |"));
+        // Should only have header rows
+        assert_eq!(table.lines().count(), 4); // Title + empty line + header + separator
+    }
+
+    #[test]
+    fn test_generate_table_no_license_no_description() {
+        let packages = vec![Package {
+            name: "minimal-package".to_string(),
+            version: "0.0.1".to_string(),
+            description: None,
+            license: None,
+        }];
+
+        let table = generate_table(packages);
+
+        assert!(table.contains("| minimal-package | 0.0.1 | N/A |  |"));
+    }
+
+    #[test]
+    fn test_generate_table_escapes_both_pipe_and_newline() {
+        let packages = vec![Package {
+            name: "complex".to_string(),
+            version: "1.0.0".to_string(),
+            description: Some("Description | with pipe\nand newline".to_string()),
+            license: Some("Apache 2.0".to_string()),
+        }];
+
+        let table = generate_table(packages);
+
+        assert!(table.contains("Description \\| with pipe and newline"));
+    }
 }

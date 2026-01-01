@@ -14,7 +14,7 @@ impl std::str::FromStr for OutputFormat {
             "json" => Ok(OutputFormat::Json),
             "markdown" | "md" => Ok(OutputFormat::Markdown),
             _ => Err(format!(
-                "無効なフォーマット: {}。'json'または'markdown'を指定してください",
+                "Invalid format: {}. Please specify 'json' or 'markdown'",
                 s
             )),
         }
@@ -43,5 +43,64 @@ pub struct Args {
 impl Args {
     pub fn parse_args() -> Self {
         Self::parse()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_output_format_from_str_json() {
+        let format = OutputFormat::from_str("json").unwrap();
+        assert!(matches!(format, OutputFormat::Json));
+    }
+
+    #[test]
+    fn test_output_format_from_str_json_case_insensitive() {
+        let format = OutputFormat::from_str("JSON").unwrap();
+        assert!(matches!(format, OutputFormat::Json));
+
+        let format = OutputFormat::from_str("Json").unwrap();
+        assert!(matches!(format, OutputFormat::Json));
+    }
+
+    #[test]
+    fn test_output_format_from_str_markdown() {
+        let format = OutputFormat::from_str("markdown").unwrap();
+        assert!(matches!(format, OutputFormat::Markdown));
+    }
+
+    #[test]
+    fn test_output_format_from_str_md() {
+        let format = OutputFormat::from_str("md").unwrap();
+        assert!(matches!(format, OutputFormat::Markdown));
+    }
+
+    #[test]
+    fn test_output_format_from_str_markdown_case_insensitive() {
+        let format = OutputFormat::from_str("MARKDOWN").unwrap();
+        assert!(matches!(format, OutputFormat::Markdown));
+
+        let format = OutputFormat::from_str("MD").unwrap();
+        assert!(matches!(format, OutputFormat::Markdown));
+    }
+
+    #[test]
+    fn test_output_format_from_str_invalid() {
+        let result = OutputFormat::from_str("invalid");
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.contains("Invalid format"));
+        assert!(error.contains("invalid"));
+        assert!(error.contains("json"));
+        assert!(error.contains("markdown"));
+    }
+
+    #[test]
+    fn test_output_format_from_str_empty() {
+        let result = OutputFormat::from_str("");
+        assert!(result.is_err());
     }
 }

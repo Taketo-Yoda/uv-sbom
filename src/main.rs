@@ -15,13 +15,13 @@ use std::process;
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("\n❌ エラーが発生しました:\n");
+        eprintln!("\n❌ An error occurred:\n");
         eprintln!("{}", e);
 
-        // エラーチェーンの表示
+        // Display error chain
         let mut source = e.source();
         while let Some(err) = source {
-            eprintln!("\n原因: {}", err);
+            eprintln!("\nCaused by: {}", err);
             source = err.source();
         }
 
@@ -33,30 +33,30 @@ fn main() {
 fn run() -> Result<()> {
     let args = Args::parse_args();
 
-    // プロジェクトディレクトリの検証
+    // Validate project directory
     let project_dir = args.path.as_deref().unwrap_or(".");
     let project_path = PathBuf::from(project_dir);
 
     validate_project_path(&project_path)?;
 
-    // uv.lockファイルのパスを構築
+    // Build uv.lock file path
     let lockfile_path = project_path.join("uv.lock");
 
-    // uv.lockファイルの存在確認
+    // Check if uv.lock file exists
     if !lockfile_path.exists() {
         return Err(SbomError::LockfileNotFound {
             path: lockfile_path.clone(),
             suggestion: format!(
-                "プロジェクトディレクトリ「{}」にuv.lockファイルが存在しません。\n   \
-                 uvプロジェクトのルートディレクトリで実行するか、--pathオプションで正しいパスを指定してください。",
+                "uv.lock file does not exist in project directory \"{}\".\n   \
+                 Please run in the root directory of a uv project, or specify the correct path with the --path option.",
                 project_path.display()
             ),
         }
         .into());
     }
 
-    // uv.lockファイルの読み込みとパース
-    eprintln!("📖 uv.lockファイルを読み込んでいます: {}", lockfile_path.display());
+    // Load and parse uv.lock file
+    eprintln!("📖 Loading uv.lock file: {}", lockfile_path.display());
     let lockfile_content = fs::read_to_string(&lockfile_path).map_err(|e| {
         SbomError::LockfileParseError {
             path: lockfile_path.clone(),
@@ -71,39 +71,39 @@ fn run() -> Result<()> {
         }
     })?;
 
-    eprintln!("✅ {}個のパッケージを検出しました", packages.len());
+    eprintln!("✅ Detected {} package(s)", packages.len());
 
-    // ライセンス情報の取得
-    eprintln!("🔍 ライセンス情報を取得しています...");
+    // Fetch license information
+    eprintln!("🔍 Fetching license information...");
     let packages_with_licenses = license::fetch_licenses(packages)?;
 
-    // 出力フォーマットに応じて生成
+    // Generate output according to format
     let format_name = match args.format {
         OutputFormat::Json => "CycloneDX JSON",
         OutputFormat::Markdown => "Markdown",
     };
-    eprintln!("📝 {}形式で出力を生成しています...", format_name);
+    eprintln!("📝 Generating {} format output...", format_name);
 
     let output_content = match args.format {
         OutputFormat::Json => {
             let bom = cyclonedx::generate_bom(packages_with_licenses)
-                .context("CycloneDX BOMの生成に失敗しました")?;
-            serde_json::to_string_pretty(&bom).context("JSONのシリアライズに失敗しました")?
+                .context("Failed to generate CycloneDX BOM")?;
+            serde_json::to_string_pretty(&bom).context("Failed to serialize JSON")?
         }
         OutputFormat::Markdown => markdown::generate_table(packages_with_licenses),
     };
 
-    // 出力先の決定
+    // Determine output destination
     if let Some(output_path) = args.output {
         let output_pathbuf = PathBuf::from(&output_path);
 
-        // 出力ディレクトリの存在確認
+        // Check if output directory exists
         if let Some(parent) = output_pathbuf.parent() {
             if !parent.exists() && parent != Path::new("") {
                 return Err(SbomError::FileWriteError {
-                    path: output_pathbuf,
+                    path: output_pathbuf.clone(),
                     details: format!(
-                        "親ディレクトリが存在しません: {}",
+                        "Parent directory does not exist: {}",
                         parent.display()
                     ),
                 }
@@ -115,11 +115,11 @@ fn run() -> Result<()> {
             path: output_pathbuf.clone(),
             details: e.to_string(),
         })?;
-        eprintln!("✅ 出力完了: {}", output_pathbuf.display());
+        eprintln!("✅ Output complete: {}", output_pathbuf.display());
     } else {
         io::stdout()
             .write_all(output_content.as_bytes())
-            .context("標準出力への書き込みに失敗しました")?;
+            .context("Failed to write to stdout")?;
     }
 
     Ok(())
@@ -129,7 +129,7 @@ fn validate_project_path(path: &Path) -> Result<()> {
     if !path.exists() {
         return Err(SbomError::InvalidProjectPath {
             path: path.to_path_buf(),
-            reason: "ディレクトリが存在しません".to_string(),
+            reason: "Directory does not exist".to_string(),
         }
         .into());
     }
@@ -137,10 +137,56 @@ fn validate_project_path(path: &Path) -> Result<()> {
     if !path.is_dir() {
         return Err(SbomError::InvalidProjectPath {
             path: path.to_path_buf(),
-            reason: "ディレクトリではありません".to_string(),
+            reason: "Not a directory".to_string(),
         }
         .into());
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_validate_project_path_valid_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let result = validate_project_path(temp_dir.path());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_project_path_nonexistent() {
+        let nonexistent_path = PathBuf::from("/nonexistent/path/that/does/not/exist");
+        let result = validate_project_path(&nonexistent_path);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        let err_string = format!("{}", err);
+        assert!(err_string.contains("Directory does not exist"));
+    }
+
+    #[test]
+    fn test_validate_project_path_file_not_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test_file.txt");
+        fs::write(&file_path, "test content").unwrap();
+
+        let result = validate_project_path(&file_path);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        let err_string = format!("{}", err);
+        assert!(err_string.contains("Not a directory"));
+    }
+
+    #[test]
+    fn test_validate_project_path_current_directory() {
+        let current_dir = std::env::current_dir().unwrap();
+        let result = validate_project_path(&current_dir);
+        assert!(result.is_ok());
+    }
 }
