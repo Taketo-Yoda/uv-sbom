@@ -14,6 +14,40 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 🛡️ Robust error handling with helpful error messages and suggestions
 - 📈 Progress tracking during license information retrieval
 
+## Scope and Key Differences from CycloneDX
+
+### SBOM Scope
+
+This tool generates SBOMs based on **uv.lock** file contents, which includes:
+- Direct runtime dependencies
+- Transitive runtime dependencies
+- Development dependencies (if locked in uv.lock)
+
+**What's NOT included:**
+- Build system dependencies (e.g., hatchling, setuptools)
+- Publishing tools (e.g., twine, build)
+- Dependencies only present in the virtual environment but not locked in uv.lock
+
+### Comparison with CycloneDX Official Tools
+
+As of 2026-01-01, the official CycloneDX tools do not yet support uv directly. When generating SBOMs for Python projects:
+
+| Aspect | uv-sbom (this tool) | CycloneDX Official Tools |
+|--------|---------------------|--------------------------|
+| **Data Source** | `uv.lock` file | `.venv` virtual environment |
+| **Scope** | Production runtime dependencies only | Entire supply chain including build/dev tools |
+| **Package Count** | Typically fewer (e.g., 16 packages) | Typically more (e.g., 38+ packages) |
+| **Use Case** | Production security scanning | Comprehensive supply chain audit |
+| **Accuracy** | Reflects locked dependencies | Reflects installed packages |
+
+### Which Tool Should You Use?
+
+- **For production security scanning**: Use `uv-sbom` to focus on dependencies that will be deployed to production
+- **For comprehensive supply chain audit**: Use CycloneDX official tools to include all development and build-time dependencies
+- **For regulatory compliance**: Check your specific requirements - some regulations may require the comprehensive approach
+
+The focused approach of `uv-sbom` reduces noise in security vulnerability scanning by excluding build-time dependencies that don't ship with the final application.
+
 ## Installation
 
 ### From source

@@ -11,10 +11,12 @@ pub enum SbomError {
         path: PathBuf,
         details: String,
     },
+    #[allow(dead_code)]
     LicenseFetchError {
         package_name: String,
         details: String,
     },
+    #[allow(dead_code)]
     OutputGenerationError {
         format: String,
         details: String,

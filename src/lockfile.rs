@@ -19,12 +19,14 @@ struct UvPackage {
     name: String,
     version: String,
     #[serde(default)]
+    #[allow(dead_code)]
     source: Option<UvSource>,
 }
 
 #[derive(Debug, Deserialize)]
 struct UvSource {
     #[serde(default)]
+    #[allow(dead_code)]
     registry: Option<String>,
 }
 
