@@ -1,3 +1,4 @@
+mod application;
 mod cli;
 mod cyclonedx;
 mod error;

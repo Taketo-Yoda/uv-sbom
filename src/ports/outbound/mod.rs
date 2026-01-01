@@ -9,7 +9,7 @@ pub mod output_presenter;
 pub mod progress_reporter;
 pub mod project_config_reader;
 
-pub use formatter::SbomFormatter;
+pub use formatter::{EnrichedPackage, SbomFormatter};
 pub use license_repository::LicenseRepository;
 pub use lockfile_reader::LockfileReader;
 pub use output_presenter::OutputPresenter;
