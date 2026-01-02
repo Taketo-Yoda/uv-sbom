@@ -144,7 +144,7 @@ A comprehensive list of all software components and libraries included in this p
 | Package | Version | License | Description |
 |---------|---------|---------|-------------|
 | janome | 0.5.0 | AL2 | Japanese morphological analysis engine. |
-| pydantic | 2.12.5 | N/A | Data validation using Python type hints |
+| pydantic | 2.12.5 | MIT | Data validation using Python type hints |
 | ...additional packages... |
 
 ## Direct Dependencies
@@ -154,7 +154,7 @@ Primary packages explicitly defined in the project configuration(e.g., pyproject
 | Package | Version | License | Description |
 |---------|---------|---------|-------------|
 | janome | 0.5.0 | AL2 | Japanese morphological analysis engine. |
-| pydantic | 2.12.5 | N/A | Data validation using Python type hints |
+| pydantic | 2.12.5 | MIT | Data validation using Python type hints |
 
 ## Transitive Dependencies
 
@@ -165,7 +165,7 @@ Secondary dependencies introduced by the primary packages.
 | Package | Version | License | Description |
 |---------|---------|---------|-------------|
 | annotated-types | 0.7.0 | MIT License | Reusable constraint types to use with typing.Annotated |
-| pydantic-core | 2.41.5 | N/A | Core functionality for Pydantic validation and serialization |
+| pydantic-core | 2.41.5 | MIT | Core functionality for Pydantic validation and serialization |
 ```
 
 ### CycloneDX JSON形式
