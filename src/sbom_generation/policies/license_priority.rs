@@ -188,7 +188,6 @@ mod tests {
 
         assert_eq!(info.license_text(), Some("MIT"));
         assert_eq!(info.description(), summary.as_deref());
-        assert!(info.has_license());
     }
 
     #[test]
@@ -205,7 +204,7 @@ mod tests {
             summary,
         );
 
-        assert!(!info.has_license());
+        assert_eq!(info.license_text(), None);
     }
 
     #[test]

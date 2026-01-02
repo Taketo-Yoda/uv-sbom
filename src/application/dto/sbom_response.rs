@@ -27,18 +27,4 @@ impl SbomResponse {
             metadata,
         }
     }
-
-    /// Creates a response without dependency graph information
-    pub fn without_dependencies(enriched_packages: Vec<EnrichedPackage>, metadata: SbomMetadata) -> Self {
-        Self::new(enriched_packages, None, metadata)
-    }
-
-    /// Creates a response with dependency graph information
-    pub fn with_dependencies(
-        enriched_packages: Vec<EnrichedPackage>,
-        dependency_graph: DependencyGraph,
-        metadata: SbomMetadata,
-    ) -> Self {
-        Self::new(enriched_packages, Some(dependency_graph), metadata)
-    }
 }

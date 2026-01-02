@@ -68,14 +68,6 @@ impl Package {
     pub fn version(&self) -> &str {
         self.version.as_str()
     }
-
-    pub fn package_name(&self) -> &PackageName {
-        &self.name
-    }
-
-    pub fn package_version(&self) -> &Version {
-        &self.version
-    }
 }
 
 #[cfg(test)]

@@ -125,7 +125,6 @@ mod tests {
         let project_name = PackageName::new("myproject".to_string()).unwrap();
         let graph = DependencyAnalyzer::analyze(packages, &project_name, &dependency_map).unwrap();
 
-        assert_eq!(graph.total_package_count(), 3);
         assert_eq!(graph.direct_dependency_count(), 1);
         assert_eq!(graph.direct_dependencies()[0].as_str(), "requests");
 
@@ -152,7 +151,6 @@ mod tests {
         let project_name = PackageName::new("myproject".to_string()).unwrap();
         let graph = DependencyAnalyzer::analyze(packages, &project_name, &dependency_map).unwrap();
 
-        assert_eq!(graph.total_package_count(), 2);
         assert_eq!(graph.direct_dependency_count(), 1);
         assert_eq!(graph.transitive_dependency_count(), 0);
     }
@@ -177,7 +175,6 @@ mod tests {
         let project_name = PackageName::new("myproject".to_string()).unwrap();
         let graph = DependencyAnalyzer::analyze(packages, &project_name, &dependency_map).unwrap();
 
-        assert_eq!(graph.total_package_count(), 4);
         assert_eq!(graph.direct_dependency_count(), 2);
         assert_eq!(graph.transitive_dependency_count(), 1);
     }
@@ -239,7 +236,6 @@ mod tests {
         let project_name = PackageName::new("myproject".to_string()).unwrap();
         let graph = DependencyAnalyzer::analyze(packages, &project_name, &dependency_map).unwrap();
 
-        assert_eq!(graph.total_package_count(), 1);
         assert_eq!(graph.direct_dependency_count(), 0);
         assert_eq!(graph.transitive_dependency_count(), 0);
     }

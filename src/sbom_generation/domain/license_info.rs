@@ -20,10 +20,6 @@ impl LicenseInfo {
     pub fn description(&self) -> Option<&str> {
         self.description.as_deref()
     }
-
-    pub fn has_license(&self) -> bool {
-        self.license_text.is_some()
-    }
 }
 
 #[cfg(test)]
@@ -35,7 +31,6 @@ mod tests {
         let info = LicenseInfo::new(Some("MIT".to_string()), Some("A library".to_string()));
         assert_eq!(info.license_text(), Some("MIT"));
         assert_eq!(info.description(), Some("A library"));
-        assert!(info.has_license());
     }
 
     #[test]
@@ -43,7 +38,6 @@ mod tests {
         let info = LicenseInfo::new(None, Some("A library".to_string()));
         assert_eq!(info.license_text(), None);
         assert_eq!(info.description(), Some("A library"));
-        assert!(!info.has_license());
     }
 
     #[test]
@@ -51,6 +45,5 @@ mod tests {
         let info = LicenseInfo::new(None, None);
         assert_eq!(info.license_text(), None);
         assert_eq!(info.description(), None);
-        assert!(!info.has_license());
     }
 }

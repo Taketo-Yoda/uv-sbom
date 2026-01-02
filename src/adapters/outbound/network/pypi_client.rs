@@ -43,19 +43,6 @@ impl PyPiLicenseRepository {
         })
     }
 
-    /// Creates a new PyPI license repository with custom configuration
-    pub fn with_config(timeout_secs: u64, max_retries: u32) -> Result<Self> {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(timeout_secs))
-            .user_agent("uv-sbom/0.1.0")
-            .build()?;
-
-        Ok(Self {
-            client,
-            max_retries,
-        })
-    }
-
     /// Fetches package information from PyPI with retry logic
     fn fetch_with_retry(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
         let mut last_error = None;
@@ -125,13 +112,6 @@ mod tests {
     fn test_pypi_client_creation() {
         let client = PyPiLicenseRepository::new();
         assert!(client.is_ok());
-    }
-
-    #[test]
-    fn test_pypi_client_with_config() {
-        let client = PyPiLicenseRepository::with_config(5, 2);
-        assert!(client.is_ok());
-        assert_eq!(client.unwrap().max_retries, 2);
     }
 
     // Integration test - requires network access

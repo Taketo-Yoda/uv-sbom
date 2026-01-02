@@ -4,26 +4,20 @@ use std::collections::HashMap;
 /// DependencyGraph aggregate representing the complete dependency structure
 #[derive(Debug, Clone)]
 pub struct DependencyGraph {
-    all_packages: Vec<Package>,
     direct_dependencies: Vec<PackageName>,
     transitive_dependencies: HashMap<PackageName, Vec<PackageName>>,
 }
 
 impl DependencyGraph {
     pub fn new(
-        all_packages: Vec<Package>,
+        _all_packages: Vec<Package>,
         direct_dependencies: Vec<PackageName>,
         transitive_dependencies: HashMap<PackageName, Vec<PackageName>>,
     ) -> Self {
         Self {
-            all_packages,
             direct_dependencies,
             transitive_dependencies,
         }
-    }
-
-    pub fn all_packages(&self) -> &[Package] {
-        &self.all_packages
     }
 
     pub fn direct_dependencies(&self) -> &[PackageName] {
@@ -32,10 +26,6 @@ impl DependencyGraph {
 
     pub fn transitive_dependencies(&self) -> &HashMap<PackageName, Vec<PackageName>> {
         &self.transitive_dependencies
-    }
-
-    pub fn total_package_count(&self) -> usize {
-        self.all_packages.len()
     }
 
     pub fn direct_dependency_count(&self) -> usize {
@@ -69,7 +59,6 @@ mod tests {
 
         let graph = DependencyGraph::new(all_packages, direct_deps, transitive);
 
-        assert_eq!(graph.total_package_count(), 2);
         assert_eq!(graph.direct_dependency_count(), 1);
         assert_eq!(graph.transitive_dependency_count(), 1);
     }
@@ -78,7 +67,6 @@ mod tests {
     fn test_dependency_graph_empty() {
         let graph = DependencyGraph::new(vec![], vec![], HashMap::new());
 
-        assert_eq!(graph.total_package_count(), 0);
         assert_eq!(graph.direct_dependency_count(), 0);
         assert_eq!(graph.transitive_dependency_count(), 0);
     }

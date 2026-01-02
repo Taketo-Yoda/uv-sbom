@@ -1,5 +1,9 @@
 # uv-sbom
 
+[![shield_license]][license_file] 
+
+----
+
 Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](https://github.com/astral-sh/uv).
 
 ## Features

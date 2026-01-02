@@ -65,9 +65,9 @@ pub mod prelude {
         ProjectConfigReader, SbomFormatter,
     };
     pub use crate::sbom_generation::domain::{
-        DependencyGraph, LicenseInfo, Package, PackageName, SbomMetadata, Version,
+        DependencyGraph, LicenseInfo, Package, PackageName, SbomMetadata,
     };
     pub use crate::sbom_generation::policies::LicensePriority;
     pub use crate::sbom_generation::services::{DependencyAnalyzer, SbomGenerator};
-    pub use crate::shared::{error::SbomError, Result};
+    pub use crate::shared::Result;
 }
