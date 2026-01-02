@@ -4,6 +4,9 @@ use crate::shared::Result;
 use std::fs;
 use std::path::Path;
 
+/// Maximum file size for security (100 MB)
+const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024;
+
 /// FileSystemReader adapter for reading files from the file system
 ///
 /// This adapter implements both LockfileReader and ProjectConfigReader ports,
@@ -19,6 +22,51 @@ impl FileSystemReader {
 impl Default for FileSystemReader {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl FileSystemReader {
+    /// Safely read a file with security checks:
+    /// - Reject symbolic links
+    /// - Check file size limits
+    /// - Validate file is a regular file
+    fn safe_read_file(&self, path: &Path, file_type: &str) -> Result<String> {
+        // Get file metadata without following symlinks
+        let metadata = fs::symlink_metadata(path).map_err(|e| {
+            anyhow::anyhow!("Failed to read {} metadata: {}", file_type, e)
+        })?;
+
+        // Security check: Reject symbolic links
+        if metadata.is_symlink() {
+            anyhow::bail!(
+                "Security: {} is a symbolic link. For security reasons, symbolic links are not allowed.",
+                path.display()
+            );
+        }
+
+        // Security check: Ensure it's a regular file
+        if !metadata.is_file() {
+            anyhow::bail!(
+                "{} is not a regular file",
+                path.display()
+            );
+        }
+
+        // Security check: File size limit (prevent DoS via huge files)
+        let file_size = metadata.len();
+        if file_size > MAX_FILE_SIZE {
+            anyhow::bail!(
+                "Security: {} is too large ({} bytes). Maximum allowed size is {} bytes.",
+                path.display(),
+                file_size,
+                MAX_FILE_SIZE
+            );
+        }
+
+        // Safe to read the file now
+        fs::read_to_string(path).map_err(|e| {
+            anyhow::anyhow!("Failed to read {}: {}", file_type, e)
+        })
     }
 }
 
@@ -39,8 +87,8 @@ impl LockfileReader for FileSystemReader {
             .into());
         }
 
-        // Read lockfile content
-        fs::read_to_string(&lockfile_path).map_err(|e| {
+        // Read lockfile content with security checks
+        self.safe_read_file(&lockfile_path, "uv.lock").map_err(|e| {
             SbomError::LockfileParseError {
                 path: lockfile_path,
                 details: e.to_string(),
@@ -58,8 +106,8 @@ impl ProjectConfigReader for FileSystemReader {
             anyhow::bail!("pyproject.toml not found in project directory");
         }
 
-        let pyproject_content = fs::read_to_string(&pyproject_path)
-            .map_err(|e| anyhow::anyhow!("Failed to read pyproject.toml: {}", e))?;
+        // Read with security checks
+        let pyproject_content = self.safe_read_file(&pyproject_path, "pyproject.toml")?;
 
         let pyproject: toml::Value = toml::from_str(&pyproject_content)
             .map_err(|e| anyhow::anyhow!("Failed to parse pyproject.toml: {}", e))?;

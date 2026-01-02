@@ -48,6 +48,7 @@ impl DependencyAnalyzer {
                 &mut trans_deps,
                 &mut visited,
                 &direct_deps_set,
+                0, // Start with depth 0
             );
 
             if !trans_deps.is_empty() {
@@ -67,6 +68,10 @@ impl DependencyAnalyzer {
         ))
     }
 
+    /// Maximum recursion depth to prevent stack overflow attacks
+    /// This limits dependency chains to prevent malicious lockfiles from causing DoS
+    const MAX_RECURSION_DEPTH: usize = 100;
+
     /// Recursively collects transitive dependencies for a package
     ///
     /// This is a pure algorithm with no I/O operations.
@@ -77,13 +82,26 @@ impl DependencyAnalyzer {
     /// * `trans_deps` - Accumulated transitive dependencies
     /// * `visited` - Set of already visited packages (cycle detection)
     /// * `direct_deps` - Set of direct dependencies (to exclude from transitive)
+    /// * `depth` - Current recursion depth (for DoS prevention)
     fn collect_transitive_deps(
         package_name: &str,
         dependency_map: &HashMap<String, Vec<String>>,
         trans_deps: &mut Vec<String>,
         visited: &mut HashSet<String>,
         direct_deps: &HashSet<String>,
+        depth: usize,
     ) {
+        // Security: Prevent excessive recursion (DoS protection)
+        if depth >= Self::MAX_RECURSION_DEPTH {
+            eprintln!(
+                "Warning: Maximum recursion depth ({}) reached for package '{}'. \
+                 Dependency chain may be truncated.",
+                Self::MAX_RECURSION_DEPTH,
+                package_name
+            );
+            return;
+        }
+
         if visited.contains(package_name) {
             return;
         }
@@ -95,8 +113,8 @@ impl DependencyAnalyzer {
                 if !direct_deps.contains(dep) && !trans_deps.contains(dep) {
                     trans_deps.push(dep.clone());
                 }
-                // Recursively collect transitive dependencies
-                Self::collect_transitive_deps(dep, dependency_map, trans_deps, visited, direct_deps);
+                // Recursively collect transitive dependencies with incremented depth
+                Self::collect_transitive_deps(dep, dependency_map, trans_deps, visited, direct_deps, depth + 1);
             }
         }
     }
@@ -195,6 +213,7 @@ mod tests {
             &mut trans_deps,
             &mut visited,
             &direct_deps,
+            0, // Start with depth 0
         );
 
         // Should not infinite loop, visited set prevents cycles
@@ -221,6 +240,7 @@ mod tests {
             &mut trans_deps,
             &mut visited,
             &direct_deps,
+            0, // Start with depth 0
         );
 
         assert!(trans_deps.contains(&"pkg-b".to_string()));

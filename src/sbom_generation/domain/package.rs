@@ -1,14 +1,46 @@
 use crate::shared::Result;
 
+/// Maximum length for package names (security limit)
+const MAX_PACKAGE_NAME_LENGTH: usize = 255;
+
+/// Maximum length for package versions (security limit)
+const MAX_VERSION_LENGTH: usize = 100;
+
 /// NewType wrapper for package name with validation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PackageName(String);
 
 impl PackageName {
     pub fn new(name: String) -> Result<Self> {
+        // Basic validation
         if name.is_empty() {
             anyhow::bail!("Package name cannot be empty");
         }
+
+        // Security: Length limit to prevent DoS
+        if name.len() > MAX_PACKAGE_NAME_LENGTH {
+            anyhow::bail!(
+                "Package name is too long ({} bytes). Maximum allowed: {} bytes",
+                name.len(),
+                MAX_PACKAGE_NAME_LENGTH
+            );
+        }
+
+        // Security: Validate characters (allow alphanumeric, hyphens, underscores, dots, and common package chars)
+        // This prevents injection attacks and special characters that could cause issues
+        if !name.chars().all(|c| {
+            c.is_alphanumeric()
+                || c == '-'
+                || c == '_'
+                || c == '.'
+                || c == '['
+                || c == ']'  // For extras like package[extra]
+        }) {
+            anyhow::bail!(
+                "Package name contains invalid characters. Only alphanumeric, hyphens, underscores, dots, and brackets are allowed."
+            );
+        }
+
         Ok(Self(name))
     }
 
@@ -29,9 +61,34 @@ pub struct Version(String);
 
 impl Version {
     pub fn new(version: String) -> Result<Self> {
+        // Basic validation
         if version.is_empty() {
             anyhow::bail!("Package version cannot be empty");
         }
+
+        // Security: Length limit to prevent DoS
+        if version.len() > MAX_VERSION_LENGTH {
+            anyhow::bail!(
+                "Package version is too long ({} bytes). Maximum allowed: {} bytes",
+                version.len(),
+                MAX_VERSION_LENGTH
+            );
+        }
+
+        // Security: Validate characters (allow alphanumeric, dots, hyphens, plus, and common version chars)
+        // This prevents injection attacks
+        if !version.chars().all(|c| {
+            c.is_alphanumeric()
+                || c == '.'
+                || c == '-'
+                || c == '+'
+                || c == '*'  // For wildcards
+        }) {
+            anyhow::bail!(
+                "Package version contains invalid characters. Only alphanumeric, dots, hyphens, plus, and asterisks are allowed."
+            );
+        }
+
         Ok(Self(version))
     }
 

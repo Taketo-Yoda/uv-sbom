@@ -109,10 +109,44 @@ fn validate_project_path(path: &Path) -> Result<()> {
         .into());
     }
 
+    // Security check: Reject symbolic links for project paths
+    let metadata = std::fs::symlink_metadata(path).map_err(|e| {
+        SbomError::InvalidProjectPath {
+            path: path.to_path_buf(),
+            reason: format!("Failed to read path metadata: {}", e),
+        }
+    })?;
+
+    if metadata.is_symlink() {
+        return Err(SbomError::InvalidProjectPath {
+            path: path.to_path_buf(),
+            reason: "Security: Project path is a symbolic link. For security reasons, symbolic links are not allowed.".to_string(),
+        }
+        .into());
+    }
+
     if !path.is_dir() {
         return Err(SbomError::InvalidProjectPath {
             path: path.to_path_buf(),
             reason: "Not a directory".to_string(),
+        }
+        .into());
+    }
+
+    // Security check: Canonicalize path to prevent path traversal
+    let canonical_path = path.canonicalize().map_err(|e| {
+        SbomError::InvalidProjectPath {
+            path: path.to_path_buf(),
+            reason: format!("Failed to canonicalize path: {}", e),
+        }
+    })?;
+
+    // Validate that the canonical path is actually a directory
+    // (additional check after canonicalization)
+    if !canonical_path.is_dir() {
+        return Err(SbomError::InvalidProjectPath {
+            path: path.to_path_buf(),
+            reason: "Resolved path is not a directory".to_string(),
         }
         .into());
     }

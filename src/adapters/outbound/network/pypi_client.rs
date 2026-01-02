@@ -81,11 +81,9 @@ impl PyPiLicenseRepository {
     }
 }
 
-impl Default for PyPiLicenseRepository {
-    fn default() -> Self {
-        Self::new().expect("Failed to create PyPI client")
-    }
-}
+// Note: Default implementation removed for security reasons.
+// Default::default() would panic if client creation fails, which is not safe for production.
+// Use PyPiLicenseRepository::new() explicitly and handle the Result.
 
 impl LicenseRepository for PyPiLicenseRepository {
     fn fetch_license_info(
