@@ -23,14 +23,6 @@ impl MockLicenseRepository {
         self
     }
 
-    pub fn with_no_license(mut self, package: &str, version: &str) -> Self {
-        self.licenses.insert(
-            format!("{}@{}", package, version),
-            (None, None, vec![], None),
-        );
-        self
-    }
-
     pub fn with_failure() -> Self {
         Self {
             licenses: HashMap::new(),

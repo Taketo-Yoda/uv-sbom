@@ -17,6 +17,8 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 💾 Output to stdout or file
 - 🛡️ Robust error handling with helpful error messages and suggestions
 - 📈 Progress tracking during license information retrieval
+- 🏗️ Built with **Hexagonal Architecture** (Ports and Adapters) + **Domain-Driven Design** for maintainability and testability
+- ✅ Comprehensive test coverage with **149 tests** (Unit, Integration, E2E)
 
 ## Scope and Key Differences from CycloneDX
 
@@ -127,6 +129,8 @@ Options:
 ## Output Examples
 
 ### Markdown format
+
+> **Note**: The Markdown format sample is based on the SBOM format from [ja-complete v0.1.0](https://github.com/Taketo-Yoda/ja-complete/tree/v0.1.0).
 
 ```markdown
 # Software Bill of Materials (SBOM)
@@ -241,12 +245,12 @@ If you're behind a proxy or firewall, ensure that you can access `https://pypi.o
 ## Documentation
 
 ### For Users
-- [README.md](README.md) - This file, user documentation
+- [README.md](README.md) / [日本語版 (README-ja.md)](README-ja.md) - User documentation
 - [LICENSE](LICENSE) - MIT License
 
 ### For Developers
 - [DEVELOPMENT.md](DEVELOPMENT.md) - Development guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Architecture documentation
+- [ARCHITECTURE.md](ARCHITECTURE.md) / [日本語版 (ARCHITECTURE-ja.md)](ARCHITECTURE-ja.md) - **Hexagonal Architecture + DDD implementation** (layers, ports, adapters, test strategy, ADRs)
 - [CHANGELOG.md](CHANGELOG.md) - Change history
 
 ### For Claude Code Users
