@@ -1,590 +1,350 @@
 # Architecture Documentation
 
-このドキュメントは、uv-sbomプロジェクトのアーキテクチャを詳細に説明します。
+## Overview
 
-## システムアーキテクチャ
+This project follows **Hexagonal Architecture** (Ports and Adapters) combined with **Domain-Driven Design (DDD)** principles. The architecture is designed to be:
 
-### 全体像
+- **Testable**: Pure domain logic isolated from infrastructure
+- **Flexible**: Easy to swap implementations (e.g., different license sources)
+- **Maintainable**: Clear separation of concerns
+- **Screaming**: Directory structure expresses business intent
+
+## Architectural Layers
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         CLI Layer                           │
-│  (cli.rs - コマンドライン引数のパース)                      │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│                    Application Layer                        │
-│  (main.rs - フロー制御、エラーハンドリング)                  │
-└─┬──────────────┬──────────────┬──────────────┬─────────────┘
-  │              │              │              │
-  │              │              │              │
-┌─▼────────┐ ┌──▼─────────┐ ┌─▼────────┐ ┌──▼─────────────┐
-│Lockfile  │ │License     │ │CycloneDX │ │Markdown        │
-│Parser    │ │Fetcher     │ │Generator │ │Generator       │
-│          │ │            │ │          │ │                │
-│lockfile  │ │license.rs  │ │cyclonedx │ │markdown.rs     │
-│.rs       │ │            │ │.rs       │ │                │
-└──────────┘ └─────┬──────┘ └──────────┘ └────────────────┘
-                   │
-                   │ HTTP
-┌──────────────────▼──────────────────┐
-│       External Services             │
-│   (PyPI JSON API)                   │
-│   https://pypi.org/pypi/{pkg}/json  │
-└─────────────────────────────────────┘
+│                        Adapters (Inbound)                    │
+│                          CLI, API, etc.                      │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+              ┌────────▼────────┐
+              │  Application    │  ← Use Cases (Orchestration)
+              │     Layer       │
+              └────────┬────────┘
+                       │
+              ┌────────▼────────┐
+              │     Ports       │  ← Interface Definitions (Traits)
+              │   (Inbound &    │
+              │    Outbound)    │
+              └────────┬────────┘
+                       │
+              ┌────────▼────────┐
+              │     Domain      │  ← Pure Business Logic
+              │      Layer      │     (No Infrastructure)
+              └─────────────────┘
+                       ▲
+                       │
+              ┌────────┴────────┐
+              │  Adapters       │  ← Infrastructure Implementations
+              │  (Outbound)     │     (FileSystem, Network, etc.)
+              └─────────────────┘
 ```
 
-### レイヤー構造
-
-#### 1. CLI Layer (cli.rs)
-**責務**: コマンドライン引数の定義とパース
-
-**入力**: プログラム引数 (argv)
-**出力**: `Args`構造体
-
-**依存関係**:
-- `clap` (derive機能)
-
-#### 2. Application Layer (main.rs)
-**責務**:
-- 全体のフロー制御
-- エラーハンドリング
-- ユーザーへのフィードバック
-
-**主要な関数**:
-- `main()`: エラーハンドリングとプロセス終了
-- `run()`: メインロジック
-- `validate_project_path()`: パス検証
-
-#### 3. Data Layer
-各モジュールがデータの取得・変換を担当:
-
-**lockfile.rs**: uv.lock → `Vec<Package>`
-**license.rs**: `Vec<Package>` → `Vec<Package>` (ライセンス情報付き)
-**cyclonedx.rs**: `Vec<Package>` → CycloneDX JSON
-**markdown.rs**: `Vec<Package>` → Markdown表
-
-### データフロー
+## Directory Structure
 
 ```
-User Input (CLI args)
-    ↓
-Args {format, path, output}
-    ↓
-uv.lock file (TOML)
-    ↓
-Vec<Package> {name, version}
-    ↓
-PyPI API calls (HTTP)
-    ↓
-Vec<Package> {name, version, license, description}
-    ↓
-┌─────────────┬──────────────┐
-│             │              │
-CycloneDX     Markdown      (Output Format)
-JSON          Table
-│             │
-└──────┬──────┘
-       ↓
-┌──────────────────┬─────────────────┐
-│                  │                 │
-stdout            File              (Output Destination)
+src/
+├── main.rs                          # Entry point (DI wiring only)
+├── lib.rs                           # Library root with public API
+│
+├── sbom_generation/                 # Domain Layer (Pure business logic)
+│   ├── domain/
+│   │   ├── package.rs               # Package value object (PackageName, Version)
+│   │   ├── dependency_graph.rs      # DependencyGraph aggregate
+│   │   ├── license_info.rs          # LicenseInfo value object
+│   │   └── sbom_metadata.rs         # SBOM metadata
+│   ├── services/
+│   │   ├── dependency_analyzer.rs   # Transitive dependency algorithm
+│   │   └── sbom_generator.rs        # SBOM metadata generation
+│   └── policies/
+│       └── license_priority.rs      # License selection priority rules
+│
+├── application/                     # Application Layer (Use Cases)
+│   ├── use_cases/
+│   │   └── generate_sbom.rs         # GenerateSbomUseCase<LR,PCR,LREPO,PR>
+│   └── dto/
+│       ├── sbom_request.rs          # Request DTO
+│       └── sbom_response.rs         # Response DTO
+│
+├── ports/                           # Ports (Trait interfaces)
+│   ├── inbound/
+│   │   └── mod.rs                   # (Currently uses direct use case invocation)
+│   └── outbound/
+│       ├── lockfile_reader.rs       # LockfileReader trait
+│       ├── project_config_reader.rs # ProjectConfigReader trait
+│       ├── license_repository.rs    # LicenseRepository trait
+│       ├── formatter.rs             # SbomFormatter trait
+│       ├── output_presenter.rs      # OutputPresenter trait
+│       └── progress_reporter.rs     # ProgressReporter trait
+│
+├── adapters/                        # Adapters (Infrastructure)
+│   ├── inbound/
+│   │   └── mod.rs                   # (Reserved for future CLI adapter)
+│   └── outbound/
+│       ├── filesystem/
+│       │   ├── file_reader.rs       # FileSystemReader
+│       │   └── file_writer.rs       # FileSystemWriter, StdoutPresenter
+│       ├── network/
+│       │   └── pypi_client.rs       # PyPiLicenseRepository
+│       ├── formatters/
+│       │   ├── cyclonedx_formatter.rs  # CycloneDX JSON formatter
+│       │   └── markdown_formatter.rs    # Markdown formatter
+│       └── console/
+│           └── progress_reporter.rs  # StderrProgressReporter
+│
+├── shared/                          # Shared kernel
+│   ├── error.rs                     # Domain errors (SbomError)
+│   └── result.rs                    # Type aliases (Result<T>)
+│
+└── cli.rs                           # CLI argument parsing
 ```
 
-## モジュール設計
+## Domain Layer
 
-### lockfile.rs
+### Value Objects
+- **PackageName**: NewType wrapper with validation (non-empty)
+- **Version**: NewType wrapper with validation (non-empty)
+- **Package**: Immutable package representation
+- **LicenseInfo**: License and description information
 
-**目的**: uv.lockファイルのパース
+### Aggregates
+- **DependencyGraph**: Complete dependency structure with direct and transitive dependencies
 
-**データ構造**:
+### Domain Services
+- **DependencyAnalyzer**: Analyzes and builds dependency graph with cycle detection
+- **SbomGenerator**: Generates SBOM metadata (timestamp, serial number, tool info)
+
+### Policies
+- **LicensePriority**: Business rules for license selection (license > license_expression > classifiers)
+
+**Key Principles:**
+- ✅ No infrastructure dependencies (no `std::fs`, `reqwest`, etc.)
+- ✅ Pure functions where possible
+- ✅ Rich domain model with validation
+- ✅ Business logic explicitly expressed
+
+## Application Layer
+
+### Use Cases
+**GenerateSbomUseCase**: Orchestrates the SBOM generation workflow
+
 ```rust
-// 内部用 (TOMLデシリアライズ)
-struct UvLock {
-    package: Vec<UvPackage>,
-}
-
-struct UvPackage {
-    name: String,
-    version: String,
-    source: Option<UvSource>,
-}
-
-// 公開用
-pub struct Package {
-    pub name: String,
-    pub version: String,
-    pub description: Option<String>,  // 後で設定
-    pub license: Option<String>,      // 後で設定
-}
-```
-
-**主要な関数**:
-```rust
-pub fn parse_lockfile(content: &str) -> Result<Vec<Package>>
-```
-
-**エラーハンドリング**:
-- TOML パースエラー → `anyhow::Context`で詳細を追加
-
-**テスト**:
-- 有効なuv.lockのパース
-- 複数パッケージの処理
-- 依存関係情報の無視 (現在は使用しない)
-
-### license.rs
-
-**目的**: PyPI APIからライセンス情報と説明を取得
-
-**データ構造**:
-```rust
-// PyPI APIレスポンス (内部用)
-struct PyPiPackageInfo {
-    info: PyPiInfo,
-}
-
-struct PyPiInfo {
-    license: Option<String>,
-    summary: Option<String>,
-    classifiers: Vec<String>,
+pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR> {
+    lockfile_reader: LR,
+    project_config_reader: PCR,
+    license_repository: LREPO,
+    progress_reporter: PR,
 }
 ```
 
-**主要な関数**:
+**Workflow:**
+1. Read lockfile content
+2. Parse lockfile to extract packages
+3. Read project configuration
+4. Analyze dependencies (if requested)
+5. Enrich packages with license information
+6. Generate SBOM metadata
+7. Return response DTO
+
+**Error Handling:**
+- Lockfile/config read failures → Error
+- License fetch failures → Warning (package included without license)
+- Invalid TOML → Error
+
+## Ports (Interfaces)
+
+### Outbound Ports (Driven)
+- **LockfileReader**: Reads lockfile from filesystem
+- **ProjectConfigReader**: Reads project name from pyproject.toml
+- **LicenseRepository**: Fetches license information (e.g., from PyPI)
+- **SbomFormatter**: Formats SBOM to output format (JSON, Markdown)
+- **OutputPresenter**: Presents output (stdout, file)
+- **ProgressReporter**: Reports progress to user
+
+### Inbound Ports (Driving)
+Currently, the application uses direct use case invocation instead of inbound ports, which is a valid hexagonal architecture pattern.
+
+## Adapters
+
+### Outbound Adapters (Infrastructure)
+
+**FileSystem Adapters:**
+- `FileSystemReader`: Implements LockfileReader and ProjectConfigReader
+- `FileSystemWriter`: Implements OutputPresenter for file output
+- `StdoutPresenter`: Implements OutputPresenter for stdout
+
+**Network Adapters:**
+- `PyPiLicenseRepository`: Implements LicenseRepository with retry logic
+
+**Formatter Adapters:**
+- `CycloneDxFormatter`: Generates CycloneDX 1.6 JSON format
+- `MarkdownFormatter`: Generates Markdown with dependency sections
+
+**Console Adapters:**
+- `StderrProgressReporter`: Implements ProgressReporter for stderr output
+
+## Dependency Injection Pattern
+
+This project uses **Generic-based static dispatch** for dependency injection:
+
 ```rust
-pub fn fetch_licenses(packages: Vec<Package>) -> Result<Vec<Package>>
-fn fetch_from_pypi_with_retry(...) -> Result<(Option<String>, Option<String>)>
-fn fetch_from_pypi(...) -> Result<(Option<String>, Option<String>)>
-fn extract_license_from_classifiers(classifiers: &[String]) -> Option<String>
-```
-
-**リトライ戦略**:
-```rust
-const MAX_RETRIES: u32 = 3;
-// 線形バックオフ: 100ms, 200ms, 300ms
-Duration::from_millis(100 * attempt as u64)
-```
-
-**プログレス表示**:
-```rust
-eprint!("\r   進捗: {}/{} ({:.1}%) - {}", current, total, percentage, name);
-```
-
-**エラーハンドリング**:
-- HTTP エラー → ログ出力、処理継続
-- タイムアウト → リトライ
-- JSONパースエラー → ログ出力、処理継続
-
-**テスト**:
-- Classifier からのライセンス抽出
-- 空のライセンス情報の処理
-- "UNKNOWN"ライセンスの除外
-
-### cyclonedx.rs
-
-**目的**: CycloneDX 1.6 仕様のSBOM生成
-
-**データ構造**:
-```rust
-pub struct Bom {
-    bom_format: String,      // "CycloneDX"
-    spec_version: String,    // "1.6"
-    version: u32,            // 1
-    serial_number: String,   // UUID
-    metadata: Metadata,
-    components: Vec<Component>,
-}
-
-struct Metadata {
-    timestamp: String,       // RFC3339形式
-    tools: Vec<Tool>,
-}
-
-struct Component {
-    component_type: String,  // "library"
-    name: String,
-    version: String,
-    description: Option<String>,
-    licenses: Option<Vec<License>>,
-    purl: String,            // Package URL
-}
-```
-
-**PURL形式**:
-```
-pkg:pypi/{package_name}@{version}
-```
-
-**主要な関数**:
-```rust
-pub fn generate_bom(packages: Vec<Package>) -> Result<Bom>
-```
-
-**エラーハンドリング**:
-- UUID生成失敗 (通常発生しない)
-- JSON シリアライズ失敗
-
-**テスト**:
-- BOM生成の基本機能
-- メタデータの正確性
-- PURL形式の検証
-
-### markdown.rs
-
-**目的**: Markdown表形式のSBOM生成
-
-**出力形式**:
-```markdown
-# Software Bill of Materials (SBOM)
-
-| Package | Version | License | Description |
-|---------|---------|---------|-------------|
-| ... | ... | ... | ... |
-```
-
-**主要な関数**:
-```rust
-pub fn generate_table(packages: Vec<Package>) -> String
-```
-
-**特殊文字処理**:
-- `|` → `\|` (エスケープ)
-- `\n` → ` ` (スペースに置換)
-
-**テスト**:
-- 基本的な表生成
-- パイプ文字のエスケープ
-- 改行の処理
-
-### error.rs
-
-**目的**: カスタムエラー型の定義
-
-**エラー型**:
-```rust
-pub enum SbomError {
-    LockfileNotFound { path, suggestion },
-    LockfileParseError { path, details },
-    LicenseFetchError { package_name, details },
-    OutputGenerationError { format, details },
-    FileWriteError { path, details },
-    InvalidProjectPath { path, reason },
+impl<LR, PCR, LREPO, PR> GenerateSbomUseCase<LR, PCR, LREPO, PR>
+where
+    LR: LockfileReader,
+    PCR: ProjectConfigReader,
+    LREPO: LicenseRepository,
+    PR: ProgressReporter,
+{
+    // ...
 }
 ```
 
-**Display実装の特徴**:
-- 日本語メッセージ
-- 💡 マークで解決策を提示
-- パス情報を明示
-- 詳細情報を含める
+**Benefits:**
+- ✅ Zero runtime overhead (static dispatch)
+- ✅ Type-safe at compile time
+- ✅ Easy to test with mocks
+- ✅ No trait objects needed
 
-**anyhow統合**:
+**DI Wiring in `main.rs`:**
 ```rust
-impl From<SbomError> for anyhow::Error {
-    fn from(err: SbomError) -> Self {
-        anyhow::anyhow!(err)
-    }
+fn run() -> Result<()> {
+    let args = Args::parse_args();
+
+    // Create concrete adapters
+    let lockfile_reader = FileSystemReader::new();
+    let project_config_reader = FileSystemReader::new();
+    let license_repository = PyPiLicenseRepository::new()?;
+    let progress_reporter = StderrProgressReporter::new();
+
+    // Inject into use case
+    let use_case = GenerateSbomUseCase::new(
+        lockfile_reader,
+        project_config_reader,
+        license_repository,
+        progress_reporter,
+    );
+
+    // Execute
+    let response = use_case.execute(request)?;
+    // ...
 }
 ```
 
-## エラーハンドリング戦略
+## Test Strategy
 
-### エラー伝播
-
-```
-Low Level (各モジュール)
-    ↓ Result<T, anyhow::Error>
-    ↓ .context("詳細情報")
-    ↓
-Mid Level (main.rs の run())
-    ↓ Result<(), anyhow::Error>
-    ↓ SbomError::* に変換
-    ↓
-High Level (main.rs の main())
-    ↓ エラーメッセージ表示
-    ↓ エラーチェーン表示
-    ↓
-process::exit(1)
-```
-
-### グレースフルデグラデーション
-
-**方針**: 部分的な失敗を許容
-
-**例**: ライセンス情報取得
-```rust
-match fetch_from_pypi_with_retry(...) {
-    Ok((license, summary)) => {
-        // 成功: 情報を設定
-        package.license = license;
-        package.description = summary;
-    }
-    Err(e) => {
-        // 失敗: 警告を表示して継続
-        eprintln!("⚠️  警告: {}のライセンス情報取得に失敗", name);
-        // パッケージは含める (ライセンス情報なし)
-    }
-}
-```
-
-## 依存関係管理
-
-### 直接依存関係
-
-```toml
-[dependencies]
-clap = "4.5"          # CLI - derive機能使用
-serde = "1.0"         # シリアライゼーション - derive機能使用
-serde_json = "1.0"    # JSON処理
-toml = "0.8"          # TOML (uv.lock) パース
-anyhow = "1.0"        # エラーハンドリング
-reqwest = "0.12"      # HTTP - blocking機能使用
-chrono = "0.4"        # 日時処理 - serde機能使用
-uuid = "1.10"         # UUID生成 - v4, serde機能使用
-```
-
-### 機能フラグの使用
-
-- `clap`: `derive` - 構造体からCLI定義を生成
-- `serde`: `derive` - 構造体のシリアライゼーション
-- `reqwest`: `json`, `blocking` - 同期HTTPクライアント
-- `chrono`: `serde` - 日時のシリアライゼーション
-- `uuid`: `v4`, `serde` - UUIDv4生成とシリアライゼーション
-
-### 依存関係グラフ
+### Test Pyramid
 
 ```
-main.rs
-├── clap (CLI)
-├── anyhow (エラー)
-└── 各モジュール
-    ├── lockfile.rs
-    │   ├── serde
-    │   └── toml
-    ├── license.rs
-    │   ├── serde
-    │   └── reqwest
-    ├── cyclonedx.rs
-    │   ├── serde
-    │   ├── serde_json
-    │   ├── chrono
-    │   └── uuid
-    ├── markdown.rs (依存なし)
-    └── error.rs (std のみ)
+        ╱╲
+       ╱  ╲       E2E Tests (4 tests)
+      ╱────╲      - Full workflow with fixtures
+     ╱      ╲
+    ╱────────╲    Integration Tests (7 tests)
+   ╱          ╲   - Use case with mocks
+  ╱────────────╲
+ ╱              ╲ Unit Tests (138 tests)
+╱────────────────╲ - Domain logic, adapters
 ```
 
-## パフォーマンス特性
+**Total: 149 tests**
 
-### 時間計算量
+### Test Architecture
 
-- **uv.lockパース**: O(n) - nはパッケージ数
-- **ライセンス情報取得**: O(n) - nはパッケージ数、各パッケージでHTTPリクエスト
-- **出力生成**: O(n) - nはパッケージ数
+**Mocks (tests/test_utilities/mocks/):**
+- `MockLockfileReader`
+- `MockProjectConfigReader`
+- `MockLicenseRepository`
+- `MockProgressReporter` (with message capture)
 
-### 空間計算量
+**Integration Tests:**
+- Happy path
+- Dependency graph generation
+- Error scenarios (lockfile missing, invalid TOML, etc.)
+- Progress reporting verification
 
-- **メモリ使用**: O(n) - パッケージ情報を保持
-- **一時的なメモリ**: HTTPレスポンス (パッケージごと)
+**E2E Tests:**
+- JSON format output
+- Markdown format output
+- Nonexistent project handling
+- Fixture-based validation
 
-### ボトルネック
+**Coverage Goals:**
+- Domain layer: 100% ✅
+- Application layer: 90%+ ✅
+- Adapters: 80%+ ✅
 
-1. **PyPI API呼び出し** (最大)
-   - ネットワークレイテンシ: ~100-500ms/パッケージ
-   - 逐次処理: n × レイテンシ
+## Design Decisions (ADR)
 
-2. **TOML パース** (小)
-   - ファイルI/O: ~10ms
-   - パース: ~50ms
+### ADR-001: Hexagonal Architecture
+**Context**: Need testable, maintainable architecture for SBOM generation.
 
-3. **JSON生成** (小)
-   - シリアライズ: ~10ms
+**Decision**: Adopt Hexagonal Architecture with Ports and Adapters.
 
-### 最適化の可能性
+**Consequences:**
+- ✅ Domain logic completely isolated from infrastructure
+- ✅ Easy to swap implementations (e.g., different license sources)
+- ✅ Testable with mocks
+- ⚠️ More files/boilerplate than simple architecture
 
-**並列処理**:
-```rust
-// 現在 (逐次処理)
-for package in packages {
-    fetch_license(package);  // ~200ms
-}
-// 合計: n × 200ms
+### ADR-002: Generic-based Dependency Injection
+**Context**: Need compile-time type safety with zero runtime overhead.
 
-// 並列処理
-tokio::spawn で並列化
-// 合計: ~200ms (並列度によって)
-```
+**Decision**: Use Generic static dispatch instead of trait objects.
 
-**キャッシュ**:
-```rust
-// PyPI APIレスポンスをキャッシュ
-// キャッシュヒット時: ~1ms
-// キャッシュミス時: ~200ms + キャッシュ保存
-```
+**Consequences:**
+- ✅ Zero runtime overhead
+- ✅ Compile-time type checking
+- ✅ No Box<dyn Trait> allocations
+- ⚠️ Slightly more complex type signatures
+- ⚠️ Longer compile times (marginal)
 
-## セキュリティアーキテクチャ
+### ADR-003: License Fetch Failures as Warnings
+**Context**: License information may be unavailable or network may fail.
 
-### 脅威モデル
+**Decision**: Treat license fetch failures as warnings, not errors. Include packages without license info.
 
-**想定する脅威**:
-1. パストラバーサル攻撃
-2. PyPI APIの偽装
-3. 機密情報の漏洩
+**Consequences:**
+- ✅ SBOM generation succeeds even with network issues
+- ✅ User gets partial information instead of nothing
+- ⚠️ User must check warnings for missing licenses
 
-**対策**:
-1. パス検証 (`validate_project_path`)
-2. HTTPS通信 (reqwestのデフォルト)
-3. エラーメッセージの制御
+### ADR-004: No Backward Compatibility After Refactoring
+**Context**: Migrating from 7-file to 50-file architecture.
 
-### 入力検証
+**Decision**: Break backward compatibility, remove unused public API exports.
 
-```rust
-fn validate_project_path(path: &Path) -> Result<()> {
-    // 存在確認
-    if !path.exists() {
-        return Err(...);
-    }
+**Consequences:**
+- ✅ Clean, minimal public API surface
+- ✅ No maintenance burden for unused code
+- ⚠️ Existing code using library API may break
 
-    // ディレクトリ確認
-    if !path.is_dir() {
-        return Err(...);
-    }
+### ADR-005: Markdown Format Without Timestamps
+**Context**: Users want stable, version-controllable SBOM output.
 
-    // シンボリックリンクの追跡 (標準ライブラリが処理)
-    Ok(())
-}
-```
+**Decision**: Remove timestamps and tool metadata from Markdown output.
 
-### 外部通信
+**Consequences:**
+- ✅ Stable output for version control diffs
+- ✅ Matches reference format from ja-complete project
+- ⚠️ Less audit trail information
 
-**PyPI API**:
-- プロトコル: HTTPS (TLS 1.2以上)
-- 認証: 不要
-- タイムアウト: 10秒
-- User-Agent: `uv-sbom/0.1.0`
+## Future Considerations
 
-**リトライ**:
-- 最大回数: 3回
-- バックオフ: 線形 (100ms, 200ms, 300ms)
+### Potential Enhancements
+1. **SPDX Format Support**: Add SpdxFormatter adapter
+2. **GitHub API Integration**: Fetch license info from GitHub
+3. **Cache Layer**: Add LicenseCache adapter to reduce API calls
+4. **Async Runtime**: Convert to async for concurrent license fetching
+5. **WASM Support**: Compile to WebAssembly for browser usage
 
-## テスト戦略
+### Scalability
+- Current design handles projects with 1000+ packages efficiently
+- Network I/O is the bottleneck (license fetching)
+- Async + caching would improve performance significantly
 
-### ユニットテスト
+## References
 
-各モジュールに配置:
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_xxx() {
-        // テストコード
-    }
-}
-```
-
-### テストのカバレッジ
-
-- **lockfile.rs**: パース成功、複数パッケージ
-- **license.rs**: Classifier抽出、UNKNOWNライセンス
-- **cyclonedx.rs**: BOM生成、PURL形式
-- **markdown.rs**: 表生成、エスケープ処理
-
-### E2Eテスト
-
-**サンプルプロジェクト** (`examples/sample-project`):
-```bash
-cargo run -- --path examples/sample-project --format json
-cargo run -- --path examples/sample-project --format markdown
-```
-
-## 拡張性
-
-### 新しい出力フォーマットの追加
-
-1. **新しいモジュール作成** (例: `spdx.rs`)
-2. **OutputFormat列挙型に追加**
-3. **main.rsにマッチング追加**
-4. **テスト追加**
-5. **ドキュメント更新**
-
-### 新しいデータソースの追加
-
-1. **新しいパーサーモジュール作成**
-2. **`Package`構造体への変換実装**
-3. **CLI引数で選択可能に**
-4. **テスト追加**
-
-### キャッシュ機能の追加
-
-1. **キャッシュモジュール作成** (`cache.rs`)
-2. **SQLite接続とスキーマ定義**
-3. **license.rsにキャッシュ層を追加**
-4. **TTL管理**
-5. **テスト追加**
-
-## デプロイメント
-
-### ビルド成果物
-
-```bash
-# デバッグビルド
-target/debug/uv-sbom
-
-# リリースビルド
-target/release/uv-sbom
-```
-
-### インストール方法
-
-1. **Cargoからインストール**
-```bash
-cargo install --path .
-```
-
-2. **バイナリ配布**
-```bash
-cargo build --release
-cp target/release/uv-sbom /usr/local/bin/
-```
-
-3. **GitHub Releases** (将来)
-   - CI/CDでビルド
-   - クロスコンパイル
-   - バイナリのアップロード
-
-## 監視とロギング
-
-### 現在の実装
-
-**標準エラー出力** (`eprintln!`):
-- 進捗メッセージ
-- 警告メッセージ
-- エラーメッセージ
-
-**標準出力** (`stdout`):
-- SBOM出力のみ (--outputオプション未使用時)
-
-### 将来の拡張
-
-**ロギングライブラリ** (`log`, `env_logger`):
-```rust
-log::info!("Starting SBOM generation");
-log::warn!("License fetch failed for {}", name);
-log::error!("Failed to parse lockfile: {}", e);
-```
-
-**構造化ログ** (`tracing`):
-```rust
-tracing::info_span!("fetch_licenses", package_count = packages.len());
-```
-
-## まとめ
-
-このアーキテクチャは以下の原則に基づいています:
-
-1. **モジュール化**: 責務の明確な分離
-2. **エラーハンドリング**: グレースフルデグラデーション
-3. **ユーザー体験**: 詳細なフィードバックと解決策の提示
-4. **拡張性**: 新機能の追加が容易
-5. **テスト可能性**: ユニットテストとE2Eテストの両方をサポート
+- [Hexagonal Architecture (Alistair Cockburn)](https://alistair.cockburn.us/hexagonal-architecture/)
+- [Domain-Driven Design (Eric Evans)](https://www.domainlanguage.com/ddd/)
+- [CycloneDX Specification](https://cyclonedx.org/specification/overview/)
+- [uv Package Manager](https://github.com/astral-sh/uv)
