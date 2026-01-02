@@ -11,33 +11,23 @@ This project follows **Hexagonal Architecture** (Ports and Adapters) combined wi
 
 ## Architectural Layers
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Adapters (Inbound)                    │
-│                          CLI, API, etc.                      │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-              ┌────────▼────────┐
-              │  Application    │  ← Use Cases (Orchestration)
-              │     Layer       │
-              └────────┬────────┘
-                       │
-              ┌────────▼────────┐
-              │     Ports       │  ← Interface Definitions (Traits)
-              │   (Inbound &    │
-              │    Outbound)    │
-              └────────┬────────┘
-                       │
-              ┌────────▼────────┐
-              │     Domain      │  ← Pure Business Logic
-              │      Layer      │     (No Infrastructure)
-              └─────────────────┘
-                       ▲
-                       │
-              ┌────────┴────────┐
-              │  Adapters       │  ← Infrastructure Implementations
-              │  (Outbound)     │     (FileSystem, Network, etc.)
-              └─────────────────┘
+```mermaid
+flowchart TD
+
+    Inbound["<b>Adapters (Inbound)</b><br>CLI, API, etc."]
+    App["<b>Application Layer</b><br><small>(Use Cases / Orchestration)</small>"]
+    
+    Ports["<b>Ports</b><br>(Inbound & Outbound)<br><small>(Interface Definitions / Traits)</small>"]
+    
+    Domain["<b>Domain Layer</b><br><small>Pure Business Logic<br>(No Infrastructure)</small>"]
+    
+    Outbound["<b>Adapters (Outbound)</b><br><small>(Infrastructure Implementations<br>FileSystem, Network, etc.)</small>"]
+
+
+    Inbound --> App
+    App --> Ports
+    Ports --> Domain    
+    Outbound --> Domain
 ```
 
 ## Directory Structure
