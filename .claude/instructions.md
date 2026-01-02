@@ -4,22 +4,82 @@
 
 ## プロジェクトの性質
 
-このプロジェクトは**Rust製のCLIツール**で、以下の特性があります:
+このプロジェクトは**Rust製のCLIツール**で、**ヘキサゴナルアーキテクチャ + DDD**を採用しています:
 
 - 言語: Rust (Edition 2021)
 - ビルドシステム: Cargo
-- アーキテクチャ: モジュール化された単一バイナリ
+- アーキテクチャ: ヘキサゴナル（ポート&アダプター）
 - エラーハンドリング: anyhowベース、カスタムエラー型使用
+- 依存性注入: Generic-based（静的ディスパッチ）
+
+## アーキテクチャの理解
+
+### レイヤーの責務
+
+1. **ドメイン層** (`sbom_generation/`)
+   - 純粋なビジネスロジック
+   - I/O操作は一切禁止
+   - `std::fs`, `reqwest`などの使用禁止
+   - すべて純粋関数として実装
+
+2. **アプリケーション層** (`application/`)
+   - ユースケースのオーケストレーション
+   - ポートを通じてインフラと通信
+   - ビジネスフローの制御
+
+3. **ポート層** (`ports/`)
+   - インターフェース定義のみ
+   - トレイトとして実装
+   - 実装は含まない
+
+4. **アダプター層** (`adapters/`)
+   - インフラストラクチャの具体実装
+   - ポートを実装
+   - I/O操作を実行
+
+5. **共有層** (`shared/`)
+   - エラー型
+   - 型エイリアス
+   - セキュリティ検証関数
+
+### 依存関係のルール
+
+**CRITICAL**: 依存関係の方向を厳守すること
+
+```
+Adapters → Application → Domain
+    ↓           ↓
+  Ports   ←   Ports
+```
+
+- ドメイン層は他のレイヤーに依存しない
+- アプリケーション層はドメイン層とポート層のみに依存
+- アダプター層はポート層を実装
 
 ## コード変更時の注意事項
 
-### 1. エラーハンドリング
+### 1. レイヤー違反の禁止
 
-すべてのエラーは`SbomError`型を使用し、ユーザーフレンドリーなメッセージを提供すること:
+```rust
+// ❌ 悪い例: ドメイン層でI/O操作
+// domain/package.rs内
+use std::fs;  // NG!!
+
+// ✅ 良い例: ポート経由
+// application/use_cases/generate_sbom.rs内
+fn execute(&self, request: SbomRequest) -> Result<SbomResponse> {
+    // ポート経由でI/O操作
+    let content = self.lockfile_reader.read_lockfile(&path)?;
+}
+```
+
+### 2. エラーハンドリング
+
+ユーザーフレンドリーなメッセージを提供:
 
 ```rust
 // ❌ 悪い例
-return Err(anyhow::anyhow!("Failed to read file"));
+return Err(anyhow::anyhow!("Failed"));
 
 // ✅ 良い例
 return Err(SbomError::LockfileParseError {
@@ -28,15 +88,32 @@ return Err(SbomError::LockfileParseError {
 }.into());
 ```
 
-### 2. ユーザー向けメッセージ
+### 3. セキュリティ検証
 
-- 進捗メッセージ: `eprintln!` を使用して標準エラー出力に表示
-- エラーメッセージ: 日本語で分かりやすく、解決策を含める
-- 絵文字を活用: 📖 (読み込み), ✅ (成功), ❌ (エラー), 🔍 (検索), 💡 (ヒント)
+ファイル操作時は必ず`shared/security.rs`の関数を使用:
 
-### 3. テストの追加
+```rust
+// ✅ 良い例
+use crate::shared::security::{validate_regular_file, validate_file_size};
 
-新機能を追加する場合は、必ず対応するテストを追加:
+validate_regular_file(path, "uv.lock")?;
+validate_file_size(file_size, path, MAX_FILE_SIZE)?;
+```
+
+### 4. 型エイリアスの使用
+
+複雑な型には型エイリアスを使用（Clippy警告回避）:
+
+```rust
+// ✅ 良い例
+pub type PyPiMetadata = (Option<String>, Option<String>, Vec<String>, Option<String>);
+
+fn fetch_license_info(&self, name: &str, version: &str) -> Result<PyPiMetadata>;
+```
+
+### 5. テストの追加
+
+すべての新機能にテストを追加:
 
 ```rust
 #[cfg(test)]
@@ -45,49 +122,142 @@ mod tests {
 
     #[test]
     fn test_new_feature() {
-        // テストコード
+        // ドメイン層: 純粋関数のテスト
+        // アプリケーション層: モックを使用
+        // アダプター層: tempfileなどで実環境テスト
     }
 }
 ```
 
-### 4. ドキュメントの更新
-
-以下のファイルを必要に応じて更新:
-- `README.md`: ユーザー向けドキュメント
-- `CHANGELOG.md`: 変更履歴
-- `.claude/project-context.md`: プロジェクトコンテキスト
-- `DEVELOPMENT.md`: 開発者向けガイド
-
 ## モジュール別のガイドライン
 
-### main.rs
-- エントリーポイントとフロー制御のみ
-- ビジネスロジックは他のモジュールに委譲
-- エラーハンドリングとユーザーメッセージ表示
+### sbom_generation/domain/
 
-### cli.rs
-- `clap`の`derive`マクロを使用
-- オプションにはデフォルト値を設定
-- ヘルプメッセージは英語で簡潔に
+**責務**: ビジネスロジックの中核
+**禁止事項**:
+- I/O操作（ファイル、ネットワーク、データベース）
+- 外部クレートへの依存（`std`のみ許可）
+- 副作用のある操作
 
-### lockfile.rs
-- TOML形式のパース
-- エラーは詳細な情報を含める
-- パース結果は`Vec<Package>`として返す
+**許可事項**:
+- バリューオブジェクトの定義
+- ドメインサービス（純粋関数）
+- ビジネスポリシー
 
-### license.rs
-- PyPI API呼び出しは必ずリトライロジックを通す
-- 進捗表示を更新
-- 失敗してもパッケージを除外しない
+### sbom_generation/services/
 
-### cyclonedx.rs, markdown.rs
-- 出力形式の生成のみ
-- 外部APIとの通信は行わない
-- テストで出力形式を検証
+**責務**: ドメインサービス
+**特徴**:
+- すべて純粋関数
+- I/O依存なし
+- テストが容易
 
-### error.rs
-- 新しいエラー型を追加する場合、必ず解決策の提案を含める
-- `Display`実装で分かりやすいメッセージを提供
+**例**:
+```rust
+pub struct DependencyAnalyzer;
+
+impl DependencyAnalyzer {
+    pub fn analyze(
+        project_name: &PackageName,
+        dependency_map: &HashMap<String, Vec<String>>,
+    ) -> Result<DependencyGraph> {
+        // 純粋なアルゴリズム
+    }
+}
+```
+
+### application/use_cases/
+
+**責務**: ワークフローのオーケストレーション
+**パターン**: Generic-based DI
+
+```rust
+pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR> {
+    lockfile_reader: LR,
+    project_config_reader: PCR,
+    license_repository: LREPO,
+    progress_reporter: PR,
+}
+
+impl<LR, PCR, LREPO, PR> GenerateSbomUseCase<LR, PCR, LREPO, PR>
+where
+    LR: LockfileReader,
+    PCR: ProjectConfigReader,
+    LREPO: LicenseRepository,
+    PR: ProgressReporter,
+{
+    pub fn execute(&self, request: SbomRequest) -> Result<SbomResponse> {
+        // オーケストレーション
+    }
+}
+```
+
+### ports/outbound/
+
+**責務**: インターフェース定義
+**パターン**: トレイト定義
+
+```rust
+pub trait LockfileReader {
+    fn read_lockfile(&self, project_path: &Path) -> Result<String>;
+}
+```
+
+### adapters/outbound/
+
+**責務**: ポートの具体実装
+**必須**: セキュリティチェック
+
+**ファイルシステムアダプター**:
+```rust
+impl LockfileReader for FileSystemReader {
+    fn read_lockfile(&self, project_path: &Path) -> Result<String> {
+        // セキュリティ検証
+        validate_regular_file(&lockfile_path, "uv.lock")?;
+        
+        // 実装
+        self.safe_read_file(&lockfile_path, "uv.lock")
+    }
+}
+```
+
+### shared/
+
+**責務**: 共通機能
+**内容**:
+- `error.rs`: エラー型定義
+- `result.rs`: 型エイリアス
+- `security.rs`: セキュリティ検証関数
+
+## セキュリティガイドライン
+
+### ファイル操作のセキュリティ
+
+**必須チェック** (`shared/security.rs`使用):
+1. シンボリックリンク検証 - `validate_not_symlink()`
+2. 通常ファイル検証 - `validate_regular_file()`
+3. ファイルサイズ制限 - `validate_file_size()`
+
+**対策する脅威**:
+- 任意ファイル読み取り（シンボリックリンク経由）
+- DoS攻撃（巨大ファイル）
+- TOCTOU攻撃（二重チェック）
+- パストラバーサル
+
+### ネットワーク操作のセキュリティ
+
+**必須実装**:
+1. タイムアウト設定
+2. リトライ制限
+3. レート制限（DoS防止）
+4. HTTPS通信
+
+**例** (PyPiLicenseRepository):
+```rust
+const MAX_RETRIES: u32 = 3;
+const TIMEOUT_SECONDS: u64 = 10;
+const RATE_LIMIT_MS: u64 = 100;  // 10 req/sec
+```
 
 ## コーディングスタイル
 
@@ -95,151 +265,145 @@ mod tests {
 - 関数名: `snake_case`
 - 型名: `PascalCase`
 - 定数: `UPPER_SNAKE_CASE`
+- トレイト: `PascalCase`（動詞推奨）
 
 ### コメント
-- 公開APIには必ずドキュメントコメント (`///`)
-- 複雑なロジックには説明コメント
-- TODOやFIXMEは明確に
+- 公開API: `///` ドキュメントコメント必須
+- 複雑なロジック: `//` 説明コメント
+- セキュリティ関連: `// Security:` プレフィックス
 
 ### エラーハンドリング
 - `?`演算子を積極的に使用
-- `unwrap()`や`expect()`は避ける (テスト以外)
-- エラーコンテキストを`Context`トレイトで追加
+- `unwrap()`や`expect()`は避ける（テスト以外）
+- エラーコンテキストを追加
+
+## テスト戦略
+
+### ドメイン層のテスト
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_domain_logic() {
+        // 純粋関数なのでモック不要
+        let result = DependencyAnalyzer::analyze(...);
+        assert_eq!(result, expected);
+    }
+}
+```
+
+### アプリケーション層のテスト
+```rust
+#[test]
+fn test_use_case() {
+    // モックを使用
+    let mock_reader = MockLockfileReader { ... };
+    let use_case = GenerateSbomUseCase::new(mock_reader, ...);
+    
+    let result = use_case.execute(request);
+    assert!(result.is_ok());
+}
+```
+
+### アダプター層のテスト
+```rust
+#[test]
+fn test_file_reader() {
+    // tempfileで実環境テスト
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("uv.lock");
+    fs::write(&file_path, "content").unwrap();
+    
+    let reader = FileSystemReader::new();
+    let result = reader.read_lockfile(temp_dir.path());
+    assert!(result.is_ok());
+}
+```
+
+## パフォーマンス考慮
+
+### ボトルネック
+1. PyPI API呼び出し（レート制限あり）
+2. ネットワークレイテンシ
+
+### 最適化時の注意
+- ベンチマーク計測を必ず行う
+- プロファイリング結果に基づく
+- 早すぎる最適化を避ける
+
+## ドキュメント更新
+
+新機能追加時に更新すべきファイル:
+1. `README.md` - ユーザー向け使用方法
+2. `.claude/project-context.md` - アーキテクチャ情報
+3. コード内ドキュメントコメント
+4. テストケース
 
 ## 依存関係の追加
 
 新しい依存関係を追加する場合:
 
-1. **必要性を検討**: 既存の依存関係で解決できないか確認
-2. **最小限の機能**: `features`で必要な機能のみ有効化
-3. **Cargo.tomlに追加**: バージョンは最新の安定版を使用
-4. **ドキュメント更新**: `.claude/project-context.md`の技術スタックを更新
+1. **必要性を検討**: 既存で解決できないか確認
+2. **最小限の機能**: `features`で必要な機能のみ
+3. **適切なレイヤー**: 
+   - ドメイン層: `std`のみ
+   - アプリケーション層: anyhow, 基本的なユーティリティ
+   - アダプター層: I/Oライブラリ許可
+4. **ドキュメント更新**: `.claude/project-context.md`を更新
 
-## パフォーマンスの考慮
+## よくある質問
 
-### ボトルネック
-現在のボトルネックはPyPI API呼び出し (逐次処理)。最適化する場合:
+### Q: 新しいフォーマットを追加したい
+A:
+1. `ports/outbound/formatter.rs`の`SbomFormatter`トレイトを確認
+2. `adapters/outbound/formatters/`に新しいフォーマッターを実装
+3. `cli.rs`の`OutputFormat`に追加
+4. `main.rs`の分岐に追加
+5. テスト追加
 
-1. **並列処理**: `tokio`と`reqwest`の非同期版を検討
-2. **キャッシュ**: SQLiteでローカルキャッシュを検討
-3. **計測**: 変更前後でベンチマーク
+### Q: 新しいライセンスソースを追加したい
+A:
+1. `LicenseRepository`トレイトを実装
+2. `adapters/outbound/`に新しいアダプター作成
+3. `main.rs`でDI配線
+4. テスト追加
 
-### メモリ使用
-- パッケージ数が多い場合でも、逐次処理で問題なし
-- 大きなJSONを一度にメモリに保持しない
+### Q: ドメイン層で外部APIを呼びたい
+A: **NG!** ポートを定義してアダプターで実装すること
 
-## セキュリティ
-
-### 外部入力の検証
-- ファイルパス: パストラバーサルに注意
-- API レスポンス: 想定外の形式に備える
-- ユーザー入力: CLIオプションの検証
-
-### 機密情報
-- API キーなどは不要 (PyPI APIは認証なし)
-- エラーメッセージにパス情報を含める際は注意
-
-## テスト戦略
-
-### ユニットテスト
-- 各モジュールに`#[cfg(test)]`セクション
-- パブリック関数はすべてテスト
-- エッジケースを含める
-
-### 統合テスト
-- `examples/sample-project`で手動テスト
-- 実際のPyPI APIを使用するE2Eテストは慎重に
-
-### テストの実行
-```bash
-cargo test              # すべてのテスト
-cargo test -- --nocapture  # 出力付き
-```
-
-## ビルドとリリース
-
-### デバッグビルド
-```bash
-cargo build
-```
-
-### リリースビルド
-```bash
-cargo build --release
-```
-
-### インストール
-```bash
-cargo install --path .
-```
-
-## 環境固有の問題
-
-### Cargo未インストール
-プロジェクトファイルを手動で作成する必要がある場合あり
-
-### ネットワーク制限
-- PyPI APIへのアクセスが必要
-- プロキシ環境では追加設定が必要な場合あり
-
-## バージョニング
-
-Semantic Versioningに従う:
-- MAJOR: 互換性のない変更
-- MINOR: 後方互換性のある機能追加
-- PATCH: 後方互換性のあるバグ修正
-
-## コミットメッセージ
-
-以下の形式を推奨:
-```
-<type>: <subject>
-
-<body>
-```
-
-Types:
-- `feat`: 新機能
-- `fix`: バグ修正
-- `docs`: ドキュメント変更
-- `style`: フォーマット変更
-- `refactor`: リファクタリング
-- `test`: テスト追加・修正
-- `chore`: ビルドプロセスなど
+### Q: テストでファイルI/Oが必要
+A: `tempfile`クレートを使用してテンポラリファイル作成
 
 ## Claude Codeでの作業フロー
 
 1. **コンテキスト確認**: `.claude/project-context.md`を読む
-2. **変更箇所の特定**: 関連するモジュールを確認
-3. **テストの追加**: 新機能には必ずテストを追加
-4. **ビルド確認**: `cargo build`でコンパイルエラーがないか確認
-5. **テスト実行**: `cargo test`で既存の機能が壊れていないか確認
-6. **ドキュメント更新**: 必要に応じてREADMEなどを更新
-7. **フォーマット**: `cargo fmt`でコードをフォーマット
-8. **Linting**: `cargo clippy`で警告を確認
-
-## よくある質問
-
-### Q: 新しい出力フォーマットを追加したい
-A: 以下の手順:
-1. `cli.rs`の`OutputFormat`列挙型に追加
-2. 新しいモジュール (例: `spdx.rs`) を作成
-3. `main.rs`の`match`文に分岐を追加
-4. テストを追加
-5. READMEを更新
-
-### Q: エラーメッセージを英語にしたい
-A: `error.rs`の`Display`実装を変更。ただし、現在は日本語を想定している。
-
-### Q: パフォーマンスを改善したい
-A: 最大のボトルネックはPyPI API呼び出し。並列処理化を検討。
-
-### Q: オフライン動作をサポートしたい
-A: ローカルのパッケージメタデータ読み込みを実装。`license.rs`にフォールバックロジックを追加。
+2. **アーキテクチャ確認**: レイヤーの責務を理解
+3. **変更箇所の特定**: 適切なレイヤーに変更を加える
+4. **テストの追加**: 新機能には必ずテストを追加
+5. **ビルド確認**: `cargo build`
+6. **テスト実行**: `cargo test`
+7. **品質確認**: `cargo fmt && cargo clippy`
+8. **ドキュメント更新**: 必要に応じて
 
 ## 注意事項
 
-- **破壊的変更は避ける**: 既存のCLIオプションを削除・変更しない
-- **下位互換性**: uv.lockの古いバージョンも可能な限りサポート
-- **エラーメッセージの一貫性**: 既存のスタイルに合わせる
-- **テストの網羅性**: カバレッジを下げない
+### 破壊的変更の禁止
+- 公開APIの変更は慎重に
+- 既存のCLIオプションを削除・変更しない
+- 下位互換性を保つ
+
+### コード品質
+- **Clippy警告ゼロ**: 全警告を解消
+- **テストカバレッジ**: 新機能は必ずテスト
+- **ドキュメント**: 公開APIには必ずコメント
+
+### セキュリティ
+- ファイル操作: 必ず`shared/security.rs`使用
+- ネットワーク操作: タイムアウト・リトライ設定
+- エラーメッセージ: 機密情報を含めない
+
+---
+
+最終更新: 2025-01-02
