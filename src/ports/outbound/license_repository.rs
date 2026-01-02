@@ -1,6 +1,9 @@
 use crate::sbom_generation::domain::LicenseInfo;
 use crate::shared::Result;
 
+/// Type alias for PyPI metadata: (license, license_expression, classifiers, description)
+pub type PyPiMetadata = (Option<String>, Option<String>, Vec<String>, Option<String>);
+
 /// LicenseRepository port for fetching license information
 ///
 /// This port abstracts the external data source (e.g., PyPI API)
@@ -13,7 +16,7 @@ pub trait LicenseRepository {
     /// * `version` - Version of the package
     ///
     /// # Returns
-    /// A tuple containing:
+    /// PyPiMetadata tuple containing:
     /// - Optional license field from package metadata
     /// - Optional license_expression field from package metadata
     /// - List of classifiers from package metadata
@@ -24,11 +27,7 @@ pub trait LicenseRepository {
     /// - The network request fails
     /// - The API returns an error status code
     /// - The response cannot be parsed
-    fn fetch_license_info(
-        &self,
-        package_name: &str,
-        version: &str,
-    ) -> Result<(Option<String>, Option<String>, Vec<String>, Option<String>)>;
+    fn fetch_license_info(&self, package_name: &str, version: &str) -> Result<PyPiMetadata>;
 
     /// Enriches a package with license information from the repository
     ///

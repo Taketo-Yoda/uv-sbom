@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use uv_sbom::ports::outbound::PyPiMetadata;
 use uv_sbom::prelude::*;
 
 /// Mock LicenseRepository for testing
 pub struct MockLicenseRepository {
-    pub licenses: HashMap<String, (Option<String>, Option<String>, Vec<String>, Option<String>)>,
+    pub licenses: HashMap<String, PyPiMetadata>,
     pub should_fail: bool,
 }
 
@@ -38,16 +39,16 @@ impl Default for MockLicenseRepository {
 }
 
 impl LicenseRepository for MockLicenseRepository {
-    fn fetch_license_info(
-        &self,
-        package_name: &str,
-        version: &str,
-    ) -> Result<(Option<String>, Option<String>, Vec<String>, Option<String>)> {
+    fn fetch_license_info(&self, package_name: &str, version: &str) -> Result<PyPiMetadata> {
         if self.should_fail {
             anyhow::bail!("Mock license repository failure");
         }
 
         let key = format!("{}@{}", package_name, version);
-        Ok(self.licenses.get(&key).cloned().unwrap_or((None, None, vec![], None)))
+        Ok(self
+            .licenses
+            .get(&key)
+            .cloned()
+            .unwrap_or((None, None, vec![], None)))
     }
 }

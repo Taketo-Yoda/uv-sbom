@@ -11,11 +11,19 @@ pub enum SbomError {
         path: PathBuf,
         details: String,
     },
+    /// Error when fetching license information fails
+    ///
+    /// Note: Currently not used by the CLI implementation, but available for library consumers
+    /// implementing custom license repositories or error handling strategies.
     #[allow(dead_code)]
     LicenseFetchError {
         package_name: String,
         details: String,
     },
+    /// Error when SBOM output generation fails
+    ///
+    /// Note: Currently not used by the CLI implementation, but available for library consumers
+    /// implementing custom formatters or error handling strategies.
     #[allow(dead_code)]
     OutputGenerationError {
         format: String,

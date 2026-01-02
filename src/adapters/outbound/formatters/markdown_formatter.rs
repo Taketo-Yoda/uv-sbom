@@ -3,6 +3,12 @@ use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata};
 use crate::shared::Result;
 use std::collections::HashMap;
 
+/// Markdown table header for package information
+const TABLE_HEADER: &str = "| Package | Version | License | Description |\n";
+
+/// Markdown table separator line
+const TABLE_SEPARATOR: &str = "|---------|---------|---------|-------------|\n";
+
 /// MarkdownFormatter adapter for generating detailed Markdown SBOM with dependency information
 ///
 /// This adapter implements the SbomFormatter port for Markdown format,
@@ -56,8 +62,8 @@ impl SbomFormatter for MarkdownFormatter {
         output.push_str("# Software Bill of Materials (SBOM)\n\n");
         output.push_str("## Component Inventory\n\n");
         output.push_str("A comprehensive list of all software components and libraries included in this project.\n\n");
-        output.push_str("| Package | Version | License | Description |\n");
-        output.push_str("|---------|---------|---------|-------------|\n");
+        output.push_str(TABLE_HEADER);
+        output.push_str(TABLE_SEPARATOR);
 
         for enriched in &packages {
             output.push_str(&Self::format_package_row(enriched));
@@ -81,8 +87,8 @@ impl SbomFormatter for MarkdownFormatter {
         // Component Inventory section (all packages)
         output.push_str("## Component Inventory\n\n");
         output.push_str("A comprehensive list of all software components and libraries included in this project.\n\n");
-        output.push_str("| Package | Version | License | Description |\n");
-        output.push_str("|---------|---------|---------|-------------|\n");
+        output.push_str(TABLE_HEADER);
+        output.push_str(TABLE_SEPARATOR);
 
         for enriched in &packages {
             output.push_str(&Self::format_package_row(enriched));
@@ -94,8 +100,8 @@ impl SbomFormatter for MarkdownFormatter {
         output.push_str("Primary packages explicitly defined in the project configuration(e.g., pyproject.toml).\n\n");
 
         if dependency_graph.direct_dependency_count() > 0 {
-            output.push_str("| Package | Version | License | Description |\n");
-            output.push_str("|---------|---------|---------|-------------|\n");
+            output.push_str(TABLE_HEADER);
+            output.push_str(TABLE_SEPARATOR);
 
             for dep in dependency_graph.direct_dependencies() {
                 if let Some(enriched) = package_map.get(dep.as_str()) {
@@ -114,8 +120,8 @@ impl SbomFormatter for MarkdownFormatter {
         if dependency_graph.transitive_dependency_count() > 0 {
             for (direct_dep, trans_deps) in dependency_graph.transitive_dependencies() {
                 output.push_str(&format!("### Dependencies for {}\n\n", direct_dep.as_str()));
-                output.push_str("| Package | Version | License | Description |\n");
-                output.push_str("|---------|---------|---------|-------------|\n");
+                output.push_str(TABLE_HEADER);
+                output.push_str(TABLE_SEPARATOR);
 
                 for trans_dep in trans_deps {
                     if let Some(enriched) = package_map.get(trans_dep.as_str()) {
@@ -182,7 +188,7 @@ mod tests {
             PackageName::new("requests".to_string()).unwrap(),
             vec![PackageName::new("urllib3".to_string()).unwrap()],
         );
-        let graph = DependencyGraph::new(vec![pkg1, pkg2, pkg3], direct_deps, transitive_deps);
+        let graph = DependencyGraph::new(direct_deps, transitive_deps);
 
         let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
         let formatter = MarkdownFormatter::new();

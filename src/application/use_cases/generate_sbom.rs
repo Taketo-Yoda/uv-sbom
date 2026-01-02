@@ -13,6 +13,12 @@ use std::time::Duration;
 /// This limits requests to ~10 per second (100ms delay = 10 requests/second)
 const LICENSE_FETCH_DELAY_MS: u64 = 100;
 
+/// Type alias for dependency map: package name -> list of dependency names
+type DependencyMap = HashMap<String, Vec<String>>;
+
+/// Type alias for lockfile parsing result: (packages, dependency map)
+type LockfileParseResult = (Vec<Package>, DependencyMap);
+
 /// GenerateSbomUseCase - Core use case for SBOM generation
 ///
 /// This use case orchestrates the SBOM generation workflow using
@@ -85,11 +91,7 @@ where
                 .read_project_name(&request.project_path)?;
             let project_package_name = PackageName::new(project_name)?;
 
-            let graph = DependencyAnalyzer::analyze(
-                packages.clone(),
-                &project_package_name,
-                &dependency_map,
-            )?;
+            let graph = DependencyAnalyzer::analyze(&project_package_name, &dependency_map)?;
 
             self.progress_reporter.report(&format!(
                 "   - Direct dependencies: {}",
@@ -183,10 +185,7 @@ where
     ///
     /// Note: This is a temporary implementation. In a fully refined architecture,
     /// this parsing logic should be in a LockfileParser adapter.
-    fn parse_lockfile_content(
-        &self,
-        content: &str,
-    ) -> Result<(Vec<Package>, HashMap<String, Vec<String>>)> {
+    fn parse_lockfile_content(&self, content: &str) -> Result<LockfileParseResult> {
         use serde::Deserialize;
 
         #[derive(Debug, Deserialize)]
@@ -266,14 +265,12 @@ mod tests {
         }
     }
 
+    use crate::ports::outbound::PyPiMetadata;
+
     struct MockLicenseRepository;
 
     impl LicenseRepository for MockLicenseRepository {
-        fn fetch_license_info(
-            &self,
-            _package_name: &str,
-            _version: &str,
-        ) -> Result<(Option<String>, Option<String>, Vec<String>, Option<String>)> {
+        fn fetch_license_info(&self, _package_name: &str, _version: &str) -> Result<PyPiMetadata> {
             Ok((
                 Some("MIT".to_string()),
                 None,

@@ -1,5 +1,6 @@
 use crate::ports::outbound::OutputPresenter;
 use crate::shared::error::SbomError;
+use crate::shared::security::validate_not_symlink;
 use crate::shared::Result;
 use std::fs;
 use std::io::{self, Write};
@@ -40,20 +41,12 @@ impl FileSystemWriter {
     fn validate_output_security(&self) -> Result<()> {
         // If the file already exists, check it's not a symlink
         if self.output_path.exists() {
-            let metadata = fs::symlink_metadata(&self.output_path).map_err(|e| {
+            validate_not_symlink(&self.output_path, "write").map_err(|e| {
                 SbomError::FileWriteError {
                     path: self.output_path.clone(),
-                    details: format!("Failed to read file metadata: {}", e),
+                    details: e.to_string(),
                 }
             })?;
-
-            if metadata.is_symlink() {
-                return Err(SbomError::FileWriteError {
-                    path: self.output_path.clone(),
-                    details: "Security: Output path is a symbolic link. For security reasons, writing to symbolic links is not allowed.".to_string(),
-                }
-                .into());
-            }
         }
 
         // Validate parent directory chain for symlinks

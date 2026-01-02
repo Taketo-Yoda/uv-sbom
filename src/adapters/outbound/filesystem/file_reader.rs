@@ -1,12 +1,10 @@
 use crate::ports::outbound::{LockfileReader, ProjectConfigReader};
 use crate::shared::error::SbomError;
+use crate::shared::security::{validate_file_size, validate_regular_file, MAX_FILE_SIZE};
 use crate::shared::Result;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
-
-/// Maximum file size for security (100 MB)
-const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024;
 
 /// FileSystemReader adapter for reading files from the file system
 ///
@@ -33,37 +31,15 @@ impl FileSystemReader {
     /// - Validate file is a regular file
     /// - Mitigate TOCTOU by opening file and checking metadata on the file descriptor
     fn safe_read_file(&self, path: &Path, file_type: &str) -> Result<String> {
-        // Security check 1: Get file metadata without following symlinks (TOCTOU mitigation)
+        // Security check 1: Validate it's a regular file (not a symlink or directory)
+        validate_regular_file(path, file_type)?;
+
+        // Security check 2: Get file size and validate it's within limits
         let metadata = fs::symlink_metadata(path).map_err(|e| {
             anyhow::anyhow!("Failed to read {} metadata: {}", file_type, e)
         })?;
-
-        // Security check: Reject symbolic links
-        if metadata.is_symlink() {
-            anyhow::bail!(
-                "Security: {} is a symbolic link. For security reasons, symbolic links are not allowed.",
-                path.display()
-            );
-        }
-
-        // Security check: Ensure it's a regular file
-        if !metadata.is_file() {
-            anyhow::bail!(
-                "{} is not a regular file",
-                path.display()
-            );
-        }
-
-        // Security check: File size limit (prevent DoS via huge files)
         let file_size = metadata.len();
-        if file_size > MAX_FILE_SIZE {
-            anyhow::bail!(
-                "Security: {} is too large ({} bytes). Maximum allowed size is {} bytes.",
-                path.display(),
-                file_size,
-                MAX_FILE_SIZE
-            );
-        }
+        validate_file_size(file_size, path, MAX_FILE_SIZE)?;
 
         // TOCTOU mitigation: Open file and verify metadata again
         // This reduces (but doesn't eliminate) the race window

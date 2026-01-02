@@ -10,7 +10,7 @@ pub mod progress_reporter;
 pub mod project_config_reader;
 
 pub use formatter::{EnrichedPackage, SbomFormatter};
-pub use license_repository::LicenseRepository;
+pub use license_repository::{LicenseRepository, PyPiMetadata};
 pub use lockfile_reader::LockfileReader;
 pub use output_presenter::OutputPresenter;
 pub use progress_reporter::ProgressReporter;

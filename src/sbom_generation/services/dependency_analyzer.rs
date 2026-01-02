@@ -1,4 +1,4 @@
-use crate::sbom_generation::domain::{DependencyGraph, Package, PackageName};
+use crate::sbom_generation::domain::{DependencyGraph, PackageName};
 use crate::shared::Result;
 use std::collections::{HashMap, HashSet};
 
@@ -12,14 +12,12 @@ impl DependencyAnalyzer {
     /// Analyzes dependencies and builds a DependencyGraph
     ///
     /// # Arguments
-    /// * `packages` - All packages in the lockfile
     /// * `project_name` - The name of the root project
     /// * `dependency_map` - Map of package name to its dependencies
     ///
     /// # Returns
-    /// A DependencyGraph containing all packages, direct dependencies, and transitive dependencies
+    /// A DependencyGraph containing direct dependencies and transitive dependencies
     pub fn analyze(
-        packages: Vec<Package>,
         project_name: &PackageName,
         dependency_map: &HashMap<String, Vec<String>>,
     ) -> Result<DependencyGraph> {
@@ -61,11 +59,7 @@ impl DependencyAnalyzer {
             }
         }
 
-        Ok(DependencyGraph::new(
-            packages,
-            direct_deps_names,
-            transitive_dependencies,
-        ))
+        Ok(DependencyGraph::new(direct_deps_names, transitive_dependencies))
     }
 
     /// Maximum recursion depth to prevent stack overflow attacks
@@ -124,24 +118,14 @@ impl DependencyAnalyzer {
 mod tests {
     use super::*;
 
-    fn create_test_package(name: &str, version: &str) -> Package {
-        Package::new(name.to_string(), version.to_string()).unwrap()
-    }
-
     #[test]
     fn test_analyze_simple_dependency_tree() {
-        let packages = vec![
-            create_test_package("myproject", "1.0.0"),
-            create_test_package("requests", "2.31.0"),
-            create_test_package("urllib3", "1.26.0"),
-        ];
-
         let mut dependency_map = HashMap::new();
         dependency_map.insert("myproject".to_string(), vec!["requests".to_string()]);
         dependency_map.insert("requests".to_string(), vec!["urllib3".to_string()]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(packages, &project_name, &dependency_map).unwrap();
+        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         assert_eq!(graph.direct_dependency_count(), 1);
         assert_eq!(graph.direct_dependencies()[0].as_str(), "requests");
@@ -157,17 +141,12 @@ mod tests {
 
     #[test]
     fn test_analyze_no_transitive_dependencies() {
-        let packages = vec![
-            create_test_package("myproject", "1.0.0"),
-            create_test_package("simple-lib", "1.0.0"),
-        ];
-
         let mut dependency_map = HashMap::new();
         dependency_map.insert("myproject".to_string(), vec!["simple-lib".to_string()]);
         dependency_map.insert("simple-lib".to_string(), vec![]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(packages, &project_name, &dependency_map).unwrap();
+        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         assert_eq!(graph.direct_dependency_count(), 1);
         assert_eq!(graph.transitive_dependency_count(), 0);
@@ -175,13 +154,6 @@ mod tests {
 
     #[test]
     fn test_analyze_multiple_direct_dependencies() {
-        let packages = vec![
-            create_test_package("myproject", "1.0.0"),
-            create_test_package("requests", "2.31.0"),
-            create_test_package("numpy", "1.24.0"),
-            create_test_package("urllib3", "1.26.0"),
-        ];
-
         let mut dependency_map = HashMap::new();
         dependency_map.insert(
             "myproject".to_string(),
@@ -191,7 +163,7 @@ mod tests {
         dependency_map.insert("numpy".to_string(), vec![]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(packages, &project_name, &dependency_map).unwrap();
+        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         assert_eq!(graph.direct_dependency_count(), 2);
         assert_eq!(graph.transitive_dependency_count(), 1);
@@ -249,12 +221,11 @@ mod tests {
 
     #[test]
     fn test_analyze_empty_project() {
-        let packages = vec![create_test_package("myproject", "1.0.0")];
         let mut dependency_map = HashMap::new();
         dependency_map.insert("myproject".to_string(), vec![]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(packages, &project_name, &dependency_map).unwrap();
+        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         assert_eq!(graph.direct_dependency_count(), 0);
         assert_eq!(graph.transitive_dependency_count(), 0);

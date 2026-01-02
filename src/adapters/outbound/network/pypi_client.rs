@@ -1,4 +1,4 @@
-use crate::ports::outbound::LicenseRepository;
+use crate::ports::outbound::{LicenseRepository, PyPiMetadata};
 use crate::shared::Result;
 use serde::Deserialize;
 use std::time::Duration;
@@ -126,11 +126,7 @@ impl PyPiLicenseRepository {
 // Use PyPiLicenseRepository::new() explicitly and handle the Result.
 
 impl LicenseRepository for PyPiLicenseRepository {
-    fn fetch_license_info(
-        &self,
-        package_name: &str,
-        version: &str,
-    ) -> Result<(Option<String>, Option<String>, Vec<String>, Option<String>)> {
+    fn fetch_license_info(&self, package_name: &str, version: &str) -> Result<PyPiMetadata> {
         let package_info = self.fetch_with_retry(package_name, version)?;
 
         Ok((
