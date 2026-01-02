@@ -1,0 +1,12 @@
+[project]
+name = "sample-project"
+version = "1.0.0"
+description = "A sample project for testing"
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.31.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
