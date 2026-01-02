@@ -2,6 +2,8 @@
 
 [![shield_license]][license_file]
 
+[English](README.md) | [日本語](README-JP.md)
+
 ----
 
 [uv](https://github.com/astral-sh/uv)で管理されているPythonプロジェクトのSBOM（Software Bill of Materials）を生成します。
@@ -245,12 +247,12 @@ uv.lock file not found: /path/to/project/uv.lock
 ## ドキュメント
 
 ### ユーザー向け
-- [README.md](README.md) / [日本語版 (README-ja.md)](README-ja.md) - ユーザードキュメント
+- [README-JP.md)](README-JP.md) - ユーザードキュメント
 - [LICENSE](LICENSE) - MITライセンス
 
 ### 開発者向け
 - [DEVELOPMENT.md](DEVELOPMENT.md) - 開発ガイド
-- [ARCHITECTURE.md](ARCHITECTURE.md) / [日本語版 (ARCHITECTURE-ja.md)](ARCHITECTURE-ja.md) - **ヘキサゴナルアーキテクチャ + DDD実装**（レイヤー、ポート、アダプター、テスト戦略、ADR）
+- [ARCHITECTURE-JP.md)](ARCHITECTURE-JP.md) - **ヘキサゴナルアーキテクチャ + DDD実装**（レイヤー、ポート、アダプター、テスト戦略、ADR）
 - [CHANGELOG.md](CHANGELOG.md) - 変更履歴
 
 ### Claude Codeユーザー向け

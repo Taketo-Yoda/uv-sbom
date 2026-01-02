@@ -2,6 +2,8 @@
 
 [![shield_license]][license_file] 
 
+[English](README.md) | [日本語](README-JP.md)
+
 ----
 
 Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](https://github.com/astral-sh/uv).
@@ -245,12 +247,12 @@ If you're behind a proxy or firewall, ensure that you can access `https://pypi.o
 ## Documentation
 
 ### For Users
-- [README.md](README.md) / [日本語版 (README-ja.md)](README-ja.md) - User documentation
+- [README.md](README.md) - User documentation
 - [LICENSE](LICENSE) - MIT License
 
 ### For Developers
 - [DEVELOPMENT.md](DEVELOPMENT.md) - Development guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) / [日本語版 (ARCHITECTURE-ja.md)](ARCHITECTURE-ja.md) - **Hexagonal Architecture + DDD implementation** (layers, ports, adapters, test strategy, ADRs)
+- [ARCHITECTURE.md](ARCHITECTURE.md) - **Hexagonal Architecture + DDD implementation** (layers, ports, adapters, test strategy, ADRs)
 - [CHANGELOG.md](CHANGELOG.md) - Change history
 
 ### For Claude Code Users
