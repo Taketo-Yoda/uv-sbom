@@ -27,13 +27,14 @@ jobs:
           pip install build
 
       - name: Build package
+        working-directory: python-wrapper
         run: python -m build
 
       - name: Store the distribution packages
         uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions
-          path: dist/
+          path: python-wrapper/dist/
 
   publish-to-pypi:
     name: Publish to PyPI
