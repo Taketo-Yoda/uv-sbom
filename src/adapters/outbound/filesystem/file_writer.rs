@@ -24,10 +24,7 @@ impl FileSystemWriter {
             if !parent.exists() && parent != Path::new("") {
                 return Err(SbomError::FileWriteError {
                     path: self.output_path.clone(),
-                    details: format!(
-                        "Parent directory does not exist: {}",
-                        parent.display()
-                    ),
+                    details: format!("Parent directory does not exist: {}", parent.display()),
                 }
                 .into());
             }
@@ -83,11 +80,9 @@ impl OutputPresenter for FileSystemWriter {
         self.validate_output_security()?;
 
         // Safe to write now
-        fs::write(&self.output_path, content).map_err(|e| {
-            SbomError::FileWriteError {
-                path: self.output_path.clone(),
-                details: e.to_string(),
-            }
+        fs::write(&self.output_path, content).map_err(|e| SbomError::FileWriteError {
+            path: self.output_path.clone(),
+            details: e.to_string(),
         })?;
 
         eprintln!("✅ Output complete: {}", self.output_path.display());

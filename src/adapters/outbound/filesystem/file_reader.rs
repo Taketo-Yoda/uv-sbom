@@ -37,17 +37,15 @@ impl FileSystemReader {
         validate_regular_file(path, file_type)?;
 
         // Security check 2: Get file size and validate it's within limits
-        let metadata = fs::symlink_metadata(path).map_err(|e| {
-            anyhow::anyhow!("Failed to read {} metadata: {}", file_type, e)
-        })?;
+        let metadata = fs::symlink_metadata(path)
+            .map_err(|e| anyhow::anyhow!("Failed to read {} metadata: {}", file_type, e))?;
         let file_size = metadata.len();
         validate_file_size(file_size, path, MAX_FILE_SIZE)?;
 
         // TOCTOU mitigation: Open file and verify metadata again
         // This reduces (but doesn't eliminate) the race window
-        let mut file = File::open(path).map_err(|e| {
-            anyhow::anyhow!("Failed to open {}: {}", file_type, e)
-        })?;
+        let mut file =
+            File::open(path).map_err(|e| anyhow::anyhow!("Failed to open {}: {}", file_type, e))?;
 
         // Re-check metadata on the opened file descriptor
         let fd_metadata = file.metadata().map_err(|e| {
@@ -65,9 +63,8 @@ impl FileSystemReader {
 
         // Read file contents
         let mut contents = String::new();
-        file.read_to_string(&mut contents).map_err(|e| {
-            anyhow::anyhow!("Failed to read {}: {}", file_type, e)
-        })?;
+        file.read_to_string(&mut contents)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", file_type, e))?;
 
         Ok(contents)
     }
@@ -147,12 +144,11 @@ impl FileSystemReader {
             dev: Vec<UvDependency>,
         }
 
-        let lockfile: UvLock = toml::from_str(content).map_err(|e| {
-            SbomError::LockfileParseError {
+        let lockfile: UvLock =
+            toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
                 path: project_path.join("uv.lock"),
                 details: e.to_string(),
-            }
-        })?;
+            })?;
 
         let mut packages = Vec::new();
         let mut dependency_map = HashMap::new();

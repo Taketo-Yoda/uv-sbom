@@ -120,18 +120,18 @@ where
     /// Security: This method implements rate limiting to prevent DoS attacks
     /// via unbounded PyPI API requests. A delay is added between requests
     /// to limit the rate to approximately 10 requests per second.
-    fn enrich_packages_with_licenses(&self, packages: Vec<Package>) -> Result<Vec<EnrichedPackage>> {
+    fn enrich_packages_with_licenses(
+        &self,
+        packages: Vec<Package>,
+    ) -> Result<Vec<EnrichedPackage>> {
         let total = packages.len();
         let mut enriched = Vec::new();
         let mut successful = 0;
         let mut failed = 0;
 
         for (idx, package) in packages.into_iter().enumerate() {
-            self.progress_reporter.report_progress(
-                idx + 1,
-                total,
-                Some(package.name()),
-            );
+            self.progress_reporter
+                .report_progress(idx + 1, total, Some(package.name()));
 
             match self
                 .license_repository

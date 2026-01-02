@@ -29,12 +29,8 @@ impl PackageName {
         // Security: Validate characters (allow alphanumeric, hyphens, underscores, dots, and common package chars)
         // This prevents injection attacks and special characters that could cause issues
         if !name.chars().all(|c| {
-            c.is_alphanumeric()
-                || c == '-'
-                || c == '_'
-                || c == '.'
-                || c == '['
-                || c == ']'  // For extras like package[extra]
+            c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '[' || c == ']'
+            // For extras like package[extra]
         }) {
             anyhow::bail!(
                 "Package name contains invalid characters. Only alphanumeric, hyphens, underscores, dots, and brackets are allowed."
@@ -78,11 +74,7 @@ impl Version {
         // Security: Validate characters (allow alphanumeric, dots, hyphens, plus, and common version chars)
         // This prevents injection attacks
         if !version.chars().all(|c| {
-            c.is_alphanumeric()
-                || c == '.'
-                || c == '-'
-                || c == '+'
-                || c == '*'  // For wildcards
+            c.is_alphanumeric() || c == '.' || c == '-' || c == '+' || c == '*' // For wildcards
         }) {
             anyhow::bail!(
                 "Package version contains invalid characters. Only alphanumeric, dots, hyphens, plus, and asterisks are allowed."

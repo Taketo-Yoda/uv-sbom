@@ -193,7 +193,9 @@ source = { registry = "https://pypi.org/simple" }
 
     // Verify that an error was reported via progress reporter
     let messages = progress_reporter.get_messages();
-    assert!(messages.iter().any(|m| m.contains("Error:") && m.contains("license")));
+    assert!(messages
+        .iter()
+        .any(|m| m.contains("Error:") && m.contains("license")));
 }
 
 #[test]
@@ -232,8 +234,12 @@ source = { registry = "https://pypi.org/simple" }
 
     let lockfile_reader = MockLockfileReader::new(lockfile_content.to_string());
     let project_config_reader = MockProjectConfigReader::new("test-project".to_string());
-    let license_repository = MockLicenseRepository::new()
-        .with_license("requests", "2.31.0", "Apache 2.0", "HTTP library");
+    let license_repository = MockLicenseRepository::new().with_license(
+        "requests",
+        "2.31.0",
+        "Apache 2.0",
+        "HTTP library",
+    );
     let progress_reporter = MockProgressReporter::new();
 
     let use_case = GenerateSbomUseCase::new(

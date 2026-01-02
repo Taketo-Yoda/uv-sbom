@@ -66,7 +66,9 @@ fn test_e2e_markdown_format() {
     // Format as Markdown
     let formatter = MarkdownFormatter::new();
     let markdown_output = formatter.format_with_dependencies(
-        &response.dependency_graph.expect("Dependency graph should be present"),
+        &response
+            .dependency_graph
+            .expect("Dependency graph should be present"),
         response.enriched_packages,
         &response.metadata,
     );
@@ -130,7 +132,9 @@ fn test_e2e_package_count() {
     assert_eq!(response.enriched_packages.len(), 6);
 
     // Verify dependency graph structure
-    let graph = response.dependency_graph.expect("Dependency graph should be present");
+    let graph = response
+        .dependency_graph
+        .expect("Dependency graph should be present");
     assert_eq!(graph.direct_dependency_count(), 1); // Only requests
     assert!(graph.transitive_dependency_count() > 0); // requests has transitive deps
 }
@@ -140,8 +144,11 @@ fn test_e2e_package_count() {
 fn create_test_license_repository() -> impl LicenseRepository {
     use std::collections::HashMap;
 
+    // Type alias for license data: (license, license_expression, classifiers, description)
+    type LicenseData = (Option<String>, Option<String>, Vec<String>, Option<String>);
+
     struct TestLicenseRepository {
-        licenses: HashMap<String, (Option<String>, Option<String>, Vec<String>, Option<String>)>,
+        licenses: HashMap<String, LicenseData>,
     }
 
     impl TestLicenseRepository {
@@ -149,23 +156,48 @@ fn create_test_license_repository() -> impl LicenseRepository {
             let mut licenses = HashMap::new();
             licenses.insert(
                 "requests@2.31.0".to_string(),
-                (Some("Apache-2.0".to_string()), None, vec![], Some("Python HTTP for Humans.".to_string())),
+                (
+                    Some("Apache-2.0".to_string()),
+                    None,
+                    vec![],
+                    Some("Python HTTP for Humans.".to_string()),
+                ),
             );
             licenses.insert(
                 "urllib3@2.1.0".to_string(),
-                (Some("MIT".to_string()), None, vec![], Some("HTTP library with thread-safe connection pooling".to_string())),
+                (
+                    Some("MIT".to_string()),
+                    None,
+                    vec![],
+                    Some("HTTP library with thread-safe connection pooling".to_string()),
+                ),
             );
             licenses.insert(
                 "charset-normalizer@3.3.2".to_string(),
-                (Some("MIT".to_string()), None, vec![], Some("The Real First Universal Charset Detector".to_string())),
+                (
+                    Some("MIT".to_string()),
+                    None,
+                    vec![],
+                    Some("The Real First Universal Charset Detector".to_string()),
+                ),
             );
             licenses.insert(
                 "idna@3.6".to_string(),
-                (Some("BSD-3-Clause".to_string()), None, vec![], Some("Internationalized Domain Names in Applications (IDNA)".to_string())),
+                (
+                    Some("BSD-3-Clause".to_string()),
+                    None,
+                    vec![],
+                    Some("Internationalized Domain Names in Applications (IDNA)".to_string()),
+                ),
             );
             licenses.insert(
                 "certifi@2023.11.17".to_string(),
-                (Some("MPL-2.0".to_string()), None, vec![], Some("Python package for providing Mozilla's CA Bundle.".to_string())),
+                (
+                    Some("MPL-2.0".to_string()),
+                    None,
+                    vec![],
+                    Some("Python package for providing Mozilla's CA Bundle.".to_string()),
+                ),
             );
             Self { licenses }
         }
@@ -178,7 +210,11 @@ fn create_test_license_repository() -> impl LicenseRepository {
             version: &str,
         ) -> Result<(Option<String>, Option<String>, Vec<String>, Option<String>)> {
             let key = format!("{}@{}", package_name, version);
-            Ok(self.licenses.get(&key).cloned().unwrap_or((None, None, vec![], None)))
+            Ok(self
+                .licenses
+                .get(&key)
+                .cloned()
+                .unwrap_or((None, None, vec![], None)))
         }
     }
 

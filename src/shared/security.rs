@@ -54,13 +54,8 @@ pub fn validate_not_symlink(path: &Path, operation: &str) -> Result<()> {
 /// - The path is a symbolic link
 /// - The path is not a regular file
 pub fn validate_regular_file(path: &Path, file_description: &str) -> Result<()> {
-    let metadata = fs::symlink_metadata(path).map_err(|e| {
-        anyhow::anyhow!(
-            "Failed to read {} metadata: {}",
-            file_description,
-            e
-        )
-    })?;
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|e| anyhow::anyhow!("Failed to read {} metadata: {}", file_description, e))?;
 
     if metadata.is_symlink() {
         anyhow::bail!(
@@ -140,7 +135,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let result = validate_regular_file(temp_dir.path(), "test directory");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not a regular file"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("not a regular file"));
     }
 
     #[test]

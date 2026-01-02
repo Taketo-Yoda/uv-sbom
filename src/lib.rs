@@ -55,7 +55,9 @@ pub mod shared;
 /// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::adapters::outbound::console::StderrProgressReporter;
-    pub use crate::adapters::outbound::filesystem::{FileSystemReader, FileSystemWriter, StdoutPresenter};
+    pub use crate::adapters::outbound::filesystem::{
+        FileSystemReader, FileSystemWriter, StdoutPresenter,
+    };
     pub use crate::adapters::outbound::formatters::{CycloneDxFormatter, MarkdownFormatter};
     pub use crate::adapters::outbound::network::PyPiLicenseRepository;
     pub use crate::application::dto::{SbomRequest, SbomResponse};

@@ -16,10 +16,21 @@ impl MockLicenseRepository {
         }
     }
 
-    pub fn with_license(mut self, package: &str, version: &str, license: &str, description: &str) -> Self {
+    pub fn with_license(
+        mut self,
+        package: &str,
+        version: &str,
+        license: &str,
+        description: &str,
+    ) -> Self {
         self.licenses.insert(
             format!("{}@{}", package, version),
-            (Some(license.to_string()), None, vec![], Some(description.to_string())),
+            (
+                Some(license.to_string()),
+                None,
+                vec![],
+                Some(description.to_string()),
+            ),
         );
         self
     }

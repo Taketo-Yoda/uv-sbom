@@ -32,10 +32,7 @@ impl DependencyGraph {
     }
 
     pub fn transitive_dependency_count(&self) -> usize {
-        self.transitive_dependencies
-            .values()
-            .map(|v| v.len())
-            .sum()
+        self.transitive_dependencies.values().map(|v| v.len()).sum()
     }
 }
 

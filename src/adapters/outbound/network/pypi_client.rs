@@ -103,17 +103,13 @@ impl PyPiLicenseRepository {
 
         let url = format!(
             "https://pypi.org/pypi/{}/{}/json",
-            encoded_package,
-            encoded_version
+            encoded_package, encoded_version
         );
 
         let response = self.client.get(&url).send()?;
 
         if !response.status().is_success() {
-            anyhow::bail!(
-                "PyPI API returned status code {}",
-                response.status()
-            );
+            anyhow::bail!("PyPI API returned status code {}", response.status());
         }
 
         let package_info: PyPiPackageInfo = response.json()?;

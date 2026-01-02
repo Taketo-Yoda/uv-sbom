@@ -110,11 +110,9 @@ fn validate_project_path(path: &Path) -> Result<()> {
     }
 
     // Security check: Reject symbolic links for project paths
-    let metadata = std::fs::symlink_metadata(path).map_err(|e| {
-        SbomError::InvalidProjectPath {
-            path: path.to_path_buf(),
-            reason: format!("Failed to read path metadata: {}", e),
-        }
+    let metadata = std::fs::symlink_metadata(path).map_err(|e| SbomError::InvalidProjectPath {
+        path: path.to_path_buf(),
+        reason: format!("Failed to read path metadata: {}", e),
     })?;
 
     if metadata.is_symlink() {
@@ -134,12 +132,12 @@ fn validate_project_path(path: &Path) -> Result<()> {
     }
 
     // Security check: Canonicalize path to prevent path traversal
-    let canonical_path = path.canonicalize().map_err(|e| {
-        SbomError::InvalidProjectPath {
+    let canonical_path = path
+        .canonicalize()
+        .map_err(|e| SbomError::InvalidProjectPath {
             path: path.to_path_buf(),
             reason: format!("Failed to canonicalize path: {}", e),
-        }
-    })?;
+        })?;
 
     // Validate that the canonical path is actually a directory
     // (additional check after canonicalization)

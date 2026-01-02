@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn test_progress_reporter_default() {
-        let reporter = StderrProgressReporter::default();
+        let reporter = StderrProgressReporter;
         reporter.report("Test message");
     }
 }

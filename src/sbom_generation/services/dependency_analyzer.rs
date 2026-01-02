@@ -59,7 +59,10 @@ impl DependencyAnalyzer {
             }
         }
 
-        Ok(DependencyGraph::new(direct_deps_names, transitive_dependencies))
+        Ok(DependencyGraph::new(
+            direct_deps_names,
+            transitive_dependencies,
+        ))
     }
 
     /// Maximum recursion depth to prevent stack overflow attacks
@@ -108,7 +111,14 @@ impl DependencyAnalyzer {
                     trans_deps.push(dep.clone());
                 }
                 // Recursively collect transitive dependencies with incremented depth
-                Self::collect_transitive_deps(dep, dependency_map, trans_deps, visited, direct_deps, depth + 1);
+                Self::collect_transitive_deps(
+                    dep,
+                    dependency_map,
+                    trans_deps,
+                    visited,
+                    direct_deps,
+                    depth + 1,
+                );
             }
         }
     }
