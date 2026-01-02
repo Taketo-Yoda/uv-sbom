@@ -20,7 +20,7 @@
 - 🛡️ 堅牢なエラーハンドリングと親切なエラーメッセージ・提案
 - 📈 ライセンス情報取得時の進捗表示
 - 🏗️ **ヘキサゴナルアーキテクチャ**（ポート＆アダプター）+ **ドメイン駆動設計**による保守性とテスタビリティ
-- ✅ **149個のテスト**による包括的なテストカバレッジ（ユニット、統合、E2E）
+- ✅ **163個のテスト**による包括的なテストカバレッジ（ユニット、統合、E2E）
 
 ## スコープとCycloneDXとの主な違い
 
@@ -58,16 +58,58 @@
 
 ## インストール
 
+### Cargo（Rustユーザー向け推奨）
+
+[crates.io](https://crates.io/crates/uv-sbom)からインストール:
+
+```bash
+cargo install uv-sbom
+```
+
+### プリビルドバイナリ
+
+[GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases)からプリビルドバイナリをダウンロード:
+
+**macOS (Apple Silicon)**:
+```bash
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-aarch64-apple-darwin.tar.gz
+tar xzf uv-sbom-aarch64-apple-darwin.tar.gz
+sudo mv uv-sbom /usr/local/bin/
+```
+
+**macOS (Intel)**:
+```bash
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-apple-darwin.tar.gz
+tar xzf uv-sbom-x86_64-apple-darwin.tar.gz
+sudo mv uv-sbom /usr/local/bin/
+```
+
+**Linux (x86_64)**:
+```bash
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-unknown-linux-gnu.tar.gz
+tar xzf uv-sbom-x86_64-unknown-linux-gnu.tar.gz
+sudo mv uv-sbom /usr/local/bin/
+```
+
+**Windows**:
+[リリースページ](https://github.com/Taketo-Yoda/uv-sbom/releases)から`uv-sbom-x86_64-pc-windows-msvc.zip`をダウンロードし、任意の場所に展開してください。
+
 ### ソースから
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/yourusername/uv-sbom.git
+git clone https://github.com/Taketo-Yoda/uv-sbom.git
 cd uv-sbom
 
 # ビルドとインストール
 cargo build --release
 cargo install --path .
+```
+
+### インストールの確認
+
+```bash
+uv-sbom --version
 ```
 
 ## 使用方法
@@ -252,7 +294,7 @@ uv.lock file not found: /path/to/project/uv.lock
 
 ### 開発者向け
 - [DEVELOPMENT.md](DEVELOPMENT.md) - 開発ガイド
-- [ARCHITECTURE-JP.md)](ARCHITECTURE-JP.md) - **ヘキサゴナルアーキテクチャ + DDD実装**（レイヤー、ポート、アダプター、テスト戦略、ADR）
+- [ARCHITECTURE-JP.md](ARCHITECTURE-JP.md) - **ヘキサゴナルアーキテクチャ + DDD実装**（レイヤー、ポート、アダプター、テスト戦略、ADR）
 - [CHANGELOG.md](CHANGELOG.md) - 変更履歴
 
 ### Claude Codeユーザー向け

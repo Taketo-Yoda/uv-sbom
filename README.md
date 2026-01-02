@@ -20,7 +20,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 🛡️ Robust error handling with helpful error messages and suggestions
 - 📈 Progress tracking during license information retrieval
 - 🏗️ Built with **Hexagonal Architecture** (Ports and Adapters) + **Domain-Driven Design** for maintainability and testability
-- ✅ Comprehensive test coverage with **149 tests** (Unit, Integration, E2E)
+- ✅ Comprehensive test coverage with **163 tests** (Unit, Integration, E2E)
 
 ## Scope and Key Differences from CycloneDX
 
@@ -58,16 +58,58 @@ The focused approach of `uv-sbom` reduces noise in security vulnerability scanni
 
 ## Installation
 
-### From source
+### Cargo (Recommended for Rust users)
+
+Install from [crates.io](https://crates.io/crates/uv-sbom):
+
+```bash
+cargo install uv-sbom
+```
+
+### Pre-built Binaries
+
+Download pre-built binaries from [GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases):
+
+**macOS (Apple Silicon)**:
+```bash
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-aarch64-apple-darwin.tar.gz
+tar xzf uv-sbom-aarch64-apple-darwin.tar.gz
+sudo mv uv-sbom /usr/local/bin/
+```
+
+**macOS (Intel)**:
+```bash
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-apple-darwin.tar.gz
+tar xzf uv-sbom-x86_64-apple-darwin.tar.gz
+sudo mv uv-sbom /usr/local/bin/
+```
+
+**Linux (x86_64)**:
+```bash
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-unknown-linux-gnu.tar.gz
+tar xzf uv-sbom-x86_64-unknown-linux-gnu.tar.gz
+sudo mv uv-sbom /usr/local/bin/
+```
+
+**Windows**:
+Download `uv-sbom-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/Taketo-Yoda/uv-sbom/releases) and extract to your desired location.
+
+### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/uv-sbom.git
+git clone https://github.com/Taketo-Yoda/uv-sbom.git
 cd uv-sbom
 
 # Build and install
 cargo build --release
 cargo install --path .
+```
+
+### Verify Installation
+
+```bash
+uv-sbom --version
 ```
 
 ## Usage

@@ -2,10 +2,21 @@
 name = "uv-sbom"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
-description = "Generate SBOMs for Python projects managed by uv"
+authors = ["Taketo Yoda <exhaust7.drs@gmail.com>"]
+description = "SBOM generation tool for uv projects - Generate CycloneDX SBOMs from uv.lock files"
 license = "MIT"
-repository = "https://github.com/yourusername/uv-sbom"
+repository = "https://github.com/Taketo-Yoda/uv-sbom"
+homepage = "https://github.com/Taketo-Yoda/uv-sbom"
+documentation = "https://github.com/Taketo-Yoda/uv-sbom"
+readme = "README.md"
+keywords = ["sbom", "cyclonedx", "uv", "security", "supply-chain"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = [
+    ".claude/",
+    ".github/",
+    "tests/fixtures/",
+    "sample-project/",
+]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
