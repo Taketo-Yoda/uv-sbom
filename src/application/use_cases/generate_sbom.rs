@@ -6,6 +6,12 @@ use crate::sbom_generation::domain::{Package, PackageName};
 use crate::sbom_generation::services::{DependencyAnalyzer, SbomGenerator};
 use crate::shared::Result;
 use std::collections::HashMap;
+use std::thread;
+use std::time::Duration;
+
+/// Rate limiting: Delay between license fetch requests to prevent DoS (milliseconds)
+/// This limits requests to ~10 per second (100ms delay = 10 requests/second)
+const LICENSE_FETCH_DELAY_MS: u64 = 100;
 
 /// GenerateSbomUseCase - Core use case for SBOM generation
 ///
@@ -117,6 +123,10 @@ where
     }
 
     /// Enriches packages with license information from the repository
+    ///
+    /// Security: This method implements rate limiting to prevent DoS attacks
+    /// via unbounded PyPI API requests. A delay is added between requests
+    /// to limit the rate to approximately 10 requests per second.
     fn enrich_packages_with_licenses(&self, packages: Vec<Package>) -> Result<Vec<EnrichedPackage>> {
         let total = packages.len();
         let mut enriched = Vec::new();
@@ -152,6 +162,12 @@ where
                     enriched.push(EnrichedPackage::new(package, None, None));
                     failed += 1;
                 }
+            }
+
+            // Security: Rate limiting to prevent DoS via unbounded API requests
+            // Add delay between requests (except after the last one)
+            if idx < total - 1 {
+                thread::sleep(Duration::from_millis(LICENSE_FETCH_DELAY_MS));
             }
         }
 

@@ -63,9 +63,49 @@ impl PyPiLicenseRepository {
         Err(last_error.unwrap())
     }
 
+    /// Validates and sanitizes package name and version for URL safety
+    fn validate_url_component(component: &str, component_type: &str) -> Result<()> {
+        // Security: Prevent URL injection attacks
+        if component.contains('/') || component.contains('\\') {
+            anyhow::bail!(
+                "Security: {} contains path separators which are not allowed",
+                component_type
+            );
+        }
+
+        if component.contains("..") {
+            anyhow::bail!(
+                "Security: {} contains '..' which is not allowed",
+                component_type
+            );
+        }
+
+        // Check for URL-unsafe characters that could cause issues
+        if component.contains('#') || component.contains('?') || component.contains('@') {
+            anyhow::bail!(
+                "Security: {} contains URL-unsafe characters",
+                component_type
+            );
+        }
+
+        Ok(())
+    }
+
     /// Fetches package information from PyPI API
     fn fetch_from_pypi(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
-        let url = format!("https://pypi.org/pypi/{}/{}/json", package_name, version);
+        // Security: Validate URL components before using them
+        Self::validate_url_component(package_name, "Package name")?;
+        Self::validate_url_component(version, "Version")?;
+
+        // URL encode components to handle special characters safely
+        let encoded_package = urlencoding::encode(package_name);
+        let encoded_version = urlencoding::encode(version);
+
+        let url = format!(
+            "https://pypi.org/pypi/{}/{}/json",
+            encoded_package,
+            encoded_version
+        );
 
         let response = self.client.get(&url).send()?;
 

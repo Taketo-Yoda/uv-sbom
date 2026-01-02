@@ -1,7 +1,8 @@
 use crate::ports::outbound::{LockfileReader, ProjectConfigReader};
 use crate::shared::error::SbomError;
 use crate::shared::Result;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::Path;
 
 /// Maximum file size for security (100 MB)
@@ -30,8 +31,9 @@ impl FileSystemReader {
     /// - Reject symbolic links
     /// - Check file size limits
     /// - Validate file is a regular file
+    /// - Mitigate TOCTOU by opening file and checking metadata on the file descriptor
     fn safe_read_file(&self, path: &Path, file_type: &str) -> Result<String> {
-        // Get file metadata without following symlinks
+        // Security check 1: Get file metadata without following symlinks (TOCTOU mitigation)
         let metadata = fs::symlink_metadata(path).map_err(|e| {
             anyhow::anyhow!("Failed to read {} metadata: {}", file_type, e)
         })?;
@@ -63,10 +65,33 @@ impl FileSystemReader {
             );
         }
 
-        // Safe to read the file now
-        fs::read_to_string(path).map_err(|e| {
+        // TOCTOU mitigation: Open file and verify metadata again
+        // This reduces (but doesn't eliminate) the race window
+        let mut file = File::open(path).map_err(|e| {
+            anyhow::anyhow!("Failed to open {}: {}", file_type, e)
+        })?;
+
+        // Re-check metadata on the opened file descriptor
+        let fd_metadata = file.metadata().map_err(|e| {
+            anyhow::anyhow!("Failed to read {} metadata after opening: {}", file_type, e)
+        })?;
+
+        // Verify the file hasn't changed (same size indicates likely same file)
+        // This is not perfect but provides additional protection
+        if fd_metadata.len() != file_size {
+            anyhow::bail!(
+                "Security: {} changed between check and open (possible TOCTOU attack)",
+                path.display()
+            );
+        }
+
+        // Read file contents
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).map_err(|e| {
             anyhow::anyhow!("Failed to read {}: {}", file_type, e)
-        })
+        })?;
+
+        Ok(contents)
     }
 }
 
