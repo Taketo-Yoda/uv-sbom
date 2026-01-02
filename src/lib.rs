@@ -61,8 +61,8 @@ pub mod prelude {
     pub use crate::application::dto::{SbomRequest, SbomResponse};
     pub use crate::application::use_cases::GenerateSbomUseCase;
     pub use crate::ports::outbound::{
-        EnrichedPackage, LicenseRepository, LockfileReader, OutputPresenter, ProgressReporter,
-        ProjectConfigReader, SbomFormatter,
+        EnrichedPackage, LicenseRepository, LockfileParseResult, LockfileReader, OutputPresenter,
+        ProgressReporter, ProjectConfigReader, SbomFormatter,
     };
     pub use crate::sbom_generation::domain::{
         DependencyGraph, LicenseInfo, Package, PackageName, SbomMetadata,

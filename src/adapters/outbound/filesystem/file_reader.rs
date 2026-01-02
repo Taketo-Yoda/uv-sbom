@@ -1,7 +1,9 @@
-use crate::ports::outbound::{LockfileReader, ProjectConfigReader};
+use crate::ports::outbound::{LockfileParseResult, LockfileReader, ProjectConfigReader};
+use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
 use crate::shared::security::{validate_file_size, validate_regular_file, MAX_FILE_SIZE};
 use crate::shared::Result;
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
@@ -96,6 +98,82 @@ impl LockfileReader for FileSystemReader {
             }
             .into()
         })
+    }
+
+    fn read_and_parse_lockfile(&self, project_path: &Path) -> Result<LockfileParseResult> {
+        // Read the lockfile content
+        let lockfile_content = self.read_lockfile(project_path)?;
+
+        // Parse TOML content
+        self.parse_lockfile_content(&lockfile_content, project_path)
+    }
+}
+
+impl FileSystemReader {
+    /// Parses lockfile content to extract packages and dependency map
+    ///
+    /// This method handles the TOML parsing logic which is an infrastructure concern.
+    /// It was moved from the application layer to properly separate concerns.
+    fn parse_lockfile_content(
+        &self,
+        content: &str,
+        project_path: &Path,
+    ) -> Result<LockfileParseResult> {
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize)]
+        struct UvLock {
+            package: Vec<UvPackage>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct UvPackage {
+            name: String,
+            version: String,
+            #[serde(default)]
+            dependencies: Vec<UvDependency>,
+            #[serde(default, rename = "dev-dependencies")]
+            dev_dependencies: Option<DevDependencies>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct UvDependency {
+            name: String,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct DevDependencies {
+            #[serde(default)]
+            dev: Vec<UvDependency>,
+        }
+
+        let lockfile: UvLock = toml::from_str(content).map_err(|e| {
+            SbomError::LockfileParseError {
+                path: project_path.join("uv.lock"),
+                details: e.to_string(),
+            }
+        })?;
+
+        let mut packages = Vec::new();
+        let mut dependency_map = HashMap::new();
+
+        for pkg in lockfile.package {
+            packages.push(Package::new(pkg.name.clone(), pkg.version.clone())?);
+
+            // Build dependency map
+            let mut deps = Vec::new();
+            for dep in &pkg.dependencies {
+                deps.push(dep.name.clone());
+            }
+            if let Some(dev_deps) = &pkg.dev_dependencies {
+                for dep in &dev_deps.dev {
+                    deps.push(dep.name.clone());
+                }
+            }
+            dependency_map.insert(pkg.name, deps);
+        }
+
+        Ok((packages, dependency_map))
     }
 }
 

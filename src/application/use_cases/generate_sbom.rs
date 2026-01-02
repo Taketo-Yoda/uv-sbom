@@ -5,19 +5,12 @@ use crate::ports::outbound::{
 use crate::sbom_generation::domain::{Package, PackageName};
 use crate::sbom_generation::services::{DependencyAnalyzer, SbomGenerator};
 use crate::shared::Result;
-use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
 
 /// Rate limiting: Delay between license fetch requests to prevent DoS (milliseconds)
 /// This limits requests to ~10 per second (100ms delay = 10 requests/second)
 const LICENSE_FETCH_DELAY_MS: u64 = 100;
-
-/// Type alias for dependency map: package name -> list of dependency names
-type DependencyMap = HashMap<String, Vec<String>>;
-
-/// Type alias for lockfile parsing result: (packages, dependency map)
-type LockfileParseResult = (Vec<Package>, DependencyMap);
 
 /// GenerateSbomUseCase - Core use case for SBOM generation
 ///
@@ -66,17 +59,15 @@ where
     /// # Returns
     /// SbomResponse containing enriched packages, optional dependency graph, and metadata
     pub fn execute(&self, request: SbomRequest) -> Result<SbomResponse> {
-        // Step 1: Read lockfile
+        // Step 1: Read and parse lockfile
         self.progress_reporter.report(&format!(
             "📖 Loading uv.lock file from: {}",
             request.project_path.display()
         ));
 
-        let lockfile_content = self.lockfile_reader.read_lockfile(&request.project_path)?;
-
-        // Step 2: Parse lockfile to get packages and dependencies
-        // Note: This parsing logic will be moved to an adapter in future refinement
-        let (packages, dependency_map) = self.parse_lockfile_content(&lockfile_content)?;
+        let (packages, dependency_map) = self
+            .lockfile_reader
+            .read_and_parse_lockfile(&request.project_path)?;
 
         self.progress_reporter
             .report(&format!("✅ Detected {} package(s)", packages.len()));
@@ -180,68 +171,14 @@ where
 
         Ok(enriched)
     }
-
-    /// Parses lockfile content to extract packages and dependency map
-    ///
-    /// Note: This is a temporary implementation. In a fully refined architecture,
-    /// this parsing logic should be in a LockfileParser adapter.
-    fn parse_lockfile_content(&self, content: &str) -> Result<LockfileParseResult> {
-        use serde::Deserialize;
-
-        #[derive(Debug, Deserialize)]
-        struct UvLock {
-            package: Vec<UvPackage>,
-        }
-
-        #[derive(Debug, Deserialize)]
-        struct UvPackage {
-            name: String,
-            version: String,
-            #[serde(default)]
-            dependencies: Vec<UvDependency>,
-            #[serde(default, rename = "dev-dependencies")]
-            dev_dependencies: Option<DevDependencies>,
-        }
-
-        #[derive(Debug, Deserialize)]
-        struct UvDependency {
-            name: String,
-        }
-
-        #[derive(Debug, Deserialize)]
-        struct DevDependencies {
-            #[serde(default)]
-            dev: Vec<UvDependency>,
-        }
-
-        let lockfile: UvLock = toml::from_str(content)?;
-
-        let mut packages = Vec::new();
-        let mut dependency_map = HashMap::new();
-
-        for pkg in lockfile.package {
-            packages.push(Package::new(pkg.name.clone(), pkg.version.clone())?);
-
-            // Build dependency map
-            let mut deps = Vec::new();
-            for dep in &pkg.dependencies {
-                deps.push(dep.name.clone());
-            }
-            if let Some(dev_deps) = &pkg.dev_dependencies {
-                for dep in &dev_deps.dev {
-                    deps.push(dep.name.clone());
-                }
-            }
-            dependency_map.insert(pkg.name, deps);
-        }
-
-        Ok((packages, dependency_map))
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ports::outbound::LockfileParseResult;
+    use crate::sbom_generation::domain::Package;
+    use std::collections::HashMap;
     use std::path::Path;
 
     // Mock implementations for testing
@@ -252,6 +189,59 @@ mod tests {
     impl LockfileReader for MockLockfileReader {
         fn read_lockfile(&self, _path: &Path) -> Result<String> {
             Ok(self.content.clone())
+        }
+
+        fn read_and_parse_lockfile(&self, _path: &Path) -> Result<LockfileParseResult> {
+            // Parse the mock content
+            use serde::Deserialize;
+
+            #[derive(Debug, Deserialize)]
+            struct UvLock {
+                package: Vec<UvPackage>,
+            }
+
+            #[derive(Debug, Deserialize)]
+            struct UvPackage {
+                name: String,
+                version: String,
+                #[serde(default)]
+                dependencies: Vec<UvDependency>,
+                #[serde(default, rename = "dev-dependencies")]
+                dev_dependencies: Option<DevDependencies>,
+            }
+
+            #[derive(Debug, Deserialize)]
+            struct UvDependency {
+                name: String,
+            }
+
+            #[derive(Debug, Deserialize)]
+            struct DevDependencies {
+                #[serde(default)]
+                dev: Vec<UvDependency>,
+            }
+
+            let lockfile: UvLock = toml::from_str(&self.content)?;
+
+            let mut packages = Vec::new();
+            let mut dependency_map = HashMap::new();
+
+            for pkg in lockfile.package {
+                packages.push(Package::new(pkg.name.clone(), pkg.version.clone())?);
+
+                let mut deps = Vec::new();
+                for dep in &pkg.dependencies {
+                    deps.push(dep.name.clone());
+                }
+                if let Some(dev_deps) = &pkg.dev_dependencies {
+                    for dep in &dev_deps.dev {
+                        deps.push(dep.name.clone());
+                    }
+                }
+                dependency_map.insert(pkg.name, deps);
+            }
+
+            Ok((packages, dependency_map))
         }
     }
 
