@@ -3,15 +3,63 @@ name: Publish to PyPI
 on:
   push:
     tags:
-      - 'py-v*'  # Trigger on tags like py-v0.1.0
+      - 'v*'  # Trigger on tags like v0.1.0 (same as Rust release)
 
 permissions:
   contents: read
 
 jobs:
+  validate-versions:
+    name: Validate version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract tag version
+        id: tag
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
+          echo "Tag version: $TAG_VERSION"
+
+      - name: Check Cargo.toml version
+        run: |
+          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
+          echo "Cargo.toml version: $CARGO_VERSION"
+          if [ "$CARGO_VERSION" != "${{ steps.tag.outputs.version }}" ]; then
+            echo "❌ Error: Cargo.toml version ($CARGO_VERSION) does not match tag version (${{ steps.tag.outputs.version }})"
+            exit 1
+          fi
+          echo "✅ Cargo.toml version matches tag"
+
+      - name: Check pyproject.toml version
+        run: |
+          PYPROJECT_VERSION=$(grep '^version = ' python-wrapper/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          if [ "$PYPROJECT_VERSION" != "${{ steps.tag.outputs.version }}" ]; then
+            echo "❌ Error: pyproject.toml version ($PYPROJECT_VERSION) does not match tag version (${{ steps.tag.outputs.version }})"
+            exit 1
+          fi
+          echo "✅ pyproject.toml version matches tag"
+
+      - name: Check install.py UV_SBOM_VERSION
+        run: |
+          INSTALL_VERSION=$(grep 'UV_SBOM_VERSION = ' python-wrapper/uv_sbom_bin/install.py | sed 's/UV_SBOM_VERSION = "\(.*\)"/\1/')
+          echo "install.py UV_SBOM_VERSION: $INSTALL_VERSION"
+          if [ "$INSTALL_VERSION" != "${{ steps.tag.outputs.version }}" ]; then
+            echo "❌ Error: install.py UV_SBOM_VERSION ($INSTALL_VERSION) does not match tag version (${{ steps.tag.outputs.version }})"
+            exit 1
+          fi
+          echo "✅ install.py UV_SBOM_VERSION matches tag"
+
+      - name: All versions validated
+        run: echo "🎉 All version numbers are consistent with tag ${{ steps.tag.outputs.version }}"
+
   build:
     name: Build distribution
     runs-on: ubuntu-latest
+    needs: validate-versions
 
     steps:
       - uses: actions/checkout@v4
