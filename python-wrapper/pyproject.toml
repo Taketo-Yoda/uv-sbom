@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "uv-sbom-bin"
+version = "0.1.0"
+description = "Python wrapper for uv-sbom - SBOM generation tool for uv projects"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Taketo Yoda", email = "exhaust7.drs@gmail.com" }
+]
+keywords = [
+    "sbom",
+    "cyclonedx",
+    "uv",
+    "security",
+    "supply-chain",
+    "python-wrapper"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Security",
+    "Topic :: System :: Software Distribution",
+]
+requires-python = ">=3.8"
+
+[project.urls]
+Homepage = "https://github.com/Taketo-Yoda/uv-sbom"
+Repository = "https://github.com/Taketo-Yoda/uv-sbom"
+"Bug Tracker" = "https://github.com/Taketo-Yoda/uv-sbom/issues"
+
+[project.scripts]
+uv-sbom = "uv_sbom_bin.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["uv_sbom_bin"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "uv_sbom_bin/**/*.py",
+    "README.md",
+]

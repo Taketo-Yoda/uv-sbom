@@ -66,6 +66,28 @@
 cargo install uv-sbom
 ```
 
+### uv tool（Pythonユーザー向け）
+
+Pythonラッパーパッケージをインストール:
+
+```bash
+uv tool install uv-sbom-bin
+```
+
+またはpip経由:
+
+```bash
+pip install uv-sbom-bin
+```
+
+インストール後は `uv-sbom` コマンドで実行:
+
+```bash
+uv-sbom --version
+```
+
+**注意**: パッケージ名は `uv-sbom-bin` ですが、インストールされるコマンド名は `uv-sbom` です。
+
 ### プリビルドバイナリ
 
 [GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases)からプリビルドバイナリをダウンロード:

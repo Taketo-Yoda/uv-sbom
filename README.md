@@ -66,6 +66,28 @@ Install from [crates.io](https://crates.io/crates/uv-sbom):
 cargo install uv-sbom
 ```
 
+### uv tool (Python users)
+
+Install the Python wrapper package:
+
+```bash
+uv tool install uv-sbom-bin
+```
+
+Or via pip:
+
+```bash
+pip install uv-sbom-bin
+```
+
+After installation, use the `uv-sbom` command:
+
+```bash
+uv-sbom --version
+```
+
+**Note**: The package name is `uv-sbom-bin`, but the installed command is `uv-sbom`.
+
 ### Pre-built Binaries
 
 Download pre-built binaries from [GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases):
