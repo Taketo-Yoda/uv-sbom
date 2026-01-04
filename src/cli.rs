@@ -1,5 +1,8 @@
 use clap::Parser;
 
+use crate::adapters::outbound::formatters::{CycloneDxFormatter, MarkdownFormatter};
+use crate::ports::outbound::SbomFormatter;
+
 #[derive(Debug, Clone, Copy)]
 pub enum OutputFormat {
     Json,
@@ -17,6 +20,30 @@ impl std::str::FromStr for OutputFormat {
                 "Invalid format: {}. Please specify 'json' or 'markdown'",
                 s
             )),
+        }
+    }
+}
+
+impl OutputFormat {
+    /// Creates a formatter instance for the specified output format
+    ///
+    /// # Returns
+    /// A boxed SbomFormatter trait object appropriate for this format
+    pub fn create_formatter(&self) -> Box<dyn SbomFormatter> {
+        match self {
+            OutputFormat::Json => Box::new(CycloneDxFormatter::new()),
+            OutputFormat::Markdown => Box::new(MarkdownFormatter::new()),
+        }
+    }
+
+    /// Returns the progress message for the specified output format
+    ///
+    /// # Returns
+    /// A static string containing the progress message to display
+    pub fn progress_message(&self) -> &'static str {
+        match self {
+            OutputFormat::Json => "📝 Generating CycloneDX JSON format output...",
+            OutputFormat::Markdown => "📝 Generating Markdown format output...",
         }
     }
 }
