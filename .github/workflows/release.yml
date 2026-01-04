@@ -128,7 +128,7 @@ jobs:
         run: ls -R
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             uv-sbom-*-linux-gnu/*.tar.gz
@@ -184,7 +184,7 @@ jobs:
   build-python:
     name: Build Python package
     runs-on: ubuntu-latest
-    needs: create-release  # Wait for binaries to be published to GitHub Release
+    needs: validate-versions  # Can build in parallel with Rust binaries
 
     steps:
       - name: Checkout code
@@ -212,7 +212,7 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    needs: build-python
+    needs: [create-release, build-python]  # Wait for both GitHub Release and Python package
     runs-on: ubuntu-latest
 
     environment:
@@ -221,7 +221,8 @@ jobs:
 
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
-      contents: read
+      contents: read   # Required for checkout and general access
+      actions: read    # Required for downloading artifacts
 
     steps:
       - name: Download all the dists
