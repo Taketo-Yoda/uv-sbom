@@ -376,20 +376,94 @@ A: **NG!** ポートを定義してアダプターで実装すること
 ### Q: テストでファイルI/Oが必要
 A: `tempfile`クレートを使用してテンポラリファイル作成
 
+## Git/ブランチ戦略
+
+このプロジェクトではGit Flowベースのブランチ戦略を採用しています（詳細は `DEVELOPMENT.md` 参照）。
+
+### 作業前のブランチ確認
+
+**CRITICAL**: コーディング開始前に必ず現在のブランチを確認してください：
+
+```bash
+git status
+git branch --show-current
+```
+
+### ブランチルール
+
+1. **`develop`ブランチで直接作業しない**
+   - 必ずfeatureブランチを作成してから作業
+
+2. **`main`ブランチでは絶対に作業しない**
+   - mainは本番リリース用
+
+3. **適切なブランチ命名規則**:
+   - Feature: `feature/<issue-number>-<short-description>`
+   - Bugfix: `bugfix/<issue-number>-<short-description>`
+   - Hotfix: `hotfix/<issue-number>-<short-description>`
+
+### 作業開始時のチェックリスト
+
+```bash
+# 1. 現在のブランチを確認
+git branch --show-current
+
+# 2. developブランチまたはmainブランチの場合、featureブランチを作成
+git checkout develop
+git pull origin develop
+git checkout -b feature/<issue-number>-<description>
+
+# 3. 作業開始
+```
+
+### コミット前の確認
+
+すべての変更をコミットする前に：
+
+1. **正しいブランチにいることを確認**
+   ```bash
+   git branch --show-current
+   # feature/*, bugfix/*, または hotfix/* であることを確認
+   ```
+
+2. **変更内容を確認**
+   ```bash
+   git status
+   git diff
+   ```
+
+3. **品質チェックを実行**（後述）
+
 ## Claude Codeでの作業フロー
 
-1. **コンテキスト確認**: `.claude/project-context.md`を読む
-2. **アーキテクチャ確認**: レイヤーの責務を理解
-3. **変更箇所の特定**: 適切なレイヤーに変更を加える
-4. **テストの追加**: 新機能には必ずテストを追加
-5. **ビルド確認**: `cargo build`
-6. **テスト実行**: `cargo test`
-7. **品質確認（必須）**:
+### 作業開始時
+
+1. **ブランチ確認（必須）**: `git status` で現在のブランチを確認
+   - `develop`または`main`の場合 → featureブランチを作成
+   - featureブランチの場合 → そのまま作業継続
+2. **コンテキスト確認**: `.claude/project-context.md`を読む
+3. **アーキテクチャ確認**: レイヤーの責務を理解
+
+### コーディング中
+
+4. **変更箇所の特定**: 適切なレイヤーに変更を加える
+5. **テストの追加**: 新機能には必ずテストを追加
+6. **ビルド確認**: `cargo build`
+7. **テスト実行**: `cargo test`
+8. **品質確認（必須）**:
    - **フォーマットチェック**: `cargo fmt --all -- --check` （エラーが出たら `cargo fmt --all` で修正）
    - **Clippyチェック**: `cargo clippy --all-targets --all-features -- -D warnings` （警告ゼロ必須）
-8. **ドキュメント更新**: 必要に応じて
 
-**重要**: ステップ7の品質確認は**コーディング完了時に必ず実行**すること。両方のチェックがパスしない限り、コードは完成していないと見なされます。
+### 作業完了時
+
+9. **ドキュメント更新**: 必要に応じて
+10. **ブランチ確認**: コミット前に再度ブランチを確認
+11. **コミット**: 適切なコミットメッセージで変更をコミット
+
+**重要**:
+- ステップ1のブランチ確認は**作業開始時に必ず実行**すること
+- ステップ8の品質確認は**コーディング完了時に必ず実行**すること
+- 両方のチェックがパスしない限り、コードは完成していないと見なされます
 
 ## 注意事項
 
