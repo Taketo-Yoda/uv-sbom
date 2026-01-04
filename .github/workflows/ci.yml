@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    # Trigger on push to all branches for immediate feedback
   pull_request:
     branches: [ main ]
 
