@@ -7,12 +7,11 @@ mod shared;
 
 use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::{FileSystemReader, FileSystemWriter, StdoutPresenter};
-use adapters::outbound::formatters::{CycloneDxFormatter, MarkdownFormatter};
 use adapters::outbound::network::PyPiLicenseRepository;
 use application::dto::SbomRequest;
 use application::use_cases::GenerateSbomUseCase;
 use cli::{Args, OutputFormat};
-use ports::outbound::{OutputPresenter, SbomFormatter};
+use ports::outbound::OutputPresenter;
 use shared::error::SbomError;
 use shared::Result;
 use std::path::{Path, PathBuf};
@@ -67,25 +66,17 @@ fn run() -> Result<()> {
     let response = use_case.execute(request)?;
 
     // Format output based on requested format
-    let formatted_output = match args.format {
-        OutputFormat::Json => {
-            eprintln!("📝 Generating CycloneDX JSON format output...");
-            let formatter = CycloneDxFormatter::new();
-            formatter.format(response.enriched_packages, &response.metadata)?
-        }
-        OutputFormat::Markdown => {
-            eprintln!("📝 Generating Markdown format output...");
-            let formatter = MarkdownFormatter::new();
-            if let Some(dep_graph) = response.dependency_graph {
-                formatter.format_with_dependencies(
-                    &dep_graph,
-                    response.enriched_packages,
-                    &response.metadata,
-                )?
-            } else {
-                formatter.format(response.enriched_packages, &response.metadata)?
-            }
-        }
+    eprintln!("{}", args.format.progress_message());
+
+    let formatter = args.format.create_formatter();
+    let formatted_output = if let Some(dep_graph) = response.dependency_graph.as_ref() {
+        formatter.format_with_dependencies(
+            dep_graph,
+            response.enriched_packages,
+            &response.metadata,
+        )?
+    } else {
+        formatter.format(response.enriched_packages, &response.metadata)?
     };
 
     // Present output
