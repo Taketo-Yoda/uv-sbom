@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: write  # Required for creating releases
 
 jobs:
   validate-versions:
@@ -56,8 +56,8 @@ jobs:
       - name: All versions validated
         run: echo "🎉 All version numbers are consistent with tag ${{ steps.tag.outputs.version }}"
 
-  build:
-    name: Build ${{ matrix.target }}
+  build-rust:
+    name: Build Rust binary - ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     needs: validate-versions
     strategy:
@@ -113,8 +113,9 @@ jobs:
           name: ${{ matrix.asset_name }}
           path: ${{ matrix.asset_name }}.*
 
-  release:
-    needs: build
+  create-release:
+    name: Create GitHub Release
+    needs: build-rust
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -140,6 +141,11 @@ jobs:
             ### Cargo
             ```bash
             cargo install uv-sbom
+            ```
+
+            ### Python (PyPI)
+            ```bash
+            pip install uv-sbom-bin
             ```
 
             ### Pre-built Binaries
@@ -174,3 +180,55 @@ jobs:
             ```
 
             See the [README](https://github.com/Taketo-Yoda/uv-sbom#readme) for full documentation.
+
+  build-python:
+    name: Build Python package
+    runs-on: ubuntu-latest
+    needs: create-release  # Wait for binaries to be published to GitHub Release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build package
+        working-directory: python-wrapper
+        run: python -m build
+
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: python-wrapper/dist/
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build-python
+    runs-on: ubuntu-latest
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/uv-sbom-bin
+
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+      contents: read
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
