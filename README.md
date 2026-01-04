@@ -181,15 +181,41 @@ uv-sbom --format markdown --output SBOM.md
 uv-sbom --path /path/to/project --format markdown --output SBOM.md
 ```
 
+### Excluding packages
+
+You can exclude specific packages from the SBOM using the `--exclude` or `-e` option:
+
+```bash
+# Exclude a single package
+uv-sbom -e "pytest"
+
+# Exclude multiple packages
+uv-sbom -e "pytest" -e "mypy" -e "black"
+
+# Use wildcards to exclude patterns
+uv-sbom -e "debug-*"        # Exclude all packages starting with "debug-"
+uv-sbom -e "*-dev"          # Exclude all packages ending with "-dev"
+uv-sbom -e "*-test-*"       # Exclude all packages containing "-test-"
+
+# Combine with other options
+uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
+```
+
+**Pattern Syntax:**
+- Use `*` as a wildcard to match zero or more characters
+- Patterns are case-sensitive
+- Maximum 64 patterns per invocation
+
 ## Command-line options
 
 ```
 Options:
-  -f, --format <FORMAT>  Output format: json or markdown [default: json]
-  -p, --path <PATH>      Path to the project directory [default: current directory]
-  -o, --output <OUTPUT>  Output file path (if not specified, outputs to stdout)
-  -h, --help             Print help
-  -V, --version          Print version
+  -f, --format <FORMAT>    Output format: json or markdown [default: json]
+  -p, --path <PATH>        Path to the project directory [default: current directory]
+  -o, --output <OUTPUT>    Output file path (if not specified, outputs to stdout)
+  -e, --exclude <PATTERN>  Exclude packages matching patterns (supports wildcards: *)
+  -h, --help               Print help
+  -V, --version            Print version
 ```
 
 ## Output Examples

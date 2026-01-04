@@ -3,7 +3,7 @@ use crate::ports::outbound::{
     EnrichedPackage, LicenseRepository, LockfileReader, ProgressReporter, ProjectConfigReader,
 };
 use crate::sbom_generation::domain::{Package, PackageName};
-use crate::sbom_generation::services::{DependencyAnalyzer, SbomGenerator};
+use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
 use crate::shared::Result;
 use std::thread;
 use std::time::Duration;
@@ -72,6 +72,35 @@ where
         self.progress_reporter
             .report(&format!("✅ Detected {} package(s)", packages.len()));
 
+        // Step 2: Apply exclusion filters
+        let (filtered_packages, filtered_dependency_map) = if !request.exclude_patterns.is_empty() {
+            let filter = PackageFilter::new(request.exclude_patterns)?;
+            let original_count = packages.len();
+            let filtered_pkgs = filter.filter_packages(packages);
+            let filtered_deps = filter.filter_dependency_map(dependency_map);
+
+            let excluded_count = original_count - filtered_pkgs.len();
+            if excluded_count > 0 {
+                self.progress_reporter.report(&format!(
+                    "🚫 Excluded {} package(s) based on filters",
+                    excluded_count
+                ));
+            }
+
+            // Check if all packages were excluded
+            if filtered_pkgs.is_empty() {
+                anyhow::bail!(
+                    "All {} package(s) were excluded by the provided filters. \
+                         The SBOM would be empty. Please adjust your exclusion patterns.",
+                    original_count
+                );
+            }
+
+            (filtered_pkgs, filtered_deps)
+        } else {
+            (packages, dependency_map)
+        };
+
         // Step 3: Analyze dependencies if requested
         let dependency_graph = if request.include_dependency_info {
             self.progress_reporter
@@ -82,7 +111,8 @@ where
                 .read_project_name(&request.project_path)?;
             let project_package_name = PackageName::new(project_name)?;
 
-            let graph = DependencyAnalyzer::analyze(&project_package_name, &dependency_map)?;
+            let graph =
+                DependencyAnalyzer::analyze(&project_package_name, &filtered_dependency_map)?;
 
             self.progress_reporter.report(&format!(
                 "   - Direct dependencies: {}",
@@ -102,7 +132,7 @@ where
         self.progress_reporter
             .report("🔍 Fetching license information...");
 
-        let enriched_packages = self.enrich_packages_with_licenses(packages)?;
+        let enriched_packages = self.enrich_packages_with_licenses(filtered_packages)?;
 
         // Step 5: Generate SBOM metadata
         let metadata = SbomGenerator::generate_default_metadata();
@@ -304,7 +334,8 @@ version = "3.4.0"
 
         let request = SbomRequest::new(
             std::path::PathBuf::from("/test/project"),
-            false, // no dependency info
+            false,  // no dependency info
+            vec![], // no exclusion patterns
         );
 
         let response = use_case.execute(request).unwrap();
@@ -349,7 +380,8 @@ version = "1.26.0"
 
         let request = SbomRequest::new(
             std::path::PathBuf::from("/test/project"),
-            true, // with dependency info
+            true,   // with dependency info
+            vec![], // no exclusion patterns
         );
 
         let response = use_case.execute(request).unwrap();

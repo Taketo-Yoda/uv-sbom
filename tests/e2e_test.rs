@@ -21,7 +21,7 @@ fn test_e2e_json_format() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(project_path, false);
+    let request = SbomRequest::new(project_path, false, vec![]);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -57,7 +57,7 @@ fn test_e2e_markdown_format() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(project_path, true);
+    let request = SbomRequest::new(project_path, true, vec![]);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -100,7 +100,7 @@ fn test_e2e_nonexistent_project() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(project_path, false);
+    let request = SbomRequest::new(project_path, false, vec![]);
     let result = use_case.execute(request);
 
     assert!(result.is_err());
@@ -122,7 +122,7 @@ fn test_e2e_package_count() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(project_path, true);
+    let request = SbomRequest::new(project_path, true, vec![]);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -137,6 +137,151 @@ fn test_e2e_package_count() {
         .expect("Dependency graph should be present");
     assert_eq!(graph.direct_dependency_count(), 1); // Only requests
     assert!(graph.transitive_dependency_count() > 0); // requests has transitive deps
+}
+
+#[test]
+fn test_e2e_exclude_single_package() {
+    let project_path = PathBuf::from("tests/fixtures/sample-project");
+
+    let lockfile_reader = FileSystemReader::new();
+    let project_config_reader = FileSystemReader::new();
+    let license_repository = create_test_license_repository();
+    let progress_reporter = StderrProgressReporter::new();
+
+    let use_case = GenerateSbomUseCase::new(
+        lockfile_reader,
+        project_config_reader,
+        license_repository,
+        progress_reporter,
+    );
+
+    // Exclude urllib3
+    let request = SbomRequest::new(project_path, false, vec!["urllib3".to_string()]);
+    let result = use_case.execute(request);
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+
+    // Should have 5 packages (6 - 1 excluded)
+    assert_eq!(response.enriched_packages.len(), 5);
+
+    // Verify urllib3 is not in the result
+    assert!(!response
+        .enriched_packages
+        .iter()
+        .any(|p| p.package.name() == "urllib3"));
+}
+
+#[test]
+fn test_e2e_exclude_multiple_packages() {
+    let project_path = PathBuf::from("tests/fixtures/sample-project");
+
+    let lockfile_reader = FileSystemReader::new();
+    let project_config_reader = FileSystemReader::new();
+    let license_repository = create_test_license_repository();
+    let progress_reporter = StderrProgressReporter::new();
+
+    let use_case = GenerateSbomUseCase::new(
+        lockfile_reader,
+        project_config_reader,
+        license_repository,
+        progress_reporter,
+    );
+
+    // Exclude urllib3 and certifi
+    let request = SbomRequest::new(
+        project_path,
+        false,
+        vec!["urllib3".to_string(), "certifi".to_string()],
+    );
+    let result = use_case.execute(request);
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+
+    // Should have 4 packages (6 - 2 excluded)
+    assert_eq!(response.enriched_packages.len(), 4);
+
+    // Verify excluded packages are not in the result
+    assert!(!response
+        .enriched_packages
+        .iter()
+        .any(|p| p.package.name() == "urllib3"));
+    assert!(!response
+        .enriched_packages
+        .iter()
+        .any(|p| p.package.name() == "certifi"));
+}
+
+#[test]
+fn test_e2e_exclude_with_wildcard() {
+    let project_path = PathBuf::from("tests/fixtures/sample-project");
+
+    let lockfile_reader = FileSystemReader::new();
+    let project_config_reader = FileSystemReader::new();
+    let license_repository = create_test_license_repository();
+    let progress_reporter = StderrProgressReporter::new();
+
+    let use_case = GenerateSbomUseCase::new(
+        lockfile_reader,
+        project_config_reader,
+        license_repository,
+        progress_reporter,
+    );
+
+    // Exclude packages starting with "char"
+    let request = SbomRequest::new(project_path, false, vec!["char*".to_string()]);
+    let result = use_case.execute(request);
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+
+    // Should have 5 packages (charset-normalizer excluded)
+    assert_eq!(response.enriched_packages.len(), 5);
+
+    // Verify charset-normalizer is not in the result
+    assert!(!response
+        .enriched_packages
+        .iter()
+        .any(|p| p.package.name() == "charset-normalizer"));
+}
+
+#[test]
+fn test_e2e_exclude_all_packages_error() {
+    let project_path = PathBuf::from("tests/fixtures/sample-project");
+
+    let lockfile_reader = FileSystemReader::new();
+    let project_config_reader = FileSystemReader::new();
+    let license_repository = create_test_license_repository();
+    let progress_reporter = StderrProgressReporter::new();
+
+    let use_case = GenerateSbomUseCase::new(
+        lockfile_reader,
+        project_config_reader,
+        license_repository,
+        progress_reporter,
+    );
+
+    // Exclude all packages with a pattern that matches everything
+    let request = SbomRequest::new(
+        project_path,
+        false,
+        vec![
+            "*requests*".to_string(),
+            "*urllib3*".to_string(),
+            "*charset*".to_string(),
+            "*idna*".to_string(),
+            "*certifi*".to_string(),
+            "*sample*".to_string(),
+        ],
+    );
+    let result = use_case.execute(request);
+
+    // Should fail because all packages would be excluded
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("All"));
+    assert!(error.to_string().contains("excluded"));
 }
 
 // Helper function to create a test license repository

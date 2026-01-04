@@ -61,7 +61,7 @@ fn run() -> Result<()> {
 
     // Create request
     let include_dependency_info = matches!(args.format, OutputFormat::Markdown);
-    let request = SbomRequest::new(project_path, include_dependency_info);
+    let request = SbomRequest::new(project_path, include_dependency_info, args.exclude);
 
     // Execute use case
     let response = use_case.execute(request)?;
