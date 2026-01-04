@@ -38,6 +38,11 @@ pub struct Args {
     /// Output file path (if not specified, outputs to stdout)
     #[arg(short, long)]
     pub output: Option<String>,
+
+    /// Exclude packages matching patterns (supports wildcards: *)
+    /// Can be specified multiple times: -e "pkg-a" -e "debug-*"
+    #[arg(short, long = "exclude", value_name = "PATTERN")]
+    pub exclude: Vec<String>,
 }
 
 impl Args {

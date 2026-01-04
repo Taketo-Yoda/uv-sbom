@@ -181,15 +181,41 @@ uv-sbom --format markdown --output SBOM.md
 uv-sbom --path /path/to/project --format markdown --output SBOM.md
 ```
 
+### パッケージの除外
+
+`--exclude`または`-e`オプションを使用して、特定のパッケージをSBOMから除外できます：
+
+```bash
+# 単一のパッケージを除外
+uv-sbom -e "pytest"
+
+# 複数のパッケージを除外
+uv-sbom -e "pytest" -e "mypy" -e "black"
+
+# ワイルドカードパターンを使用して除外
+uv-sbom -e "debug-*"        # "debug-"で始まるすべてのパッケージを除外
+uv-sbom -e "*-dev"          # "-dev"で終わるすべてのパッケージを除外
+uv-sbom -e "*-test-*"       # "-test-"を含むすべてのパッケージを除外
+
+# 他のオプションと組み合わせて使用
+uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
+```
+
+**パターン構文:**
+- `*`をワイルドカードとして使用し、0文字以上の文字列にマッチさせます
+- パターンは大文字小文字を区別します
+- 1回の実行につき最大64個のパターンを指定できます
+
 ## コマンドラインオプション
 
 ```
 Options:
-  -f, --format <FORMAT>  出力形式: json または markdown [デフォルト: json]
-  -p, --path <PATH>      プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
-  -o, --output <OUTPUT>  出力ファイルパス（指定しない場合は標準出力）
-  -h, --help             ヘルプを表示
-  -V, --version          バージョンを表示
+  -f, --format <FORMAT>    出力形式: json または markdown [デフォルト: json]
+  -p, --path <PATH>        プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
+  -o, --output <OUTPUT>    出力ファイルパス（指定しない場合は標準出力）
+  -e, --exclude <PATTERN>  パッケージ除外パターン（ワイルドカード対応: *）
+  -h, --help               ヘルプを表示
+  -V, --version            バージョンを表示
 ```
 
 ## 出力例

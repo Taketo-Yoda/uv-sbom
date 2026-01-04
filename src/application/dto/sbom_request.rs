@@ -10,13 +10,20 @@ pub struct SbomRequest {
     pub project_path: PathBuf,
     /// Whether to include dependency graph information
     pub include_dependency_info: bool,
+    /// Patterns for excluding packages from the SBOM
+    pub exclude_patterns: Vec<String>,
 }
 
 impl SbomRequest {
-    pub fn new(project_path: PathBuf, include_dependency_info: bool) -> Self {
+    pub fn new(
+        project_path: PathBuf,
+        include_dependency_info: bool,
+        exclude_patterns: Vec<String>,
+    ) -> Self {
         Self {
             project_path,
             include_dependency_info,
+            exclude_patterns,
         }
     }
 }
