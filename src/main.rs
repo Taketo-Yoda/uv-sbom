@@ -8,10 +8,10 @@ mod shared;
 use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::FileSystemReader;
 use adapters::outbound::network::PyPiLicenseRepository;
-use application::dto::SbomRequest;
-use application::factories::{FormatterFactory, FormatterType, PresenterFactory, PresenterType};
+use application::dto::{OutputFormat, SbomRequest};
+use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::use_cases::GenerateSbomUseCase;
-use cli::{Args, OutputFormat};
+use cli::Args;
 use shared::error::SbomError;
 use shared::Result;
 use std::path::{Path, PathBuf};
@@ -65,17 +65,11 @@ fn run() -> Result<()> {
     // Execute use case
     let response = use_case.execute(request)?;
 
-    // Convert CLI format to application layer format type
-    let formatter_type = match args.format {
-        OutputFormat::Json => FormatterType::Json,
-        OutputFormat::Markdown => FormatterType::Markdown,
-    };
-
     // Display progress message
-    eprintln!("{}", FormatterFactory::progress_message(formatter_type));
+    eprintln!("{}", FormatterFactory::progress_message(args.format));
 
     // Create formatter using factory
-    let formatter = FormatterFactory::create(formatter_type);
+    let formatter = FormatterFactory::create(args.format);
     let formatted_output = if let Some(dep_graph) = response.dependency_graph.as_ref() {
         formatter.format_with_dependencies(
             dep_graph,

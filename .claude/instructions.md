@@ -370,8 +370,10 @@ A: GoFデザインパターンの適用を検討してください:
 A:
 1. `ports/outbound/formatter.rs`の`SbomFormatter`トレイトを確認
 2. `adapters/outbound/formatters/`に新しいフォーマッターを実装
-3. `cli.rs`の`OutputFormat`に追加（Strategyパターン適用）
-4. テスト追加
+3. `application/dto/output_format.rs`の`OutputFormat`enumに新しいフォーマット種別を追加
+4. `application/factories/formatter_factory.rs`の`FormatterFactory::create()`メソッドを更新
+5. `FormatterFactory::progress_message()`を更新（必要に応じて）
+6. テスト追加（OutputFormatのFromStrテストとFormatterFactoryのテスト）
 
 ### Q: 新しいライセンスソースを追加したい
 A:
