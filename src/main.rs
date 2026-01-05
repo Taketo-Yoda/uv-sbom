@@ -6,13 +6,12 @@ mod sbom_generation;
 mod shared;
 
 use adapters::outbound::console::StderrProgressReporter;
-use adapters::outbound::filesystem::{FileSystemReader, FileSystemWriter, StdoutPresenter};
-use adapters::outbound::formatters::{CycloneDxFormatter, MarkdownFormatter};
+use adapters::outbound::filesystem::FileSystemReader;
 use adapters::outbound::network::PyPiLicenseRepository;
-use application::dto::SbomRequest;
+use application::dto::{OutputFormat, SbomRequest};
+use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::use_cases::GenerateSbomUseCase;
-use cli::{Args, OutputFormat};
-use ports::outbound::{OutputPresenter, SbomFormatter};
+use cli::Args;
 use shared::error::SbomError;
 use shared::Result;
 use std::path::{Path, PathBuf};
@@ -66,35 +65,29 @@ fn run() -> Result<()> {
     // Execute use case
     let response = use_case.execute(request)?;
 
-    // Format output based on requested format
-    let formatted_output = match args.format {
-        OutputFormat::Json => {
-            eprintln!("📝 Generating CycloneDX JSON format output...");
-            let formatter = CycloneDxFormatter::new();
-            formatter.format(response.enriched_packages, &response.metadata)?
-        }
-        OutputFormat::Markdown => {
-            eprintln!("📝 Generating Markdown format output...");
-            let formatter = MarkdownFormatter::new();
-            if let Some(dep_graph) = response.dependency_graph {
-                formatter.format_with_dependencies(
-                    &dep_graph,
-                    response.enriched_packages,
-                    &response.metadata,
-                )?
-            } else {
-                formatter.format(response.enriched_packages, &response.metadata)?
-            }
-        }
-    };
+    // Display progress message
+    eprintln!("{}", FormatterFactory::progress_message(args.format));
 
-    // Present output
-    let presenter: Box<dyn OutputPresenter> = if let Some(output_path) = args.output {
-        Box::new(FileSystemWriter::new(PathBuf::from(output_path)))
+    // Create formatter using factory
+    let formatter = FormatterFactory::create(args.format);
+    let formatted_output = if let Some(dep_graph) = response.dependency_graph.as_ref() {
+        formatter.format_with_dependencies(
+            dep_graph,
+            response.enriched_packages,
+            &response.metadata,
+        )?
     } else {
-        Box::new(StdoutPresenter::new())
+        formatter.format(response.enriched_packages, &response.metadata)?
     };
 
+    // Create presenter using factory
+    let presenter_type = if let Some(output_path) = args.output {
+        PresenterType::File(PathBuf::from(output_path))
+    } else {
+        PresenterType::Stdout
+    };
+
+    let presenter = PresenterFactory::create(presenter_type);
     presenter.present(&formatted_output)?;
 
     Ok(())
