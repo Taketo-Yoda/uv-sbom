@@ -61,6 +61,7 @@ pub mod prelude {
     pub use crate::adapters::outbound::formatters::{CycloneDxFormatter, MarkdownFormatter};
     pub use crate::adapters::outbound::network::PyPiLicenseRepository;
     pub use crate::application::dto::{SbomRequest, SbomResponse};
+    pub use crate::application::factories::{FormatterFactory, FormatterType};
     pub use crate::application::use_cases::GenerateSbomUseCase;
     pub use crate::ports::outbound::{
         EnrichedPackage, LicenseRepository, LockfileParseResult, LockfileReader, OutputPresenter,

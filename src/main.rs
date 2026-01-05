@@ -9,6 +9,7 @@ use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::{FileSystemReader, FileSystemWriter, StdoutPresenter};
 use adapters::outbound::network::PyPiLicenseRepository;
 use application::dto::SbomRequest;
+use application::factories::{FormatterFactory, FormatterType};
 use application::use_cases::GenerateSbomUseCase;
 use cli::{Args, OutputFormat};
 use ports::outbound::OutputPresenter;
@@ -65,10 +66,17 @@ fn run() -> Result<()> {
     // Execute use case
     let response = use_case.execute(request)?;
 
-    // Format output based on requested format
-    eprintln!("{}", args.format.progress_message());
+    // Convert CLI format to application layer format type
+    let formatter_type = match args.format {
+        OutputFormat::Json => FormatterType::Json,
+        OutputFormat::Markdown => FormatterType::Markdown,
+    };
 
-    let formatter = args.format.create_formatter();
+    // Display progress message
+    eprintln!("{}", FormatterFactory::progress_message(formatter_type));
+
+    // Create formatter using factory
+    let formatter = FormatterFactory::create(formatter_type);
     let formatted_output = if let Some(dep_graph) = response.dependency_graph.as_ref() {
         formatter.format_with_dependencies(
             dep_graph,
