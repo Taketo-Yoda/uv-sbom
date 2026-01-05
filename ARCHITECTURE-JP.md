@@ -36,58 +36,37 @@ flowchart TD
 src/
 ├── main.rs                          # エントリーポイント（DI配線のみ）
 ├── lib.rs                           # ライブラリルート、パブリックAPI
+├── cli.rs                           # CLI引数パース
 │
 ├── sbom_generation/                 # ドメイン層（純粋なビジネスロジック）
-│   ├── domain/
-│   │   ├── package.rs               # Packageバリューオブジェクト（PackageName, Version）
-│   │   ├── dependency_graph.rs      # DependencyGraph集約
-│   │   ├── license_info.rs          # LicenseInfoバリューオブジェクト
-│   │   └── sbom_metadata.rs         # SBOMメタデータ
-│   ├── services/
-│   │   ├── dependency_analyzer.rs   # 推移的依存関係アルゴリズム
-│   │   └── sbom_generator.rs        # SBOMメタデータ生成
-│   └── policies/
-│       └── license_priority.rs      # ライセンス選択優先順位ルール
+│   ├── domain/                      # バリューオブジェクトと集約
+│   ├── services/                    # ドメインサービス（純粋関数）
+│   └── policies/                    # ビジネスルールとポリシー
 │
 ├── application/                     # アプリケーション層（ユースケース）
-│   ├── use_cases/
-│   │   └── generate_sbom.rs         # GenerateSbomUseCase<LR,PCR,LREPO,PR>
-│   └── dto/
-│       ├── sbom_request.rs          # リクエストDTO
-│       └── sbom_response.rs         # レスポンスDTO
+│   ├── use_cases/                   # ユースケースのオーケストレーション
+│   ├── dto/                         # データ転送オブジェクト
+│   └── factories/                   # ファクトリーパターン実装
 │
 ├── ports/                           # ポート（トレイトインターフェース）
-│   ├── inbound/
-│   │   └── mod.rs                   # （現在は直接ユースケース呼び出しを使用）
-│   └── outbound/
-│       ├── lockfile_reader.rs       # LockfileReaderトレイト
-│       ├── project_config_reader.rs # ProjectConfigReaderトレイト
-│       ├── license_repository.rs    # LicenseRepositoryトレイト
-│       ├── formatter.rs             # SbomFormatterトレイト
-│       ├── output_presenter.rs      # OutputPresenterトレイト
-│       └── progress_reporter.rs     # ProgressReporterトレイト
+│   ├── inbound/                     # 駆動するポート（現在は直接ユースケース呼び出しを使用）
+│   └── outbound/                    # 駆動されるポート（インフラストラクチャインターフェース）
 │
 ├── adapters/                        # アダプター（インフラストラクチャ）
-│   ├── inbound/
-│   │   └── mod.rs                   # （将来のCLIアダプター用に予約）
-│   └── outbound/
-│       ├── filesystem/
-│       │   ├── file_reader.rs       # FileSystemReader
-│       │   └── file_writer.rs       # FileSystemWriter, StdoutPresenter
-│       ├── network/
-│       │   └── pypi_client.rs       # PyPiLicenseRepository
-│       ├── formatters/
-│       │   ├── cyclonedx_formatter.rs  # CycloneDX JSONフォーマッター
-│       │   └── markdown_formatter.rs    # Markdownフォーマッター
-│       └── console/
-│           └── progress_reporter.rs  # StderrProgressReporter
+│   ├── inbound/                     # インバウンドアダプター（将来の使用のため予約）
+│   └── outbound/                    # アウトバウンドアダプター
+│       ├── filesystem/              # ファイルI/O実装
+│       ├── network/                 # HTTPクライアント実装
+│       ├── formatters/              # 出力フォーマット実装
+│       └── console/                 # コンソールI/O実装
 │
-├── shared/                          # 共有カーネル
-│   ├── error.rs                     # ドメインエラー（SbomError）
-│   └── result.rs                    # 型エイリアス（Result<T>）
-│
-└── cli.rs                           # CLI引数パース
+└── shared/                          # 共有カーネル
+    ├── error.rs                     # ドメインエラー
+    ├── result.rs                    # 型エイリアス
+    └── security.rs                  # セキュリティ検証ユーティリティ
 ```
+
+**注記**: この構造は高レベルの組織を示しています。各ディレクトリ内の個別のファイルは、ヘキサゴナルアーキテクチャの原則に従って、特定のドメイン概念、ユースケース、ポート、アダプターを実装します。
 
 ## ドメイン層
 

@@ -36,58 +36,37 @@ flowchart TD
 src/
 ├── main.rs                          # Entry point (DI wiring only)
 ├── lib.rs                           # Library root with public API
+├── cli.rs                           # CLI argument parsing
 │
 ├── sbom_generation/                 # Domain Layer (Pure business logic)
-│   ├── domain/
-│   │   ├── package.rs               # Package value object (PackageName, Version)
-│   │   ├── dependency_graph.rs      # DependencyGraph aggregate
-│   │   ├── license_info.rs          # LicenseInfo value object
-│   │   └── sbom_metadata.rs         # SBOM metadata
-│   ├── services/
-│   │   ├── dependency_analyzer.rs   # Transitive dependency algorithm
-│   │   └── sbom_generator.rs        # SBOM metadata generation
-│   └── policies/
-│       └── license_priority.rs      # License selection priority rules
+│   ├── domain/                      # Value objects and aggregates
+│   ├── services/                    # Domain services (pure functions)
+│   └── policies/                    # Business rules and policies
 │
 ├── application/                     # Application Layer (Use Cases)
-│   ├── use_cases/
-│   │   └── generate_sbom.rs         # GenerateSbomUseCase<LR,PCR,LREPO,PR>
-│   └── dto/
-│       ├── sbom_request.rs          # Request DTO
-│       └── sbom_response.rs         # Response DTO
+│   ├── use_cases/                   # Use case orchestration
+│   ├── dto/                         # Data Transfer Objects
+│   └── factories/                   # Factory pattern implementations
 │
 ├── ports/                           # Ports (Trait interfaces)
-│   ├── inbound/
-│   │   └── mod.rs                   # (Currently uses direct use case invocation)
-│   └── outbound/
-│       ├── lockfile_reader.rs       # LockfileReader trait
-│       ├── project_config_reader.rs # ProjectConfigReader trait
-│       ├── license_repository.rs    # LicenseRepository trait
-│       ├── formatter.rs             # SbomFormatter trait
-│       ├── output_presenter.rs      # OutputPresenter trait
-│       └── progress_reporter.rs     # ProgressReporter trait
+│   ├── inbound/                     # Driving ports (currently using direct use case invocation)
+│   └── outbound/                    # Driven ports (infrastructure interfaces)
 │
 ├── adapters/                        # Adapters (Infrastructure)
-│   ├── inbound/
-│   │   └── mod.rs                   # (Reserved for future CLI adapter)
-│   └── outbound/
-│       ├── filesystem/
-│       │   ├── file_reader.rs       # FileSystemReader
-│       │   └── file_writer.rs       # FileSystemWriter, StdoutPresenter
-│       ├── network/
-│       │   └── pypi_client.rs       # PyPiLicenseRepository
-│       ├── formatters/
-│       │   ├── cyclonedx_formatter.rs  # CycloneDX JSON formatter
-│       │   └── markdown_formatter.rs    # Markdown formatter
-│       └── console/
-│           └── progress_reporter.rs  # StderrProgressReporter
+│   ├── inbound/                     # Inbound adapters (reserved for future use)
+│   └── outbound/                    # Outbound adapters
+│       ├── filesystem/              # File I/O implementations
+│       ├── network/                 # HTTP client implementations
+│       ├── formatters/              # Output format implementations
+│       └── console/                 # Console I/O implementations
 │
-├── shared/                          # Shared kernel
-│   ├── error.rs                     # Domain errors (SbomError)
-│   └── result.rs                    # Type aliases (Result<T>)
-│
-└── cli.rs                           # CLI argument parsing
+└── shared/                          # Shared kernel
+    ├── error.rs                     # Domain errors
+    ├── result.rs                    # Type aliases
+    └── security.rs                  # Security validation utilities
 ```
+
+**Note**: This structure shows the high-level organization. Individual files within each directory implement specific domain concepts, use cases, ports, and adapters according to hexagonal architecture principles.
 
 ## Domain Layer
 
