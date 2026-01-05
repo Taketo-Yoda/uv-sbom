@@ -337,7 +337,7 @@ uv.lock file not found: /path/to/project/uv.lock
 ## ドキュメント
 
 ### ユーザー向け
-- [README-JP.md)](README-JP.md) - ユーザードキュメント
+- [README-JP.md](README-JP.md) - ユーザードキュメント
 - [LICENSE](LICENSE) - MITライセンス
 
 ### 開発者向け
