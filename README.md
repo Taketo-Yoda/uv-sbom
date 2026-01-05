@@ -20,7 +20,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 🛡️ Robust error handling with helpful error messages and suggestions
 - 📈 Progress tracking during license information retrieval
 - 🏗️ Built with **Hexagonal Architecture** (Ports and Adapters) + **Domain-Driven Design** for maintainability and testability
-- ✅ Comprehensive test coverage with **163 tests** (Unit, Integration, E2E)
+- ✅ Comprehensive test coverage (Unit, Integration, E2E)
 
 ## Scope and Key Differences from CycloneDX
 

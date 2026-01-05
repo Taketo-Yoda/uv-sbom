@@ -226,17 +226,17 @@ fn run() -> Result<()> {
 
 ```
         ╱╲
-       ╱  ╲       E2E Tests (4 tests)
+       ╱  ╲       E2E Tests
       ╱────╲      - Full workflow with fixtures
      ╱      ╲
-    ╱────────╲    Integration Tests (7 tests)
+    ╱────────╲    Integration Tests
    ╱          ╲   - Use case with mocks
   ╱────────────╲
- ╱              ╲ Unit Tests (138 tests)
+ ╱              ╲ Unit Tests
 ╱────────────────╲ - Domain logic, adapters
 ```
 
-**Total: 149 tests**
+The project has a comprehensive test suite covering all layers.
 
 ### Test Architecture
 

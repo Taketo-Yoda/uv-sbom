@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hexagonal Architecture** (Ports & Adapters) + **Domain-Driven Design**
 - Clean separation of concerns across layers (Domain, Application, Ports, Adapters)
 - Generic-based dependency injection for testability
-- Comprehensive test coverage: **163 tests** (Unit, Integration, E2E)
+- Comprehensive test coverage (Unit, Integration, E2E)
 - Zero Clippy warnings
 
 #### Security Features
