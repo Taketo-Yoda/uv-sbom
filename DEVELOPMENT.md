@@ -57,22 +57,11 @@ cargo clippy -- -D warnings
 
 ## Project Structure
 
-```
-uv-sbom/
-├── Cargo.toml           # Project configuration and dependencies
-├── src/
-│   ├── main.rs          # Entry point and main logic
-│   ├── cli.rs           # CLI argument parsing
-│   ├── lockfile.rs      # uv.lock file parser
-│   ├── license.rs       # License information fetching
-│   ├── cyclonedx.rs     # CycloneDX JSON generation
-│   ├── markdown.rs      # Markdown table generation
-│   └── error.rs         # Error types
-└── examples/
-    └── sample-project/  # Sample project for testing
-        ├── uv.lock
-        └── pyproject.toml
-```
+This project follows **Hexagonal Architecture** (Ports & Adapters) + **Domain-Driven Design** principles.
+
+For detailed architecture information, see:
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Complete architecture documentation with layer diagrams and directory structure
+- [ARCHITECTURE-JP.md](ARCHITECTURE-JP.md) - Japanese version
 
 ## Testing with sample project
 

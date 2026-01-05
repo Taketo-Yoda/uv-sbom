@@ -56,64 +56,30 @@ tempfile = "3.8"             # テンポラリファイル作成
 3. **柔軟性**: インフラストラクチャの実装を容易に差し替え可能
 4. **叫ぶアーキテクチャ**: ディレクトリ構造がシステムの目的を表現
 
-### ディレクトリ構成
+### レイヤー構成
 
-```
-src/
-├── main.rs                          # エントリーポイント（DI配線のみ）
-├── lib.rs                           # ライブラリルート
-│
-├── sbom_generation/                 # ドメイン層（純粋なビジネスロジック）
-│   ├── domain/                      # ドメインモデル
-│   │   ├── package.rs               # Packageバリューオブジェクト
-│   │   ├── dependency_graph.rs      # DependencyGraph集約
-│   │   ├── license_info.rs          # LicenseInfoバリューオブジェクト
-│   │   └── sbom_metadata.rs         # SBOMメタデータ
-│   ├── services/                    # ドメインサービス
-│   │   ├── dependency_analyzer.rs   # 推移的依存関係分析（純粋関数）
-│   │   └── sbom_generator.rs        # SBOMメタデータ生成
-│   └── policies/                    # ビジネスポリシー
-│       └── license_priority.rs      # ライセンス選択優先順位ルール
-│
-├── application/                     # アプリケーション層（ユースケース）
-│   ├── use_cases/
-│   │   └── generate_sbom.rs         # GenerateSbomUseCase<LR,PCR,LREPO,PR>
-│   └── dto/
-│       ├── sbom_request.rs          # リクエストDTO
-│       └── sbom_response.rs         # レスポンスDTO
-│
-├── ports/                           # ポート（インターフェース定義）
-│   ├── inbound/
-│   │   └── sbom_generation_port.rs  # インバウンドポート
-│   └── outbound/                    # アウトバウンドポート
-│       ├── lockfile_reader.rs       # LockfileReaderトレイト
-│       ├── project_config_reader.rs # ProjectConfigReaderトレイト
-│       ├── license_repository.rs    # LicenseRepositoryトレイト
-│       ├── formatter.rs             # SbomFormatterトレイト
-│       ├── output_presenter.rs      # OutputPresenterトレイト
-│       └── progress_reporter.rs     # ProgressReporterトレイト
-│
-├── adapters/                        # アダプター層（インフラストラクチャ実装）
-│   ├── inbound/
-│   │   └── cli_adapter.rs           # CLI引数解析＋オーケストレーション
-│   └── outbound/
-│       ├── filesystem/              # ファイルシステムアダプター
-│       │   ├── file_reader.rs       # FileSystemReader（セキュリティチェック付き）
-│       │   └── file_writer.rs       # FileSystemWriter, StdoutPresenter
-│       ├── network/                 # ネットワークアダプター
-│       │   └── pypi_client.rs       # PyPiLicenseRepository
-│       ├── formatters/              # フォーマッターアダプター
-│       │   ├── cyclonedx_formatter.rs  # CycloneDxFormatter
-│       │   └── markdown_formatter.rs   # MarkdownFormatter
-│       └── console/                 # コンソールアダプター
-│           ├── stdout_presenter.rs  # StdoutPresenter
-│           └── stderr_progress_reporter.rs  # StderrProgressReporter
-│
-└── shared/                          # 共有カーネル
-    ├── error.rs                     # ドメインエラー（SbomError）
-    ├── result.rs                    # 型エイリアス（Result<T>）
-    └── security.rs                  # セキュリティ検証関数（NEW）
-```
+プロジェクトは以下の4つの主要レイヤーで構成されています：
+
+1. **ドメイン層** (`sbom_generation/`)
+   - 純粋なビジネスロジック、インフラストラクチャ依存なし
+   - バリューオブジェクト、集約、ドメインサービス、ポリシー
+
+2. **アプリケーション層** (`application/`)
+   - ユースケースのオーケストレーション
+   - DTO（Data Transfer Objects）、ファクトリー
+
+3. **ポート層** (`ports/`)
+   - インターフェース定義（トレイト）
+   - インバウンド/アウトバウンドポート
+
+4. **アダプター層** (`adapters/`)
+   - インフラストラクチャの具体実装
+   - ファイルシステム、ネットワーク、フォーマッター、コンソール
+
+5. **共有カーネル** (`shared/`)
+   - エラー型、セキュリティ検証など
+
+**詳細なディレクトリ構造**: [ARCHITECTURE-JP.md](../ARCHITECTURE-JP.md) を参照
 
 ## 最近の変更履歴（2025-01-02）
 
@@ -137,7 +103,7 @@ src/
   - file_reader.rsとfile_writer.rsのリファクタリング
 
 **テスト結果**:
-- 全163テスト合格（元149テスト + 新規14テスト）
+- 全テスト合格
 - 警告なし
 
 ## リソース
