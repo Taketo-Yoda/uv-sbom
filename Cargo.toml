@@ -1,6 +1,6 @@
 [package]
 name = "uv-sbom"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Taketo Yoda <exhaust7.drs@gmail.com>"]
 description = "SBOM generation tool for uv projects - Generate CycloneDX SBOMs from uv.lock files"
@@ -28,6 +28,8 @@ reqwest = { version = "0.12", features = ["json", "blocking"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 urlencoding = "2.1"
+indicatif = "0.17"
+owo-colors = "4.1"
 
 [dev-dependencies]
 tempfile = "3.10"

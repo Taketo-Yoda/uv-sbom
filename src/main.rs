@@ -12,6 +12,7 @@ use application::dto::{OutputFormat, SbomRequest};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::use_cases::GenerateSbomUseCase;
 use cli::Args;
+use owo_colors::OwoColorize;
 use shared::error::SbomError;
 use shared::Result;
 use std::path::{Path, PathBuf};
@@ -35,6 +36,9 @@ fn main() {
 }
 
 fn run() -> Result<()> {
+    // Display startup banner
+    display_banner();
+
     // Parse command-line arguments
     let args = Args::parse_args();
 
@@ -91,6 +95,17 @@ fn run() -> Result<()> {
     presenter.present(&formatted_output)?;
 
     Ok(())
+}
+
+fn display_banner() {
+    let version = env!("CARGO_PKG_VERSION");
+    eprintln!(
+        "{} {} {}",
+        "🚀".bright_yellow(),
+        "uv-sbom".bright_cyan().bold(),
+        format!("v{}", version).bright_green()
+    );
+    eprintln!();
 }
 
 fn validate_project_path(path: &Path) -> Result<()> {

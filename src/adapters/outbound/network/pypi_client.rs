@@ -32,9 +32,11 @@ pub struct PyPiLicenseRepository {
 impl PyPiLicenseRepository {
     /// Creates a new PyPI license repository with default configuration
     pub fn new() -> Result<Self> {
+        let version = env!("CARGO_PKG_VERSION");
+        let user_agent = format!("uv-sbom/{}", version);
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(10))
-            .user_agent("uv-sbom/0.1.0")
+            .user_agent(user_agent)
             .build()?;
 
         Ok(Self {

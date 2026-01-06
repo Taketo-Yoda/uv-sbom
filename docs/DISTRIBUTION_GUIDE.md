@@ -84,17 +84,17 @@ pip install uv-sbom-bin
    ```bash
    cd python-wrapper
    python -m build
-   pip install dist/uv_sbom_bin-0.1.0-py3-none-any.whl
+   pip install dist/uv_sbom_bin-X.Y.Z-py3-none-any.whl
    uv-sbom --version
    ```
 
 5. **Publish**:
    ```bash
-   # Create and push tag
-   git tag py-v0.1.0
-   git push origin py-v0.1.0
+   # Create and push tag (vX.Y.Z format triggers PyPI publish)
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
 
-   # GitHub Actions will publish automatically
+   # GitHub Actions will publish automatically to both crates.io and PyPI
    ```
 
 **See**: [docs/PYPI_WRAPPER_SETUP.md](PYPI_WRAPPER_SETUP.md)
@@ -127,7 +127,7 @@ When releasing a new version (e.g., v0.2.0):
    ```bash
    # Update version in python-wrapper/pyproject.toml
    # Update UV_SBOM_VERSION in python-wrapper/uv_sbom_bin/install.py
-   # Tag and push: py-v0.2.0
+   # The standard vX.Y.Z tag will trigger both crates.io and PyPI publish
    ```
 
 ### Python Wrapper Release Only
@@ -137,8 +137,9 @@ If only updating the Python wrapper (no Rust changes):
 ```bash
 # Update version in pyproject.toml
 # No need to update UV_SBOM_VERSION if using same binary
-git tag py-v0.1.1  # Patch version
-git push origin py-v0.1.1
+# Use standard vX.Y.Z tag format - CI will handle PyPI publishing
+git tag vX.Y.Z-python  # For Python wrapper only releases
+git push origin vX.Y.Z-python
 ```
 
 ---
@@ -160,7 +161,7 @@ For **PyPI**:
 - [ ] Configure trusted publishing
 - [ ] (Optional) Create separate repository
 - [ ] Update versions in pyproject.toml and install.py
-- [ ] Tag and push: `py-v0.1.0`
+- [ ] Tag and push: `vX.Y.Z` (standard format)
 - [ ] Verify: `pip install uv-sbom-bin`
 
 ---
