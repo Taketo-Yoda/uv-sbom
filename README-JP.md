@@ -1,6 +1,7 @@
 # uv-sbom
 
-[![shield_license]][license_file]
+[![GitHub release](https://img.shields.io/github/release/Taketo-Yoda/uv-sbom.svg)](https://github.com/Taketo-Yoda/uv-sbom/releases) [![PyPI - Version](https://img.shields.io/pypi/v/uv-sbom-bin?logo=python&logoColor=white&label=PyPI)](https://pypi.org/project/uv-sbom-bin/) [![Crates.io Version](https://img.shields.io/crates/v/uv-sbom?logo=rust&logoColor=white)](https://crates.io/crates/uv-sbom)
+[![shield_license]][license_file] [![CI](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/ci.yml/badge.svg)](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/ci.yml)
 
 [English](README.md) | [日本語](README-JP.md)
 
@@ -20,7 +21,7 @@
 - 🛡️ 堅牢なエラーハンドリングと親切なエラーメッセージ・提案
 - 📈 ライセンス情報取得時の進捗表示
 - 🏗️ **ヘキサゴナルアーキテクチャ**（ポート＆アダプター）+ **ドメイン駆動設計**による保守性とテスタビリティ
-- ✅ **163個のテスト**による包括的なテストカバレッジ（ユニット、統合、E2E）
+- ✅ 包括的なテストカバレッジ（ユニット、統合、E2E）
 
 ## スコープとCycloneDXとの主な違い
 
@@ -94,21 +95,21 @@ uv-sbom --version
 
 **macOS (Apple Silicon)**:
 ```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-aarch64-apple-darwin.tar.gz
 tar xzf uv-sbom-aarch64-apple-darwin.tar.gz
 sudo mv uv-sbom /usr/local/bin/
 ```
 
 **macOS (Intel)**:
 ```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-apple-darwin.tar.gz
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-x86_64-apple-darwin.tar.gz
 tar xzf uv-sbom-x86_64-apple-darwin.tar.gz
 sudo mv uv-sbom /usr/local/bin/
 ```
 
 **Linux (x86_64)**:
 ```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-x86_64-unknown-linux-gnu.tar.gz
 tar xzf uv-sbom-x86_64-unknown-linux-gnu.tar.gz
 sudo mv uv-sbom /usr/local/bin/
 ```
@@ -181,15 +182,41 @@ uv-sbom --format markdown --output SBOM.md
 uv-sbom --path /path/to/project --format markdown --output SBOM.md
 ```
 
+### パッケージの除外
+
+`--exclude`または`-e`オプションを使用して、特定のパッケージをSBOMから除外できます：
+
+```bash
+# 単一のパッケージを除外
+uv-sbom -e "pytest"
+
+# 複数のパッケージを除外
+uv-sbom -e "pytest" -e "mypy" -e "black"
+
+# ワイルドカードパターンを使用して除外
+uv-sbom -e "debug-*"        # "debug-"で始まるすべてのパッケージを除外
+uv-sbom -e "*-dev"          # "-dev"で終わるすべてのパッケージを除外
+uv-sbom -e "*-test-*"       # "-test-"を含むすべてのパッケージを除外
+
+# 他のオプションと組み合わせて使用
+uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
+```
+
+**パターン構文:**
+- `*`をワイルドカードとして使用し、0文字以上の文字列にマッチさせます
+- パターンは大文字小文字を区別します
+- 1回の実行につき最大64個のパターンを指定できます
+
 ## コマンドラインオプション
 
 ```
 Options:
-  -f, --format <FORMAT>  出力形式: json または markdown [デフォルト: json]
-  -p, --path <PATH>      プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
-  -o, --output <OUTPUT>  出力ファイルパス（指定しない場合は標準出力）
-  -h, --help             ヘルプを表示
-  -V, --version          バージョンを表示
+  -f, --format <FORMAT>    出力形式: json または markdown [デフォルト: json]
+  -p, --path <PATH>        プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
+  -o, --output <OUTPUT>    出力ファイルパス（指定しない場合は標準出力）
+  -e, --exclude <PATTERN>  パッケージ除外パターン（ワイルドカード対応: *）
+  -h, --help               ヘルプを表示
+  -V, --version            バージョンを表示
 ```
 
 ## 出力例
@@ -311,7 +338,7 @@ uv.lock file not found: /path/to/project/uv.lock
 ## ドキュメント
 
 ### ユーザー向け
-- [README-JP.md)](README-JP.md) - ユーザードキュメント
+- [README-JP.md](README-JP.md) - ユーザードキュメント
 - [LICENSE](LICENSE) - MITライセンス
 
 ### 開発者向け

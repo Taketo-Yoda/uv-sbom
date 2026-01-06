@@ -13,10 +13,63 @@
 - 直接依存と推移的依存の分析
 
 ### バージョン情報
-- 現在のバージョン: 0.1.0
+- 現在のバージョン: 0.2.0
 - Rust Edition: 2021
 - CycloneDX仕様: 1.6
 - アーキテクチャ: ヘキサゴナルアーキテクチャ + DDD
+
+### バージョンアップ時のチェックリスト
+
+バージョン番号を更新する際は、以下のファイルをすべて確認・更新してください：
+
+#### 必須更新ファイル（動的バージョン参照を使用）
+これらのファイルは `env!("CARGO_PKG_VERSION")` または類似の仕組みでバージョンを自動取得しています。Cargo.tomlを更新すれば自動的に反映されます：
+
+1. **Cargo.toml** - `version = "X.Y.Z"` （メインバージョン管理）
+2. **src/cli.rs** - `#[command(version)]` （Cargo.tomlから自動取得）
+3. **src/main.rs** - `display_banner()` 関数で `env!("CARGO_PKG_VERSION")` 使用
+4. **src/adapters/outbound/network/pypi_client.rs** - User-Agentで `env!("CARGO_PKG_VERSION")` 使用
+
+#### Python Wrapperファイル（手動更新必要）
+5. **python-wrapper/pyproject.toml** - `version = "X.Y.Z"`
+6. **python-wrapper/uv_sbom_bin/__init__.py** - `__version__ = "X.Y.Z"`
+7. **python-wrapper/uv_sbom_bin/install.py** - `UV_SBOM_VERSION = "X.Y.Z"`
+
+#### ドキュメントファイル（手動更新必要）
+8. **.claude/project-context.md** - このファイルの「現在のバージョン」セクション
+
+#### 自動生成・サンプルファイル（更新不要）
+以下のファイルは更新**不要**です：
+- `Cargo.lock` - 自動生成
+- `CHANGELOG.md` - 履歴として残す
+- `RELEASE.md` - リリース比較URLとして残す
+- `README.md` / `README-JP.md` - `/latest/download/` URLを使用（バージョン非依存）
+- `docs/DISTRIBUTION_GUIDE.md` - プレースホルダー（X.Y.Z）を使用
+- `src/sbom_generation/domain/sbom_metadata.rs` - テストコード（実際は動的生成）
+- `examples/sample-project/pyproject.toml` - サンプルプロジェクト
+- `docs/PYPI_WRAPPER_SETUP.md` - ドキュメントの例として記載
+
+#### バージョンアップ手順
+```bash
+# 1. Cargo.tomlのバージョンを更新
+sed -i '' 's/version = "0.2.0"/version = "0.3.0"/' Cargo.toml
+
+# 2. Python wrapperのバージョンを更新
+sed -i '' 's/version = "0.2.0"/version = "0.3.0"/' python-wrapper/pyproject.toml
+sed -i '' 's/__version__ = "0.2.0"/__version__ = "0.3.0"/' python-wrapper/uv_sbom_bin/__init__.py
+sed -i '' 's/UV_SBOM_VERSION = "0.2.0"/UV_SBOM_VERSION = "0.3.0"/' python-wrapper/uv_sbom_bin/install.py
+
+# 3. このファイルのバージョンを更新
+sed -i '' 's/現在のバージョン: 0.2.0/現在のバージョン: 0.3.0/' .claude/project-context.md
+
+# 4. ビルドとテスト
+cargo build
+cargo test
+
+# 5. コミット
+git add Cargo.toml python-wrapper/ .claude/project-context.md
+git commit -m "chore: bump version to 0.3.0"
+```
 
 ## 技術スタック
 
@@ -56,64 +109,30 @@ tempfile = "3.8"             # テンポラリファイル作成
 3. **柔軟性**: インフラストラクチャの実装を容易に差し替え可能
 4. **叫ぶアーキテクチャ**: ディレクトリ構造がシステムの目的を表現
 
-### ディレクトリ構成
+### レイヤー構成
 
-```
-src/
-├── main.rs                          # エントリーポイント（DI配線のみ）
-├── lib.rs                           # ライブラリルート
-│
-├── sbom_generation/                 # ドメイン層（純粋なビジネスロジック）
-│   ├── domain/                      # ドメインモデル
-│   │   ├── package.rs               # Packageバリューオブジェクト
-│   │   ├── dependency_graph.rs      # DependencyGraph集約
-│   │   ├── license_info.rs          # LicenseInfoバリューオブジェクト
-│   │   └── sbom_metadata.rs         # SBOMメタデータ
-│   ├── services/                    # ドメインサービス
-│   │   ├── dependency_analyzer.rs   # 推移的依存関係分析（純粋関数）
-│   │   └── sbom_generator.rs        # SBOMメタデータ生成
-│   └── policies/                    # ビジネスポリシー
-│       └── license_priority.rs      # ライセンス選択優先順位ルール
-│
-├── application/                     # アプリケーション層（ユースケース）
-│   ├── use_cases/
-│   │   └── generate_sbom.rs         # GenerateSbomUseCase<LR,PCR,LREPO,PR>
-│   └── dto/
-│       ├── sbom_request.rs          # リクエストDTO
-│       └── sbom_response.rs         # レスポンスDTO
-│
-├── ports/                           # ポート（インターフェース定義）
-│   ├── inbound/
-│   │   └── sbom_generation_port.rs  # インバウンドポート
-│   └── outbound/                    # アウトバウンドポート
-│       ├── lockfile_reader.rs       # LockfileReaderトレイト
-│       ├── project_config_reader.rs # ProjectConfigReaderトレイト
-│       ├── license_repository.rs    # LicenseRepositoryトレイト
-│       ├── formatter.rs             # SbomFormatterトレイト
-│       ├── output_presenter.rs      # OutputPresenterトレイト
-│       └── progress_reporter.rs     # ProgressReporterトレイト
-│
-├── adapters/                        # アダプター層（インフラストラクチャ実装）
-│   ├── inbound/
-│   │   └── cli_adapter.rs           # CLI引数解析＋オーケストレーション
-│   └── outbound/
-│       ├── filesystem/              # ファイルシステムアダプター
-│       │   ├── file_reader.rs       # FileSystemReader（セキュリティチェック付き）
-│       │   └── file_writer.rs       # FileSystemWriter, StdoutPresenter
-│       ├── network/                 # ネットワークアダプター
-│       │   └── pypi_client.rs       # PyPiLicenseRepository
-│       ├── formatters/              # フォーマッターアダプター
-│       │   ├── cyclonedx_formatter.rs  # CycloneDxFormatter
-│       │   └── markdown_formatter.rs   # MarkdownFormatter
-│       └── console/                 # コンソールアダプター
-│           ├── stdout_presenter.rs  # StdoutPresenter
-│           └── stderr_progress_reporter.rs  # StderrProgressReporter
-│
-└── shared/                          # 共有カーネル
-    ├── error.rs                     # ドメインエラー（SbomError）
-    ├── result.rs                    # 型エイリアス（Result<T>）
-    └── security.rs                  # セキュリティ検証関数（NEW）
-```
+プロジェクトは以下の4つの主要レイヤーで構成されています：
+
+1. **ドメイン層** (`sbom_generation/`)
+   - 純粋なビジネスロジック、インフラストラクチャ依存なし
+   - バリューオブジェクト、集約、ドメインサービス、ポリシー
+
+2. **アプリケーション層** (`application/`)
+   - ユースケースのオーケストレーション
+   - DTO（Data Transfer Objects）、ファクトリー
+
+3. **ポート層** (`ports/`)
+   - インターフェース定義（トレイト）
+   - インバウンド/アウトバウンドポート
+
+4. **アダプター層** (`adapters/`)
+   - インフラストラクチャの具体実装
+   - ファイルシステム、ネットワーク、フォーマッター、コンソール
+
+5. **共有カーネル** (`shared/`)
+   - エラー型、セキュリティ検証など
+
+**詳細なディレクトリ構造**: [ARCHITECTURE-JP.md](../ARCHITECTURE-JP.md) を参照
 
 ## 最近の変更履歴（2025-01-02）
 
@@ -137,7 +156,7 @@ src/
   - file_reader.rsとfile_writer.rsのリファクタリング
 
 **テスト結果**:
-- 全163テスト合格（元149テスト + 新規14テスト）
+- 全テスト合格
 - 警告なし
 
 ## リソース

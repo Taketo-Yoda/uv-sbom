@@ -1,6 +1,7 @@
 # uv-sbom
 
-[![shield_license]][license_file] 
+[![GitHub release](https://img.shields.io/github/release/Taketo-Yoda/uv-sbom.svg)](https://github.com/Taketo-Yoda/uv-sbom/releases) [![PyPI - Version](https://img.shields.io/pypi/v/uv-sbom-bin?logo=python&logoColor=white&label=PyPI)](https://pypi.org/project/uv-sbom-bin/) [![Crates.io Version](https://img.shields.io/crates/v/uv-sbom?logo=rust&logoColor=white)](https://crates.io/crates/uv-sbom)
+[![shield_license]][license_file] [![CI](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/ci.yml/badge.svg)](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/ci.yml)
 
 [English](README.md) | [日本語](README-JP.md)
 
@@ -20,7 +21,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 🛡️ Robust error handling with helpful error messages and suggestions
 - 📈 Progress tracking during license information retrieval
 - 🏗️ Built with **Hexagonal Architecture** (Ports and Adapters) + **Domain-Driven Design** for maintainability and testability
-- ✅ Comprehensive test coverage with **163 tests** (Unit, Integration, E2E)
+- ✅ Comprehensive test coverage (Unit, Integration, E2E)
 
 ## Scope and Key Differences from CycloneDX
 
@@ -94,21 +95,21 @@ Download pre-built binaries from [GitHub Releases](https://github.com/Taketo-Yod
 
 **macOS (Apple Silicon)**:
 ```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-aarch64-apple-darwin.tar.gz
 tar xzf uv-sbom-aarch64-apple-darwin.tar.gz
 sudo mv uv-sbom /usr/local/bin/
 ```
 
 **macOS (Intel)**:
 ```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-apple-darwin.tar.gz
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-x86_64-apple-darwin.tar.gz
 tar xzf uv-sbom-x86_64-apple-darwin.tar.gz
 sudo mv uv-sbom /usr/local/bin/
 ```
 
 **Linux (x86_64)**:
 ```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-x86_64-unknown-linux-gnu.tar.gz
 tar xzf uv-sbom-x86_64-unknown-linux-gnu.tar.gz
 sudo mv uv-sbom /usr/local/bin/
 ```
@@ -181,15 +182,41 @@ uv-sbom --format markdown --output SBOM.md
 uv-sbom --path /path/to/project --format markdown --output SBOM.md
 ```
 
+### Excluding packages
+
+You can exclude specific packages from the SBOM using the `--exclude` or `-e` option:
+
+```bash
+# Exclude a single package
+uv-sbom -e "pytest"
+
+# Exclude multiple packages
+uv-sbom -e "pytest" -e "mypy" -e "black"
+
+# Use wildcards to exclude patterns
+uv-sbom -e "debug-*"        # Exclude all packages starting with "debug-"
+uv-sbom -e "*-dev"          # Exclude all packages ending with "-dev"
+uv-sbom -e "*-test-*"       # Exclude all packages containing "-test-"
+
+# Combine with other options
+uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
+```
+
+**Pattern Syntax:**
+- Use `*` as a wildcard to match zero or more characters
+- Patterns are case-sensitive
+- Maximum 64 patterns per invocation
+
 ## Command-line options
 
 ```
 Options:
-  -f, --format <FORMAT>  Output format: json or markdown [default: json]
-  -p, --path <PATH>      Path to the project directory [default: current directory]
-  -o, --output <OUTPUT>  Output file path (if not specified, outputs to stdout)
-  -h, --help             Print help
-  -V, --version          Print version
+  -f, --format <FORMAT>    Output format: json or markdown [default: json]
+  -p, --path <PATH>        Path to the project directory [default: current directory]
+  -o, --output <OUTPUT>    Output file path (if not specified, outputs to stdout)
+  -e, --exclude <PATTERN>  Exclude packages matching patterns (supports wildcards: *)
+  -h, --help               Print help
+  -V, --version            Print version
 ```
 
 ## Output Examples
