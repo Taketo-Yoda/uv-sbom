@@ -1,6 +1,6 @@
 [package]
 name = "uv-sbom"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Taketo Yoda <exhaust7.drs@gmail.com>"]
 description = "SBOM generation tool for uv projects - Generate CycloneDX SBOMs from uv.lock files"

@@ -95,21 +95,21 @@ Download pre-built binaries from [GitHub Releases](https://github.com/Taketo-Yod
 
 **macOS (Apple Silicon)**:
 ```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-aarch64-apple-darwin.tar.gz
 tar xzf uv-sbom-aarch64-apple-darwin.tar.gz
 sudo mv uv-sbom /usr/local/bin/
 ```
 
 **macOS (Intel)**:
 ```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-apple-darwin.tar.gz
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-x86_64-apple-darwin.tar.gz
 tar xzf uv-sbom-x86_64-apple-darwin.tar.gz
 sudo mv uv-sbom /usr/local/bin/
 ```
 
 **Linux (x86_64)**:
 ```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/download/v0.1.0/uv-sbom-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-x86_64-unknown-linux-gnu.tar.gz
 tar xzf uv-sbom-x86_64-unknown-linux-gnu.tar.gz
 sudo mv uv-sbom /usr/local/bin/
 ```

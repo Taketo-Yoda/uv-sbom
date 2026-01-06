@@ -5,7 +5,7 @@ use crate::application::dto::OutputFormat;
 /// Generate SBOMs for Python projects managed by uv
 #[derive(Parser, Debug)]
 #[command(name = "uv-sbom")]
-#[command(version = "0.1.0")]
+#[command(version)]
 #[command(about = "Generate SBOMs for Python projects managed by uv", long_about = None)]
 pub struct Args {
     /// Output format: json or markdown
