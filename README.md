@@ -61,6 +61,8 @@ The focused approach of `uv-sbom` reduces noise in security vulnerability scanni
 
 ### Cargo (Recommended for Rust users)
 
+![Crates.io Total Downloads](https://img.shields.io/crates/d/uv-sbom)
+
 Install from [crates.io](https://crates.io/crates/uv-sbom):
 
 ```bash
@@ -68,6 +70,8 @@ cargo install uv-sbom
 ```
 
 ### uv tool (Python users)
+
+![PyPI - Downloads](https://img.shields.io/pypi/dm/uv-sbom-bin?logo=PyPI&logoColor=white)
 
 Install the Python wrapper package:
 
@@ -90,6 +94,9 @@ uv-sbom --version
 **Note**: The package name is `uv-sbom-bin`, but the installed command is `uv-sbom`.
 
 ### Pre-built Binaries
+
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Taketo-Yoda/uv-sbom/total?logo=GitHub)
+
 
 Download pre-built binaries from [GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases):
 
