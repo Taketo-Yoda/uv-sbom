@@ -39,7 +39,7 @@ This tool generates SBOMs based on **uv.lock** file contents, which includes:
 
 ### Comparison with CycloneDX Official Tools
 
-As of 2026-01-01, the official CycloneDX tools do not yet support uv directly. When generating SBOMs for Python projects:
+As of v7.2.1, the official cyclonedx-python library does not yet provide direct support for uv. When generating SBOMs for Python projects:
 
 | Aspect | uv-sbom (this tool) | CycloneDX Official Tools |
 |--------|---------------------|--------------------------|
