@@ -39,7 +39,7 @@
 
 ### CycloneDX公式ツールとの比較
 
-2026年1月1日時点で、CycloneDX公式ツールはまだuvを直接サポートしていません。Pythonプロジェクトの SBOMを生成する場合:
+CycloneDX公式ツール (v7.2.1時点) は、まだ uv を直接サポートしていません。PythonプロジェクトのSBOMを生成する場合:
 
 | 側面 | uv-sbom（このツール） | CycloneDX公式ツール |
 |--------|---------------------|--------------------------|
@@ -61,6 +61,8 @@
 
 ### Cargo（Rustユーザー向け推奨）
 
+![Crates.io Total Downloads](https://img.shields.io/crates/d/uv-sbom)
+
 [crates.io](https://crates.io/crates/uv-sbom)からインストール:
 
 ```bash
@@ -68,6 +70,8 @@ cargo install uv-sbom
 ```
 
 ### uv tool（Pythonユーザー向け）
+
+![PyPI - Downloads](https://img.shields.io/pypi/dm/uv-sbom-bin?logo=PyPI&logoColor=white)
 
 Pythonラッパーパッケージをインストール:
 
@@ -90,6 +94,8 @@ uv-sbom --version
 **注意**: パッケージ名は `uv-sbom-bin` ですが、インストールされるコマンド名は `uv-sbom` です。
 
 ### プリビルドバイナリ
+
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Taketo-Yoda/uv-sbom/total?logo=GitHub)
 
 [GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases)からプリビルドバイナリをダウンロード:
 
