@@ -1,175 +1,175 @@
-# uv-sbom プロジェクトコンテキスト
+# uv-sbom Project Context
 
-このファイルは、Claude Codeや他の開発者がプロジェクトの完全なコンテキストを理解するためのものです。
+This file provides complete project context for Claude Code and other developers.
 
-## プロジェクト概要
+## Project Overview
 
-**uv-sbom** は、Pythonのパッケージマネージャー[uv](https://github.com/astral-sh/uv)で管理されているプロジェクトから、SBOM (Software Bill of Materials) を生成するRust製のCLIツールです。
+**uv-sbom** is a Rust-based CLI tool that generates SBOM (Software Bill of Materials) from projects managed by the Python package manager [uv](https://github.com/astral-sh/uv).
 
-### 主要な目的
-- uvプロジェクトの依存関係を可視化
-- セキュリティ監査やコンプライアンスのためのSBOM生成
-- ライセンス情報の自動収集と報告
-- 直接依存と推移的依存の分析
+### Key Objectives
+- Visualize uv project dependencies
+- Generate SBOMs for security audits and compliance
+- Automatically collect and report license information
+- Analyze direct and transitive dependencies
 
-### バージョン情報
-- 現在のバージョン: 0.2.0
+### Version Information
+- Current Version: 0.2.0
 - Rust Edition: 2021
-- CycloneDX仕様: 1.6
-- アーキテクチャ: ヘキサゴナルアーキテクチャ + DDD
+- CycloneDX Specification: 1.6
+- Architecture: Hexagonal Architecture + DDD
 
-### バージョンアップ時のチェックリスト
+### Version Update Checklist
 
-バージョン番号を更新する際は、以下のファイルをすべて確認・更新してください：
+When updating the version number, verify and update all of the following files:
 
-#### 必須更新ファイル（動的バージョン参照を使用）
-これらのファイルは `env!("CARGO_PKG_VERSION")` または類似の仕組みでバージョンを自動取得しています。Cargo.tomlを更新すれば自動的に反映されます：
+#### Required Updates (Dynamic Version Reference)
+These files automatically retrieve the version using `env!("CARGO_PKG_VERSION")` or similar mechanisms. Updating Cargo.toml will automatically reflect the changes:
 
-1. **Cargo.toml** - `version = "X.Y.Z"` （メインバージョン管理）
-2. **src/cli.rs** - `#[command(version)]` （Cargo.tomlから自動取得）
-3. **src/main.rs** - `display_banner()` 関数で `env!("CARGO_PKG_VERSION")` 使用
-4. **src/adapters/outbound/network/pypi_client.rs** - User-Agentで `env!("CARGO_PKG_VERSION")` 使用
+1. **Cargo.toml** - `version = "X.Y.Z"` (Main version management)
+2. **src/cli.rs** - `#[command(version)]` (Auto-retrieved from Cargo.toml)
+3. **src/main.rs** - Uses `env!("CARGO_PKG_VERSION")` in `display_banner()` function
+4. **src/adapters/outbound/network/pypi_client.rs** - Uses `env!("CARGO_PKG_VERSION")` in User-Agent
 
-#### Python Wrapperファイル（手動更新必要）
+#### Python Wrapper Files (Manual Update Required)
 5. **python-wrapper/pyproject.toml** - `version = "X.Y.Z"`
 6. **python-wrapper/uv_sbom_bin/__init__.py** - `__version__ = "X.Y.Z"`
 7. **python-wrapper/uv_sbom_bin/install.py** - `UV_SBOM_VERSION = "X.Y.Z"`
 
-#### ドキュメントファイル（手動更新必要）
-8. **.claude/project-context.md** - このファイルの「現在のバージョン」セクション
+#### Documentation Files (Manual Update Required)
+8. **.claude/project-context.md** - "Current Version" section in this file
 
-#### 自動生成・サンプルファイル（更新不要）
-以下のファイルは更新**不要**です：
-- `Cargo.lock` - 自動生成
-- `CHANGELOG.md` - 履歴として残す
-- `RELEASE.md` - リリース比較URLとして残す
-- `README.md` / `README-JP.md` - `/latest/download/` URLを使用（バージョン非依存）
-- `docs/DISTRIBUTION_GUIDE.md` - プレースホルダー（X.Y.Z）を使用
-- `src/sbom_generation/domain/sbom_metadata.rs` - テストコード（実際は動的生成）
-- `examples/sample-project/pyproject.toml` - サンプルプロジェクト
-- `docs/PYPI_WRAPPER_SETUP.md` - ドキュメントの例として記載
+#### Auto-generated/Sample Files (No Update Required)
+The following files do **NOT** need updates:
+- `Cargo.lock` - Auto-generated
+- `CHANGELOG.md` - Kept as history
+- `RELEASE.md` - Kept for release comparison URLs
+- `README.md` / `README-JP.md` - Uses `/latest/download/` URL (version-independent)
+- `docs/DISTRIBUTION_GUIDE.md` - Uses placeholder (X.Y.Z)
+- `src/sbom_generation/domain/sbom_metadata.rs` - Test code (dynamically generated in practice)
+- `examples/sample-project/pyproject.toml` - Sample project
+- `docs/PYPI_WRAPPER_SETUP.md` - Listed as documentation example
 
-#### バージョンアップ手順
+#### Version Update Procedure
 ```bash
-# 1. Cargo.tomlのバージョンを更新
+# 1. Update Cargo.toml version
 sed -i '' 's/version = "0.2.0"/version = "0.3.0"/' Cargo.toml
 
-# 2. Python wrapperのバージョンを更新
+# 2. Update Python wrapper version
 sed -i '' 's/version = "0.2.0"/version = "0.3.0"/' python-wrapper/pyproject.toml
 sed -i '' 's/__version__ = "0.2.0"/__version__ = "0.3.0"/' python-wrapper/uv_sbom_bin/__init__.py
 sed -i '' 's/UV_SBOM_VERSION = "0.2.0"/UV_SBOM_VERSION = "0.3.0"/' python-wrapper/uv_sbom_bin/install.py
 
-# 3. このファイルのバージョンを更新
-sed -i '' 's/現在のバージョン: 0.2.0/現在のバージョン: 0.3.0/' .claude/project-context.md
+# 3. Update this file's version
+sed -i '' 's/Current Version: 0.2.0/Current Version: 0.3.0/' .claude/project-context.md
 
-# 4. ビルドとテスト
+# 4. Build and test
 cargo build
 cargo test
 
-# 5. コミット
+# 5. Commit
 git add Cargo.toml python-wrapper/ .claude/project-context.md
 git commit -m "chore: bump version to 0.3.0"
 ```
 
-## 技術スタック
+## Technology Stack
 
-### 主要な依存関係
+### Main Dependencies
 ```toml
-# CLI & 設定
-clap = "4.5"                 # CLI引数パース (derive機能使用)
+# CLI & Configuration
+clap = "4.5"                 # CLI argument parsing (using derive feature)
 
-# シリアライゼーション
-serde = "1.0"                # シリアライゼーション (derive機能使用)
-serde_json = "1.0"           # JSON処理
-toml = "0.8"                 # TOML (uv.lock) パース
+# Serialization
+serde = "1.0"                # Serialization (using derive feature)
+serde_json = "1.0"           # JSON processing
+toml = "0.8"                 # TOML (uv.lock) parsing
 
-# エラーハンドリング
-anyhow = "1.0"               # エラーハンドリング
+# Error Handling
+anyhow = "1.0"               # Error handling
 
-# HTTP クライアント
-reqwest = "0.12"             # HTTP クライアント (blocking機能使用)
+# HTTP Client
+reqwest = "0.12"             # HTTP client (using blocking feature)
 
-# ユーティリティ
-chrono = "0.4"               # 日時処理
-uuid = "1.10"                # UUID生成 (v4機能使用)
+# Utilities
+chrono = "0.4"               # Date/time handling
+uuid = "1.10"                # UUID generation (using v4 feature)
 
-# テスト
-tempfile = "3.8"             # テンポラリファイル作成
+# Testing
+tempfile = "3.8"             # Temporary file creation
 ```
 
-## アーキテクチャ: ヘキサゴナルアーキテクチャ + DDD
+## Architecture: Hexagonal Architecture + DDD
 
-### アーキテクチャの原則
+### Architecture Principles
 
-このプロジェクトは**ヘキサゴナルアーキテクチャ（ポート&アダプターパターン）**と**ドメイン駆動設計（DDD）**を採用しています。
+This project adopts **Hexagonal Architecture (Ports & Adapters pattern)** and **Domain-Driven Design (DDD)**.
 
-**主な利点**:
-1. **テスタビリティ**: ドメインロジックがI/Oから分離されており、モックで簡単にテスト可能
-2. **保守性**: 関心の分離が明確で、コードの位置が分かりやすい
-3. **柔軟性**: インフラストラクチャの実装を容易に差し替え可能
-4. **叫ぶアーキテクチャ**: ディレクトリ構造がシステムの目的を表現
+**Key Benefits**:
+1. **Testability**: Domain logic is isolated from I/O, easily testable with mocks
+2. **Maintainability**: Clear separation of concerns, easy to locate code
+3. **Flexibility**: Infrastructure implementations can be easily swapped
+4. **Screaming Architecture**: Directory structure expresses the system's purpose
 
-### レイヤー構成
+### Layer Structure
 
-プロジェクトは以下の4つの主要レイヤーで構成されています：
+The project consists of four main layers:
 
-1. **ドメイン層** (`sbom_generation/`)
-   - 純粋なビジネスロジック、インフラストラクチャ依存なし
-   - バリューオブジェクト、集約、ドメインサービス、ポリシー
+1. **Domain Layer** (`sbom_generation/`)
+   - Pure business logic, no infrastructure dependencies
+   - Value objects, aggregates, domain services, policies
 
-2. **アプリケーション層** (`application/`)
-   - ユースケースのオーケストレーション
-   - DTO（Data Transfer Objects）、ファクトリー
+2. **Application Layer** (`application/`)
+   - Use case orchestration
+   - DTOs (Data Transfer Objects), factories
 
-3. **ポート層** (`ports/`)
-   - インターフェース定義（トレイト）
-   - インバウンド/アウトバウンドポート
+3. **Ports Layer** (`ports/`)
+   - Interface definitions (traits)
+   - Inbound/outbound ports
 
-4. **アダプター層** (`adapters/`)
-   - インフラストラクチャの具体実装
-   - ファイルシステム、ネットワーク、フォーマッター、コンソール
+4. **Adapters Layer** (`adapters/`)
+   - Concrete infrastructure implementations
+   - File system, network, formatters, console
 
-5. **共有カーネル** (`shared/`)
-   - エラー型、セキュリティ検証など
+5. **Shared Kernel** (`shared/`)
+   - Error types, security validation, etc.
 
-**詳細なディレクトリ構造**: [ARCHITECTURE-JP.md](../ARCHITECTURE-JP.md) を参照
+**Detailed Directory Structure**: See [ARCHITECTURE-JP.md](../ARCHITECTURE-JP.md)
 
-## 最近の変更履歴（2025-01-02）
+## Recent Changes (2025-01-02)
 
-### コードレビュー指摘事項対応
+### Code Review Response
 
-**High優先度**:
-- ✅ Clippy警告解消（型エイリアス追加）
+**High Priority**:
+- ✅ Resolved Clippy warnings (added type aliases)
   - `DependencyMap = HashMap<String, Vec<String>>`
   - `LockfileParseResult = (Vec<Package>, DependencyMap)`
   - `PyPiMetadata = (Option<String>, Option<String>, Vec<String>, Option<String>)`
 
-**Medium優先度**:
-- ✅ 不要なclone()削減
-  - `DependencyGraph::new()`から未使用パラメータ削除
-  - `DependencyAnalyzer::analyze()`のシグネチャ簡素化
-- ✅ #[allow(dead_code)]整理
-  - `LicenseFetchError`と`OutputGenerationError`にドキュメント追加
-  - ライブラリAPI用として保持する理由を明記
-- ✅ セキュリティ検証コード共通化
-  - `shared/security.rs`モジュール新規作成
-  - file_reader.rsとfile_writer.rsのリファクタリング
+**Medium Priority**:
+- ✅ Reduced unnecessary clone() operations
+  - Removed unused parameters from `DependencyGraph::new()`
+  - Simplified `DependencyAnalyzer::analyze()` signature
+- ✅ Cleaned up #[allow(dead_code)] attributes
+  - Added documentation for `LicenseFetchError` and `OutputGenerationError`
+  - Clarified reasons for keeping them as library API
+- ✅ Unified security validation code
+  - Created new `shared/security.rs` module
+  - Refactored file_reader.rs and file_writer.rs
 
-**テスト結果**:
-- 全テスト合格
-- 警告なし
+**Test Results**:
+- All tests passing
+- No warnings
 
-## リソース
+## Resources
 
-### ドキュメント
-- `README.md`: ユーザー向け使用方法
-- `.claude/instructions.md`: Claude Code向け指示
+### Documentation
+- `README.md`: User guide
+- `.claude/instructions.md`: Instructions for Claude Code
 
-### 外部リファレンス
-- [CycloneDX 1.6仕様](https://cyclonedx.org/docs/1.6/)
+### External References
+- [CycloneDX 1.6 Specification](https://cyclonedx.org/docs/1.6/)
 - [PyPI JSON API](https://warehouse.pypa.io/api-reference/json.html)
 - [uv](https://github.com/astral-sh/uv)
 
 ---
 
-最終更新: 2025-01-02
+Last Updated: 2025-01-02
