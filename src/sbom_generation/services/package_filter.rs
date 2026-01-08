@@ -548,7 +548,8 @@ mod tests {
             Package::new("requests".to_string(), "1.0.0".to_string()).unwrap(),
             Package::new("numpy".to_string(), "3.0.0".to_string()).unwrap(),
         ];
-        let filter = PackageFilter::new(vec!["pytest".to_string(), "non-existent".to_string()]).unwrap();
+        let filter =
+            PackageFilter::new(vec!["pytest".to_string(), "non-existent".to_string()]).unwrap();
         let _filtered = filter.filter_packages(packages);
 
         // Both patterns should be unmatched
@@ -569,7 +570,8 @@ mod tests {
             "pytest".to_string(),
             "non-existent".to_string(),
             "req*".to_string(),
-        ]).unwrap();
+        ])
+        .unwrap();
         let _filtered = filter.filter_packages(packages);
 
         // Only "non-existent" should be unmatched
