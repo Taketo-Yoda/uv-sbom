@@ -46,3 +46,6 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Claude Code context saves (As it may contain sensitive information)
+.claude/saved-contexts/
