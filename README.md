@@ -214,6 +214,9 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 - Patterns are case-sensitive
 - Maximum 64 patterns per invocation
 
+**Preventing Information Leakage:**
+Use the `--exclude` option to skip specific internal or proprietary libraries. This prevents their names from being sent to external registries (like PyPI) during metadata retrieval, ensuring your internal project structure remains private.
+
 ## Command-line options
 
 ```
