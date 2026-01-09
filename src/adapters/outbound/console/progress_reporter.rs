@@ -62,7 +62,7 @@ impl ProgressReporter for StderrProgressReporter {
         if let Some(pb) = self.progress_bar.borrow().as_ref() {
             pb.finish_and_clear();
         }
-        eprintln!("\n{}", message);
+        eprintln!("{}", message);
     }
 
     fn report_completion(&self, message: &str) {
