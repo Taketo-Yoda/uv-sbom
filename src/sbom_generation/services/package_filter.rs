@@ -1,5 +1,6 @@
 use crate::sbom_generation::domain::Package;
 use crate::shared::Result;
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 /// Maximum number of exclude patterns to prevent DoS attacks
@@ -93,14 +94,29 @@ impl PackageFilter {
     fn matches(&self, package_name: &str) -> bool {
         self.patterns.iter().any(|p| p.matches(package_name))
     }
+
+    /// Returns a list of patterns that did not match any packages
+    ///
+    /// This method should be called after filtering to identify patterns
+    /// that had no effect on the package list.
+    ///
+    /// # Returns
+    /// Vector of pattern strings that did not match any packages
+    pub fn get_unmatched_patterns(&self) -> Vec<String> {
+        self.patterns
+            .iter()
+            .filter(|p| !*p.matched.borrow())
+            .map(|p| p.original.clone())
+            .collect()
+    }
 }
 
 /// Represents a single exclusion pattern with its compiled matcher
 #[derive(Debug)]
 struct ExcludePattern {
-    #[allow(dead_code)]
     original: String,
     matcher: PatternMatcher,
+    matched: RefCell<bool>,
 }
 
 impl ExcludePattern {
@@ -119,12 +135,17 @@ impl ExcludePattern {
         Ok(Self {
             original: pattern,
             matcher,
+            matched: RefCell::new(false),
         })
     }
 
     /// Checks if a package name matches this pattern
     fn matches(&self, package_name: &str) -> bool {
-        self.matcher.matches(package_name)
+        let is_match = self.matcher.matches(package_name);
+        if is_match {
+            *self.matched.borrow_mut() = true;
+        }
+        is_match
     }
 }
 
@@ -504,5 +525,73 @@ mod tests {
         assert!(filter.matches("com.example.package"));
         assert!(filter.matches("com.example.test"));
         assert!(!filter.matches("com.other.package"));
+    }
+
+    #[test]
+    fn test_unmatched_patterns_all_matched() {
+        let packages = vec![
+            Package::new("requests".to_string(), "1.0.0".to_string()).unwrap(),
+            Package::new("pytest".to_string(), "2.0.0".to_string()).unwrap(),
+            Package::new("numpy".to_string(), "3.0.0".to_string()).unwrap(),
+        ];
+        let filter = PackageFilter::new(vec!["pytest".to_string()]).unwrap();
+        let _filtered = filter.filter_packages(packages);
+
+        // pytest pattern should have matched
+        let unmatched = filter.get_unmatched_patterns();
+        assert_eq!(unmatched.len(), 0);
+    }
+
+    #[test]
+    fn test_unmatched_patterns_none_matched() {
+        let packages = vec![
+            Package::new("requests".to_string(), "1.0.0".to_string()).unwrap(),
+            Package::new("numpy".to_string(), "3.0.0".to_string()).unwrap(),
+        ];
+        let filter =
+            PackageFilter::new(vec!["pytest".to_string(), "non-existent".to_string()]).unwrap();
+        let _filtered = filter.filter_packages(packages);
+
+        // Both patterns should be unmatched
+        let unmatched = filter.get_unmatched_patterns();
+        assert_eq!(unmatched.len(), 2);
+        assert!(unmatched.contains(&"pytest".to_string()));
+        assert!(unmatched.contains(&"non-existent".to_string()));
+    }
+
+    #[test]
+    fn test_unmatched_patterns_partial_match() {
+        let packages = vec![
+            Package::new("requests".to_string(), "1.0.0".to_string()).unwrap(),
+            Package::new("pytest".to_string(), "2.0.0".to_string()).unwrap(),
+            Package::new("numpy".to_string(), "3.0.0".to_string()).unwrap(),
+        ];
+        let filter = PackageFilter::new(vec![
+            "pytest".to_string(),
+            "non-existent".to_string(),
+            "req*".to_string(),
+        ])
+        .unwrap();
+        let _filtered = filter.filter_packages(packages);
+
+        // Only "non-existent" should be unmatched
+        let unmatched = filter.get_unmatched_patterns();
+        assert_eq!(unmatched.len(), 1);
+        assert_eq!(unmatched[0], "non-existent");
+    }
+
+    #[test]
+    fn test_unmatched_patterns_wildcard() {
+        let packages = vec![
+            Package::new("requests".to_string(), "1.0.0".to_string()).unwrap(),
+            Package::new("flask".to_string(), "2.0.0".to_string()).unwrap(),
+        ];
+        let filter = PackageFilter::new(vec!["req*".to_string(), "*-dev".to_string()]).unwrap();
+        let _filtered = filter.filter_packages(packages);
+
+        // "*-dev" should be unmatched, "req*" should match "requests"
+        let unmatched = filter.get_unmatched_patterns();
+        assert_eq!(unmatched.len(), 1);
+        assert_eq!(unmatched[0], "*-dev");
     }
 }
