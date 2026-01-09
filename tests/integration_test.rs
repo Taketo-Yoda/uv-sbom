@@ -40,7 +40,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![]);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -91,7 +91,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), true, vec![]);
+    let request = SbomRequest::new(PathBuf::from("."), true, vec![], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -119,7 +119,7 @@ fn test_generate_sbom_lockfile_read_failure() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![]);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false);
     let result = use_case.execute(request);
 
     assert!(result.is_err());
@@ -150,7 +150,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), true, vec![]);
+    let request = SbomRequest::new(PathBuf::from("."), true, vec![], false);
     let result = use_case.execute(request);
 
     assert!(result.is_err());
@@ -181,7 +181,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter.clone(),
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![]);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false);
     let result = use_case.execute(request);
 
     // License repository failures are treated as warnings, not errors
@@ -214,7 +214,7 @@ fn test_generate_sbom_invalid_toml() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![]);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false);
     let result = use_case.execute(request);
 
     assert!(result.is_err());
@@ -249,7 +249,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter.clone(),
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![]);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false);
     let _result = use_case.execute(request);
 
     // Verify that progress was reported
@@ -297,7 +297,7 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude urllib3
-    let request = SbomRequest::new(PathBuf::from("."), false, vec!["urllib3".to_string()]);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec!["urllib3".to_string()], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -367,6 +367,7 @@ source = { registry = "https://pypi.org/simple" }
         PathBuf::from("."),
         false,
         vec!["urllib3".to_string(), "certifi".to_string()],
+        false,
     );
     let result = use_case.execute(request);
 
@@ -418,7 +419,7 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude all pytest-related packages
-    let request = SbomRequest::new(PathBuf::from("."), false, vec!["pytest*".to_string()]);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec!["pytest*".to_string()], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -454,7 +455,7 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude all packages with a pattern that matches everything
-    let request = SbomRequest::new(PathBuf::from("."), false, vec!["*requests*".to_string()]);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec!["*requests*".to_string()], false);
     let result = use_case.execute(request);
 
     // Should fail because all packages would be excluded
@@ -510,7 +511,7 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude urllib3 and request dependency graph
-    let request = SbomRequest::new(PathBuf::from("."), true, vec!["urllib3".to_string()]);
+    let request = SbomRequest::new(PathBuf::from("."), true, vec!["urllib3".to_string()], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());

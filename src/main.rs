@@ -64,10 +64,20 @@ fn run() -> Result<()> {
 
     // Create request
     let include_dependency_info = matches!(args.format, OutputFormat::Markdown);
-    let request = SbomRequest::new(project_path, include_dependency_info, args.exclude);
+    let request = SbomRequest::new(
+        project_path,
+        include_dependency_info,
+        args.exclude,
+        args.dry_run,
+    );
 
     // Execute use case
     let response = use_case.execute(request)?;
+
+    // Skip output generation for dry-run mode
+    if args.dry_run {
+        return Ok(());
+    }
 
     // Display progress message
     eprintln!("{}", FormatterFactory::progress_message(args.format));
