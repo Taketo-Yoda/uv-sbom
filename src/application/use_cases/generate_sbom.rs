@@ -100,7 +100,7 @@ where
             let unmatched_patterns = filter.get_unmatched_patterns();
             for pattern in unmatched_patterns {
                 self.progress_reporter.report_error(&format!(
-                    "Warning: Exclude pattern '{}' did not match any dependencies.",
+                    "⚠️  Warning: Exclude pattern '{}' did not match any dependencies.",
                     pattern
                 ));
             }
