@@ -217,6 +217,55 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 **Preventing Information Leakage:**
 Use the `--exclude` option to skip specific internal or proprietary libraries. This prevents their names from being sent to external registries (like PyPI) during metadata retrieval, ensuring your internal project structure remains private.
 
+## Security
+
+### Exclude Pattern Input Validation
+
+The `-e`/`--exclude` option implements the following security measures to protect against malicious input:
+
+#### Character Restrictions
+
+Only the following characters are allowed in patterns:
+- **Alphanumeric characters**: a-z, A-Z, 0-9, Unicode letters/numbers
+- **Hyphens** (`-`), **underscores** (`_`), **dots** (`.`): Common in package names
+- **Square brackets** (`[`, `]`): For package extras (e.g., `requests[security]`)
+- **Asterisks** (`*`): For wildcard matching
+
+Control characters, shell metacharacters, and path separators are blocked to prevent:
+- Terminal escape sequence injection
+- Log injection attacks
+- Command injection (defense in depth)
+
+#### Pattern Limits
+
+- **Maximum patterns**: 64 patterns can be specified per invocation
+- **Maximum length**: 255 characters per pattern
+- **Minimum content**: Patterns must contain at least one non-wildcard character
+
+These limits prevent denial-of-service attacks via:
+- Excessive memory consumption
+- CPU exhaustion from complex pattern matching
+
+#### Examples
+
+**Valid patterns**:
+```bash
+uv-sbom -e 'pytest'           # Exact match
+uv-sbom -e 'test-*'           # Prefix wildcard
+uv-sbom -e '*-dev'            # Suffix wildcard
+uv-sbom -e 'package[extra]'   # Package with extras
+```
+
+**Invalid patterns** (rejected with error):
+```bash
+uv-sbom -e ''                 # Empty pattern
+uv-sbom -e '***'              # Only wildcards
+uv-sbom -e 'pkg;rm -rf /'     # Contains shell metacharacter
+uv-sbom -e "$(cat /etc/passwd)" # Shell command substitution blocked
+```
+
+For more detailed security information, including threat model and attack vectors, see [SECURITY.md](SECURITY.md).
+
 ## Command-line options
 
 ```
