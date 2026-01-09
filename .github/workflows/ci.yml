@@ -10,10 +10,16 @@ on:
       - main
       - develop
       - 'feature/**'
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
   pull_request:
     branches:
       - main
       - develop
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
 
 env:
   CARGO_TERM_COLOR: always
