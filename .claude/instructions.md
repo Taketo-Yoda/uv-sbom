@@ -614,6 +614,244 @@ gh pr create --base develop --title "..." --body "..."
 
 **Remember**: These steps are MANDATORY, not optional. Skipping any step may result in CI failures or review delays.
 
+## GitHub Issue Creation Guidelines
+
+### Purpose
+
+Issues serve as the foundation for development work in this project. Well-written issues enable:
+- AI agents to implement features autonomously
+- Clear communication of requirements and technical specifications
+- Consistent documentation of decisions and rationale
+- Efficient collaboration between team members
+
+### Key Principles
+
+1. **Language**: Always write issues in **English**
+   - Reason: Project standard for all public documentation
+   - Applies to: Issue title, description, code examples, acceptance criteria
+   - No exceptions
+
+2. **AI-First Design**: Issues must contain sufficient detail for autonomous AI implementation
+   - Include technical specifications, not just high-level descriptions
+   - Provide concrete code examples and file paths
+   - Document design decisions and rationale explicitly
+   - Anticipate implementation questions and address them proactively
+
+3. **Completeness**: An issue should answer the question "Can an AI implement this without asking for clarification?"
+   - If the answer is no, add more detail
+   - Include context, constraints, and assumptions
+   - Reference related issues, PRs, or documentation
+
+### Issue Structure Template
+
+Use this structure for all issues:
+
+```markdown
+## Description
+[Clear, concise description of the problem or feature]
+[Explain why this is needed and what value it provides]
+
+## Current Situation / Background
+[Explain current behavior or implementation]
+[Provide context that helps understand the need]
+[Reference related code, issues, or documentation]
+
+## Proposed Solution / Technical Details
+[Detailed technical specification]
+[Architecture considerations]
+[Design decisions and trade-offs]
+[Security implications (if any)]
+
+## Implementation Examples
+
+### Example 1: [Specific file or component]
+```[language]
+[Concrete code example or documentation snippet]
+```
+[Explanation of the example]
+[Why this approach was chosen]
+
+### Example 2: [Another file or component]
+```[language]
+[Another concrete example]
+```
+[Explanation]
+
+## Acceptance Criteria
+- [ ] [Specific, testable criterion 1]
+- [ ] [Specific, testable criterion 2]
+- [ ] [Specific, testable criterion 3]
+- [ ] All existing tests pass
+- [ ] New tests added for new functionality (if applicable)
+- [ ] Documentation updated (if applicable)
+- [ ] Code formatted with `cargo fmt --all`
+- [ ] Clippy warnings resolved (`cargo clippy -- -D warnings`)
+
+## Files to Update/Create
+1. `path/to/file1.rs` - [What changes are needed]
+2. `path/to/file2.md` - [What changes are needed]
+3. `path/to/new_file.rs` - [What to create and why]
+
+## Additional Notes
+[Any other relevant information]
+[Links to related issues or PRs]
+[Dependencies or blockers]
+[Security considerations]
+```
+
+### When to Create an Issue
+
+Create an issue in these situations:
+
+1. **Before starting implementation work**
+   - Allows for discussion and design review
+   - Documents the plan for future reference
+
+2. **For documenting bugs**
+   - Include reproduction steps
+   - Document expected vs. actual behavior
+   - Provide environment details
+
+3. **For proposing new features or enhancements**
+   - Explain the use case and value
+   - Consider alternative approaches
+   - Document design decisions
+
+4. **For tracking technical debt**
+   - Document what needs improvement and why
+   - Explain impact and priority
+
+### Writing for AI Implementation
+
+To ensure AI agents can implement your issue autonomously:
+
+1. **Provide Concrete Examples**
+   - Don't just describe what to do, show it
+   - Include code snippets for each file to be modified
+   - Use actual code, not pseudocode
+
+2. **Include File Paths**
+   - Specify exact paths: `src/sbom_generation/services/package_filter.rs`
+   - List all files that need changes
+   - Indicate whether files are new or existing
+
+3. **Specify Design Decisions Explicitly**
+   - Don't leave room for interpretation
+   - Example: "Use Strategy pattern" not "Improve the design"
+   - Explain why a particular approach was chosen
+
+4. **Document Assumptions and Constraints**
+   - Security requirements
+   - Performance constraints
+   - Backward compatibility needs
+   - API stability guarantees
+
+5. **Provide Context**
+   - Reference related code or issues
+   - Explain architectural patterns in use
+   - Link to relevant documentation
+
+### Quality Checklist
+
+Before submitting an issue, verify:
+
+- [ ] Issue written in English (title and body)
+- [ ] Clear description of problem/feature with context
+- [ ] Technical details sufficient for implementation
+- [ ] At least one concrete code example provided
+- [ ] Acceptance criteria in checklist format (testable)
+- [ ] Files to update/create are listed with explanations
+- [ ] Design decisions documented with rationale
+- [ ] Question: "Can an AI implement this without asking questions?" - Answer: Yes
+
+### Examples of Good Issues
+
+**Example 1: Feature Request (Issue #23)**
+
+✅ **Good because**:
+- Clear description of expected behavior
+- Technical implementation hints provided
+- Example scenarios with expected output
+- Message format specified (emoji + text)
+- Output channel specified (stderr)
+
+**Example 2: Documentation (Issue #32)**
+
+✅ **Good because**:
+- Detailed documentation of what currently exists
+- Specific examples for each file to update
+- Code snippets for documentation comments
+- Clear acceptance criteria
+- Rationale for each security measure
+
+**Example 3: This Issue (Issue #33)**
+
+✅ **Good because**:
+- Comprehensive template structure
+- Multiple concrete examples
+- Clear quality checklist
+- References to existing good issues
+
+### Examples of Issues to Avoid
+
+**❌ Bad Example 1: Vague Description**
+```
+Title: "Fix bug"
+Body: "The exclude option doesn't work right. Please fix."
+```
+**Problems**:
+- No specific behavior described
+- No reproduction steps
+- No expected vs. actual behavior
+- Impossible for AI to implement
+
+**❌ Bad Example 2: Missing Technical Details**
+```
+Title: "Add logging"
+Body: "We should add logging to the application."
+```
+**Problems**:
+- No specification of what to log
+- No logging framework specified
+- No log level strategy
+- No examples of log messages
+- No file paths
+
+**❌ Bad Example 3: No Acceptance Criteria**
+```
+Title: "Improve performance"
+Body: "The application is slow. Make it faster."
+```
+**Problems**:
+- No baseline performance metrics
+- No target performance goals
+- No specific bottlenecks identified
+- No clear definition of "done"
+
+**❌ Bad Example 4: Insufficient Examples**
+```
+Title: "Add security validation"
+Body: "Add security validation to file operations."
+```
+**Problems**:
+- No code examples showing what validation to add
+- No specific files mentioned
+- No explanation of security threats being mitigated
+
+### Integration with Development Workflow
+
+1. **Issue Creation** → Discussion/Review → Implementation → PR → Review → Merge
+2. Always reference the issue number in commits: `feat: add feature X (#123)`
+3. Use `Closes #123` in PR description to auto-close issues
+4. Update issues with implementation notes if approach changes
+
+### Maintaining Issue Quality
+
+- Review existing issues periodically for quality
+- Update old issues to match current template
+- Close outdated or duplicate issues
+- Add labels to categorize issues (bug, feature, documentation, security, etc.)
+
 ## Important Notes
 
 ### Prohibit Breaking Changes
@@ -653,6 +891,7 @@ Last Updated: 2026-01-09
 
 ## Change History
 
+- 2026-01-09: Added "GitHub Issue Creation Guidelines" section (Issue #33)
 - 2026-01-09: Added "PR Creation and Review Response Checklist" section (Lessons from PR #31)
 - 2025-01-04: Added Git/Branch Strategy section
 - 2025-01-04: Added design pattern consideration and security review to workflow
