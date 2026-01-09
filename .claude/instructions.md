@@ -494,6 +494,126 @@ Before committing all changes:
 - Step 10 quality checks are **mandatory upon coding completion**
 - Code is not considered complete unless all these checks pass
 
+## PR Creation and Review Response Checklist
+
+### Before Creating a Pull Request
+
+**CRITICAL**: Always complete this checklist before pushing code and creating a PR:
+
+1. **Run code formatter (MANDATORY)**:
+   ```bash
+   cargo fmt --all
+   ```
+   - This must be done BEFORE `git push`
+   - Prevents CI failures due to formatting issues
+   - **Common mistake**: Forgetting to run formatter before push (Issue #23, PR #31)
+
+2. **Run quality checks**:
+   ```bash
+   cargo fmt --all -- --check  # Verify formatting
+   cargo clippy --all-targets --all-features -- -D warnings  # Zero warnings
+   cargo test  # All tests must pass
+   ```
+
+3. **Verify target branch (MANDATORY)**:
+   - **Default base branch**: `develop` (NOT `main`)
+   - **Common mistake**: Creating PR with `main` as base branch (Issue #23, PR #31)
+   - When creating PR via `gh pr create`:
+     ```bash
+     gh pr create --base develop --title "..." --body "..."
+     ```
+   - When creating PR via GitHub web UI: Double-check the base branch dropdown
+
+4. **Review all changes before push**:
+   ```bash
+   git status
+   git diff
+   ```
+
+### When Responding to Review Comments
+
+**CRITICAL**: Follow this checklist to avoid missing review feedback:
+
+1. **Read ALL review comments thoroughly**:
+   ```bash
+   gh pr view <PR-number> --comments
+   ```
+   - Read each comment completely
+   - **Common mistake**: Missing individual review comments (Issue #23, PR #31 - missed emoji addition)
+
+2. **Create a checklist of all review items**:
+   - List all requested changes
+   - Use TodoWrite tool to track each item
+   - Example:
+     ```
+     [ ] Fix formatting issue in file X
+     [ ] Add emoji to warning message
+     [ ] Change base branch to develop
+     [ ] Update documentation
+     ```
+
+3. **Address each item one by one**:
+   - Mark items as completed only after verification
+   - Test each change before committing
+
+4. **Verify all changes before push**:
+   ```bash
+   cargo fmt --all  # Run formatter again
+   cargo test       # Verify tests still pass
+   git diff         # Review all changes
+   ```
+
+5. **Cross-check with review comments after push**:
+   - Re-read all review comments
+   - Verify each point has been addressed
+   - Update PR comment with response to each review item
+
+### Common Mistakes to Avoid (Lessons from PR #31)
+
+**Mistake 1: Wrong base branch**
+- ❌ Creating PR with `main` as base
+- ✅ Always use `develop` as base branch
+- **Prevention**: Always specify `--base develop` when using `gh pr create`
+
+**Mistake 2: Forgetting to run formatter before push**
+- ❌ Pushing code without running `cargo fmt --all`
+- ✅ Always run `cargo fmt --all` immediately before `git push`
+- **Prevention**: Add this to your pre-push mental checklist
+
+**Mistake 3: Missing review comment items**
+- ❌ Addressing only some review comments
+- ✅ Read ALL comments, create checklist, address all items
+- **Prevention**: Use `gh pr view <PR> --comments` to see all comments, use TodoWrite tool
+
+### Pre-Push Final Checklist
+
+Before running `git push`, verify ALL of the following:
+
+```bash
+# 1. Code formatter (MANDATORY)
+cargo fmt --all
+
+# 2. Quality checks
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+
+# 3. Review changes
+git status
+git diff
+
+# 4. Verify branch
+git branch --show-current  # Should be feature/*, bugfix/*, etc.
+
+# 5. Push
+git push
+
+# 6. Create PR with correct base branch
+gh pr create --base develop --title "..." --body "..."
+```
+
+**Remember**: These steps are MANDATORY, not optional. Skipping any step may result in CI failures or review delays.
+
 ## Important Notes
 
 ### Prohibit Breaking Changes
@@ -529,9 +649,10 @@ Code is not complete unless all these checks pass.
 
 ---
 
-Last Updated: 2025-01-04
+Last Updated: 2026-01-09
 
 ## Change History
 
+- 2026-01-09: Added "PR Creation and Review Response Checklist" section (Lessons from PR #31)
 - 2025-01-04: Added Git/Branch Strategy section
 - 2025-01-04: Added design pattern consideration and security review to workflow
