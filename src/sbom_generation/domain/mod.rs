@@ -10,4 +10,4 @@ pub use package::{Package, PackageName};
 pub use sbom_metadata::SbomMetadata;
 // Note: These will be used in subsequent subtasks (Subtask 2-8)
 #[allow(unused_imports)]
-pub use vulnerability::{PackageVulnerabilities, Severity, Vulnerability};
+pub use vulnerability::{CvssScore, PackageVulnerabilities, Severity, Vulnerability};
