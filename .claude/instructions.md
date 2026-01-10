@@ -466,6 +466,15 @@ Before committing all changes:
 ### During Coding
 
 4. **Identify changes**: Make changes in the appropriate layer
+4-1. **CRITICAL - For Rust file changes (.rs files)**:
+   - After making ANY changes to .rs files (adding, modifying, or deleting), you MUST run format check BEFORE pushing
+   - This is MANDATORY and cannot be skipped
+   - Non-Rust file changes (e.g., README.md, .yml) do not require format check
+   ```bash
+   # MANDATORY before git push when .rs files are changed
+   cargo fmt --all
+   cargo fmt --all -- --check  # Verify formatting is correct
+   ```
 5. **Consider design patterns**: Before implementation, consider applying GoF design patterns
    - For duplicate code or complex conditionals, consider appropriate patterns (Strategy, Factory, Template Method, etc.)
    - Verify consistency with existing architecture patterns (Hexagonal, DDD)
@@ -587,10 +596,13 @@ Before committing all changes:
 
 ### Pre-Push Final Checklist
 
+**CRITICAL**: If you have changed ANY Rust files (.rs), you MUST complete this checklist before `git push`:
+
 Before running `git push`, verify ALL of the following:
 
 ```bash
-# 1. Code formatter (MANDATORY)
+# 1. Code formatter (MANDATORY for .rs file changes)
+# Skip this step ONLY if you changed non-Rust files (e.g., README.md, .yml)
 cargo fmt --all
 
 # 2. Quality checks
