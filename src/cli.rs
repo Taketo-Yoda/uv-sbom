@@ -24,6 +24,10 @@ pub struct Args {
     /// Can be specified multiple times: -e "pkg-a" -e "debug-*"
     #[arg(short, long = "exclude", value_name = "PATTERN")]
     pub exclude: Vec<String>,
+
+    /// Validate configuration without performing network operations or generating output
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 impl Args {

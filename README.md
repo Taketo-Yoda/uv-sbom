@@ -217,6 +217,32 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 **Preventing Information Leakage:**
 Use the `--exclude` option to skip specific internal or proprietary libraries. This prevents their names from being sent to external registries (like PyPI) during metadata retrieval, ensuring your internal project structure remains private.
 
+### Validating configuration with dry-run
+
+Use the `--dry-run` option to validate your configuration before the tool communicates with external registries:
+
+```bash
+# Verify exclude patterns work correctly
+uv-sbom --dry-run -e "internal-*" -e "proprietary-pkg"
+
+# Test configuration with all options
+uv-sbom --dry-run --path /path/to/project --format json -e "*-dev"
+```
+
+**Why use --dry-run:**
+- **Verify exclude patterns**: Ensure your `--exclude` patterns correctly match the packages you want to skip
+- **Prevent information leakage**: Confirm that sensitive internal packages are excluded BEFORE the tool communicates with PyPI registry
+- **Fast validation**: All input validation happens without network overhead
+- **Early error detection**: Catch configuration issues (missing uv.lock, invalid patterns, etc.) immediately
+
+**What happens in dry-run mode:**
+- ✅ Reads and parses `uv.lock` file
+- ✅ Validates all command-line arguments
+- ✅ Checks exclude patterns and warns about unmatched patterns
+- ✅ Outputs success message if no issues found
+- ❌ Skips license fetching from PyPI (no network communication)
+- ❌ Skips SBOM output generation
+
 ## Security
 
 ### Exclude Pattern Input Validation
@@ -274,6 +300,7 @@ Options:
   -p, --path <PATH>        Path to the project directory [default: current directory]
   -o, --output <OUTPUT>    Output file path (if not specified, outputs to stdout)
   -e, --exclude <PATTERN>  Exclude packages matching patterns (supports wildcards: *)
+      --dry-run            Validate configuration without network communication or output generation
   -h, --help               Print help
   -V, --version            Print version
 ```

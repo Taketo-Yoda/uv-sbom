@@ -21,7 +21,7 @@ fn test_e2e_json_format() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(project_path, false, vec![]);
+    let request = SbomRequest::new(project_path, false, vec![], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -57,7 +57,7 @@ fn test_e2e_markdown_format() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(project_path, true, vec![]);
+    let request = SbomRequest::new(project_path, true, vec![], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -100,7 +100,7 @@ fn test_e2e_nonexistent_project() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(project_path, false, vec![]);
+    let request = SbomRequest::new(project_path, false, vec![], false);
     let result = use_case.execute(request);
 
     assert!(result.is_err());
@@ -122,7 +122,7 @@ fn test_e2e_package_count() {
         progress_reporter,
     );
 
-    let request = SbomRequest::new(project_path, true, vec![]);
+    let request = SbomRequest::new(project_path, true, vec![], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -156,7 +156,7 @@ fn test_e2e_exclude_single_package() {
     );
 
     // Exclude urllib3
-    let request = SbomRequest::new(project_path, false, vec!["urllib3".to_string()]);
+    let request = SbomRequest::new(project_path, false, vec!["urllib3".to_string()], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -193,6 +193,7 @@ fn test_e2e_exclude_multiple_packages() {
         project_path,
         false,
         vec!["urllib3".to_string(), "certifi".to_string()],
+        false,
     );
     let result = use_case.execute(request);
 
@@ -230,7 +231,7 @@ fn test_e2e_exclude_with_wildcard() {
     );
 
     // Exclude packages starting with "char"
-    let request = SbomRequest::new(project_path, false, vec!["char*".to_string()]);
+    let request = SbomRequest::new(project_path, false, vec!["char*".to_string()], false);
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -274,6 +275,7 @@ fn test_e2e_exclude_all_packages_error() {
             "*certifi*".to_string(),
             "*sample*".to_string(),
         ],
+        false,
     );
     let result = use_case.execute(request);
 

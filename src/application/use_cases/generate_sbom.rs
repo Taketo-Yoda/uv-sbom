@@ -110,6 +110,15 @@ where
             (packages, dependency_map)
         };
 
+        // Early return for dry-run mode (validation only)
+        if request.dry_run {
+            self.progress_reporter
+                .report_completion("Success: Configuration validated. No issues found.");
+            // Return empty response for dry-run
+            let metadata = SbomGenerator::generate_default_metadata();
+            return Ok(SbomResponse::new(vec![], None, metadata));
+        }
+
         // Step 3: Analyze dependencies if requested
         let dependency_graph = if request.include_dependency_info {
             self.progress_reporter
@@ -345,6 +354,7 @@ version = "3.4.0"
             std::path::PathBuf::from("/test/project"),
             false,  // no dependency info
             vec![], // no exclusion patterns
+            false,  // not dry-run
         );
 
         let response = use_case.execute(request).unwrap();
@@ -391,6 +401,7 @@ version = "1.26.0"
             std::path::PathBuf::from("/test/project"),
             true,   // with dependency info
             vec![], // no exclusion patterns
+            false,  // not dry-run
         );
 
         let response = use_case.execute(request).unwrap();

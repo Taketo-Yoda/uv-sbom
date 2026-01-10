@@ -12,6 +12,8 @@ pub struct SbomRequest {
     pub include_dependency_info: bool,
     /// Patterns for excluding packages from the SBOM
     pub exclude_patterns: Vec<String>,
+    /// Whether to perform dry-run validation only (skip network operations and output generation)
+    pub dry_run: bool,
 }
 
 impl SbomRequest {
@@ -19,11 +21,13 @@ impl SbomRequest {
         project_path: PathBuf,
         include_dependency_info: bool,
         exclude_patterns: Vec<String>,
+        dry_run: bool,
     ) -> Self {
         Self {
             project_path,
             include_dependency_info,
             exclude_patterns,
+            dry_run,
         }
     }
 }
