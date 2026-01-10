@@ -297,7 +297,12 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude urllib3
-    let request = SbomRequest::new(PathBuf::from("."), false, vec!["urllib3".to_string()], false);
+    let request = SbomRequest::new(
+        PathBuf::from("."),
+        false,
+        vec!["urllib3".to_string()],
+        false,
+    );
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -419,7 +424,12 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude all pytest-related packages
-    let request = SbomRequest::new(PathBuf::from("."), false, vec!["pytest*".to_string()], false);
+    let request = SbomRequest::new(
+        PathBuf::from("."),
+        false,
+        vec!["pytest*".to_string()],
+        false,
+    );
     let result = use_case.execute(request);
 
     assert!(result.is_ok());
@@ -455,7 +465,12 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude all packages with a pattern that matches everything
-    let request = SbomRequest::new(PathBuf::from("."), false, vec!["*requests*".to_string()], false);
+    let request = SbomRequest::new(
+        PathBuf::from("."),
+        false,
+        vec!["*requests*".to_string()],
+        false,
+    );
     let result = use_case.execute(request);
 
     // Should fail because all packages would be excluded
