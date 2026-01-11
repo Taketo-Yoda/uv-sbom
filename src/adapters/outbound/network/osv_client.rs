@@ -1,0 +1,491 @@
+// Note: This module will be used in subsequent subtasks for CVE check feature
+#![allow(dead_code)]
+
+use crate::ports::outbound::VulnerabilityRepository;
+use crate::sbom_generation::domain::vulnerability::{
+    CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+};
+use crate::sbom_generation::domain::Package;
+use crate::shared::Result;
+use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+/// OSV API client for fetching vulnerability data
+///
+/// Uses the OSV.dev Batch Query API to efficiently check multiple packages.
+///
+/// # Security
+/// - Implements rate limiting (10 req/sec)
+/// - Implements timeout (30 seconds)
+/// - Does not retry failed requests (fail fast for CVE checks)
+pub struct OsvClient {
+    client: Client,
+    api_url: String,
+}
+
+impl OsvClient {
+    const API_ENDPOINT: &'static str = "https://api.osv.dev/v1/querybatch";
+    const TIMEOUT_SECONDS: u64 = 30;
+    const RATE_LIMIT_MS: u64 = 100; // 10 req/sec
+    const MAX_BATCH_SIZE: usize = 100; // OSV API limit
+
+    /// Creates a new OSV API client with default configuration
+    pub fn new() -> Result<Self> {
+        let version = env!("CARGO_PKG_VERSION");
+        let user_agent = format!("uv-sbom/{}", version);
+        let client = Client::builder()
+            .timeout(Duration::from_secs(Self::TIMEOUT_SECONDS))
+            .user_agent(user_agent)
+            .build()?;
+
+        Ok(Self {
+            client,
+            api_url: Self::API_ENDPOINT.to_string(),
+        })
+    }
+
+    /// Fetches vulnerabilities for a batch of packages
+    fn fetch_batch(&self, packages: &[Package]) -> Result<Vec<OsvResult>> {
+        // Build batch query
+        let queries: Vec<OsvQuery> = packages
+            .iter()
+            .map(|pkg| OsvQuery {
+                package: OsvPackage {
+                    name: pkg.name().to_string(),
+                    ecosystem: "PyPI".to_string(),
+                },
+                version: pkg.version().to_string(),
+            })
+            .collect();
+
+        let batch_query = OsvBatchQuery { queries };
+
+        // Send request
+        let response = self.client.post(&self.api_url).json(&batch_query).send()?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("OSV API returned status code {}", response.status());
+        }
+
+        let batch_response: OsvBatchResponse = response.json()?;
+        Ok(batch_response.results)
+    }
+
+    /// Converts OSV vulnerabilities to domain model
+    fn convert_to_package_vulnerabilities(
+        &self,
+        package: &Package,
+        osv_result: &OsvResult,
+    ) -> Result<Option<PackageVulnerabilities>> {
+        if osv_result.vulns.is_empty() {
+            return Ok(None);
+        }
+
+        let vulnerabilities: Vec<Vulnerability> = osv_result
+            .vulns
+            .iter()
+            .filter_map(|osv_vuln| self.convert_to_vulnerability(osv_vuln).ok())
+            .collect();
+
+        if vulnerabilities.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(PackageVulnerabilities::new(
+            package.name().to_string(),
+            package.version().to_string(),
+            vulnerabilities,
+        )))
+    }
+
+    /// Converts a single OSV vulnerability to domain model
+    fn convert_to_vulnerability(&self, osv_vuln: &OsvVulnerability) -> Result<Vulnerability> {
+        // Extract CVSS score
+        let cvss_score = osv_vuln
+            .severity
+            .as_ref()
+            .and_then(|severities| severities.iter().find(|s| s.severity_type == "CVSS_V3"))
+            .and_then(|s| parse_cvss_score(&s.score));
+
+        // Determine severity
+        let severity = if let Some(score) = cvss_score {
+            Severity::from_cvss_score(score)
+        } else {
+            Severity::None
+        };
+
+        // Extract fixed version
+        let fixed_version = osv_vuln.affected.as_ref().and_then(|affected| {
+            affected.iter().find_map(|a| {
+                a.ranges
+                    .as_ref()?
+                    .iter()
+                    .find_map(|r| r.events.iter().find_map(|e| e.fixed.clone()))
+            })
+        });
+
+        Vulnerability::new(
+            osv_vuln.id.clone(),
+            cvss_score,
+            severity,
+            fixed_version,
+            osv_vuln.summary.clone(),
+        )
+    }
+}
+
+impl VulnerabilityRepository for OsvClient {
+    fn fetch_vulnerabilities(&self, packages: Vec<Package>) -> Result<Vec<PackageVulnerabilities>> {
+        let mut all_results = Vec::new();
+
+        // Process in batches
+        for chunk in packages.chunks(Self::MAX_BATCH_SIZE) {
+            // Rate limiting: sleep between requests
+            if !all_results.is_empty() {
+                std::thread::sleep(Duration::from_millis(Self::RATE_LIMIT_MS));
+            }
+
+            let osv_results = self.fetch_batch(chunk)?;
+
+            // Convert results to domain model
+            for (package, osv_result) in chunk.iter().zip(osv_results.iter()) {
+                if let Some(pkg_vulns) =
+                    self.convert_to_package_vulnerabilities(package, osv_result)?
+                {
+                    all_results.push(pkg_vulns);
+                }
+            }
+        }
+
+        Ok(all_results)
+    }
+}
+
+// OSV API request/response structures
+
+#[derive(Debug, Serialize)]
+struct OsvBatchQuery {
+    queries: Vec<OsvQuery>,
+}
+
+#[derive(Debug, Serialize)]
+struct OsvQuery {
+    package: OsvPackage,
+    version: String,
+}
+
+#[derive(Debug, Serialize)]
+struct OsvPackage {
+    name: String,
+    ecosystem: String, // "PyPI"
+}
+
+#[derive(Debug, Deserialize)]
+struct OsvBatchResponse {
+    results: Vec<OsvResult>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OsvResult {
+    #[serde(default)]
+    vulns: Vec<OsvVulnerability>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OsvVulnerability {
+    id: String,
+    #[serde(default)]
+    summary: Option<String>,
+    #[serde(default)]
+    severity: Option<Vec<OsvSeverity>>,
+    #[serde(default)]
+    affected: Option<Vec<OsvAffected>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OsvSeverity {
+    #[serde(rename = "type")]
+    severity_type: String, // "CVSS_V3"
+    score: String, // e.g., "CVSS:3.1/AV:N/AC:L/..."
+}
+
+#[derive(Debug, Deserialize)]
+struct OsvAffected {
+    #[serde(default)]
+    ranges: Option<Vec<OsvRange>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OsvRange {
+    #[serde(rename = "type")]
+    #[allow(dead_code)]
+    range_type: String,
+    events: Vec<OsvEvent>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OsvEvent {
+    #[serde(default)]
+    #[allow(dead_code)]
+    introduced: Option<String>,
+    #[serde(default)]
+    fixed: Option<String>,
+}
+
+/// Extracts numeric CVSS score from CVSS vector string
+///
+/// Example: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" -> Some(9.8)
+///
+/// Note: This is a simplified implementation that extracts the score from
+/// the vector components. For the initial implementation, we calculate
+/// the score based on the metrics in the vector string.
+fn parse_cvss_score(cvss_vector: &str) -> Option<CvssScore> {
+    // CVSS v3.1 metric values and their scores
+    // This is a simplified scoring algorithm based on the Base Score formula
+
+    // Parse metrics from vector string
+    let metrics: std::collections::HashMap<&str, &str> = cvss_vector
+        .split('/')
+        .skip(1) // Skip "CVSS:3.1" or "CVSS:3.0"
+        .filter_map(|part| {
+            let mut split = part.split(':');
+            Some((split.next()?, split.next()?))
+        })
+        .collect();
+
+    // Extract metric values
+    let av = metrics.get("AV")?;
+    let ac = metrics.get("AC")?;
+    let pr = metrics.get("PR")?;
+    let ui = metrics.get("UI")?;
+    let s = metrics.get("S")?;
+    let c = metrics.get("C")?;
+    let i = metrics.get("I")?;
+    let a = metrics.get("A")?;
+
+    // Calculate exploitability sub-score
+    let av_score = match *av {
+        "N" => 0.85, // Network
+        "A" => 0.62, // Adjacent
+        "L" => 0.55, // Local
+        "P" => 0.2,  // Physical
+        _ => return None,
+    };
+
+    let ac_score = match *ac {
+        "L" => 0.77, // Low
+        "H" => 0.44, // High
+        _ => return None,
+    };
+
+    let pr_score = match (*pr, *s) {
+        ("N", _) => 0.85,   // None
+        ("L", "U") => 0.62, // Low, Unchanged
+        ("L", "C") => 0.68, // Low, Changed
+        ("H", "U") => 0.27, // High, Unchanged
+        ("H", "C") => 0.5,  // High, Changed
+        _ => return None,
+    };
+
+    let ui_score = match *ui {
+        "N" => 0.85, // None
+        "R" => 0.62, // Required
+        _ => return None,
+    };
+
+    // Calculate impact sub-score
+    let c_score = match *c {
+        "N" => 0.0,  // None
+        "L" => 0.22, // Low
+        "H" => 0.56, // High
+        _ => return None,
+    };
+
+    let i_score = match *i {
+        "N" => 0.0,  // None
+        "L" => 0.22, // Low
+        "H" => 0.56, // High
+        _ => return None,
+    };
+
+    let a_score = match *a {
+        "N" => 0.0,  // None
+        "L" => 0.22, // Low
+        "H" => 0.56, // High
+        _ => return None,
+    };
+
+    // Calculate ISS (Impact Sub-Score)
+    let iss = 1.0_f64 - ((1.0 - c_score) * (1.0 - i_score) * (1.0 - a_score));
+
+    // Calculate Impact
+    let impact = if *s == "U" {
+        6.42 * iss
+    } else {
+        7.52 * (iss - 0.029) - 3.25 * (iss - 0.02_f64).powi(15)
+    };
+
+    // Calculate Exploitability
+    let exploitability = 8.22 * av_score * ac_score * pr_score * ui_score;
+
+    // Calculate Base Score
+    let base_score = if impact <= 0.0 {
+        0.0
+    } else if *s == "U" {
+        f64::min(impact + exploitability, 10.0)
+    } else {
+        f64::min(1.08 * (impact + exploitability), 10.0)
+    };
+
+    // Round up to one decimal place
+    let rounded_score = (base_score * 10.0).ceil() / 10.0;
+
+    CvssScore::new(rounded_score as f32).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_osv_client_creation() {
+        let client = OsvClient::new();
+        assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_parse_cvss_score_critical() {
+        // High severity example (network, low complexity, no privileges, no interaction)
+        let vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H";
+        let score = parse_cvss_score(vector);
+        assert!(score.is_some());
+        let score = score.unwrap();
+        // This should be around 9.8 (Critical)
+        assert!(score.value() >= 9.0 && score.value() <= 10.0);
+    }
+
+    #[test]
+    fn test_parse_cvss_score_high() {
+        // High severity example
+        let vector = "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H";
+        let score = parse_cvss_score(vector);
+        assert!(score.is_some());
+        let score = score.unwrap();
+        // This should be around 8.8 (High)
+        assert!(score.value() >= 7.0 && score.value() < 9.0);
+    }
+
+    #[test]
+    fn test_parse_cvss_score_medium() {
+        // Medium severity example
+        let vector = "CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:L";
+        let score = parse_cvss_score(vector);
+        assert!(score.is_some());
+        let score = score.unwrap();
+        // This should be in the Medium range (4.0-6.9)
+        assert!(score.value() >= 4.0 && score.value() < 7.0);
+    }
+
+    #[test]
+    fn test_parse_cvss_score_low() {
+        // Low severity example
+        let vector = "CVSS:3.1/AV:L/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N";
+        let score = parse_cvss_score(vector);
+        assert!(score.is_some());
+        let score = score.unwrap();
+        // This should be in the Low range (0.1-3.9)
+        assert!(score.value() > 0.0 && score.value() < 4.0);
+    }
+
+    #[test]
+    fn test_parse_cvss_score_none() {
+        // No impact
+        let vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N";
+        let score = parse_cvss_score(vector);
+        assert!(score.is_some());
+        let score = score.unwrap();
+        assert_eq!(score.value(), 0.0);
+    }
+
+    #[test]
+    fn test_parse_cvss_score_invalid() {
+        let vector = "invalid vector";
+        let score = parse_cvss_score(vector);
+        assert!(score.is_none());
+    }
+
+    #[test]
+    fn test_osv_result_deserialize_empty() {
+        let json = r#"{"vulns": []}"#;
+        let result = serde_json::from_str::<OsvResult>(json);
+        assert!(result.is_ok());
+        assert!(result.unwrap().vulns.is_empty());
+    }
+
+    #[test]
+    fn test_osv_result_deserialize_with_vulns() {
+        let json = r#"{
+            "vulns": [
+                {
+                    "id": "CVE-2024-1234",
+                    "summary": "Test vulnerability",
+                    "severity": [
+                        {
+                            "type": "CVSS_V3",
+                            "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+                        }
+                    ],
+                    "affected": [
+                        {
+                            "ranges": [
+                                {
+                                    "type": "ECOSYSTEM",
+                                    "events": [
+                                        {"introduced": "0"},
+                                        {"fixed": "2.0.0"}
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }"#;
+        let result = serde_json::from_str::<OsvResult>(json);
+        assert!(result.is_ok());
+        let osv_result = result.unwrap();
+        assert_eq!(osv_result.vulns.len(), 1);
+        assert_eq!(osv_result.vulns[0].id, "CVE-2024-1234");
+    }
+
+    #[test]
+    fn test_osv_batch_query_serialize() {
+        let query = OsvBatchQuery {
+            queries: vec![OsvQuery {
+                package: OsvPackage {
+                    name: "requests".to_string(),
+                    ecosystem: "PyPI".to_string(),
+                },
+                version: "2.31.0".to_string(),
+            }],
+        };
+
+        let json = serde_json::to_string(&query).unwrap();
+        assert!(json.contains("requests"));
+        assert!(json.contains("PyPI"));
+        assert!(json.contains("2.31.0"));
+    }
+
+    // Integration test - requires network access
+    // Uncomment to run with real OSV API
+    // #[test]
+    // fn test_fetch_vulnerabilities_real() {
+    //     let client = OsvClient::new().unwrap();
+    //     let packages = vec![
+    //         Package::new("requests".to_string(), "2.3.0".to_string()).unwrap(),
+    //     ];
+    //     let result = client.fetch_vulnerabilities(packages);
+    //     assert!(result.is_ok());
+    // }
+}
