@@ -14,6 +14,8 @@ pub struct SbomRequest {
     pub exclude_patterns: Vec<String>,
     /// Whether to perform dry-run validation only (skip network operations and output generation)
     pub dry_run: bool,
+    /// Whether to check for vulnerabilities using OSV API
+    pub check_cve: bool,
 }
 
 impl SbomRequest {
@@ -22,12 +24,14 @@ impl SbomRequest {
         include_dependency_info: bool,
         exclude_patterns: Vec<String>,
         dry_run: bool,
+        check_cve: bool,
     ) -> Self {
         Self {
             project_path,
             include_dependency_info,
             exclude_patterns,
             dry_run,
+            check_cve,
         }
     }
 }

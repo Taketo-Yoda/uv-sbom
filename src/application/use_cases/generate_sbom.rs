@@ -115,8 +115,8 @@ where
             self.progress_reporter
                 .report_completion("Success: Configuration validated. No issues found.");
             // Return empty response for dry-run
-            let metadata = SbomGenerator::generate_default_metadata();
-            return Ok(SbomResponse::new(vec![], None, metadata));
+            let metadata = SbomGenerator::generate_default_metadata(request.check_cve);
+            return Ok(SbomResponse::new(vec![], None, metadata, None));
         }
 
         // Step 3: Analyze dependencies if requested
@@ -153,13 +153,14 @@ where
         let enriched_packages = self.enrich_packages_with_licenses(filtered_packages)?;
 
         // Step 5: Generate SBOM metadata
-        let metadata = SbomGenerator::generate_default_metadata();
+        let metadata = SbomGenerator::generate_default_metadata(request.check_cve);
 
         // Step 6: Create response
         Ok(SbomResponse::new(
             enriched_packages,
             dependency_graph,
             metadata,
+            None, // TODO: Vulnerability report will be added in subsequent subtasks
         ))
     }
 
@@ -355,6 +356,7 @@ version = "3.4.0"
             false,  // no dependency info
             vec![], // no exclusion patterns
             false,  // not dry-run
+            false,  // no CVE check
         );
 
         let response = use_case.execute(request).unwrap();
@@ -402,6 +404,7 @@ version = "1.26.0"
             true,   // with dependency info
             vec![], // no exclusion patterns
             false,  // not dry-run
+            false,  // no CVE check
         );
 
         let response = use_case.execute(request).unwrap();
