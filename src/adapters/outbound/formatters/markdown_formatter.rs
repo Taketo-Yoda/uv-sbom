@@ -154,7 +154,7 @@ mod tests {
             Some("HTTP library".to_string()),
         )];
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
         let formatter = MarkdownFormatter::new();
         let result = formatter.format(enriched, &metadata);
 
@@ -190,7 +190,7 @@ mod tests {
         );
         let graph = DependencyGraph::new(direct_deps, transitive_deps);
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
         let formatter = MarkdownFormatter::new();
         let result = formatter.format_with_dependencies(&graph, enriched, &metadata);
 

@@ -69,6 +69,7 @@ fn run() -> Result<()> {
         include_dependency_info,
         args.exclude,
         args.dry_run,
+        false, // TODO: CVE check will be added in subsequent subtasks
     );
 
     // Execute use case
