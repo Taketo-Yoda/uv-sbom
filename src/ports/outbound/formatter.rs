@@ -1,3 +1,4 @@
+use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, Package, SbomMetadata};
 use crate::shared::Result;
 
@@ -31,13 +32,19 @@ pub trait SbomFormatter {
     /// # Arguments
     /// * `packages` - List of enriched packages with license information
     /// * `metadata` - SBOM metadata (timestamp, tool info, serial number)
+    /// * `vulnerability_report` - Optional vulnerability report from CVE check
     ///
     /// # Returns
     /// Formatted SBOM content as a string
     ///
     /// # Errors
     /// Returns an error if formatting or serialization fails
-    fn format(&self, packages: Vec<EnrichedPackage>, metadata: &SbomMetadata) -> Result<String>;
+    fn format(
+        &self,
+        packages: Vec<EnrichedPackage>,
+        metadata: &SbomMetadata,
+        vulnerability_report: Option<&[PackageVulnerabilities]>,
+    ) -> Result<String>;
 
     /// Formats packages with dependency graph information
     ///
@@ -48,6 +55,7 @@ pub trait SbomFormatter {
     /// * `dependency_graph` - Complete dependency graph
     /// * `packages` - List of enriched packages with license information
     /// * `metadata` - SBOM metadata
+    /// * `vulnerability_report` - Optional vulnerability report from CVE check
     ///
     /// # Returns
     /// Formatted SBOM content as a string
@@ -63,7 +71,8 @@ pub trait SbomFormatter {
         _dependency_graph: &DependencyGraph,
         packages: Vec<EnrichedPackage>,
         metadata: &SbomMetadata,
+        vulnerability_report: Option<&[PackageVulnerabilities]>,
     ) -> Result<String> {
-        self.format(packages, metadata)
+        self.format(packages, metadata, vulnerability_report)
     }
 }

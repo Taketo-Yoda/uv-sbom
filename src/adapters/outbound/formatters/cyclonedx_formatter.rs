@@ -1,4 +1,5 @@
 use crate::ports::outbound::{EnrichedPackage, SbomFormatter};
+use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::SbomMetadata;
 use crate::shared::Result;
 use serde::Serialize;
@@ -72,7 +73,12 @@ impl Default for CycloneDxFormatter {
 }
 
 impl SbomFormatter for CycloneDxFormatter {
-    fn format(&self, packages: Vec<EnrichedPackage>, metadata: &SbomMetadata) -> Result<String> {
+    fn format(
+        &self,
+        packages: Vec<EnrichedPackage>,
+        metadata: &SbomMetadata,
+        _vulnerability_report: Option<&[PackageVulnerabilities]>,
+    ) -> Result<String> {
         let components: Vec<Component> = packages
             .into_iter()
             .map(|enriched| {
@@ -141,7 +147,7 @@ mod tests {
 
         let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
         let formatter = CycloneDxFormatter::new();
-        let result = formatter.format(enriched, &metadata);
+        let result = formatter.format(enriched, &metadata, None);
 
         assert!(result.is_ok());
         let json = result.unwrap();

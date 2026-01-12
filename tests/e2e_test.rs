@@ -30,7 +30,7 @@ fn test_e2e_json_format() {
 
     // Format as JSON
     let formatter = CycloneDxFormatter::new();
-    let json_output = formatter.format(response.enriched_packages, &response.metadata);
+    let json_output = formatter.format(response.enriched_packages, &response.metadata, None);
 
     assert!(json_output.is_ok());
     let json = json_output.unwrap();
@@ -73,6 +73,7 @@ fn test_e2e_markdown_format() {
             .expect("Dependency graph should be present"),
         response.enriched_packages,
         &response.metadata,
+        None,
     );
 
     assert!(markdown_output.is_ok());

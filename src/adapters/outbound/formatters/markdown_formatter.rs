@@ -1,4 +1,5 @@
 use crate::ports::outbound::{EnrichedPackage, SbomFormatter};
+use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata};
 use crate::shared::Result;
 use std::collections::HashMap;
@@ -47,6 +48,68 @@ impl MarkdownFormatter {
             Self::escape_markdown_table_cell(description)
         )
     }
+
+    /// Formats vulnerability report section
+    ///
+    /// Returns markdown formatted vulnerability table with:
+    /// - Package name and current version
+    /// - Fixed version (if available)
+    /// - CVSS score
+    /// - Severity with emoji indicator
+    /// - CVE identifier
+    fn format_vulnerability_section(vulnerabilities: &[PackageVulnerabilities]) -> String {
+        let mut output = String::new();
+        output.push_str("\n## Vulnerability Report\n\n");
+        output.push_str("**⚠️ Security Issues Detected**\n\n");
+        output.push_str("The following packages have known security vulnerabilities:\n\n");
+
+        // Table header
+        output
+            .push_str("| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID |\n");
+        output
+            .push_str("|---------|----------------|---------------|------|----------|--------|\n");
+
+        // Table rows - one row per vulnerability
+        for pkg_vuln in vulnerabilities {
+            for vuln in pkg_vuln.vulnerabilities() {
+                let cvss_display = vuln
+                    .cvss_score()
+                    .map_or("N/A".to_string(), |s| format!("{:.1}", s.value()));
+                let fixed_version = vuln.fixed_version().unwrap_or("N/A");
+                let severity = vuln.severity();
+
+                output.push_str(&format!(
+                    "| {} | {} | {} | {} | {} {:?} | {} |\n",
+                    Self::escape_markdown_table_cell(pkg_vuln.package_name()),
+                    Self::escape_markdown_table_cell(pkg_vuln.current_version()),
+                    Self::escape_markdown_table_cell(fixed_version),
+                    cvss_display,
+                    severity.emoji(),
+                    severity,
+                    Self::escape_markdown_table_cell(vuln.id()),
+                ));
+            }
+        }
+
+        // Attribution
+        output.push_str("\n---\n\n");
+        output
+            .push_str("*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*\n");
+
+        output
+    }
+
+    /// Formats message when no vulnerabilities are found
+    fn format_no_vulnerabilities() -> String {
+        let mut output = String::new();
+        output.push_str("\n## Vulnerability Report\n\n");
+        output.push_str("**✅ No Known Vulnerabilities**\n\n");
+        output.push_str("No security vulnerabilities were found in the scanned packages.\n\n");
+        output.push_str("---\n\n");
+        output
+            .push_str("*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*\n");
+        output
+    }
 }
 
 impl Default for MarkdownFormatter {
@@ -56,7 +119,12 @@ impl Default for MarkdownFormatter {
 }
 
 impl SbomFormatter for MarkdownFormatter {
-    fn format(&self, packages: Vec<EnrichedPackage>, _metadata: &SbomMetadata) -> Result<String> {
+    fn format(
+        &self,
+        packages: Vec<EnrichedPackage>,
+        _metadata: &SbomMetadata,
+        vulnerability_report: Option<&[PackageVulnerabilities]>,
+    ) -> Result<String> {
         let mut output = String::new();
 
         output.push_str("# Software Bill of Materials (SBOM)\n\n");
@@ -69,6 +137,15 @@ impl SbomFormatter for MarkdownFormatter {
             output.push_str(&Self::format_package_row(enriched));
         }
 
+        // Add vulnerability section if present
+        if let Some(vulnerabilities) = vulnerability_report {
+            if vulnerabilities.is_empty() {
+                output.push_str(&Self::format_no_vulnerabilities());
+            } else {
+                output.push_str(&Self::format_vulnerability_section(vulnerabilities));
+            }
+        }
+
         Ok(output)
     }
 
@@ -77,6 +154,7 @@ impl SbomFormatter for MarkdownFormatter {
         dependency_graph: &DependencyGraph,
         packages: Vec<EnrichedPackage>,
         _metadata: &SbomMetadata,
+        vulnerability_report: Option<&[PackageVulnerabilities]>,
     ) -> Result<String> {
         let mut output = String::new();
         let package_map = Self::create_package_map(&packages);
@@ -134,6 +212,15 @@ impl SbomFormatter for MarkdownFormatter {
             output.push_str("*No transitive dependencies*\n\n");
         }
 
+        // Add vulnerability section if present
+        if let Some(vulnerabilities) = vulnerability_report {
+            if vulnerabilities.is_empty() {
+                output.push_str(&Self::format_no_vulnerabilities());
+            } else {
+                output.push_str(&Self::format_vulnerability_section(vulnerabilities));
+            }
+        }
+
         Ok(output)
     }
 }
@@ -156,7 +243,7 @@ mod tests {
 
         let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
         let formatter = MarkdownFormatter::new();
-        let result = formatter.format(enriched, &metadata);
+        let result = formatter.format(enriched, &metadata, None);
 
         assert!(result.is_ok());
         let markdown = result.unwrap();
@@ -192,7 +279,7 @@ mod tests {
 
         let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
         let formatter = MarkdownFormatter::new();
-        let result = formatter.format_with_dependencies(&graph, enriched, &metadata);
+        let result = formatter.format_with_dependencies(&graph, enriched, &metadata, None);
 
         assert!(result.is_ok());
         let markdown = result.unwrap();
@@ -209,5 +296,186 @@ mod tests {
         let input = "Text with | pipe and\nnewline";
         let escaped = MarkdownFormatter::escape_markdown_table_cell(input);
         assert_eq!(escaped, "Text with \\| pipe and newline");
+    }
+
+    #[test]
+    fn test_markdown_formatter_with_vulnerabilities() {
+        use crate::sbom_generation::domain::vulnerability::{
+            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+        };
+
+        let pkg = Package::new("requests".to_string(), "2.31.0".to_string()).unwrap();
+        let enriched = vec![EnrichedPackage::new(
+            pkg,
+            Some("Apache 2.0".to_string()),
+            Some("HTTP library".to_string()),
+        )];
+
+        // Create vulnerability data
+        let vuln1 = Vulnerability::new(
+            "CVE-2024-1234".to_string(),
+            Some(CvssScore::new(9.8).unwrap()),
+            Severity::Critical,
+            Some("2.32.0".to_string()),
+            Some("Security issue".to_string()),
+        )
+        .unwrap();
+
+        let vuln2 = Vulnerability::new(
+            "CVE-2024-5678".to_string(),
+            Some(CvssScore::new(5.3).unwrap()),
+            Severity::Medium,
+            Some("2.32.1".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let pkg_vulns = PackageVulnerabilities::new(
+            "requests".to_string(),
+            "2.31.0".to_string(),
+            vec![vuln1, vuln2],
+        );
+
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let formatter = MarkdownFormatter::new();
+        let result = formatter.format(enriched, &metadata, Some(&[pkg_vulns]));
+
+        assert!(result.is_ok());
+        let markdown = result.unwrap();
+        assert!(markdown.contains("## Vulnerability Report"));
+        assert!(markdown.contains("⚠️ Security Issues Detected"));
+        assert!(markdown.contains("CVE-2024-1234"));
+        assert!(markdown.contains("CVE-2024-5678"));
+        assert!(markdown.contains("9.8"));
+        assert!(markdown.contains("5.3"));
+        assert!(markdown.contains("🔴"));
+        assert!(markdown.contains("🟡"));
+        assert!(markdown.contains("2.32.0"));
+        assert!(markdown.contains("2.32.1"));
+        assert!(markdown.contains("OSV"));
+        assert!(markdown.contains("CC-BY 4.0"));
+    }
+
+    #[test]
+    fn test_markdown_formatter_with_empty_vulnerabilities() {
+        let pkg = Package::new("requests".to_string(), "2.31.0".to_string()).unwrap();
+        let enriched = vec![EnrichedPackage::new(
+            pkg,
+            Some("Apache 2.0".to_string()),
+            Some("HTTP library".to_string()),
+        )];
+
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let formatter = MarkdownFormatter::new();
+        let result = formatter.format(enriched, &metadata, Some(&[]));
+
+        assert!(result.is_ok());
+        let markdown = result.unwrap();
+        assert!(markdown.contains("## Vulnerability Report"));
+        assert!(markdown.contains("✅ No Known Vulnerabilities"));
+        assert!(markdown.contains("No security vulnerabilities were found"));
+        assert!(markdown.contains("OSV"));
+        assert!(markdown.contains("CC-BY 4.0"));
+    }
+
+    #[test]
+    fn test_markdown_formatter_without_vulnerability_check() {
+        let pkg = Package::new("requests".to_string(), "2.31.0".to_string()).unwrap();
+        let enriched = vec![EnrichedPackage::new(
+            pkg,
+            Some("Apache 2.0".to_string()),
+            Some("HTTP library".to_string()),
+        )];
+
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let formatter = MarkdownFormatter::new();
+        let result = formatter.format(enriched, &metadata, None);
+
+        assert!(result.is_ok());
+        let markdown = result.unwrap();
+        assert!(!markdown.contains("## Vulnerability Report"));
+        assert!(!markdown.contains("OSV"));
+    }
+
+    #[test]
+    fn test_markdown_formatter_with_dependencies_and_vulnerabilities() {
+        use crate::sbom_generation::domain::vulnerability::{
+            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+        };
+
+        let pkg1 = Package::new("myproject".to_string(), "1.0.0".to_string()).unwrap();
+        let pkg2 = Package::new("requests".to_string(), "2.31.0".to_string()).unwrap();
+        let pkg3 = Package::new("urllib3".to_string(), "1.26.0".to_string()).unwrap();
+
+        let enriched = vec![
+            EnrichedPackage::new(pkg1.clone(), None, None),
+            EnrichedPackage::new(
+                pkg2.clone(),
+                Some("Apache 2.0".to_string()),
+                Some("HTTP library".to_string()),
+            ),
+            EnrichedPackage::new(pkg3.clone(), Some("MIT".to_string()), None),
+        ];
+
+        let direct_deps = vec![PackageName::new("requests".to_string()).unwrap()];
+        let mut transitive_deps = HashMap::new();
+        transitive_deps.insert(
+            PackageName::new("requests".to_string()).unwrap(),
+            vec![PackageName::new("urllib3".to_string()).unwrap()],
+        );
+        let graph = DependencyGraph::new(direct_deps, transitive_deps);
+
+        // Create vulnerability data
+        let vuln = Vulnerability::new(
+            "CVE-2024-1234".to_string(),
+            Some(CvssScore::new(7.5).unwrap()),
+            Severity::High,
+            Some("1.27.0".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let pkg_vulns =
+            PackageVulnerabilities::new("urllib3".to_string(), "1.26.0".to_string(), vec![vuln]);
+
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let formatter = MarkdownFormatter::new();
+        let result =
+            formatter.format_with_dependencies(&graph, enriched, &metadata, Some(&[pkg_vulns]));
+
+        assert!(result.is_ok());
+        let markdown = result.unwrap();
+        assert!(markdown.contains("## Component Inventory"));
+        assert!(markdown.contains("## Direct Dependencies"));
+        assert!(markdown.contains("## Transitive Dependencies"));
+        assert!(markdown.contains("## Vulnerability Report"));
+        assert!(markdown.contains("CVE-2024-1234"));
+        assert!(markdown.contains("urllib3"));
+        assert!(markdown.contains("7.5"));
+        assert!(markdown.contains("🟠"));
+    }
+
+    #[test]
+    fn test_vulnerability_formatting_with_missing_cvss() {
+        use crate::sbom_generation::domain::vulnerability::{
+            PackageVulnerabilities, Severity, Vulnerability,
+        };
+
+        let vuln = Vulnerability::new(
+            "GHSA-xxxx-yyyy-zzzz".to_string(),
+            None,
+            Severity::High,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let pkg_vulns =
+            PackageVulnerabilities::new("test-pkg".to_string(), "1.0.0".to_string(), vec![vuln]);
+
+        let output = MarkdownFormatter::format_vulnerability_section(&[pkg_vulns]);
+
+        assert!(output.contains("N/A")); // CVSS should be N/A
+        assert!(output.contains("GHSA-xxxx-yyyy-zzzz"));
     }
 }

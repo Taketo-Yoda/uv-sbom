@@ -41,7 +41,7 @@
 //!
 //! // Format output
 //! let formatter = CycloneDxFormatter::new();
-//! let output = formatter.format(response.enriched_packages, &response.metadata)?;
+//! let output = formatter.format(response.enriched_packages, &response.metadata, None)?;
 //! println!("{}", output);
 //! # Ok(())
 //! # }
