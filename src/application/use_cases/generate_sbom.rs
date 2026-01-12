@@ -1,6 +1,7 @@
 use crate::application::dto::{SbomRequest, SbomResponse};
 use crate::ports::outbound::{
     EnrichedPackage, LicenseRepository, LockfileReader, ProgressReporter, ProjectConfigReader,
+    VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::{Package, PackageName};
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
@@ -22,19 +23,22 @@ const LICENSE_FETCH_DELAY_MS: u64 = 100;
 /// * `PCR` - ProjectConfigReader implementation
 /// * `LREPO` - LicenseRepository implementation
 /// * `PR` - ProgressReporter implementation
-pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR> {
+/// * `VREPO` - VulnerabilityRepository implementation (optional)
+pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO> {
     lockfile_reader: LR,
     project_config_reader: PCR,
     license_repository: LREPO,
     progress_reporter: PR,
+    vulnerability_repository: Option<VREPO>,
 }
 
-impl<LR, PCR, LREPO, PR> GenerateSbomUseCase<LR, PCR, LREPO, PR>
+impl<LR, PCR, LREPO, PR, VREPO> GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
     LREPO: LicenseRepository,
     PR: ProgressReporter,
+    VREPO: VulnerabilityRepository,
 {
     /// Creates a new GenerateSbomUseCase with injected dependencies
     pub fn new(
@@ -42,12 +46,14 @@ where
         project_config_reader: PCR,
         license_repository: LREPO,
         progress_reporter: PR,
+        vulnerability_repository: Option<VREPO>,
     ) -> Self {
         Self {
             lockfile_reader,
             project_config_reader,
             license_repository,
             progress_reporter,
+            vulnerability_repository,
         }
     }
 
@@ -115,7 +121,7 @@ where
             self.progress_reporter
                 .report_completion("Success: Configuration validated. No issues found.");
             // Return empty response for dry-run
-            let metadata = SbomGenerator::generate_default_metadata(request.check_cve);
+            let metadata = SbomGenerator::generate_default_metadata(false);
             return Ok(SbomResponse::new(vec![], None, metadata, None));
         }
 
@@ -150,17 +156,24 @@ where
         self.progress_reporter
             .report("🔍 Fetching license information...");
 
-        let enriched_packages = self.enrich_packages_with_licenses(filtered_packages)?;
+        let enriched_packages = self.enrich_packages_with_licenses(filtered_packages.clone())?;
 
-        // Step 5: Generate SBOM metadata
-        let metadata = SbomGenerator::generate_default_metadata(request.check_cve);
+        // Step 4.5: CVE check if requested and not in dry-run mode
+        let vulnerability_report = if request.check_cve && !request.dry_run {
+            self.check_vulnerabilities(&filtered_packages)?
+        } else {
+            None
+        };
+
+        // Step 5: Generate SBOM metadata with OSV attribution if CVE check was performed
+        let metadata = SbomGenerator::generate_default_metadata(vulnerability_report.is_some());
 
         // Step 6: Create response
         Ok(SbomResponse::new(
             enriched_packages,
             dependency_graph,
             metadata,
-            None, // TODO: Vulnerability report will be added in subsequent subtasks
+            vulnerability_report,
         ))
     }
 
@@ -219,6 +232,32 @@ where
         ));
 
         Ok(enriched)
+    }
+
+    /// Checks vulnerabilities for the given packages
+    ///
+    /// # Arguments
+    /// * `packages` - List of packages to check
+    ///
+    /// # Returns
+    /// Option containing vulnerability report, or None if repository not available
+    fn check_vulnerabilities(
+        &self,
+        packages: &[Package],
+    ) -> Result<Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>> {
+        let Some(repo) = &self.vulnerability_repository else {
+            // No repository configured - skip CVE check
+            return Ok(None);
+        };
+
+        // Prepare package list for batch query
+        let package_list: Vec<crate::sbom_generation::domain::Package> = packages.to_vec();
+
+        // Fetch vulnerabilities
+        let vulnerabilities = repo.fetch_vulnerabilities(package_list)?;
+
+        // Return Some even if empty (indicates check was performed)
+        Ok(Some(vulnerabilities))
     }
 }
 
@@ -340,16 +379,18 @@ name = "charset-normalizer"
 version = "3.4.0"
 "#;
 
-        let use_case = GenerateSbomUseCase::new(
-            MockLockfileReader {
-                content: lockfile_content.to_string(),
-            },
-            MockProjectConfigReader {
-                project_name: "test-project".to_string(),
-            },
-            MockLicenseRepository,
-            MockProgressReporter,
-        );
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: lockfile_content.to_string(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test-project".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
 
         let request = SbomRequest::new(
             std::path::PathBuf::from("/test/project"),
@@ -388,16 +429,18 @@ name = "urllib3"
 version = "1.26.0"
 "#;
 
-        let use_case = GenerateSbomUseCase::new(
-            MockLockfileReader {
-                content: lockfile_content.to_string(),
-            },
-            MockProjectConfigReader {
-                project_name: "myproject".to_string(),
-            },
-            MockLicenseRepository,
-            MockProgressReporter,
-        );
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: lockfile_content.to_string(),
+                },
+                MockProjectConfigReader {
+                    project_name: "myproject".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
 
         let request = SbomRequest::new(
             std::path::PathBuf::from("/test/project"),
@@ -415,5 +458,157 @@ version = "1.26.0"
         let graph = response.dependency_graph.unwrap();
         assert_eq!(graph.direct_dependency_count(), 1);
         assert_eq!(graph.transitive_dependency_count(), 1);
+    }
+
+    struct MockVulnerabilityRepository;
+
+    impl VulnerabilityRepository for MockVulnerabilityRepository {
+        fn fetch_vulnerabilities(
+            &self,
+            _packages: Vec<Package>,
+        ) -> Result<Vec<crate::sbom_generation::domain::PackageVulnerabilities>> {
+            Ok(vec![])
+        }
+    }
+
+    #[test]
+    fn test_execute_with_cve_check_enabled() {
+        let lockfile_content = r#"
+[[package]]
+name = "certifi"
+version = "2024.8.30"
+
+[[package]]
+name = "charset-normalizer"
+version = "3.4.0"
+"#;
+
+        let use_case = GenerateSbomUseCase::new(
+            MockLockfileReader {
+                content: lockfile_content.to_string(),
+            },
+            MockProjectConfigReader {
+                project_name: "test-project".to_string(),
+            },
+            MockLicenseRepository,
+            MockProgressReporter,
+            Some(MockVulnerabilityRepository),
+        );
+
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,  // no dependency info
+            vec![], // no exclusion patterns
+            false,  // not dry-run
+            true,   // CVE check enabled
+        );
+
+        let response = use_case.execute(request).unwrap();
+
+        assert_eq!(response.enriched_packages.len(), 2);
+        assert!(response.vulnerability_report.is_some());
+    }
+
+    #[test]
+    fn test_execute_with_cve_check_but_no_repository() {
+        let lockfile_content = r#"
+[[package]]
+name = "certifi"
+version = "2024.8.30"
+"#;
+
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: lockfile_content.to_string(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test-project".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None, // No vulnerability repository
+            );
+
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,  // no dependency info
+            vec![], // no exclusion patterns
+            false,  // not dry-run
+            true,   // CVE check enabled
+        );
+
+        let response = use_case.execute(request).unwrap();
+
+        assert_eq!(response.enriched_packages.len(), 1);
+        assert!(response.vulnerability_report.is_none());
+    }
+
+    #[test]
+    fn test_execute_with_cve_check_disabled() {
+        let lockfile_content = r#"
+[[package]]
+name = "certifi"
+version = "2024.8.30"
+"#;
+
+        let use_case = GenerateSbomUseCase::new(
+            MockLockfileReader {
+                content: lockfile_content.to_string(),
+            },
+            MockProjectConfigReader {
+                project_name: "test-project".to_string(),
+            },
+            MockLicenseRepository,
+            MockProgressReporter,
+            Some(MockVulnerabilityRepository),
+        );
+
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,  // no dependency info
+            vec![], // no exclusion patterns
+            false,  // not dry-run
+            false,  // CVE check disabled
+        );
+
+        let response = use_case.execute(request).unwrap();
+
+        assert_eq!(response.enriched_packages.len(), 1);
+        assert!(response.vulnerability_report.is_none());
+    }
+
+    #[test]
+    fn test_execute_with_cve_check_in_dry_run_mode() {
+        let lockfile_content = r#"
+[[package]]
+name = "certifi"
+version = "2024.8.30"
+"#;
+
+        let use_case = GenerateSbomUseCase::new(
+            MockLockfileReader {
+                content: lockfile_content.to_string(),
+            },
+            MockProjectConfigReader {
+                project_name: "test-project".to_string(),
+            },
+            MockLicenseRepository,
+            MockProgressReporter,
+            Some(MockVulnerabilityRepository),
+        );
+
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,  // no dependency info
+            vec![], // no exclusion patterns
+            true,   // dry-run mode
+            true,   // CVE check enabled (but should be skipped due to dry-run)
+        );
+
+        let response = use_case.execute(request).unwrap();
+
+        assert_eq!(response.enriched_packages.len(), 0); // dry-run returns empty
+        assert!(response.vulnerability_report.is_none()); // CVE check skipped
     }
 }
