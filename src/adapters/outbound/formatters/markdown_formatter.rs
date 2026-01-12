@@ -61,7 +61,29 @@ impl MarkdownFormatter {
         let mut output = String::new();
         output.push_str("\n## Vulnerability Report\n\n");
         output.push_str("**⚠️ Security Issues Detected**\n\n");
-        output.push_str("The following packages have known security vulnerabilities:\n\n");
+
+        // Calculate summary statistics
+        let total_vulnerabilities: usize = vulnerabilities
+            .iter()
+            .map(|pv| pv.vulnerabilities().len())
+            .sum();
+        let package_count = vulnerabilities.len();
+
+        output.push_str(&format!(
+            "Found {} {} in {} {}.\n\n",
+            total_vulnerabilities,
+            if total_vulnerabilities == 1 {
+                "vulnerability"
+            } else {
+                "vulnerabilities"
+            },
+            package_count,
+            if package_count == 1 {
+                "package"
+            } else {
+                "packages"
+            }
+        ));
 
         // Table header
         output

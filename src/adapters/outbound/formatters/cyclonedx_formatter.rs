@@ -77,6 +77,10 @@ impl SbomFormatter for CycloneDxFormatter {
         &self,
         packages: Vec<EnrichedPackage>,
         metadata: &SbomMetadata,
+        // NOTE: Vulnerability data is not included in CycloneDX JSON format output.
+        // The CycloneDX specification does support vulnerability information,
+        // but that feature is not yet implemented in this formatter.
+        // For now, only the Markdown formatter displays vulnerability information.
         _vulnerability_report: Option<&[PackageVulnerabilities]>,
     ) -> Result<String> {
         let components: Vec<Component> = packages
