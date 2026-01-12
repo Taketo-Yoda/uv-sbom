@@ -27,11 +27,12 @@
 //! let progress_reporter = StderrProgressReporter::new();
 //!
 //! // Create use case
-//! let use_case = GenerateSbomUseCase::new(
+//! let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
 //!     lockfile_reader,
 //!     project_config_reader,
 //!     license_repository,
 //!     progress_reporter,
+//!     None, // No vulnerability checking in this example
 //! );
 //!
 //! // Execute

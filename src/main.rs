@@ -55,11 +55,12 @@ fn run() -> Result<()> {
     let progress_reporter = StderrProgressReporter::new();
 
     // Create use case with injected dependencies
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None, // TODO: Will be integrated in subsequent subtask
     );
 
     // Create request

@@ -14,11 +14,12 @@ fn test_e2e_json_format() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     let request = SbomRequest::new(project_path, false, vec![], false, false);
@@ -50,11 +51,12 @@ fn test_e2e_markdown_format() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     let request = SbomRequest::new(project_path, true, vec![], false, false);
@@ -93,11 +95,12 @@ fn test_e2e_nonexistent_project() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     let request = SbomRequest::new(project_path, false, vec![], false, false);
@@ -115,11 +118,12 @@ fn test_e2e_package_count() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     let request = SbomRequest::new(project_path, true, vec![], false, false);
@@ -148,11 +152,12 @@ fn test_e2e_exclude_single_package() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     // Exclude urllib3
@@ -187,11 +192,12 @@ fn test_e2e_exclude_multiple_packages() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     // Exclude urllib3 and certifi
@@ -230,11 +236,12 @@ fn test_e2e_exclude_with_wildcard() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     // Exclude packages starting with "char"
@@ -263,11 +270,12 @@ fn test_e2e_exclude_all_packages_error() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     // Exclude all packages with a pattern that matches everything
