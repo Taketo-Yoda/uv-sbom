@@ -86,14 +86,20 @@ fn run() -> Result<()> {
 
     // Create formatter using factory
     let formatter = FormatterFactory::create(args.format);
+    let vulnerability_report = response.vulnerability_report.as_deref();
     let formatted_output = if let Some(dep_graph) = response.dependency_graph.as_ref() {
         formatter.format_with_dependencies(
             dep_graph,
             response.enriched_packages,
             &response.metadata,
+            vulnerability_report,
         )?
     } else {
-        formatter.format(response.enriched_packages, &response.metadata)?
+        formatter.format(
+            response.enriched_packages,
+            &response.metadata,
+            vulnerability_report,
+        )?
     };
 
     // Create presenter using factory
