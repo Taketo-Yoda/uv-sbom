@@ -763,10 +763,52 @@ To ensure AI agents can implement your issue autonomously:
    - Explain architectural patterns in use
    - Link to relevant documentation
 
+### Pre-Submission Verification (MANDATORY)
+
+**CRITICAL**: Before submitting ANY issue via `gh issue create` or GitHub UI, complete this checklist:
+
+```bash
+# Step 1: Verify language (MANDATORY)
+# Check your drafted issue content for any non-English text
+# Look for Japanese characters: ぁ-ん, ァ-ヶ, 一-龯
+# If found, translate to English before submission
+
+# Step 2: Review against template
+# Ensure all sections are present:
+# - Description ✓
+# - Current Situation / Background ✓
+# - Proposed Solution / Technical Details ✓
+# - Implementation Examples ✓
+# - Acceptance Criteria ✓
+# - Files to Update/Create ✓
+
+# Step 3: Quality check
+# - Issue written in English (title and body) ✓
+# - Code examples use proper markdown formatting ✓
+# - Acceptance criteria use checklist format ✓
+# - File paths are absolute and specific ✓
+```
+
+**Checklist for AI Agents** (use TodoWrite tool):
+
+When creating an issue, add these todos BEFORE drafting content:
+- [ ] Verify issue will be written in English (MANDATORY)
+- [ ] Review `.claude/instructions.md` GitHub Issue Creation Guidelines
+- [ ] Prepare code examples with proper formatting
+- [ ] Write acceptance criteria in checklist format
+- [ ] **FINAL CHECK**: Re-verify entire issue is in English before `gh issue create`
+
+**Why this checklist is necessary**:
+- Catches language violations before submission
+- Provides a moment for reflection and review
+- Creates a mental checkpoint in the workflow
+- Prevents the need to edit issues after creation
+
 ### Quality Checklist
 
 Before submitting an issue, verify:
 
+- [ ] **COMPLETED Pre-Submission Verification above** ⚠️
 - [ ] Issue written in English (title and body)
 - [ ] Clear description of problem/feature with context
 - [ ] Technical details sufficient for implementation
@@ -899,10 +941,11 @@ Code is not complete unless all these checks pass.
 
 ---
 
-Last Updated: 2026-01-09
+Last Updated: 2026-01-13
 
 ## Change History
 
+- 2026-01-13: Added "Pre-Submission Verification (MANDATORY)" section to prevent non-English issues (Issue #69)
 - 2026-01-09: Added "GitHub Issue Creation Guidelines" section (Issue #33)
 - 2026-01-09: Added "PR Creation and Review Response Checklist" section (Lessons from PR #31)
 - 2025-01-04: Added Git/Branch Strategy section
