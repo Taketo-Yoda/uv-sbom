@@ -28,6 +28,11 @@ pub struct Args {
     /// Validate configuration without performing network operations or generating output
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Check for known vulnerabilities using OSV API (Markdown format only)
+    /// Vulnerability data provided by OSV (https://osv.dev) under CC-BY 4.0
+    #[arg(long)]
+    pub check_cve: bool,
 }
 
 impl Args {

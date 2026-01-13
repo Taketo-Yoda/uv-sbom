@@ -7,7 +7,7 @@ mod shared;
 
 use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::FileSystemReader;
-use adapters::outbound::network::PyPiLicenseRepository;
+use adapters::outbound::network::{OsvClient, PyPiLicenseRepository};
 use application::dto::{OutputFormat, SbomRequest};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::use_cases::GenerateSbomUseCase;
@@ -42,6 +42,14 @@ fn run() -> Result<()> {
     // Parse command-line arguments
     let args = Args::parse_args();
 
+    // Warn if check_cve is used with JSON format
+    if args.check_cve && args.format == OutputFormat::Json {
+        eprintln!("⚠️  Warning: --check-cve has no effect with JSON format.");
+        eprintln!("   Vulnerability data is not included in JSON output.");
+        eprintln!("   Use --format markdown to see vulnerability report.");
+        eprintln!();
+    }
+
     // Validate project directory
     let project_dir = args.path.as_deref().unwrap_or(".");
     let project_path = PathBuf::from(project_dir);
@@ -54,13 +62,20 @@ fn run() -> Result<()> {
     let license_repository = PyPiLicenseRepository::new()?;
     let progress_reporter = StderrProgressReporter::new();
 
+    // Create vulnerability repository if CVE check is requested
+    let vulnerability_repository = if args.check_cve {
+        Some(OsvClient::new()?)
+    } else {
+        None
+    };
+
     // Create use case with injected dependencies
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
-        None, // TODO: Will be integrated in subsequent subtask
+        vulnerability_repository,
     );
 
     // Create request
@@ -70,7 +85,7 @@ fn run() -> Result<()> {
         include_dependency_info,
         args.exclude,
         args.dry_run,
-        false, // TODO: CVE check will be added in subsequent subtasks
+        args.check_cve,
     );
 
     // Execute use case
