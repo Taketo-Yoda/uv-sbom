@@ -13,6 +13,7 @@
 
 - 📦 `uv.lock`ファイルを解析して依存関係情報を抽出
 - 🔍 PyPIからライセンス情報を自動取得（リトライロジック付き）
+- 🛡️ **新機能:** OSV APIを使用した既知の脆弱性チェック（Markdownフォーマットのみ）
 - 📊 複数のフォーマットに対応:
   - **CycloneDX 1.6** JSON形式（標準SBOM形式）
   - **Markdown**形式（直接依存と推移的依存を明確に分離）
@@ -216,6 +217,62 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 **情報の外部送信を防止する:**
 独自の社内ライブラリなど、PyPI等の外部レジストリに名前を送信したくないパッケージがある場合は、`--exclude` オプションを使用してください。これにより、メタデータ取得時の通信から特定のライブラリ名を除外し、秘匿性を保つことができます。
 
+### 脆弱性のチェック
+
+`--check-cve`オプションを使用して、[OSV (Open Source Vulnerability) データベース](https://osv.dev)を使用したパッケージの既知のセキュリティ脆弱性をチェックできます：
+
+```bash
+# Markdown出力で脆弱性をチェック
+uv-sbom --format markdown --check-cve
+
+# 脆弱性レポートをファイルに保存
+uv-sbom --format markdown --check-cve --output SBOM.md
+
+# 除外パターンと組み合わせて使用
+uv-sbom --format markdown --check-cve -e "pytest" -e "*-dev"
+```
+
+**重要な注意事項:**
+- 脆弱性チェックは**Markdownフォーマットでのみ利用可能**です
+- OSV APIへのクエリにはインターネット接続が必要です
+- `--dry-run`モードでは利用できません（ネットワーク操作をスキップします）
+- 内部パッケージがOSV APIに送信されないようにするには`--exclude`を使用してください
+
+**出力例:**
+
+脆弱性が見つかった場合、Markdown出力に次のようなセクションが追加されます：
+
+```markdown
+## Vulnerability Report
+
+**⚠️ Security Issues Detected**
+
+The following packages have known security vulnerabilities:
+
+| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID |
+|---------|----------------|---------------|------|----------|--------|
+| urllib3 | 2.0.0 | 2.0.7 | 9.8 | 🔴 CRITICAL | CVE-2023-45803 |
+| requests | 2.28.0 | 2.31.0 | 7.5 | 🟠 HIGH | CVE-2023-32681 |
+
+---
+
+*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
+```
+
+脆弱性が見つからなかった場合:
+
+```markdown
+## Vulnerability Report
+
+**✅ No Known Vulnerabilities**
+
+No security vulnerabilities were found in the scanned packages.
+
+---
+
+*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
+```
+
 ### dry-runモードで設定を検証する
 
 `--dry-run`オプションを使用して、ツールが外部レジストリと通信する前に設定を検証できます：
@@ -300,6 +357,7 @@ Options:
   -o, --output <OUTPUT>    出力ファイルパス（指定しない場合は標準出力）
   -e, --exclude <PATTERN>  パッケージ除外パターン（ワイルドカード対応: *）
       --dry-run            ネットワーク通信や出力生成を行わずに設定を検証
+      --check-cve          OSV APIを使用して既知の脆弱性をチェック（Markdownフォーマットのみ）
   -h, --help               ヘルプを表示
   -V, --version            バージョンを表示
 ```
@@ -436,6 +494,19 @@ uv.lock file not found: /path/to/project/uv.lock
 - [.claude/instructions.md](.claude/instructions.md) - Claude Code用のコーディングガイドラインと指示
 
 これらのファイルは、Claude Codeを使用したAI支援開発のための包括的なコンテキストを提供します。
+
+## 帰属表示
+
+### 脆弱性データ
+
+`--check-cve`オプションを使用する場合、このツールは[OSV (Open Source Vulnerability)](https://osv.dev)から脆弱性データを取得します。これは[Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/)の下で提供されています。
+
+**必要な帰属表示:**
+- OSVが提供する脆弱性データ
+- 利用可能: https://osv.dev
+- ライセンス: CC-BY 4.0
+
+OSVデータベースは、オープンソースソフトウェアの包括的で正確かつアクセスしやすい脆弱性情報を提供するための共同作業です。
 
 ## ライセンス
 

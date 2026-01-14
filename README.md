@@ -13,6 +13,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 
 - 📦 Parses `uv.lock` files to extract dependency information
 - 🔍 Automatically fetches license information from PyPI with retry logic
+- 🛡️ **NEW:** Checks for known vulnerabilities using OSV API (Markdown format only)
 - 📊 Outputs in multiple formats:
   - **CycloneDX 1.6** JSON format (standard SBOM format)
   - **Markdown** format with direct and transitive dependencies clearly separated
@@ -217,6 +218,62 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 **Preventing Information Leakage:**
 Use the `--exclude` option to skip specific internal or proprietary libraries. This prevents their names from being sent to external registries (like PyPI) during metadata retrieval, ensuring your internal project structure remains private.
 
+### Checking for vulnerabilities
+
+Use the `--check-cve` option to check packages for known security vulnerabilities using the [OSV (Open Source Vulnerability) database](https://osv.dev):
+
+```bash
+# Check for vulnerabilities in Markdown output
+uv-sbom --format markdown --check-cve
+
+# Save vulnerability report to file
+uv-sbom --format markdown --check-cve --output SBOM.md
+
+# Combine with exclude patterns
+uv-sbom --format markdown --check-cve -e "pytest" -e "*-dev"
+```
+
+**Important Notes:**
+- Vulnerability checking is **only available for Markdown format**
+- Requires internet connection to query OSV API
+- Not available in `--dry-run` mode (skips network operations)
+- Use `--exclude` to prevent internal packages from being sent to OSV API
+
+**Example Output:**
+
+When vulnerabilities are found, a section like this is added to the Markdown output:
+
+```markdown
+## Vulnerability Report
+
+**⚠️ Security Issues Detected**
+
+The following packages have known security vulnerabilities:
+
+| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID |
+|---------|----------------|---------------|------|----------|--------|
+| urllib3 | 2.0.0 | 2.0.7 | 9.8 | 🔴 CRITICAL | CVE-2023-45803 |
+| requests | 2.28.0 | 2.31.0 | 7.5 | 🟠 HIGH | CVE-2023-32681 |
+
+---
+
+*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
+```
+
+When no vulnerabilities are found:
+
+```markdown
+## Vulnerability Report
+
+**✅ No Known Vulnerabilities**
+
+No security vulnerabilities were found in the scanned packages.
+
+---
+
+*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
+```
+
 ### Validating configuration with dry-run
 
 Use the `--dry-run` option to validate your configuration before the tool communicates with external registries:
@@ -301,6 +358,7 @@ Options:
   -o, --output <OUTPUT>    Output file path (if not specified, outputs to stdout)
   -e, --exclude <PATTERN>  Exclude packages matching patterns (supports wildcards: *)
       --dry-run            Validate configuration without network communication or output generation
+      --check-cve          Check for known vulnerabilities using OSV API (Markdown format only)
   -h, --help               Print help
   -V, --version            Print version
 ```
@@ -437,6 +495,19 @@ If you're behind a proxy or firewall, ensure that you can access `https://pypi.o
 - [.claude/instructions.md](.claude/instructions.md) - Coding guidelines and instructions for Claude Code
 
 These files provide comprehensive context for AI-assisted development with Claude Code.
+
+## Attribution
+
+### Vulnerability Data
+
+When using the `--check-cve` option, this tool retrieves vulnerability data from [OSV (Open Source Vulnerability)](https://osv.dev), which is provided under the [Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+**Required Attribution:**
+- Vulnerability data provided by OSV
+- Available at: https://osv.dev
+- License: CC-BY 4.0
+
+The OSV database is a collaborative effort to provide comprehensive, accurate, and accessible vulnerability information for open source software.
 
 ## License
 
