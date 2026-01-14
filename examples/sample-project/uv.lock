@@ -116,6 +116,12 @@ wheels = [
 ]
 
 [[package]]
+name = "pillow"
+version = "8.3.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/90/d4/a7c9b6c5d176654aa3dbccbfd0be4fd3a263355dc24122a5f1937bdc2689/Pillow-8.3.2.tar.gz", hash = "sha256:dde3f3ed8d00c72631bc19cbfff8ad3b6215062a5eed402381ad365f82f0c18c", size = 48790556, upload-time = "2021-09-02T18:14:03.398Z" }
+
+[[package]]
 name = "pyyaml"
 version = "5.4"
 source = { registry = "https://pypi.org/simple" }
@@ -143,6 +149,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "certifi" },
     { name = "jinja2" },
+    { name = "pillow" },
     { name = "pyyaml" },
     { name = "requests" },
     { name = "urllib3" },
@@ -153,6 +160,7 @@ dependencies = [
 requires-dist = [
     { name = "certifi", specifier = ">=2024.0.0" },
     { name = "jinja2", specifier = "==2.11.3" },
+    { name = "pillow", specifier = "==8.3.2" },
     { name = "pyyaml", specifier = "==5.4" },
     { name = "requests", specifier = "==2.25.0" },
     { name = "urllib3", specifier = "==1.26.5" },
