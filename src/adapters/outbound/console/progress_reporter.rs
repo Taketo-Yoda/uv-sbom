@@ -58,16 +58,16 @@ impl ProgressReporter for StderrProgressReporter {
     }
 
     fn report_error(&self, message: &str) {
-        // Finish progress bar if it exists
-        if let Some(pb) = self.progress_bar.borrow().as_ref() {
+        // Finish and clear progress bar if it exists
+        if let Some(pb) = self.progress_bar.borrow_mut().take() {
             pb.finish_and_clear();
         }
         eprintln!("{}", message);
     }
 
     fn report_completion(&self, message: &str) {
-        // Finish progress bar if it exists
-        if let Some(pb) = self.progress_bar.borrow().as_ref() {
+        // Finish and clear progress bar, then reset for next operation
+        if let Some(pb) = self.progress_bar.borrow_mut().take() {
             pb.finish_and_clear();
         }
         eprintln!();
