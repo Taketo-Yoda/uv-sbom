@@ -13,7 +13,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 
 - 📦 Parses `uv.lock` files to extract dependency information
 - 🔍 Automatically fetches license information from PyPI with retry logic
-- 🛡️ **NEW:** Checks for known vulnerabilities using OSV API (Markdown format only)
+- 🛡️ Checks for known vulnerabilities using OSV API (Markdown format only)
 - 📊 Outputs in multiple formats:
   - **CycloneDX 1.6** JSON format (standard SBOM format)
   - **Markdown** format with direct and transitive dependencies clearly separated
