@@ -1,7 +1,7 @@
 // Note: This module will be used in subsequent subtasks for CVE check feature
 #![allow(dead_code)]
 
-use crate::ports::outbound::VulnerabilityRepository;
+use crate::ports::outbound::{VulnerabilityProgressCallback, VulnerabilityRepository};
 use crate::sbom_generation::domain::vulnerability::{
     CvssScore, PackageVulnerabilities, Severity, Vulnerability,
 };
@@ -192,24 +192,73 @@ impl OsvClient {
 
 impl VulnerabilityRepository for OsvClient {
     fn fetch_vulnerabilities(&self, packages: Vec<Package>) -> Result<Vec<PackageVulnerabilities>> {
-        let mut all_results = Vec::new();
+        // Call the version with progress but with a no-op callback
+        self.fetch_vulnerabilities_with_progress(packages, Box::new(|_, _| {}))
+    }
 
-        // Process in batches
+    fn fetch_vulnerabilities_with_progress(
+        &self,
+        packages: Vec<Package>,
+        progress_callback: VulnerabilityProgressCallback,
+    ) -> Result<Vec<PackageVulnerabilities>> {
+        // Step 1: Fetch batch results and count total vulnerabilities
+        let mut batch_results: Vec<(Package, OsvResult)> = Vec::new();
+        let mut total_vulns = 0;
+
         for chunk in packages.chunks(Self::MAX_BATCH_SIZE) {
-            // Rate limiting: sleep between requests
-            if !all_results.is_empty() {
+            if !batch_results.is_empty() {
                 std::thread::sleep(Duration::from_millis(Self::RATE_LIMIT_MS));
             }
 
             let osv_results = self.fetch_batch(chunk)?;
 
-            // Convert results to domain model
-            for (package, osv_result) in chunk.iter().zip(osv_results.iter()) {
-                if let Some(pkg_vulns) =
-                    self.convert_to_package_vulnerabilities(package, osv_result)?
-                {
-                    all_results.push(pkg_vulns);
+            for (package, osv_result) in chunk.iter().zip(osv_results.into_iter()) {
+                total_vulns += osv_result.vulns.len();
+                batch_results.push((package.clone(), osv_result));
+            }
+        }
+
+        // Step 2: Process vulnerabilities with progress reporting
+        let mut all_results = Vec::new();
+        let mut processed_vulns = 0;
+
+        for (package, osv_result) in batch_results {
+            if osv_result.vulns.is_empty() {
+                continue;
+            }
+
+            let mut vulnerabilities: Vec<Vulnerability> = Vec::new();
+
+            for osv_vuln in &osv_result.vulns {
+                // Report progress before fetching
+                processed_vulns += 1;
+                progress_callback(processed_vulns, total_vulns);
+
+                // Fetch detailed vulnerability information
+                match self.fetch_vulnerability_details(&osv_vuln.id) {
+                    Ok(detailed_vuln) => {
+                        if let Ok(vuln) = self.convert_to_vulnerability(&detailed_vuln) {
+                            vulnerabilities.push(vuln);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to fetch details for {}: {}",
+                            osv_vuln.id, e
+                        );
+                    }
                 }
+
+                // Rate limiting: small delay between detail requests
+                std::thread::sleep(Duration::from_millis(Self::RATE_LIMIT_MS));
+            }
+
+            if !vulnerabilities.is_empty() {
+                all_results.push(PackageVulnerabilities::new(
+                    package.name().to_string(),
+                    package.version().to_string(),
+                    vulnerabilities,
+                ));
             }
         }
 

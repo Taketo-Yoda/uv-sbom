@@ -250,11 +250,41 @@ where
             return Ok(None);
         };
 
+        // Report start of vulnerability check
+        self.progress_reporter
+            .report("🔐 Checking for vulnerabilities...");
+
         // Prepare package list for batch query
         let package_list: Vec<crate::sbom_generation::domain::Package> = packages.to_vec();
 
-        // Fetch vulnerabilities
-        let vulnerabilities = repo.fetch_vulnerabilities(package_list)?;
+        // Track total vulnerabilities for completion message
+        let total_vulns = std::cell::RefCell::new(0usize);
+
+        // Create progress callback
+        let progress_callback: crate::ports::outbound::VulnerabilityProgressCallback =
+            Box::new(|current, total| {
+                *total_vulns.borrow_mut() = total;
+                self.progress_reporter.report_progress(
+                    current,
+                    total,
+                    Some("vulnerabilities checked"),
+                );
+            });
+
+        // Fetch vulnerabilities with progress reporting
+        let vulnerabilities = repo.fetch_vulnerabilities_with_progress(package_list, progress_callback)?;
+
+        // Report completion
+        let final_total = *total_vulns.borrow();
+        if final_total > 0 {
+            self.progress_reporter.report_completion(&format!(
+                "✅ Vulnerability check complete: {} vulnerabilities analyzed",
+                final_total
+            ));
+        } else {
+            self.progress_reporter
+                .report_completion("✅ Vulnerability check complete: No known vulnerabilities found");
+        }
 
         // Return Some even if empty (indicates check was performed)
         Ok(Some(vulnerabilities))
