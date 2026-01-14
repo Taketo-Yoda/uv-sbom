@@ -219,6 +219,80 @@ Options:
   -V, --version            バージョンを表示
 ```
 
+## 終了コード
+
+uv-sbomは以下の終了コードを返します：
+
+| 終了コード | 説明 | 例 |
+|-----------|-------------|----------|
+| 0 | 成功 | SBOMの生成成功、`--help`や`--version`の表示 |
+| 1 | アプリケーションエラー | uv.lockファイルの欠損、無効なプロジェクトパス、無効な除外パターン、ネットワークエラー、ファイル書き込みエラー |
+| 2 | 無効なコマンドライン引数 | 不明なオプション、無効な引数の型 |
+
+### よくあるエラーシナリオ
+
+**終了コード 1 - アプリケーションエラー:**
+```bash
+# uv.lockファイルが見つからない
+$ uv-sbom --path /path/without/uv-lock
+❌ An error occurred:
+uv.lock file not found: /path/without/uv-lock/uv.lock
+# 終了コード: 1
+
+# 無効な除外パターン（空）
+$ uv-sbom -e ""
+❌ An error occurred:
+Exclusion pattern cannot be empty
+# 終了コード: 1
+
+# 無効な除外パターン（無効な文字）
+$ uv-sbom -e "pkg;name"
+❌ An error occurred:
+Exclusion pattern contains invalid character ';' in pattern 'pkg;name'
+# 終了コード: 1
+
+# 存在しないプロジェクトパス
+$ uv-sbom --path /nonexistent
+❌ An error occurred:
+Invalid project path: /nonexistent
+# 終了コード: 1
+```
+
+**終了コード 2 - CLI引数エラー:**
+```bash
+# 不明なオプション
+$ uv-sbom --unknown-option
+error: unexpected argument '--unknown-option' found
+# 終了コード: 2
+
+# 無効なフォーマット値
+$ uv-sbom --format invalid
+error: invalid value 'invalid' for '--format <FORMAT>'
+# 終了コード: 2
+```
+
+### スクリプトでの使用例
+
+```bash
+#!/bin/bash
+
+uv-sbom --format json --output sbom.json
+
+case $? in
+  0)
+    echo "SBOMの生成に成功しました"
+    ;;
+  1)
+    echo "アプリケーションエラーが発生しました"
+    exit 1
+    ;;
+  2)
+    echo "無効なコマンドライン引数です"
+    exit 2
+    ;;
+esac
+```
+
 ## 出力例
 
 ### Markdown形式
@@ -299,6 +373,72 @@ Secondary dependencies introduced by the primary packages.
 
 - `uv`で管理されており、`uv.lock`ファイルを持つPythonプロジェクト
 - PyPIからライセンス情報を取得するためのインターネット接続
+
+## ネットワーク要件
+
+### アクセスする外部ドメイン
+
+`uv-sbom`は、SBOM生成時に以下の外部サービスにHTTPリクエストを送信します：
+
+#### すべての操作で必須:
+
+1. **PyPI (Python Package Index)**
+   - ドメイン: `https://pypi.org`
+   - 目的: Pythonパッケージのライセンス情報を取得
+   - タイミング: すべてのSBOM生成時（`--dry-run`を除く）
+   - レート制限: 公式制限なし、ツールはリトライロジックを実装
+   - エンドポイント: `/pypi/{package_name}/json`
+
+#### オプション（`--check-cve`使用時のみ）:
+
+2. **OSV (Open Source Vulnerability Database)**
+   - ドメイン: `https://api.osv.dev`
+   - 目的: セキュリティスキャンのための脆弱性情報を取得
+   - タイミング: `--check-cve`フラグ使用時のみ
+   - レート制限: ツールは10リクエスト/秒の制限を実装
+   - エンドポイント:
+     - `/v1/querybatch` - 脆弱性IDのバッチクエリ
+     - `/v1/vulns/{vuln_id}` - 詳細な脆弱性情報
+
+### ファイアウォール設定
+
+企業のファイアウォールやプロキシの内側にいる場合は、以下のドメインをホワイトリストに追加してください：
+
+```
+# 必須
+pypi.org
+
+# オプション（--check-cveのみ）
+api.osv.dev
+```
+
+### プロキシ設定
+
+ツールは標準のHTTP/HTTPSプロキシ環境変数を尊重します：
+
+```bash
+export HTTP_PROXY=http://proxy.company.com:8080
+export HTTPS_PROXY=http://proxy.company.com:8080
+export NO_PROXY=localhost,127.0.0.1
+
+uv-sbom --format json
+```
+
+### オフラインモード
+
+ネットワークリクエストなしで設定を検証するには、`--dry-run`を使用します：
+
+```bash
+uv-sbom --dry-run
+```
+
+このモードでは：
+- `uv.lock`ファイルを検証
+- コマンドライン引数を検証
+- 除外パターンをチェック
+- ライセンス取得をスキップ（PyPIアクセスなし）
+- 脆弱性チェックをスキップ（OSVアクセスなし）
+- SBOM出力生成をスキップ
 
 ## エラーハンドリング
 

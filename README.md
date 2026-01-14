@@ -219,6 +219,80 @@ Options:
   -V, --version            Print version
 ```
 
+## Exit Codes
+
+uv-sbom returns the following exit codes:
+
+| Exit Code | Description | Examples |
+|-----------|-------------|----------|
+| 0 | Success | SBOM generated successfully, `--help` or `--version` displayed |
+| 1 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error |
+| 2 | Invalid command-line arguments | Unknown option, invalid argument type |
+
+### Common Error Scenarios
+
+**Exit code 1 - Application errors:**
+```bash
+# Missing uv.lock file
+$ uv-sbom --path /path/without/uv-lock
+❌ An error occurred:
+uv.lock file not found: /path/without/uv-lock/uv.lock
+# Exit code: 1
+
+# Invalid exclude pattern (empty)
+$ uv-sbom -e ""
+❌ An error occurred:
+Exclusion pattern cannot be empty
+# Exit code: 1
+
+# Invalid exclude pattern (invalid characters)
+$ uv-sbom -e "pkg;name"
+❌ An error occurred:
+Exclusion pattern contains invalid character ';' in pattern 'pkg;name'
+# Exit code: 1
+
+# Nonexistent project path
+$ uv-sbom --path /nonexistent
+❌ An error occurred:
+Invalid project path: /nonexistent
+# Exit code: 1
+```
+
+**Exit code 2 - CLI argument errors:**
+```bash
+# Unknown option
+$ uv-sbom --unknown-option
+error: unexpected argument '--unknown-option' found
+# Exit code: 2
+
+# Invalid format value
+$ uv-sbom --format invalid
+error: invalid value 'invalid' for '--format <FORMAT>'
+# Exit code: 2
+```
+
+### Usage in Scripts
+
+```bash
+#!/bin/bash
+
+uv-sbom --format json --output sbom.json
+
+case $? in
+  0)
+    echo "SBOM generated successfully"
+    ;;
+  1)
+    echo "Application error occurred"
+    exit 1
+    ;;
+  2)
+    echo "Invalid command-line arguments"
+    exit 2
+    ;;
+esac
+```
+
 ## Output Examples
 
 ### Markdown format
@@ -299,6 +373,72 @@ Secondary dependencies introduced by the primary packages.
 
 - A Python project managed by `uv` with a `uv.lock` file
 - Internet connection for fetching license information from PyPI
+
+## Network Requirements
+
+### External Domains Accessed
+
+`uv-sbom` makes HTTP requests to the following external services during SBOM generation:
+
+#### Required for all operations:
+
+1. **PyPI (Python Package Index)**
+   - Domain: `https://pypi.org`
+   - Purpose: Fetch license information for Python packages
+   - When: Every SBOM generation (unless using `--dry-run`)
+   - Rate limit: No official limit, but tool implements retry logic
+   - Endpoint: `/pypi/{package_name}/json`
+
+#### Optional (only when using `--check-cve`):
+
+2. **OSV (Open Source Vulnerability Database)**
+   - Domain: `https://api.osv.dev`
+   - Purpose: Fetch vulnerability information for security scanning
+   - When: Only when `--check-cve` flag is used
+   - Rate limit: Tool implements 10 requests/second limit
+   - Endpoints:
+     - `/v1/querybatch` - Batch query for vulnerability IDs
+     - `/v1/vulns/{vuln_id}` - Detailed vulnerability information
+
+### Firewall Configuration
+
+If you are behind a corporate firewall or proxy, ensure the following domains are whitelisted:
+
+```
+# Required
+pypi.org
+
+# Optional (only for --check-cve)
+api.osv.dev
+```
+
+### Proxy Configuration
+
+The tool respects standard HTTP/HTTPS proxy environment variables:
+
+```bash
+export HTTP_PROXY=http://proxy.company.com:8080
+export HTTPS_PROXY=http://proxy.company.com:8080
+export NO_PROXY=localhost,127.0.0.1
+
+uv-sbom --format json
+```
+
+### Offline Mode
+
+To validate configuration without making network requests, use `--dry-run`:
+
+```bash
+uv-sbom --dry-run
+```
+
+This mode:
+- Validates `uv.lock` file
+- Validates command-line arguments
+- Checks exclude patterns
+- Skips license fetching (no PyPI access)
+- Skips vulnerability checking (no OSV access)
+- Skips SBOM output generation
 
 ## Error Handling
 
