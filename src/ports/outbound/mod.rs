@@ -14,8 +14,8 @@ pub use formatter::{EnrichedPackage, SbomFormatter};
 pub use license_repository::{LicenseRepository, PyPiMetadata};
 pub use lockfile_reader::{LockfileParseResult, LockfileReader};
 pub use output_presenter::OutputPresenter;
-pub use progress_reporter::ProgressReporter;
+pub use progress_reporter::{ProgressCallback, ProgressReporter};
 pub use project_config_reader::ProjectConfigReader;
 // Note: This will be used in subsequent subtasks (Subtask 3-8)
 #[allow(unused_imports)]
-pub use vulnerability_repository::{VulnerabilityProgressCallback, VulnerabilityRepository};
+pub use vulnerability_repository::VulnerabilityRepository;

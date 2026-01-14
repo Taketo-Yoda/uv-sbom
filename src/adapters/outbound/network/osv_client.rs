@@ -1,7 +1,7 @@
 // Note: This module will be used in subsequent subtasks for CVE check feature
 #![allow(dead_code)]
 
-use crate::ports::outbound::{VulnerabilityProgressCallback, VulnerabilityRepository};
+use crate::ports::outbound::{ProgressCallback, VulnerabilityRepository};
 use crate::sbom_generation::domain::vulnerability::{
     CvssScore, PackageVulnerabilities, Severity, Vulnerability,
 };
@@ -199,7 +199,7 @@ impl VulnerabilityRepository for OsvClient {
     fn fetch_vulnerabilities_with_progress(
         &self,
         packages: Vec<Package>,
-        progress_callback: VulnerabilityProgressCallback,
+        progress_callback: ProgressCallback,
     ) -> Result<Vec<PackageVulnerabilities>> {
         // Step 1: Fetch batch results and count total vulnerabilities
         let mut batch_results: Vec<(Package, OsvResult)> = Vec::new();

@@ -261,7 +261,7 @@ where
         let total_vulns = std::cell::RefCell::new(0usize);
 
         // Create progress callback
-        let progress_callback: crate::ports::outbound::VulnerabilityProgressCallback =
+        let progress_callback: crate::ports::outbound::ProgressCallback =
             Box::new(|current, total| {
                 *total_vulns.borrow_mut() = total;
                 self.progress_reporter.report_progress(
@@ -272,7 +272,8 @@ where
             });
 
         // Fetch vulnerabilities with progress reporting
-        let vulnerabilities = repo.fetch_vulnerabilities_with_progress(package_list, progress_callback)?;
+        let vulnerabilities =
+            repo.fetch_vulnerabilities_with_progress(package_list, progress_callback)?;
 
         // Report completion
         let final_total = *total_vulns.borrow();
@@ -282,8 +283,9 @@ where
                 final_total
             ));
         } else {
-            self.progress_reporter
-                .report_completion("✅ Vulnerability check complete: No known vulnerabilities found");
+            self.progress_reporter.report_completion(
+                "✅ Vulnerability check complete: No known vulnerabilities found",
+            );
         }
 
         // Return Some even if empty (indicates check was performed)
