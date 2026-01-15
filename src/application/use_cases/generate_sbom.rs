@@ -8,6 +8,7 @@ use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGe
 use crate::shared::Result;
 use std::thread;
 use std::time::Duration;
+use tokio::runtime::Runtime;
 
 /// Type alias for package list with dependency map
 /// Used to simplify complex return types and satisfy clippy::type_complexity
@@ -343,6 +344,12 @@ where
     ///
     /// # Returns
     /// Option containing vulnerability report, or None if repository not available
+    ///
+    /// # Note
+    /// This method uses a tokio runtime to call async VulnerabilityRepository methods.
+    /// This is a temporary bridge until GenerateSbomUseCase is fully async (Issue #59).
+    /// Progress reporting is simplified here; full progress reporting will be
+    /// implemented in Issue #59 when the use case becomes fully async.
     fn check_vulnerabilities(
         &self,
         packages: &[Package],
@@ -359,30 +366,26 @@ where
         // Prepare package list for batch query
         let package_list: Vec<crate::sbom_generation::domain::Package> = packages.to_vec();
 
-        // Track total vulnerabilities for completion message
-        let total_vulns = std::cell::RefCell::new(0usize);
+        // Create a tokio runtime to call async methods
+        // This is a temporary bridge until GenerateSbomUseCase is fully async (Issue #59)
+        let rt = Runtime::new()?;
 
-        // Create progress callback
-        let progress_callback: crate::ports::outbound::ProgressCallback =
-            Box::new(|current, total| {
-                *total_vulns.borrow_mut() = total;
-                self.progress_reporter.report_progress(
-                    current,
-                    total,
-                    Some("vulnerabilities checked"),
-                );
-            });
-
-        // Fetch vulnerabilities with progress reporting
+        // Fetch vulnerabilities (async via block_on)
+        // Note: Progress callback is omitted to avoid complex Send/Sync requirements.
+        // Full progress reporting will be implemented in Issue #59.
         let vulnerabilities =
-            repo.fetch_vulnerabilities_with_progress(package_list, progress_callback)?;
+            rt.block_on(async { repo.fetch_vulnerabilities(package_list).await })?;
 
-        // Report completion
-        let final_total = *total_vulns.borrow();
-        if final_total > 0 {
+        // Report completion based on results
+        let total_vulns: usize = vulnerabilities
+            .iter()
+            .map(|v| v.vulnerabilities().len())
+            .sum();
+        if total_vulns > 0 {
             self.progress_reporter.report_completion(&format!(
-                "✅ Vulnerability check complete: {} vulnerabilities analyzed",
-                final_total
+                "✅ Vulnerability check complete: {} vulnerabilities found in {} packages",
+                total_vulns,
+                vulnerabilities.len()
             ));
         } else {
             self.progress_reporter.report_completion(
@@ -596,8 +599,9 @@ version = "1.26.0"
 
     struct MockVulnerabilityRepository;
 
+    #[async_trait::async_trait]
     impl VulnerabilityRepository for MockVulnerabilityRepository {
-        fn fetch_vulnerabilities(
+        async fn fetch_vulnerabilities(
             &self,
             _packages: Vec<Package>,
         ) -> Result<Vec<crate::sbom_generation::domain::PackageVulnerabilities>> {

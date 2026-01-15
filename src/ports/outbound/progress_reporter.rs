@@ -15,7 +15,10 @@
 /// });
 /// callback(5, 10); // Prints: Progress: 5/10
 /// ```
-pub type ProgressCallback<'a> = Box<dyn Fn(usize, usize) + 'a>;
+///
+/// # Note
+/// The callback must be `Send` to support async operations.
+pub type ProgressCallback<'a> = Box<dyn Fn(usize, usize) + Send + 'a>;
 
 /// ProgressReporter port for reporting progress during operations
 ///
