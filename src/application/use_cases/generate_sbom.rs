@@ -66,6 +66,42 @@ where
     /// SbomResponse containing enriched packages, optional dependency graph, and metadata
     pub fn execute(&self, request: SbomRequest) -> Result<SbomResponse> {
         // Step 1: Read and parse lockfile
+        let (packages, dependency_map) = self.read_and_report_lockfile(&request)?;
+
+        // Step 2: Apply exclusion filters
+        let (filtered_packages, filtered_dependency_map) =
+            self.apply_exclusion_filters(packages, dependency_map, &request)?;
+
+        // Early return for dry-run mode (validation only)
+        if request.dry_run {
+            return self.build_dry_run_response();
+        }
+
+        // Step 3: Analyze dependencies if requested
+        let dependency_graph =
+            self.analyze_dependencies_if_requested(&request, &filtered_dependency_map)?;
+
+        // Step 4: Enrich packages with license information
+        let enriched_packages = self.fetch_license_info(filtered_packages.clone())?;
+
+        // Step 5: CVE check if requested
+        let vulnerability_report = self.check_vulnerabilities_if_requested(&request, &filtered_packages)?;
+
+        // Step 6: Build and return response
+        Ok(self.build_response(enriched_packages, dependency_graph, vulnerability_report))
+    }
+
+    /// Reads and parses the lockfile, reporting progress
+    ///
+    /// # Arguments
+    /// * `request` - The SBOM request containing project path
+    ///
+    /// # Returns
+    /// Tuple of (packages, dependency_map)
+    fn read_and_report_lockfile(
+        &self,
+        request: &SbomRequest,
+    ) -> Result<(Vec<Package>, std::collections::HashMap<String, Vec<String>>)> {
         self.progress_reporter.report(&format!(
             "📖 Loading uv.lock file from: {}",
             request.project_path.display()
@@ -78,103 +114,162 @@ where
         self.progress_reporter
             .report(&format!("✅ Detected {} package(s)", packages.len()));
 
-        // Step 2: Apply exclusion filters
-        let (filtered_packages, filtered_dependency_map) = if !request.exclude_patterns.is_empty() {
-            let filter = PackageFilter::new(request.exclude_patterns)?;
-            let original_count = packages.len();
-            let filtered_pkgs = filter.filter_packages(packages);
-            let filtered_deps = filter.filter_dependency_map(dependency_map);
+        Ok((packages, dependency_map))
+    }
 
-            let excluded_count = original_count - filtered_pkgs.len();
-            if excluded_count > 0 {
-                self.progress_reporter.report(&format!(
-                    "🚫 Excluded {} package(s) based on filters",
-                    excluded_count
-                ));
-            }
-
-            // Check if all packages were excluded
-            if filtered_pkgs.is_empty() {
-                anyhow::bail!(
-                    "All {} package(s) were excluded by the provided filters. \
-                         The SBOM would be empty. Please adjust your exclusion patterns.",
-                    original_count
-                );
-            }
-
-            // Warn about unmatched patterns
-            let unmatched_patterns = filter.get_unmatched_patterns();
-            for pattern in unmatched_patterns {
-                self.progress_reporter.report_error(&format!(
-                    "⚠️  Warning: Exclude pattern '{}' did not match any dependencies.",
-                    pattern
-                ));
-            }
-
-            (filtered_pkgs, filtered_deps)
-        } else {
-            (packages, dependency_map)
-        };
-
-        // Early return for dry-run mode (validation only)
-        if request.dry_run {
-            self.progress_reporter
-                .report_completion("Success: Configuration validated. No issues found.");
-            // Return empty response for dry-run
-            let metadata = SbomGenerator::generate_default_metadata(false);
-            return Ok(SbomResponse::new(vec![], None, metadata, None));
+    /// Applies exclusion filters to packages and dependency map
+    ///
+    /// # Arguments
+    /// * `packages` - Original packages from lockfile
+    /// * `dependency_map` - Original dependency map
+    /// * `request` - The SBOM request containing exclusion patterns
+    ///
+    /// # Returns
+    /// Tuple of (filtered_packages, filtered_dependency_map)
+    ///
+    /// # Errors
+    /// Returns an error if all packages are excluded
+    fn apply_exclusion_filters(
+        &self,
+        packages: Vec<Package>,
+        dependency_map: std::collections::HashMap<String, Vec<String>>,
+        request: &SbomRequest,
+    ) -> Result<(Vec<Package>, std::collections::HashMap<String, Vec<String>>)> {
+        if request.exclude_patterns.is_empty() {
+            return Ok((packages, dependency_map));
         }
 
-        // Step 3: Analyze dependencies if requested
-        let dependency_graph = if request.include_dependency_info {
-            self.progress_reporter
-                .report("📊 Parsing dependency information...");
+        let filter = PackageFilter::new(request.exclude_patterns.clone())?;
+        let original_count = packages.len();
+        let filtered_pkgs = filter.filter_packages(packages);
+        let filtered_deps = filter.filter_dependency_map(dependency_map);
 
-            let project_name = self
-                .project_config_reader
-                .read_project_name(&request.project_path)?;
-            let project_package_name = PackageName::new(project_name)?;
-
-            let graph =
-                DependencyAnalyzer::analyze(&project_package_name, &filtered_dependency_map)?;
-
+        let excluded_count = original_count - filtered_pkgs.len();
+        if excluded_count > 0 {
             self.progress_reporter.report(&format!(
-                "   - Direct dependencies: {}",
-                graph.direct_dependency_count()
+                "🚫 Excluded {} package(s) based on filters",
+                excluded_count
             ));
-            self.progress_reporter.report(&format!(
-                "   - Transitive dependencies: {}",
-                graph.transitive_dependency_count()
+        }
+
+        // Check if all packages were excluded
+        if filtered_pkgs.is_empty() {
+            anyhow::bail!(
+                "All {} package(s) were excluded by the provided filters. \
+                     The SBOM would be empty. Please adjust your exclusion patterns.",
+                original_count
+            );
+        }
+
+        // Warn about unmatched patterns
+        let unmatched_patterns = filter.get_unmatched_patterns();
+        for pattern in unmatched_patterns {
+            self.progress_reporter.report_error(&format!(
+                "⚠️  Warning: Exclude pattern '{}' did not match any dependencies.",
+                pattern
             ));
+        }
 
-            Some(graph)
-        } else {
-            None
-        };
+        Ok((filtered_pkgs, filtered_deps))
+    }
 
-        // Step 4: Enrich packages with license information
+    /// Builds a response for dry-run mode (validation only)
+    fn build_dry_run_response(&self) -> Result<SbomResponse> {
+        self.progress_reporter
+            .report_completion("Success: Configuration validated. No issues found.");
+        let metadata = SbomGenerator::generate_default_metadata(false);
+        Ok(SbomResponse::new(vec![], None, metadata, None))
+    }
+
+    /// Analyzes dependencies if requested in the SBOM request
+    ///
+    /// # Arguments
+    /// * `request` - The SBOM request
+    /// * `dependency_map` - Map of package dependencies
+    ///
+    /// # Returns
+    /// Optional DependencyGraph if analysis was requested
+    fn analyze_dependencies_if_requested(
+        &self,
+        request: &SbomRequest,
+        dependency_map: &std::collections::HashMap<String, Vec<String>>,
+    ) -> Result<Option<crate::sbom_generation::domain::DependencyGraph>> {
+        if !request.include_dependency_info {
+            return Ok(None);
+        }
+
+        self.progress_reporter
+            .report("📊 Parsing dependency information...");
+
+        let project_name = self
+            .project_config_reader
+            .read_project_name(&request.project_path)?;
+        let project_package_name = PackageName::new(project_name)?;
+
+        let graph = DependencyAnalyzer::analyze(&project_package_name, dependency_map)?;
+
+        self.progress_reporter.report(&format!(
+            "   - Direct dependencies: {}",
+            graph.direct_dependency_count()
+        ));
+        self.progress_reporter.report(&format!(
+            "   - Transitive dependencies: {}",
+            graph.transitive_dependency_count()
+        ));
+
+        Ok(Some(graph))
+    }
+
+    /// Fetches license information for packages
+    ///
+    /// # Arguments
+    /// * `packages` - Packages to enrich with license info
+    ///
+    /// # Returns
+    /// Vector of EnrichedPackage with license information
+    fn fetch_license_info(&self, packages: Vec<Package>) -> Result<Vec<EnrichedPackage>> {
         self.progress_reporter
             .report("🔍 Fetching license information...");
 
-        let enriched_packages = self.enrich_packages_with_licenses(filtered_packages.clone())?;
+        self.enrich_packages_with_licenses(packages)
+    }
 
-        // Step 4.5: CVE check if requested and not in dry-run mode
-        let vulnerability_report = if request.check_cve && !request.dry_run {
-            self.check_vulnerabilities(&filtered_packages)?
-        } else {
-            None
-        };
+    /// Checks vulnerabilities if CVE check is requested
+    ///
+    /// # Arguments
+    /// * `request` - The SBOM request
+    /// * `packages` - Packages to check for vulnerabilities
+    ///
+    /// # Returns
+    /// Optional vulnerability report
+    fn check_vulnerabilities_if_requested(
+        &self,
+        request: &SbomRequest,
+        packages: &[Package],
+    ) -> Result<Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>> {
+        if !request.check_cve {
+            return Ok(None);
+        }
+        self.check_vulnerabilities(packages)
+    }
 
-        // Step 5: Generate SBOM metadata with OSV attribution if CVE check was performed
+    /// Builds the final SBOM response
+    ///
+    /// # Arguments
+    /// * `enriched_packages` - Packages with license information
+    /// * `dependency_graph` - Optional dependency graph
+    /// * `vulnerability_report` - Optional vulnerability report
+    ///
+    /// # Returns
+    /// Complete SbomResponse
+    fn build_response(
+        &self,
+        enriched_packages: Vec<EnrichedPackage>,
+        dependency_graph: Option<crate::sbom_generation::domain::DependencyGraph>,
+        vulnerability_report: Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>,
+    ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata(vulnerability_report.is_some());
-
-        // Step 6: Create response
-        Ok(SbomResponse::new(
-            enriched_packages,
-            dependency_graph,
-            metadata,
-            vulnerability_report,
-        ))
+        SbomResponse::new(enriched_packages, dependency_graph, metadata, vulnerability_report)
     }
 
     /// Enriches packages with license information from the repository
@@ -642,5 +737,296 @@ version = "2024.8.30"
 
         assert_eq!(response.enriched_packages.len(), 0); // dry-run returns empty
         assert!(response.vulnerability_report.is_none()); // CVE check skipped
+    }
+
+    // ===== Tests for extracted methods =====
+
+    #[test]
+    fn test_apply_exclusion_filters_empty_patterns() {
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: String::new(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
+
+        let packages = vec![
+            Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap(),
+            Package::new("pkg2".to_string(), "2.0.0".to_string()).unwrap(),
+        ];
+        let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,
+            vec![], // empty patterns
+            false,
+            false,
+        );
+
+        let (filtered_pkgs, _filtered_deps) = use_case
+            .apply_exclusion_filters(packages.clone(), dependency_map, &request)
+            .unwrap();
+
+        assert_eq!(filtered_pkgs.len(), 2);
+    }
+
+    #[test]
+    fn test_apply_exclusion_filters_with_patterns() {
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: String::new(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
+
+        let packages = vec![
+            Package::new("requests".to_string(), "1.0.0".to_string()).unwrap(),
+            Package::new("urllib3".to_string(), "2.0.0".to_string()).unwrap(),
+            Package::new("certifi".to_string(), "3.0.0".to_string()).unwrap(),
+        ];
+        let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,
+            vec!["requests".to_string()],
+            false,
+            false,
+        );
+
+        let (filtered_pkgs, _filtered_deps) = use_case
+            .apply_exclusion_filters(packages, dependency_map, &request)
+            .unwrap();
+
+        assert_eq!(filtered_pkgs.len(), 2);
+        assert!(!filtered_pkgs.iter().any(|p| p.name() == "requests"));
+    }
+
+    #[test]
+    fn test_apply_exclusion_filters_all_excluded_error() {
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: String::new(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
+
+        let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
+        let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,
+            vec!["pkg1".to_string()],
+            false,
+            false,
+        );
+
+        let result = use_case.apply_exclusion_filters(packages, dependency_map, &request);
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("All 1 package(s) were excluded"));
+    }
+
+    #[test]
+    fn test_analyze_dependencies_disabled() {
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: String::new(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
+
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false, // dependency info disabled
+            vec![],
+            false,
+            false,
+        );
+        let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
+
+        let result = use_case
+            .analyze_dependencies_if_requested(&request, &dependency_map)
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_analyze_dependencies_enabled() {
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: String::new(),
+                },
+                MockProjectConfigReader {
+                    project_name: "myproject".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
+
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            true, // dependency info enabled
+            vec![],
+            false,
+            false,
+        );
+        let mut dependency_map: HashMap<String, Vec<String>> = HashMap::new();
+        dependency_map.insert("myproject".to_string(), vec!["requests".to_string()]);
+        dependency_map.insert("requests".to_string(), vec![]);
+
+        let result = use_case
+            .analyze_dependencies_if_requested(&request, &dependency_map)
+            .unwrap();
+
+        assert!(result.is_some());
+        let graph = result.unwrap();
+        assert_eq!(graph.direct_dependency_count(), 1);
+    }
+
+    #[test]
+    fn test_build_response() {
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: String::new(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
+
+        let package = Package::new("test-pkg".to_string(), "1.0.0".to_string()).unwrap();
+        let enriched_packages = vec![EnrichedPackage::new(
+            package,
+            Some("MIT".to_string()),
+            Some("Test description".to_string()),
+        )];
+
+        let response = use_case.build_response(enriched_packages.clone(), None, None);
+
+        assert_eq!(response.enriched_packages.len(), 1);
+        assert!(response.dependency_graph.is_none());
+        assert!(response.vulnerability_report.is_none());
+        assert!(!response.metadata.serial_number().is_empty());
+        assert!(!response.metadata.timestamp().is_empty());
+    }
+
+    #[test]
+    fn test_fetch_license_info() {
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: String::new(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
+
+        let packages = vec![
+            Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap(),
+            Package::new("pkg2".to_string(), "2.0.0".to_string()).unwrap(),
+        ];
+
+        let enriched = use_case.fetch_license_info(packages).unwrap();
+
+        assert_eq!(enriched.len(), 2);
+        // MockLicenseRepository always returns MIT license
+        assert!(enriched[0].license.is_some());
+        assert_eq!(enriched[0].license.as_ref().unwrap(), "MIT");
+    }
+
+    #[test]
+    fn test_check_vulnerabilities_if_requested_disabled() {
+        let use_case = GenerateSbomUseCase::new(
+            MockLockfileReader {
+                content: String::new(),
+            },
+            MockProjectConfigReader {
+                project_name: "test".to_string(),
+            },
+            MockLicenseRepository,
+            MockProgressReporter,
+            Some(MockVulnerabilityRepository),
+        );
+
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,
+            vec![],
+            false,
+            false, // CVE check disabled
+        );
+        let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
+
+        let result = use_case
+            .check_vulnerabilities_if_requested(&request, &packages)
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_check_vulnerabilities_if_requested_enabled() {
+        let use_case = GenerateSbomUseCase::new(
+            MockLockfileReader {
+                content: String::new(),
+            },
+            MockProjectConfigReader {
+                project_name: "test".to_string(),
+            },
+            MockLicenseRepository,
+            MockProgressReporter,
+            Some(MockVulnerabilityRepository),
+        );
+
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,
+            vec![],
+            false,
+            true, // CVE check enabled
+        );
+        let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
+
+        let result = use_case
+            .check_vulnerabilities_if_requested(&request, &packages)
+            .unwrap();
+
+        assert!(result.is_some());
     }
 }
