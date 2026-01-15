@@ -402,7 +402,7 @@ Secondary dependencies introduced by the primary packages.
 
 ### Firewall Configuration
 
-If you are behind a corporate firewall or proxy, ensure the following domains are whitelisted:
+If you are behind a corporate firewall or proxy, ensure the following domains are on the allowlist:
 
 ```
 # Required
