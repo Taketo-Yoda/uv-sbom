@@ -134,36 +134,12 @@ The project consists of four main layers:
 
 **Detailed Directory Structure**: See [ARCHITECTURE-JP.md](../ARCHITECTURE-JP.md)
 
-## Recent Changes (2025-01-02)
-
-### Code Review Response
-
-**High Priority**:
-- ✅ Resolved Clippy warnings (added type aliases)
-  - `DependencyMap = HashMap<String, Vec<String>>`
-  - `LockfileParseResult = (Vec<Package>, DependencyMap)`
-  - `PyPiMetadata = (Option<String>, Option<String>, Vec<String>, Option<String>)`
-
-**Medium Priority**:
-- ✅ Reduced unnecessary clone() operations
-  - Removed unused parameters from `DependencyGraph::new()`
-  - Simplified `DependencyAnalyzer::analyze()` signature
-- ✅ Cleaned up #[allow(dead_code)] attributes
-  - Added documentation for `LicenseFetchError` and `OutputGenerationError`
-  - Clarified reasons for keeping them as library API
-- ✅ Unified security validation code
-  - Created new `shared/security.rs` module
-  - Refactored file_reader.rs and file_writer.rs
-
-**Test Results**:
-- All tests passing
-- No warnings
-
 ## Resources
 
 ### Documentation
 - `README.md`: User guide
 - `.claude/instructions.md`: Instructions for Claude Code
+- `.claude/skills/`: Agent Skills for Git workflows (`/issue`, `/pr`, `/commit`, `/pre-push`)
 
 ### External References
 - [CycloneDX 1.6 Specification](https://cyclonedx.org/docs/1.6/)
@@ -172,4 +148,4 @@ The project consists of four main layers:
 
 ---
 
-Last Updated: 2025-01-02
+Last Updated: 2026-01-15
