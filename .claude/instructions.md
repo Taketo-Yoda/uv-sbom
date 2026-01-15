@@ -398,67 +398,50 @@ A: **Must fix immediately**:
 
 This project adopts a Git Flow-based branching strategy (see `DEVELOPMENT.md` for details).
 
-### Check Branch Before Working
+### Branch Creation Rule (CRITICAL)
 
-**CRITICAL**: Always verify the current branch before starting to code:
+**ALWAYS create new branches from `origin/develop`** (NOT from `main`):
 
 ```bash
-git status
-git branch --show-current
+git fetch origin
+git checkout -b feature/<issue-number>-<description> origin/develop
 ```
 
 ### Branch Rules
 
-1. **Do not work directly on the `develop` branch**
-   - Always create a feature branch first
+1. **Do not work directly on the `develop` branch** - Always create a feature branch first
+2. **Never work on the `main` branch** - main is for production releases only
+3. **PRs target `develop`** (except hotfix/release which target `main`)
 
-2. **Never work on the `main` branch**
-   - main is for production releases only
+### Branch Naming Conventions
 
-3. **Proper branch naming conventions**:
-   - Feature: `feature/<issue-number>-<short-description>`
-   - Bugfix: `bugfix/<issue-number>-<short-description>`
-   - Hotfix: `hotfix/<issue-number>-<short-description>`
-   - Documentation: `docs/<issue-number>-<short-description>`
+- Feature: `feature/<issue-number>-<short-description>`
+- Bugfix: `bugfix/<issue-number>-<short-description>`
+- Hotfix: `hotfix/<issue-number>-<short-description>`
+- Documentation: `docs/<issue-number>-<short-description>`
+- Refactor: `refactor/<issue-number>-<short-description>`
 
-### Checklist When Starting Work
+### Agent Skills (Git Operations)
 
-```bash
-# 1. Check current branch
-git branch --show-current
+For detailed Git workflow procedures, use the following Agent Skills:
 
-# 2. If on develop or main branch, create a feature branch
-git checkout develop
-git pull origin develop
-git checkout -b feature/<issue-number>-<description>
+- **`/commit`** - Commit creation (includes format/clippy checks)
+- **`/pr`** - PR creation (includes CI pre-validation, base branch: `develop`)
+- **`/pre-push`** - Pre-push validation
+- **`/issue`** - Issue creation
 
-# 3. Start working
-```
-
-### Pre-Commit Verification
-
-Before committing all changes:
-
-1. **Verify you're on the correct branch**
-   ```bash
-   git branch --show-current
-   # Ensure it's feature/*, bugfix/*, or hotfix/*
-   ```
-
-2. **Review changes**
-   ```bash
-   git status
-   git diff
-   ```
-
-3. **Run quality checks** (described below)
+**IMPORTANT**: GitHub Issues/PRs MUST be written in **English**.
 
 ## Claude Code Workflow
 
 ### When Starting Work
 
 1. **Check branch (required)**: Verify current branch with `git status`
-   - If on `develop` or `main` → Create a feature branch
+   - If on `develop` or `main` → Create a feature branch **from `origin/develop`**:
+     ```bash
+     git fetch origin
+     git checkout -b feature/<issue>-<desc> origin/develop
+     ```
    - If on a feature branch → Continue work
 2. **Check context**: Read `.claude/project-context.md`
 3. **Verify architecture**: Understand layer responsibilities
