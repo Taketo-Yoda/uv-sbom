@@ -10,6 +10,8 @@ on:
       - main
       - develop
       - 'feature/**'
+      - 'fix/**'
+      - 'refactor/**'
     paths-ignore:
       - '**.md'
       - '.gitignore'

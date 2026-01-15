@@ -9,6 +9,10 @@ use crate::shared::Result;
 use std::thread;
 use std::time::Duration;
 
+/// Type alias for package list with dependency map
+/// Used to simplify complex return types and satisfy clippy::type_complexity
+type PackagesWithDependencyMap = (Vec<Package>, std::collections::HashMap<String, Vec<String>>);
+
 /// Rate limiting: Delay between license fetch requests to prevent DoS (milliseconds)
 /// This limits requests to ~10 per second (100ms delay = 10 requests/second)
 const LICENSE_FETCH_DELAY_MS: u64 = 100;
@@ -85,7 +89,8 @@ where
         let enriched_packages = self.fetch_license_info(filtered_packages.clone())?;
 
         // Step 5: CVE check if requested
-        let vulnerability_report = self.check_vulnerabilities_if_requested(&request, &filtered_packages)?;
+        let vulnerability_report =
+            self.check_vulnerabilities_if_requested(&request, &filtered_packages)?;
 
         // Step 6: Build and return response
         Ok(self.build_response(enriched_packages, dependency_graph, vulnerability_report))
@@ -98,10 +103,7 @@ where
     ///
     /// # Returns
     /// Tuple of (packages, dependency_map)
-    fn read_and_report_lockfile(
-        &self,
-        request: &SbomRequest,
-    ) -> Result<(Vec<Package>, std::collections::HashMap<String, Vec<String>>)> {
+    fn read_and_report_lockfile(&self, request: &SbomRequest) -> Result<PackagesWithDependencyMap> {
         self.progress_reporter.report(&format!(
             "📖 Loading uv.lock file from: {}",
             request.project_path.display()
@@ -134,7 +136,7 @@ where
         packages: Vec<Package>,
         dependency_map: std::collections::HashMap<String, Vec<String>>,
         request: &SbomRequest,
-    ) -> Result<(Vec<Package>, std::collections::HashMap<String, Vec<String>>)> {
+    ) -> Result<PackagesWithDependencyMap> {
         if request.exclude_patterns.is_empty() {
             return Ok((packages, dependency_map));
         }
@@ -269,7 +271,12 @@ where
         vulnerability_report: Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata(vulnerability_report.is_some());
-        SbomResponse::new(enriched_packages, dependency_graph, metadata, vulnerability_report)
+        SbomResponse::new(
+            enriched_packages,
+            dependency_graph,
+            metadata,
+            vulnerability_report,
+        )
     }
 
     /// Enriches packages with license information from the repository
