@@ -367,8 +367,9 @@ fn create_test_license_repository() -> impl LicenseRepository {
         }
     }
 
+    #[async_trait::async_trait]
     impl LicenseRepository for TestLicenseRepository {
-        fn fetch_license_info(
+        async fn fetch_license_info(
             &self,
             package_name: &str,
             version: &str,
