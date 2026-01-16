@@ -7,16 +7,18 @@ use crate::sbom_generation::domain::vulnerability::{
 };
 use crate::sbom_generation::domain::Package;
 use crate::shared::Result;
-use reqwest::blocking::Client;
+use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// OSV API client for fetching vulnerability data
 ///
 /// Uses the OSV.dev Batch Query API to efficiently check multiple packages.
+/// Implements async operations for parallel vulnerability fetching.
 ///
 /// # Security
-/// - Implements rate limiting (10 req/sec)
+/// - Implements rate limiting (10 req/sec) using tokio::time::sleep
 /// - Implements timeout (30 seconds)
 /// - Does not retry failed requests (fail fast for CVE checks)
 pub struct OsvClient {
@@ -45,8 +47,8 @@ impl OsvClient {
         })
     }
 
-    /// Fetches vulnerabilities for a batch of packages
-    fn fetch_batch(&self, packages: &[Package]) -> Result<Vec<OsvResult>> {
+    /// Fetches vulnerabilities for a batch of packages (async)
+    async fn fetch_batch(&self, packages: &[Package]) -> Result<Vec<OsvResult>> {
         // Build batch query
         let queries: Vec<OsvQuery> = packages
             .iter()
@@ -61,24 +63,29 @@ impl OsvClient {
 
         let batch_query = OsvBatchQuery { queries };
 
-        // Send request
-        let response = self.client.post(&self.api_url).json(&batch_query).send()?;
+        // Send async request
+        let response = self
+            .client
+            .post(&self.api_url)
+            .json(&batch_query)
+            .send()
+            .await?;
 
         if !response.status().is_success() {
             anyhow::bail!("OSV API returned status code {}", response.status());
         }
 
-        let batch_response: OsvBatchResponse = response.json()?;
+        let batch_response: OsvBatchResponse = response.json().await?;
         Ok(batch_response.results)
     }
 
-    /// Fetches detailed vulnerability information by ID
+    /// Fetches detailed vulnerability information by ID (async)
     ///
     /// The batch API returns minimal information. To get severity and other details,
     /// we need to query each vulnerability individually.
-    fn fetch_vulnerability_details(&self, vuln_id: &str) -> Result<OsvVulnerability> {
+    async fn fetch_vulnerability_details(&self, vuln_id: &str) -> Result<OsvVulnerability> {
         let url = format!("https://api.osv.dev/v1/vulns/{}", vuln_id);
-        let response = self.client.get(&url).send()?;
+        let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
             anyhow::bail!(
@@ -88,15 +95,15 @@ impl OsvClient {
             );
         }
 
-        let vuln: OsvVulnerability = response.json()?;
+        let vuln: OsvVulnerability = response.json().await?;
         Ok(vuln)
     }
 
-    /// Converts OSV vulnerabilities to domain model
+    /// Converts OSV vulnerabilities to domain model (async)
     ///
     /// For each vulnerability ID in the batch result, fetches detailed information
     /// to get severity and other metadata that's not included in batch responses.
-    fn convert_to_package_vulnerabilities(
+    async fn convert_to_package_vulnerabilities(
         &self,
         package: &Package,
         osv_result: &OsvResult,
@@ -110,7 +117,7 @@ impl OsvClient {
         for osv_vuln in &osv_result.vulns {
             // Fetch detailed vulnerability information
             // Batch API only returns minimal data (id, summary), we need full details for severity
-            match self.fetch_vulnerability_details(&osv_vuln.id) {
+            match self.fetch_vulnerability_details(&osv_vuln.id).await {
                 Ok(detailed_vuln) => {
                     if let Ok(vuln) = self.convert_to_vulnerability(&detailed_vuln) {
                         vulnerabilities.push(vuln);
@@ -125,8 +132,8 @@ impl OsvClient {
                 }
             }
 
-            // Rate limiting: small delay between detail requests
-            std::thread::sleep(Duration::from_millis(Self::RATE_LIMIT_MS));
+            // Rate limiting: small delay between detail requests (async)
+            tokio::time::sleep(Duration::from_millis(Self::RATE_LIMIT_MS)).await;
         }
 
         if vulnerabilities.is_empty() {
@@ -190,16 +197,21 @@ impl OsvClient {
     }
 }
 
+#[async_trait]
 impl VulnerabilityRepository for OsvClient {
-    fn fetch_vulnerabilities(&self, packages: Vec<Package>) -> Result<Vec<PackageVulnerabilities>> {
-        // Call the version with progress but with a no-op callback
-        self.fetch_vulnerabilities_with_progress(packages, Box::new(|_, _| {}))
-    }
-
-    fn fetch_vulnerabilities_with_progress(
+    async fn fetch_vulnerabilities(
         &self,
         packages: Vec<Package>,
-        progress_callback: ProgressCallback,
+    ) -> Result<Vec<PackageVulnerabilities>> {
+        // Call the version with progress but with a no-op callback
+        self.fetch_vulnerabilities_with_progress(packages, Box::new(|_, _| {}))
+            .await
+    }
+
+    async fn fetch_vulnerabilities_with_progress(
+        &self,
+        packages: Vec<Package>,
+        progress_callback: ProgressCallback<'static>,
     ) -> Result<Vec<PackageVulnerabilities>> {
         // Step 1: Fetch batch results and count total vulnerabilities
         let mut batch_results: Vec<(Package, OsvResult)> = Vec::new();
@@ -207,10 +219,10 @@ impl VulnerabilityRepository for OsvClient {
 
         for chunk in packages.chunks(Self::MAX_BATCH_SIZE) {
             if !batch_results.is_empty() {
-                std::thread::sleep(Duration::from_millis(Self::RATE_LIMIT_MS));
+                tokio::time::sleep(Duration::from_millis(Self::RATE_LIMIT_MS)).await;
             }
 
-            let osv_results = self.fetch_batch(chunk)?;
+            let osv_results = self.fetch_batch(chunk).await?;
 
             for (package, osv_result) in chunk.iter().zip(osv_results.into_iter()) {
                 total_vulns += osv_result.vulns.len();
@@ -234,8 +246,8 @@ impl VulnerabilityRepository for OsvClient {
                 processed_vulns += 1;
                 progress_callback(processed_vulns, total_vulns);
 
-                // Fetch detailed vulnerability information
-                match self.fetch_vulnerability_details(&osv_vuln.id) {
+                // Fetch detailed vulnerability information (async)
+                match self.fetch_vulnerability_details(&osv_vuln.id).await {
                     Ok(detailed_vuln) => {
                         if let Ok(vuln) = self.convert_to_vulnerability(&detailed_vuln) {
                             vulnerabilities.push(vuln);
@@ -249,8 +261,8 @@ impl VulnerabilityRepository for OsvClient {
                     }
                 }
 
-                // Rate limiting: small delay between detail requests
-                std::thread::sleep(Duration::from_millis(Self::RATE_LIMIT_MS));
+                // Rate limiting: small delay between detail requests (async)
+                tokio::time::sleep(Duration::from_millis(Self::RATE_LIMIT_MS)).await;
             }
 
             if !vulnerabilities.is_empty() {
