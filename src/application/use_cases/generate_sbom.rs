@@ -288,48 +288,109 @@ where
     /// Security: This method implements rate limiting to prevent DoS attacks
     /// via unbounded PyPI API requests. A delay is added between requests
     /// to limit the rate to approximately 10 requests per second.
+    ///
+    /// # Note
+    /// This method uses a tokio runtime to call async LicenseRepository methods.
+    /// This is a temporary bridge until GenerateSbomUseCase is fully async (Issue #59).
     fn enrich_packages_with_licenses(
         &self,
         packages: Vec<Package>,
     ) -> Result<Vec<EnrichedPackage>> {
         let total = packages.len();
-        let mut enriched = Vec::new();
-        let mut successful = 0;
-        let mut failed = 0;
 
-        for (idx, package) in packages.into_iter().enumerate() {
-            self.progress_reporter
-                .report_progress(idx + 1, total, Some(package.name()));
+        // Create atomic counters for thread-safe progress sharing
+        let progress_current = Arc::new(AtomicUsize::new(0));
+        let progress_total = Arc::new(AtomicUsize::new(total));
+        let is_done = Arc::new(AtomicBool::new(false));
 
-            match self
-                .license_repository
-                .enrich_with_license(package.name(), package.version())
-            {
-                Ok(license_info) => {
-                    enriched.push(EnrichedPackage::new(
-                        package,
-                        license_info.license_text().map(String::from),
-                        license_info.description().map(String::from),
-                    ));
-                    successful += 1;
+        // Clone references for the progress bar update thread
+        let current_clone = progress_current.clone();
+        let total_clone = progress_total.clone();
+        let done_clone = is_done.clone();
+
+        // Spawn a thread to update the progress bar
+        let progress_handle = thread::spawn(move || {
+            let pb = ProgressBar::new(total_clone.load(Ordering::Relaxed) as u64);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("   {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} - {msg}")
+                    .expect("Failed to set progress bar template")
+                    .progress_chars("=>-"),
+            );
+            pb.set_message("Fetching license information...");
+
+            // Poll for updates until done
+            while !done_clone.load(Ordering::Relaxed) {
+                let current = current_clone.load(Ordering::Relaxed);
+                pb.set_position(current as u64);
+                thread::sleep(Duration::from_millis(50));
+            }
+
+            pb.finish_and_clear();
+        });
+
+        // Create a tokio runtime to call async methods
+        // This is a temporary bridge until GenerateSbomUseCase is fully async (Issue #59)
+        let rt = Runtime::new()?;
+
+        // Fetch licenses sequentially with rate limiting (async via block_on)
+        // Collect errors to report after async block (since progress_reporter may not be Send)
+        let result = rt.block_on(async {
+            let mut enriched = Vec::new();
+            let mut successful = 0;
+            let mut failed = 0;
+            let mut errors: Vec<(String, String)> = Vec::new(); // (package_name, error_message)
+
+            for (idx, package) in packages.into_iter().enumerate() {
+                let package_name = package.name().to_string();
+                match self
+                    .license_repository
+                    .enrich_with_license(package.name(), package.version())
+                    .await
+                {
+                    Ok(license_info) => {
+                        enriched.push(EnrichedPackage::new(
+                            package,
+                            license_info.license_text().map(String::from),
+                            license_info.description().map(String::from),
+                        ));
+                        successful += 1;
+                    }
+                    Err(e) => {
+                        // Collect error for reporting after async block
+                        errors.push((package_name, e.to_string()));
+                        // Include package without license information
+                        enriched.push(EnrichedPackage::new(package, None, None));
+                        failed += 1;
+                    }
                 }
-                Err(e) => {
-                    self.progress_reporter.report_error(&format!(
-                        "⚠️  Warning: Failed to fetch license information for {}: {}",
-                        package.name(),
-                        e
-                    ));
-                    // Include package without license information
-                    enriched.push(EnrichedPackage::new(package, None, None));
-                    failed += 1;
+
+                // Update progress
+                progress_current.store(idx + 1, Ordering::Relaxed);
+
+                // Security: Rate limiting to prevent DoS via unbounded API requests
+                // Add delay between requests (except after the last one)
+                if idx < total - 1 {
+                    tokio::time::sleep(Duration::from_millis(LICENSE_FETCH_DELAY_MS)).await;
                 }
             }
 
-            // Security: Rate limiting to prevent DoS via unbounded API requests
-            // Add delay between requests (except after the last one)
-            if idx < total - 1 {
-                thread::sleep(Duration::from_millis(LICENSE_FETCH_DELAY_MS));
-            }
+            (enriched, successful, failed, errors)
+        });
+
+        // Signal completion and wait for progress bar thread
+        is_done.store(true, Ordering::Relaxed);
+        let _ = progress_handle.join();
+
+        let (enriched, successful, failed, errors) = result;
+        eprintln!(); // Add newline after progress bar
+
+        // Report errors collected during async execution
+        for (package_name, error_msg) in errors {
+            self.progress_reporter.report_error(&format!(
+                "⚠️  Warning: Error: Failed to fetch license information for {}: {}",
+                package_name, error_msg
+            ));
         }
 
         self.progress_reporter.report_completion(&format!(
@@ -538,8 +599,13 @@ mod tests {
 
     struct MockLicenseRepository;
 
+    #[async_trait::async_trait]
     impl LicenseRepository for MockLicenseRepository {
-        fn fetch_license_info(&self, _package_name: &str, _version: &str) -> Result<PyPiMetadata> {
+        async fn fetch_license_info(
+            &self,
+            _package_name: &str,
+            _version: &str,
+        ) -> Result<PyPiMetadata> {
             Ok((
                 Some("MIT".to_string()),
                 None,

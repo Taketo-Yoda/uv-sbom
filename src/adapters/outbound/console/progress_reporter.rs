@@ -18,6 +18,13 @@ impl StderrProgressReporter {
         }
     }
 
+    /// Creates or retrieves a cached progress bar.
+    ///
+    /// # Note
+    /// This method is currently only used by `report_progress` which is not called
+    /// in the main codebase. It remains available for future use when
+    /// GenerateSbomUseCase becomes fully async (Issue #59).
+    #[allow(dead_code)]
     fn get_or_create_progress_bar(&self, total: usize) -> ProgressBar {
         let mut pb_option = self.progress_bar.borrow_mut();
         if let Some(pb) = pb_option.as_ref() {

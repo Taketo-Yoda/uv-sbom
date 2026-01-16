@@ -37,6 +37,13 @@ pub trait ProgressReporter {
     /// * `current` - Current progress value
     /// * `total` - Total expected value
     /// * `message` - Optional message to include
+    ///
+    /// # Note
+    /// This method is currently not used in the main codebase as progress bars
+    /// are managed directly via indicatif in async contexts. It remains part of
+    /// the trait interface for future use when GenerateSbomUseCase becomes fully
+    /// async (Issue #59).
+    #[allow(dead_code)]
     fn report_progress(&self, current: usize, total: usize, message: Option<&str>);
 
     /// Reports an error or warning message
