@@ -41,7 +41,7 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -93,7 +93,7 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), true, vec![], false, false);
+    let request = SbomRequest::new(PathBuf::from("."), true, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -122,7 +122,7 @@ async fn test_generate_sbom_lockfile_read_failure() {
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     assert!(result.is_err());
@@ -154,7 +154,7 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), true, vec![], false, false);
+    let request = SbomRequest::new(PathBuf::from("."), true, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     assert!(result.is_err());
@@ -186,7 +186,7 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     // License repository failures are treated as warnings, not errors
@@ -220,7 +220,7 @@ async fn test_generate_sbom_invalid_toml() {
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     assert!(result.is_err());
@@ -256,7 +256,7 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
+    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
     let _result = use_case.execute(request).await;
 
     // Verify that progress was reported
@@ -311,6 +311,8 @@ source = { registry = "https://pypi.org/simple" }
         vec!["urllib3".to_string()],
         false,
         false,
+        None,
+        None,
     );
     let result = use_case.execute(request).await;
 
@@ -384,6 +386,8 @@ source = { registry = "https://pypi.org/simple" }
         vec!["urllib3".to_string(), "certifi".to_string()],
         false,
         false,
+        None,
+        None,
     );
     let result = use_case.execute(request).await;
 
@@ -442,6 +446,8 @@ source = { registry = "https://pypi.org/simple" }
         vec!["pytest*".to_string()],
         false,
         false,
+        None,
+        None,
     );
     let result = use_case.execute(request).await;
 
@@ -485,6 +491,8 @@ source = { registry = "https://pypi.org/simple" }
         vec!["*requests*".to_string()],
         false,
         false,
+        None,
+        None,
     );
     let result = use_case.execute(request).await;
 
@@ -548,6 +556,8 @@ source = { registry = "https://pypi.org/simple" }
         vec!["urllib3".to_string()],
         false,
         false,
+        None,
+        None,
     );
     let result = use_case.execute(request).await;
 

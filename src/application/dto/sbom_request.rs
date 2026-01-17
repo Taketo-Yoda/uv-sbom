@@ -1,3 +1,4 @@
+use crate::sbom_generation::domain::vulnerability::Severity;
 use std::path::PathBuf;
 
 /// SbomRequest - Internal request DTO for SBOM generation use case
@@ -16,6 +17,14 @@ pub struct SbomRequest {
     pub dry_run: bool,
     /// Whether to check for vulnerabilities using OSV API
     pub check_cve: bool,
+    /// Severity threshold for vulnerability filtering
+    /// Note: Currently unused but prepared for threshold-based exit code feature (issue #94)
+    #[allow(dead_code)]
+    pub severity_threshold: Option<Severity>,
+    /// CVSS threshold for vulnerability filtering
+    /// Note: Currently unused but prepared for threshold-based exit code feature (issue #94)
+    #[allow(dead_code)]
+    pub cvss_threshold: Option<f32>,
 }
 
 impl SbomRequest {
@@ -25,6 +34,8 @@ impl SbomRequest {
         exclude_patterns: Vec<String>,
         dry_run: bool,
         check_cve: bool,
+        severity_threshold: Option<Severity>,
+        cvss_threshold: Option<f32>,
     ) -> Self {
         Self {
             project_path,
@@ -32,6 +43,8 @@ impl SbomRequest {
             exclude_patterns,
             dry_run,
             check_cve,
+            severity_threshold,
+            cvss_threshold,
         }
     }
 }

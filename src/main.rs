@@ -11,37 +11,66 @@ use adapters::outbound::network::{OsvClient, PyPiLicenseRepository};
 use application::dto::{OutputFormat, SbomRequest};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::use_cases::GenerateSbomUseCase;
+use clap::Parser;
 use cli::Args;
 use owo_colors::OwoColorize;
-use shared::error::SbomError;
+use shared::error::{ExitCode, SbomError};
 use shared::Result;
 use std::path::{Path, PathBuf};
 use std::process;
 
 #[tokio::main]
 async fn main() {
-    if let Err(e) = run().await {
-        eprintln!("\n❌ An error occurred:\n");
-        eprintln!("{}", e);
+    // Parse command-line arguments first to catch argument errors early
+    let args = match Args::try_parse() {
+        Ok(args) => args,
+        Err(e) => {
+            // Print the error message (clap formats these nicely)
+            let _ = e.print();
 
-        // Display error chain
-        let mut source = e.source();
-        while let Some(err) = source {
-            eprintln!("\nCaused by: {}", err);
-            source = err.source();
+            // Use exit code 0 for help/version, exit code 2 for actual argument errors
+            let exit_code = if e.use_stderr() {
+                ExitCode::InvalidArguments
+            } else {
+                ExitCode::Success
+            };
+            process::exit(exit_code.as_i32());
         }
+    };
 
-        eprintln!();
-        process::exit(1);
+    // Run the main application logic
+    match run(args).await {
+        Ok(has_vulnerabilities) => {
+            if has_vulnerabilities {
+                process::exit(ExitCode::VulnerabilitiesDetected.as_i32());
+            }
+            process::exit(ExitCode::Success.as_i32());
+        }
+        Err(e) => {
+            eprintln!("\n❌ An error occurred:\n");
+            eprintln!("{}", e);
+
+            // Display error chain
+            let mut source = e.source();
+            while let Some(err) = source {
+                eprintln!("\nCaused by: {}", err);
+                source = err.source();
+            }
+
+            eprintln!();
+            process::exit(ExitCode::ApplicationError.as_i32());
+        }
     }
 }
 
-async fn run() -> Result<()> {
+/// Runs the main application logic.
+///
+/// Returns `Ok(true)` if vulnerabilities were detected above threshold,
+/// `Ok(false)` if no vulnerabilities (or all below threshold),
+/// or `Err` for application errors.
+async fn run(args: Args) -> Result<bool> {
     // Display startup banner
     display_banner();
-
-    // Parse command-line arguments
-    let args = Args::parse_args();
 
     // Warn if check_cve is used with JSON format
     if args.check_cve && args.format == OutputFormat::Json {
@@ -87,6 +116,8 @@ async fn run() -> Result<()> {
         args.exclude,
         args.dry_run,
         args.check_cve,
+        args.severity_threshold,
+        args.cvss_threshold,
     );
 
     // Execute use case
@@ -94,7 +125,7 @@ async fn run() -> Result<()> {
 
     // Skip output generation for dry-run mode
     if args.dry_run {
-        return Ok(());
+        return Ok(false);
     }
 
     // Display progress message
@@ -128,7 +159,10 @@ async fn run() -> Result<()> {
     let presenter = PresenterFactory::create(presenter_type);
     presenter.present(&formatted_output)?;
 
-    Ok(())
+    // Determine if vulnerabilities were detected above threshold
+    let has_vulnerabilities = response.has_vulnerabilities_above_threshold;
+
+    Ok(has_vulnerabilities)
 }
 
 fn display_banner() {

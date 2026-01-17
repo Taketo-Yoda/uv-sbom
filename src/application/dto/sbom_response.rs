@@ -17,6 +17,9 @@ pub struct SbomResponse {
     /// Optional vulnerability report (only present when CVE check is enabled)
     /// None = not checked, Some(vec) = checked (empty vec means no vulnerabilities found)
     pub vulnerability_report: Option<Vec<PackageVulnerabilities>>,
+    /// Whether vulnerabilities above threshold were detected
+    /// Used to determine exit code for CI integration
+    pub has_vulnerabilities_above_threshold: bool,
 }
 
 impl SbomResponse {
@@ -25,12 +28,14 @@ impl SbomResponse {
         dependency_graph: Option<DependencyGraph>,
         metadata: SbomMetadata,
         vulnerability_report: Option<Vec<PackageVulnerabilities>>,
+        has_vulnerabilities_above_threshold: bool,
     ) -> Self {
         Self {
             enriched_packages,
             dependency_graph,
             metadata,
             vulnerability_report,
+            has_vulnerabilities_above_threshold,
         }
     }
 }

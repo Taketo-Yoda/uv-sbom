@@ -184,7 +184,7 @@ where
         self.progress_reporter
             .report_completion("Success: Configuration validated. No issues found.");
         let metadata = SbomGenerator::generate_default_metadata(false);
-        Ok(SbomResponse::new(vec![], None, metadata, None))
+        Ok(SbomResponse::new(vec![], None, metadata, None, false))
     }
 
     /// Analyzes dependencies if requested in the SBOM request
@@ -275,11 +275,19 @@ where
         vulnerability_report: Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata(vulnerability_report.is_some());
+
+        // Check if any vulnerabilities were found
+        let has_vulnerabilities_above_threshold = vulnerability_report
+            .as_ref()
+            .map(|report| report.iter().any(|pv| !pv.vulnerabilities().is_empty()))
+            .unwrap_or(false);
+
         SbomResponse::new(
             enriched_packages,
             dependency_graph,
             metadata,
             vulnerability_report,
+            has_vulnerabilities_above_threshold,
         )
     }
 
@@ -634,6 +642,8 @@ version = "3.4.0"
             vec![], // no exclusion patterns
             false,  // not dry-run
             false,  // no CVE check
+            None,   // no severity threshold
+            None,   // no cvss threshold
         );
 
         let response = use_case.execute(request).await.unwrap();
@@ -684,6 +694,8 @@ version = "1.26.0"
             vec![], // no exclusion patterns
             false,  // not dry-run
             false,  // no CVE check
+            None,   // no severity threshold
+            None,   // no cvss threshold
         );
 
         let response = use_case.execute(request).await.unwrap();
@@ -738,6 +750,8 @@ version = "3.4.0"
             vec![], // no exclusion patterns
             false,  // not dry-run
             true,   // CVE check enabled
+            None,   // no severity threshold
+            None,   // no cvss threshold
         );
 
         let response = use_case.execute(request).await.unwrap();
@@ -773,6 +787,8 @@ version = "2024.8.30"
             vec![], // no exclusion patterns
             false,  // not dry-run
             true,   // CVE check enabled
+            None,   // no severity threshold
+            None,   // no cvss threshold
         );
 
         let response = use_case.execute(request).await.unwrap();
@@ -807,6 +823,8 @@ version = "2024.8.30"
             vec![], // no exclusion patterns
             false,  // not dry-run
             false,  // CVE check disabled
+            None,   // no severity threshold
+            None,   // no cvss threshold
         );
 
         let response = use_case.execute(request).await.unwrap();
@@ -841,6 +859,8 @@ version = "2024.8.30"
             vec![], // no exclusion patterns
             true,   // dry-run mode
             true,   // CVE check enabled (but should be skipped due to dry-run)
+            None,   // no severity threshold
+            None,   // no cvss threshold
         );
 
         let response = use_case.execute(request).await.unwrap();
@@ -877,6 +897,8 @@ version = "2024.8.30"
             vec![], // empty patterns
             false,
             false,
+            None,
+            None,
         );
 
         let (filtered_pkgs, _filtered_deps) = use_case
@@ -913,6 +935,8 @@ version = "2024.8.30"
             vec!["requests".to_string()],
             false,
             false,
+            None,
+            None,
         );
 
         let (filtered_pkgs, _filtered_deps) = use_case
@@ -946,6 +970,8 @@ version = "2024.8.30"
             vec!["pkg1".to_string()],
             false,
             false,
+            None,
+            None,
         );
 
         let result = use_case.apply_exclusion_filters(packages, dependency_map, &request);
@@ -976,6 +1002,8 @@ version = "2024.8.30"
             vec![],
             false,
             false,
+            None,
+            None,
         );
         let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -1007,6 +1035,8 @@ version = "2024.8.30"
             vec![],
             false,
             false,
+            None,
+            None,
         );
         let mut dependency_map: HashMap<String, Vec<String>> = HashMap::new();
         dependency_map.insert("myproject".to_string(), vec!["requests".to_string()]);
@@ -1100,6 +1130,8 @@ version = "2024.8.30"
             vec![],
             false,
             false, // CVE check disabled
+            None,
+            None,
         );
         let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
 
@@ -1131,6 +1163,8 @@ version = "2024.8.30"
             vec![],
             false,
             true, // CVE check enabled
+            None,
+            None,
         );
         let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
 
