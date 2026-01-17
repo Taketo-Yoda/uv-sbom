@@ -30,7 +30,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 urlencoding = "2.1"
-indicatif = "0.17"
+indicatif = "0.18"
 owo-colors = "4.1"
 
 [dev-dependencies]
