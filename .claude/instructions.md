@@ -415,11 +415,32 @@ git checkout -b feature/<issue-number>-<description> origin/develop
 
 ### Branch Naming Conventions
 
-- Feature: `feature/<issue-number>-<short-description>`
-- Bugfix: `bugfix/<issue-number>-<short-description>`
-- Hotfix: `hotfix/<issue-number>-<short-description>`
-- Documentation: `docs/<issue-number>-<short-description>`
-- Refactor: `refactor/<issue-number>-<short-description>`
+**Determine branch prefix based on Issue labels (priority order):**
+
+| Priority | Issue Label | Branch Prefix | Example |
+|----------|-------------|---------------|---------|
+| 1 | `enhancement` | `feature/` | `feature/88-add-new-feature` |
+| 2 | `bug` | `bugfix/` | `bugfix/42-fix-parsing-error` |
+| 3 | `refactor` | `refactor/` | `refactor/30-cleanup-code` |
+| 4 | `documentation` | `doc/` | `doc/50-update-readme` |
+| 5 | (no label) | `feature/` | `feature/99-misc-task` |
+
+**Additional branch types:**
+- Hotfix (critical production fixes): `hotfix/<issue-number>-<short-description>`
+
+**Format**: `<prefix>/<issue-number>-<short-description>`
+
+**Example workflow:**
+```bash
+# Check Issue #88 labels
+gh issue view 88 --json labels
+
+# If label is "enhancement" → use feature/
+git checkout -b feature/88-add-new-feature origin/develop
+
+# If label is "bug" → use bugfix/
+git checkout -b bugfix/88-fix-something origin/develop
+```
 
 ### Agent Skills (Git Operations)
 
@@ -431,6 +452,45 @@ For detailed Git workflow procedures, use the following Agent Skills:
 - **`/issue`** - Issue creation
 
 **IMPORTANT**: GitHub Issues/PRs MUST be written in **English**.
+
+### CRITICAL: Never Bypass Skills for Common Operations
+
+**This section documents a critical workflow requirement based on Issue #59 incident.**
+
+**Root Cause of Failure**: When instructed to run Clippy before push, executing `cargo clippy --all-targets` directly **without** the `-D warnings` flag (instead of invoking the `/pre-push` skill) caused CI failures. The CI caught `dead_code` warnings that were not treated as errors locally.
+
+**Mandatory Skill Usage**:
+
+| Operation | Required Skill | Why |
+|-----------|---------------|-----|
+| Format check | `/pre-push` | Ensures `cargo fmt --check` is run correctly |
+| Clippy check | `/pre-push` | Ensures `-D warnings` flag is included |
+| Commit | `/commit` | Ensures proper commit message format |
+| Push | `/pre-push` | Runs all CI-equivalent checks |
+
+**⚠️ WARNING**: Executing these commands directly (without skills) risks missing critical flags that CI enforces.
+
+**Correct Usage**:
+```bash
+# ❌ WRONG: Direct command execution (missing -D warnings)
+cargo clippy --all-targets
+
+# ✅ CORRECT: Use /pre-push skill which includes:
+# cargo clippy --all-targets --all-features -- -D warnings
+```
+
+**Why `-D warnings` is mandatory**:
+- Without `-D warnings`, Clippy warnings are not treated as errors
+- CI always runs with `-D warnings`, so local checks must match
+- Warnings like `dead_code` will pass locally but fail in CI
+
+**Failure Pattern Example (Issue #59)**:
+1. Agent ran `cargo clippy --all-targets` (without `-D warnings`)
+2. Clippy showed warnings but exit code was 0 (success)
+3. Push proceeded despite warnings
+4. CI failed because it uses `-D warnings` which treats warnings as errors
+
+**Prevention**: Always invoke `/pre-push` skill before pushing. Never run individual quality commands manually.
 
 ## Claude Code Workflow
 
@@ -469,9 +529,11 @@ For detailed Git workflow procedures, use the following Agent Skills:
 7. **Add tests**: Always add tests for new features
 8. **Verify build**: `cargo build`
 9. **Run tests**: `cargo test`
-10. **Quality checks (required)**:
+10. **Quality checks (required)** - ⚠️ **USE `/pre-push` SKILL INSTEAD OF MANUAL COMMANDS**:
     - **Format check**: `cargo fmt --all -- --check` (if errors, fix with `cargo fmt --all`)
     - **Clippy check**: `cargo clippy --all-targets --all-features -- -D warnings` (zero warnings required)
+      - ⚠️ **CRITICAL**: The `-D warnings` flag is **MANDATORY** - never omit it!
+      - Without `-D warnings`, warnings pass locally but fail CI (see Issue #59)
 
 ### When Completing Work
 
@@ -577,11 +639,28 @@ For detailed Git workflow procedures, use the following Agent Skills:
 - ✅ Read ALL comments, create checklist, address all items
 - **Prevention**: Use `gh pr view <PR> --comments` to see all comments, use TodoWrite tool
 
+**Mistake 4: Running Clippy without `-D warnings` flag (Issue #59)**
+- ❌ Running `cargo clippy --all-targets` directly without `-D warnings`
+- ✅ Always use `/pre-push` skill which includes the correct flags
+- **What happens**: Warnings are displayed but treated as non-fatal, push succeeds, CI fails
+- **Prevention**: NEVER run individual quality commands manually - always use `/pre-push` skill
+- **Root cause**: Bypassing skills means missing critical flags that match CI configuration
+
+**Mistake 5: Bypassing Agent Skills for common operations (Issue #59)**
+- ❌ Running `cargo fmt --check` or `cargo clippy` manually instead of using skills
+- ✅ Always invoke `/pre-push` skill for all pre-push validation
+- **Why skills exist**: They encode the exact commands and flags that CI uses
+- **Prevention**: Treat skills as the ONLY way to run these checks before push
+
 ### Pre-Push Final Checklist
 
 **CRITICAL**: If you have changed ANY Rust files (.rs), you MUST complete this checklist before `git push`:
 
-Before running `git push`, verify ALL of the following:
+**⚠️ RECOMMENDED: Use `/pre-push` skill instead of manual commands**
+
+The `/pre-push` skill automatically runs all necessary checks with the correct flags. This is the safest way to validate your code before pushing.
+
+If you must run commands manually (not recommended), verify ALL of the following:
 
 ```bash
 # 1. Code formatter (MANDATORY for .rs file changes)
@@ -590,7 +669,7 @@ cargo fmt --all
 
 # 2. Quality checks
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --all-targets --all-features -- -D warnings  # ⚠️ -D warnings is MANDATORY!
 cargo test
 
 # 3. Review changes
@@ -607,7 +686,10 @@ git push
 gh pr create --base develop --title "..." --body "..."
 ```
 
-**Remember**: These steps are MANDATORY, not optional. Skipping any step may result in CI failures or review delays.
+**Remember**:
+- These steps are MANDATORY, not optional. Skipping any step may result in CI failures or review delays.
+- **STRONGLY PREFERRED**: Invoke `/pre-push` skill instead of running these commands manually
+- **Issue #59 Lesson**: Running `cargo clippy` without `-D warnings` caused CI failures
 
 ## GitHub Issue Creation Guidelines
 
@@ -924,10 +1006,13 @@ Code is not complete unless all these checks pass.
 
 ---
 
-Last Updated: 2026-01-13
+Last Updated: 2026-01-17
 
 ## Change History
 
+- 2026-01-17: Added "CRITICAL: Never Bypass Skills for Common Operations" section with skill enforcement table and failure pattern documentation (Issue #88)
+- 2026-01-17: Added Mistake 4 & 5 to "Common Mistakes to Avoid" section documenting Clippy `-D warnings` and skill bypass issues (Issue #88)
+- 2026-01-17: Updated "Pre-Push Final Checklist" to strongly recommend using `/pre-push` skill (Issue #88)
 - 2026-01-13: Added "Pre-Submission Verification (MANDATORY)" section to prevent non-English issues (Issue #69)
 - 2026-01-09: Added "GitHub Issue Creation Guidelines" section (Issue #33)
 - 2026-01-09: Added "PR Creation and Review Response Checklist" section (Lessons from PR #31)

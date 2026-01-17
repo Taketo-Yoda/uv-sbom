@@ -10,8 +10,11 @@ on:
       - main
       - develop
       - 'feature/**'
-      - 'fix/**'
+      - 'bugfix/**'
+      - 'fix/**'        # Legacy: kept for backward compatibility
       - 'refactor/**'
+      - 'doc/**'
+      - 'hotfix/**'
     paths-ignore:
       - '**.md'
       - '.gitignore'

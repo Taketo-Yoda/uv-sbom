@@ -6,6 +6,37 @@ Final validation before pushing commits to remote repository.
 
 Ensure code quality and branch conventions are correct before pushing to prevent CI failures and maintain repository standards.
 
+## ⚠️ CRITICAL: Always Use This Skill - Never Bypass
+
+**This skill exists to ensure CI-equivalent checks are run locally.**
+
+### NEVER run these commands directly:
+
+| ❌ Wrong (Missing Flags) | ✅ Correct (Use This Skill) |
+|--------------------------|----------------------------|
+| `cargo clippy --all-targets` | `/pre-push` includes `-D warnings` |
+| `cargo fmt --check` | `/pre-push` includes `--all` flag |
+| `cargo test` | `/pre-push` includes `--all` flag |
+
+### Why This Matters (Issue #59 Incident)
+
+Running `cargo clippy` without `-D warnings` caused a CI failure:
+1. Clippy showed warnings but exit code was 0 (success)
+2. Push proceeded despite warnings
+3. CI failed because it uses `-D warnings` which treats warnings as errors
+
+**Prevention**: Always invoke `/pre-push` instead of running individual commands manually.
+
+### Commands This Skill Runs
+
+This skill ensures the following commands are run with **exact CI-matching flags**:
+
+```bash
+cargo test --all                                           # All tests
+cargo fmt --all -- --check                                 # Format check
+cargo clippy --all-targets --all-features -- -D warnings   # Clippy with warnings as errors
+```
+
 ## Validation Checklist
 
 All of the following MUST pass before pushing:
@@ -40,15 +71,17 @@ cargo clippy --all-targets --all-features -- -D warnings
 git branch --show-current
 ```
 
-Verify branch name follows convention:
+Verify branch name follows convention based on **Issue labels** (priority order):
 
-| Pattern | Example |
-|---------|---------|
-| `feature/<issue>-<desc>` | `feature/84-agent-skills` |
-| `bugfix/<issue>-<desc>` | `bugfix/42-fix-parsing` |
-| `hotfix/<issue>-<desc>` | `hotfix/99-critical-fix` |
-| `docs/<issue>-<desc>` | `docs/50-update-readme` |
-| `refactor/<issue>-<desc>` | `refactor/30-cleanup-code` |
+| Priority | Issue Label | Branch Prefix | Example |
+|----------|-------------|---------------|---------|
+| 1 | `enhancement` | `feature/` | `feature/84-agent-skills` |
+| 2 | `bug` | `bugfix/` | `bugfix/42-fix-parsing` |
+| 3 | `refactor` | `refactor/` | `refactor/30-cleanup-code` |
+| 4 | `documentation` | `doc/` | `doc/50-update-readme` |
+| 5 | (no label) | `feature/` | `feature/99-misc-task` |
+
+**Additional**: `hotfix/<issue>-<desc>` for critical production fixes
 
 **FORBIDDEN branches for direct push:**
 
