@@ -36,11 +36,13 @@ pub struct Args {
     pub check_cve: bool,
 
     /// Severity threshold for vulnerability check (low/medium/high/critical)
-    #[arg(long, value_parser = parse_severity_threshold, group = "threshold")]
+    /// Requires --check-cve to be enabled
+    #[arg(long, value_parser = parse_severity_threshold, group = "threshold", requires = "check_cve")]
     pub severity_threshold: Option<Severity>,
 
     /// CVSS threshold for vulnerability check (0.0-10.0)
-    #[arg(long, value_parser = parse_cvss_threshold, group = "threshold")]
+    /// Requires --check-cve to be enabled
+    #[arg(long, value_parser = parse_cvss_threshold, group = "threshold", requires = "check_cve")]
     pub cvss_threshold: Option<f32>,
 }
 
