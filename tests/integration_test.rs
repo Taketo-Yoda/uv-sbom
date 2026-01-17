@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use test_utilities::mocks::*;
 use uv_sbom::prelude::*;
 
-#[test]
-fn test_generate_sbom_happy_path() {
+#[tokio::test]
+async fn test_generate_sbom_happy_path() {
     // Setup mock data
     let lockfile_content = r#"
 version = 1
@@ -42,7 +42,7 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -50,8 +50,8 @@ source = { registry = "https://pypi.org/simple" }
     assert!(response.dependency_graph.is_none());
 }
 
-#[test]
-fn test_generate_sbom_with_dependencies() {
+#[tokio::test]
+async fn test_generate_sbom_with_dependencies() {
     let lockfile_content = r#"
 version = 1
 requires-python = ">=3.8"
@@ -94,7 +94,7 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     let request = SbomRequest::new(PathBuf::from("."), true, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -107,8 +107,8 @@ source = { registry = "https://pypi.org/simple" }
     assert_eq!(graph.transitive_dependency_count(), 1);
 }
 
-#[test]
-fn test_generate_sbom_lockfile_read_failure() {
+#[tokio::test]
+async fn test_generate_sbom_lockfile_read_failure() {
     let lockfile_reader = MockLockfileReader::with_failure();
     let project_config_reader = MockProjectConfigReader::new("test-project".to_string());
     let license_repository = MockLicenseRepository::new();
@@ -123,14 +123,14 @@ fn test_generate_sbom_lockfile_read_failure() {
     );
 
     let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("lockfile"));
 }
 
-#[test]
-fn test_generate_sbom_project_config_failure() {
+#[tokio::test]
+async fn test_generate_sbom_project_config_failure() {
     let lockfile_content = r#"
 version = 1
 requires-python = ">=3.8"
@@ -155,14 +155,14 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     let request = SbomRequest::new(PathBuf::from("."), true, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("project config"));
 }
 
-#[test]
-fn test_generate_sbom_license_repository_failure() {
+#[tokio::test]
+async fn test_generate_sbom_license_repository_failure() {
     let lockfile_content = r#"
 version = 1
 requires-python = ">=3.8"
@@ -187,7 +187,7 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     // License repository failures are treated as warnings, not errors
     // The package is included without license information
@@ -203,8 +203,8 @@ source = { registry = "https://pypi.org/simple" }
         .any(|m| m.contains("Error:") && m.contains("license")));
 }
 
-#[test]
-fn test_generate_sbom_invalid_toml() {
+#[tokio::test]
+async fn test_generate_sbom_invalid_toml() {
     let lockfile_content = "invalid toml content {{{";
 
     let lockfile_reader = MockLockfileReader::new(lockfile_content.to_string());
@@ -221,13 +221,13 @@ fn test_generate_sbom_invalid_toml() {
     );
 
     let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_err());
 }
 
-#[test]
-fn test_generate_sbom_progress_reporting() {
+#[tokio::test]
+async fn test_generate_sbom_progress_reporting() {
     let lockfile_content = r#"
 version = 1
 requires-python = ">=3.8"
@@ -257,14 +257,14 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
-    let _result = use_case.execute(request);
+    let _result = use_case.execute(request).await;
 
     // Verify that progress was reported
     assert!(progress_reporter.message_count() > 0);
 }
 
-#[test]
-fn test_generate_sbom_exclude_single_package() {
+#[tokio::test]
+async fn test_generate_sbom_exclude_single_package() {
     let lockfile_content = r#"
 version = 1
 requires-python = ">=3.8"
@@ -312,7 +312,7 @@ source = { registry = "https://pypi.org/simple" }
         false,
         false,
     );
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -337,8 +337,8 @@ source = { registry = "https://pypi.org/simple" }
         .any(|p| p.package.name() == "certifi"));
 }
 
-#[test]
-fn test_generate_sbom_exclude_multiple_packages() {
+#[tokio::test]
+async fn test_generate_sbom_exclude_multiple_packages() {
     let lockfile_content = r#"
 version = 1
 requires-python = ">=3.8"
@@ -385,7 +385,7 @@ source = { registry = "https://pypi.org/simple" }
         false,
         false,
     );
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -395,8 +395,8 @@ source = { registry = "https://pypi.org/simple" }
     assert_eq!(response.enriched_packages[0].package.name(), "requests");
 }
 
-#[test]
-fn test_generate_sbom_exclude_with_wildcard() {
+#[tokio::test]
+async fn test_generate_sbom_exclude_with_wildcard() {
     let lockfile_content = r#"
 version = 1
 requires-python = ">=3.8"
@@ -443,7 +443,7 @@ source = { registry = "https://pypi.org/simple" }
         false,
         false,
     );
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -453,8 +453,8 @@ source = { registry = "https://pypi.org/simple" }
     assert_eq!(response.enriched_packages[0].package.name(), "requests");
 }
 
-#[test]
-fn test_generate_sbom_exclude_all_packages_error() {
+#[tokio::test]
+async fn test_generate_sbom_exclude_all_packages_error() {
     let lockfile_content = r#"
 version = 1
 requires-python = ">=3.8"
@@ -486,7 +486,7 @@ source = { registry = "https://pypi.org/simple" }
         false,
         false,
     );
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     // Should fail because all packages would be excluded
     assert!(result.is_err());
@@ -495,8 +495,8 @@ source = { registry = "https://pypi.org/simple" }
     assert!(error.to_string().contains("excluded"));
 }
 
-#[test]
-fn test_generate_sbom_exclude_with_dependency_graph() {
+#[tokio::test]
+async fn test_generate_sbom_exclude_with_dependency_graph() {
     let lockfile_content = r#"
 version = 1
 requires-python = ">=3.8"
@@ -549,7 +549,7 @@ source = { registry = "https://pypi.org/simple" }
         false,
         false,
     );
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
