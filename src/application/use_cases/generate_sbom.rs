@@ -11,7 +11,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tokio::runtime::Runtime;
 
 /// Type alias for package list with dependency map
 /// Used to simplify complex return types and satisfy clippy::type_complexity
@@ -72,7 +71,7 @@ where
     ///
     /// # Returns
     /// SbomResponse containing enriched packages, optional dependency graph, and metadata
-    pub fn execute(&self, request: SbomRequest) -> Result<SbomResponse> {
+    pub async fn execute(&self, request: SbomRequest) -> Result<SbomResponse> {
         // Step 1: Read and parse lockfile
         let (packages, dependency_map) = self.read_and_report_lockfile(&request)?;
 
@@ -90,11 +89,12 @@ where
             self.analyze_dependencies_if_requested(&request, &filtered_dependency_map)?;
 
         // Step 4: Enrich packages with license information
-        let enriched_packages = self.fetch_license_info(filtered_packages.clone())?;
+        let enriched_packages = self.fetch_license_info(filtered_packages.clone()).await?;
 
         // Step 5: CVE check if requested
-        let vulnerability_report =
-            self.check_vulnerabilities_if_requested(&request, &filtered_packages)?;
+        let vulnerability_report = self
+            .check_vulnerabilities_if_requested(&request, &filtered_packages)
+            .await?;
 
         // Step 6: Build and return response
         Ok(self.build_response(enriched_packages, dependency_graph, vulnerability_report))
@@ -233,11 +233,11 @@ where
     ///
     /// # Returns
     /// Vector of EnrichedPackage with license information
-    fn fetch_license_info(&self, packages: Vec<Package>) -> Result<Vec<EnrichedPackage>> {
+    async fn fetch_license_info(&self, packages: Vec<Package>) -> Result<Vec<EnrichedPackage>> {
         self.progress_reporter
             .report("🔍 Fetching license information...");
 
-        self.enrich_packages_with_licenses(packages)
+        self.enrich_packages_with_licenses(packages).await
     }
 
     /// Checks vulnerabilities if CVE check is requested
@@ -248,7 +248,7 @@ where
     ///
     /// # Returns
     /// Optional vulnerability report
-    fn check_vulnerabilities_if_requested(
+    async fn check_vulnerabilities_if_requested(
         &self,
         request: &SbomRequest,
         packages: &[Package],
@@ -256,7 +256,7 @@ where
         if !request.check_cve {
             return Ok(None);
         }
-        self.check_vulnerabilities(packages)
+        self.check_vulnerabilities(packages).await
     }
 
     /// Builds the final SBOM response
@@ -288,11 +288,7 @@ where
     /// Security: This method implements rate limiting to prevent DoS attacks
     /// via unbounded PyPI API requests. A delay is added between requests
     /// to limit the rate to approximately 10 requests per second.
-    ///
-    /// # Note
-    /// This method uses a tokio runtime to call async LicenseRepository methods.
-    /// This is a temporary bridge until GenerateSbomUseCase is fully async (Issue #59).
-    fn enrich_packages_with_licenses(
+    async fn enrich_packages_with_licenses(
         &self,
         packages: Vec<Package>,
     ) -> Result<Vec<EnrichedPackage>> {
@@ -329,60 +325,51 @@ where
             pb.finish_and_clear();
         });
 
-        // Create a tokio runtime to call async methods
-        // This is a temporary bridge until GenerateSbomUseCase is fully async (Issue #59)
-        let rt = Runtime::new()?;
+        // Fetch licenses sequentially with rate limiting
+        // Collect errors to report after async loop (since progress_reporter may not be Send)
+        let mut enriched = Vec::new();
+        let mut successful = 0;
+        let mut failed = 0;
+        let mut errors: Vec<(String, String)> = Vec::new(); // (package_name, error_message)
 
-        // Fetch licenses sequentially with rate limiting (async via block_on)
-        // Collect errors to report after async block (since progress_reporter may not be Send)
-        let result = rt.block_on(async {
-            let mut enriched = Vec::new();
-            let mut successful = 0;
-            let mut failed = 0;
-            let mut errors: Vec<(String, String)> = Vec::new(); // (package_name, error_message)
-
-            for (idx, package) in packages.into_iter().enumerate() {
-                let package_name = package.name().to_string();
-                match self
-                    .license_repository
-                    .enrich_with_license(package.name(), package.version())
-                    .await
-                {
-                    Ok(license_info) => {
-                        enriched.push(EnrichedPackage::new(
-                            package,
-                            license_info.license_text().map(String::from),
-                            license_info.description().map(String::from),
-                        ));
-                        successful += 1;
-                    }
-                    Err(e) => {
-                        // Collect error for reporting after async block
-                        errors.push((package_name, e.to_string()));
-                        // Include package without license information
-                        enriched.push(EnrichedPackage::new(package, None, None));
-                        failed += 1;
-                    }
+        for (idx, package) in packages.into_iter().enumerate() {
+            let package_name = package.name().to_string();
+            match self
+                .license_repository
+                .enrich_with_license(package.name(), package.version())
+                .await
+            {
+                Ok(license_info) => {
+                    enriched.push(EnrichedPackage::new(
+                        package,
+                        license_info.license_text().map(String::from),
+                        license_info.description().map(String::from),
+                    ));
+                    successful += 1;
                 }
-
-                // Update progress
-                progress_current.store(idx + 1, Ordering::Relaxed);
-
-                // Security: Rate limiting to prevent DoS via unbounded API requests
-                // Add delay between requests (except after the last one)
-                if idx < total - 1 {
-                    tokio::time::sleep(Duration::from_millis(LICENSE_FETCH_DELAY_MS)).await;
+                Err(e) => {
+                    // Collect error for reporting after async loop
+                    errors.push((package_name, e.to_string()));
+                    // Include package without license information
+                    enriched.push(EnrichedPackage::new(package, None, None));
+                    failed += 1;
                 }
             }
 
-            (enriched, successful, failed, errors)
-        });
+            // Update progress
+            progress_current.store(idx + 1, Ordering::Relaxed);
+
+            // Security: Rate limiting to prevent DoS via unbounded API requests
+            // Add delay between requests (except after the last one)
+            if idx < total - 1 {
+                tokio::time::sleep(Duration::from_millis(LICENSE_FETCH_DELAY_MS)).await;
+            }
+        }
 
         // Signal completion and wait for progress bar thread
         is_done.store(true, Ordering::Relaxed);
         let _ = progress_handle.join();
 
-        let (enriched, successful, failed, errors) = result;
         eprintln!(); // Add newline after progress bar
 
         // Report errors collected during async execution
@@ -409,11 +396,8 @@ where
     /// # Returns
     /// Option containing vulnerability report, or None if repository not available
     ///
-    /// # Note
-    /// This method uses a tokio runtime to call async VulnerabilityRepository methods.
-    /// This is a temporary bridge until GenerateSbomUseCase is fully async (Issue #59).
     /// Uses indicatif directly for progress bar updates via atomic counters.
-    fn check_vulnerabilities(
+    async fn check_vulnerabilities(
         &self,
         packages: &[Package],
     ) -> Result<Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>> {
@@ -476,15 +460,10 @@ where
                 progress_total.store(total, Ordering::Relaxed);
             });
 
-        // Create a tokio runtime to call async methods
-        // This is a temporary bridge until GenerateSbomUseCase is fully async (Issue #59)
-        let rt = Runtime::new()?;
-
-        // Fetch vulnerabilities with progress reporting (async via block_on)
-        let vulnerabilities = rt.block_on(async {
-            repo.fetch_vulnerabilities_with_progress(package_list, progress_callback)
-                .await
-        })?;
+        // Fetch vulnerabilities with progress reporting
+        let vulnerabilities = repo
+            .fetch_vulnerabilities_with_progress(package_list, progress_callback)
+            .await?;
 
         // Signal completion and wait for progress bar thread
         is_done.store(true, Ordering::Relaxed);
@@ -624,8 +603,8 @@ mod tests {
         fn report_completion(&self, _message: &str) {}
     }
 
-    #[test]
-    fn test_execute_without_dependencies() {
+    #[tokio::test]
+    async fn test_execute_without_dependencies() {
         let lockfile_content = r#"
 [[package]]
 name = "certifi"
@@ -657,15 +636,15 @@ version = "3.4.0"
             false,  // no CVE check
         );
 
-        let response = use_case.execute(request).unwrap();
+        let response = use_case.execute(request).await.unwrap();
 
         assert_eq!(response.enriched_packages.len(), 2);
         assert!(response.dependency_graph.is_none());
         assert!(!response.metadata.serial_number().is_empty());
     }
 
-    #[test]
-    fn test_execute_with_dependencies() {
+    #[tokio::test]
+    async fn test_execute_with_dependencies() {
         let lockfile_content = r#"
 [[package]]
 name = "myproject"
@@ -707,7 +686,7 @@ version = "1.26.0"
             false,  // no CVE check
         );
 
-        let response = use_case.execute(request).unwrap();
+        let response = use_case.execute(request).await.unwrap();
 
         assert_eq!(response.enriched_packages.len(), 3);
         assert!(response.dependency_graph.is_some());
@@ -729,8 +708,8 @@ version = "1.26.0"
         }
     }
 
-    #[test]
-    fn test_execute_with_cve_check_enabled() {
+    #[tokio::test]
+    async fn test_execute_with_cve_check_enabled() {
         let lockfile_content = r#"
 [[package]]
 name = "certifi"
@@ -761,14 +740,14 @@ version = "3.4.0"
             true,   // CVE check enabled
         );
 
-        let response = use_case.execute(request).unwrap();
+        let response = use_case.execute(request).await.unwrap();
 
         assert_eq!(response.enriched_packages.len(), 2);
         assert!(response.vulnerability_report.is_some());
     }
 
-    #[test]
-    fn test_execute_with_cve_check_but_no_repository() {
+    #[tokio::test]
+    async fn test_execute_with_cve_check_but_no_repository() {
         let lockfile_content = r#"
 [[package]]
 name = "certifi"
@@ -796,14 +775,14 @@ version = "2024.8.30"
             true,   // CVE check enabled
         );
 
-        let response = use_case.execute(request).unwrap();
+        let response = use_case.execute(request).await.unwrap();
 
         assert_eq!(response.enriched_packages.len(), 1);
         assert!(response.vulnerability_report.is_none());
     }
 
-    #[test]
-    fn test_execute_with_cve_check_disabled() {
+    #[tokio::test]
+    async fn test_execute_with_cve_check_disabled() {
         let lockfile_content = r#"
 [[package]]
 name = "certifi"
@@ -830,14 +809,14 @@ version = "2024.8.30"
             false,  // CVE check disabled
         );
 
-        let response = use_case.execute(request).unwrap();
+        let response = use_case.execute(request).await.unwrap();
 
         assert_eq!(response.enriched_packages.len(), 1);
         assert!(response.vulnerability_report.is_none());
     }
 
-    #[test]
-    fn test_execute_with_cve_check_in_dry_run_mode() {
+    #[tokio::test]
+    async fn test_execute_with_cve_check_in_dry_run_mode() {
         let lockfile_content = r#"
 [[package]]
 name = "certifi"
@@ -864,7 +843,7 @@ version = "2024.8.30"
             true,   // CVE check enabled (but should be skipped due to dry-run)
         );
 
-        let response = use_case.execute(request).unwrap();
+        let response = use_case.execute(request).await.unwrap();
 
         assert_eq!(response.enriched_packages.len(), 0); // dry-run returns empty
         assert!(response.vulnerability_report.is_none()); // CVE check skipped
@@ -1073,8 +1052,8 @@ version = "2024.8.30"
         assert!(!response.metadata.timestamp().is_empty());
     }
 
-    #[test]
-    fn test_fetch_license_info() {
+    #[tokio::test]
+    async fn test_fetch_license_info() {
         let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
             GenerateSbomUseCase::new(
                 MockLockfileReader {
@@ -1093,7 +1072,7 @@ version = "2024.8.30"
             Package::new("pkg2".to_string(), "2.0.0".to_string()).unwrap(),
         ];
 
-        let enriched = use_case.fetch_license_info(packages).unwrap();
+        let enriched = use_case.fetch_license_info(packages).await.unwrap();
 
         assert_eq!(enriched.len(), 2);
         // MockLicenseRepository always returns MIT license
@@ -1101,8 +1080,8 @@ version = "2024.8.30"
         assert_eq!(enriched[0].license.as_ref().unwrap(), "MIT");
     }
 
-    #[test]
-    fn test_check_vulnerabilities_if_requested_disabled() {
+    #[tokio::test]
+    async fn test_check_vulnerabilities_if_requested_disabled() {
         let use_case = GenerateSbomUseCase::new(
             MockLockfileReader {
                 content: String::new(),
@@ -1126,13 +1105,14 @@ version = "2024.8.30"
 
         let result = use_case
             .check_vulnerabilities_if_requested(&request, &packages)
+            .await
             .unwrap();
 
         assert!(result.is_none());
     }
 
-    #[test]
-    fn test_check_vulnerabilities_if_requested_enabled() {
+    #[tokio::test]
+    async fn test_check_vulnerabilities_if_requested_enabled() {
         let use_case = GenerateSbomUseCase::new(
             MockLockfileReader {
                 content: String::new(),
@@ -1156,6 +1136,7 @@ version = "2024.8.30"
 
         let result = use_case
             .check_vulnerabilities_if_requested(&request, &packages)
+            .await
             .unwrap();
 
         assert!(result.is_some());

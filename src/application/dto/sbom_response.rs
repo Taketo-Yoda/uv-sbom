@@ -16,7 +16,6 @@ pub struct SbomResponse {
     pub metadata: SbomMetadata,
     /// Optional vulnerability report (only present when CVE check is enabled)
     /// None = not checked, Some(vec) = checked (empty vec means no vulnerabilities found)
-    #[allow(dead_code)] // Will be used in subsequent subtasks
     pub vulnerability_report: Option<Vec<PackageVulnerabilities>>,
 }
 

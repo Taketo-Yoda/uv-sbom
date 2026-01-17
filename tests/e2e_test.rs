@@ -2,8 +2,8 @@
 use std::path::PathBuf;
 use uv_sbom::prelude::*;
 
-#[test]
-fn test_e2e_json_format() {
+#[tokio::test]
+async fn test_e2e_json_format() {
     // Use the sample project fixture
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
@@ -23,7 +23,7 @@ fn test_e2e_json_format() {
     );
 
     let request = SbomRequest::new(project_path, false, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -42,8 +42,8 @@ fn test_e2e_json_format() {
     assert!(json.contains("urllib3"));
 }
 
-#[test]
-fn test_e2e_markdown_format() {
+#[tokio::test]
+async fn test_e2e_markdown_format() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -60,7 +60,7 @@ fn test_e2e_markdown_format() {
     );
 
     let request = SbomRequest::new(project_path, true, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -87,8 +87,8 @@ fn test_e2e_markdown_format() {
     assert!(markdown.contains("requests"));
 }
 
-#[test]
-fn test_e2e_nonexistent_project() {
+#[tokio::test]
+async fn test_e2e_nonexistent_project() {
     let project_path = PathBuf::from("tests/fixtures/nonexistent");
 
     let lockfile_reader = FileSystemReader::new();
@@ -105,13 +105,13 @@ fn test_e2e_nonexistent_project() {
     );
 
     let request = SbomRequest::new(project_path, false, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_err());
 }
 
-#[test]
-fn test_e2e_package_count() {
+#[tokio::test]
+async fn test_e2e_package_count() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -128,7 +128,7 @@ fn test_e2e_package_count() {
     );
 
     let request = SbomRequest::new(project_path, true, vec![], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -144,8 +144,8 @@ fn test_e2e_package_count() {
     assert!(graph.transitive_dependency_count() > 0); // requests has transitive deps
 }
 
-#[test]
-fn test_e2e_exclude_single_package() {
+#[tokio::test]
+async fn test_e2e_exclude_single_package() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -169,7 +169,7 @@ fn test_e2e_exclude_single_package() {
         false,
         false,
     );
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -184,8 +184,8 @@ fn test_e2e_exclude_single_package() {
         .any(|p| p.package.name() == "urllib3"));
 }
 
-#[test]
-fn test_e2e_exclude_multiple_packages() {
+#[tokio::test]
+async fn test_e2e_exclude_multiple_packages() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -209,7 +209,7 @@ fn test_e2e_exclude_multiple_packages() {
         false,
         false,
     );
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -228,8 +228,8 @@ fn test_e2e_exclude_multiple_packages() {
         .any(|p| p.package.name() == "certifi"));
 }
 
-#[test]
-fn test_e2e_exclude_with_wildcard() {
+#[tokio::test]
+async fn test_e2e_exclude_with_wildcard() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -247,7 +247,7 @@ fn test_e2e_exclude_with_wildcard() {
 
     // Exclude packages starting with "char"
     let request = SbomRequest::new(project_path, false, vec!["char*".to_string()], false, false);
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -262,8 +262,8 @@ fn test_e2e_exclude_with_wildcard() {
         .any(|p| p.package.name() == "charset-normalizer"));
 }
 
-#[test]
-fn test_e2e_exclude_all_packages_error() {
+#[tokio::test]
+async fn test_e2e_exclude_all_packages_error() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -294,7 +294,7 @@ fn test_e2e_exclude_all_packages_error() {
         false,
         false,
     );
-    let result = use_case.execute(request);
+    let result = use_case.execute(request).await;
 
     // Should fail because all packages would be excluded
     assert!(result.is_err());

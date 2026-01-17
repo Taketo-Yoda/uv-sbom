@@ -19,7 +19,8 @@
 //! use uv_sbom::prelude::*;
 //! use std::path::PathBuf;
 //!
-//! # fn main() -> Result<()> {
+//! # #[tokio::main]
+//! # async fn main() -> Result<()> {
 //! // Create adapters
 //! let lockfile_reader = FileSystemReader::new();
 //! let project_config_reader = FileSystemReader::new();
@@ -37,7 +38,7 @@
 //!
 //! // Execute
 //! let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
-//! let response = use_case.execute(request)?;
+//! let response = use_case.execute(request).await?;
 //!
 //! // Format output
 //! let formatter = CycloneDxFormatter::new();

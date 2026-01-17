@@ -18,8 +18,9 @@ use shared::Result;
 use std::path::{Path, PathBuf};
 use std::process;
 
-fn main() {
-    if let Err(e) = run() {
+#[tokio::main]
+async fn main() {
+    if let Err(e) = run().await {
         eprintln!("\n❌ An error occurred:\n");
         eprintln!("{}", e);
 
@@ -35,7 +36,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<()> {
+async fn run() -> Result<()> {
     // Display startup banner
     display_banner();
 
@@ -89,7 +90,7 @@ fn run() -> Result<()> {
     );
 
     // Execute use case
-    let response = use_case.execute(request)?;
+    let response = use_case.execute(request).await?;
 
     // Skip output generation for dry-run mode
     if args.dry_run {
