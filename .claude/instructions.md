@@ -463,12 +463,13 @@ For detailed Git workflow procedures, use the following Agent Skills:
 
 | Operation | Required Skill | Why |
 |-----------|---------------|-----|
-| Format check | `/pre-push` | Ensures `cargo fmt --check` is run correctly |
 | Clippy check | `/pre-push` | Ensures `-D warnings` flag is included |
-| Commit | `/commit` | Ensures proper commit message format |
+| PR Creation | `/pr` | Runs all pre-flight checks before creating PR |
 | Push | `/pre-push` | Runs all CI-equivalent checks |
 
-**⚠️ WARNING**: Executing these commands directly (without skills) risks missing critical flags that CI enforces.
+**Note**: `cargo fmt` is handled by pre-commit hook (see below).
+
+**⚠️ WARNING**: Executing clippy directly (without skills) risks missing the `-D warnings` flag that CI enforces.
 
 **Correct Usage**:
 ```bash
@@ -490,7 +491,18 @@ cargo clippy --all-targets
 3. Push proceeded despite warnings
 4. CI failed because it uses `-D warnings` which treats warnings as errors
 
-**Prevention**: Always invoke `/pre-push` skill before pushing. Never run individual quality commands manually.
+**Prevention**: Always invoke `/pre-push` skill before pushing.
+
+### Pre-commit Hook
+
+This project has a pre-commit hook that automatically runs `cargo fmt --all`.
+
+**Setup** (run once after cloning):
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook handles formatting only. Clippy and tests require `/pre-push` skill.
 
 ## Claude Code Workflow
 
@@ -1010,6 +1022,7 @@ Last Updated: 2026-01-17
 
 ## Change History
 
+- 2026-01-17: Added pre-commit hook for automatic formatting (Issue #102)
 - 2026-01-17: Added "CRITICAL: Never Bypass Skills for Common Operations" section with skill enforcement table and failure pattern documentation (Issue #88)
 - 2026-01-17: Added Mistake 4 & 5 to "Common Mistakes to Avoid" section documenting Clippy `-D warnings` and skill bypass issues (Issue #88)
 - 2026-01-17: Updated "Pre-Push Final Checklist" to strongly recommend using `/pre-push` skill (Issue #88)
