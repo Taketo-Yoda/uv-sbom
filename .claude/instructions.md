@@ -415,11 +415,32 @@ git checkout -b feature/<issue-number>-<description> origin/develop
 
 ### Branch Naming Conventions
 
-- Feature: `feature/<issue-number>-<short-description>`
-- Bugfix: `bugfix/<issue-number>-<short-description>`
-- Hotfix: `hotfix/<issue-number>-<short-description>`
-- Documentation: `docs/<issue-number>-<short-description>`
-- Refactor: `refactor/<issue-number>-<short-description>`
+**Determine branch prefix based on Issue labels (priority order):**
+
+| Priority | Issue Label | Branch Prefix | Example |
+|----------|-------------|---------------|---------|
+| 1 | `enhancement` | `feature/` | `feature/88-add-new-feature` |
+| 2 | `bug` | `bugfix/` | `bugfix/42-fix-parsing-error` |
+| 3 | `refactor` | `refactor/` | `refactor/30-cleanup-code` |
+| 4 | `documentation` | `doc/` | `doc/50-update-readme` |
+| 5 | (no label) | `feature/` | `feature/99-misc-task` |
+
+**Additional branch types:**
+- Hotfix (critical production fixes): `hotfix/<issue-number>-<short-description>`
+
+**Format**: `<prefix>/<issue-number>-<short-description>`
+
+**Example workflow:**
+```bash
+# Check Issue #88 labels
+gh issue view 88 --json labels
+
+# If label is "enhancement" → use feature/
+git checkout -b feature/88-add-new-feature origin/develop
+
+# If label is "bug" → use bugfix/
+git checkout -b bugfix/88-fix-something origin/develop
+```
 
 ### Agent Skills (Git Operations)
 
