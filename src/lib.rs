@@ -37,7 +37,7 @@
 //! );
 //!
 //! // Execute
-//! let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false);
+//! let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
 //! let response = use_case.execute(request).await?;
 //!
 //! // Format output

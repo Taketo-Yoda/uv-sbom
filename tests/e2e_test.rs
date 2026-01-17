@@ -2,6 +2,68 @@
 use std::path::PathBuf;
 use uv_sbom::prelude::*;
 
+// Exit code tests for CLI
+mod exit_code_tests {
+    use assert_cmd::cargo::cargo_bin_cmd;
+
+    /// Exit code 0: Success - normal execution
+    #[test]
+    fn test_exit_code_success() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["-p", "tests/fixtures/sample-project"])
+            .assert()
+            .code(0);
+    }
+
+    /// Exit code 0: --help should return success
+    #[test]
+    fn test_exit_code_help() {
+        cargo_bin_cmd!("uv-sbom").arg("--help").assert().code(0);
+    }
+
+    /// Exit code 0: --version should return success
+    #[test]
+    fn test_exit_code_version() {
+        cargo_bin_cmd!("uv-sbom").arg("--version").assert().code(0);
+    }
+
+    /// Exit code 2: Invalid arguments
+    #[test]
+    fn test_exit_code_invalid_argument() {
+        cargo_bin_cmd!("uv-sbom")
+            .arg("--invalid-option")
+            .assert()
+            .code(2);
+    }
+
+    /// Exit code 2: Invalid format value
+    #[test]
+    fn test_exit_code_invalid_format() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["-f", "invalid_format"])
+            .assert()
+            .code(2);
+    }
+
+    /// Exit code 3: Application error - non-existent project path
+    #[test]
+    fn test_exit_code_application_error_nonexistent_path() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["-p", "/nonexistent/path/that/does/not/exist"])
+            .assert()
+            .code(3);
+    }
+
+    /// Exit code 3: Application error - path is a file, not a directory
+    #[test]
+    fn test_exit_code_application_error_file_not_directory() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["-p", "Cargo.toml"])
+            .assert()
+            .code(3);
+    }
+}
+
 #[tokio::test]
 async fn test_e2e_json_format() {
     // Use the sample project fixture
@@ -22,7 +84,7 @@ async fn test_e2e_json_format() {
         None,
     );
 
-    let request = SbomRequest::new(project_path, false, vec![], false, false);
+    let request = SbomRequest::new(project_path, false, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -59,7 +121,7 @@ async fn test_e2e_markdown_format() {
         None,
     );
 
-    let request = SbomRequest::new(project_path, true, vec![], false, false);
+    let request = SbomRequest::new(project_path, true, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -104,7 +166,7 @@ async fn test_e2e_nonexistent_project() {
         None,
     );
 
-    let request = SbomRequest::new(project_path, false, vec![], false, false);
+    let request = SbomRequest::new(project_path, false, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     assert!(result.is_err());
@@ -127,7 +189,7 @@ async fn test_e2e_package_count() {
         None,
     );
 
-    let request = SbomRequest::new(project_path, true, vec![], false, false);
+    let request = SbomRequest::new(project_path, true, vec![], false, false, None, None);
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -168,6 +230,8 @@ async fn test_e2e_exclude_single_package() {
         vec!["urllib3".to_string()],
         false,
         false,
+        None,
+        None,
     );
     let result = use_case.execute(request).await;
 
@@ -208,6 +272,8 @@ async fn test_e2e_exclude_multiple_packages() {
         vec!["urllib3".to_string(), "certifi".to_string()],
         false,
         false,
+        None,
+        None,
     );
     let result = use_case.execute(request).await;
 
@@ -246,7 +312,15 @@ async fn test_e2e_exclude_with_wildcard() {
     );
 
     // Exclude packages starting with "char"
-    let request = SbomRequest::new(project_path, false, vec!["char*".to_string()], false, false);
+    let request = SbomRequest::new(
+        project_path,
+        false,
+        vec!["char*".to_string()],
+        false,
+        false,
+        None,
+        None,
+    );
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -293,6 +367,8 @@ async fn test_e2e_exclude_all_packages_error() {
         ],
         false,
         false,
+        None,
+        None,
     );
     let result = use_case.execute(request).await;
 

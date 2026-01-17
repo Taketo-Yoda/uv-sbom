@@ -1,6 +1,41 @@
 use std::fmt;
 use std::path::PathBuf;
 
+/// Exit codes for the CLI application.
+///
+/// These codes allow CI systems to distinguish between different
+/// types of failures and successes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum ExitCode {
+    /// Success - no vulnerabilities detected, or all below threshold
+    Success = 0,
+    /// Vulnerabilities were detected above the configured threshold
+    VulnerabilitiesDetected = 1,
+    /// Invalid command-line arguments (clap parsing errors)
+    InvalidArguments = 2,
+    /// Application error (API error, network error, file I/O error, etc.)
+    ApplicationError = 3,
+}
+
+impl ExitCode {
+    /// Convert to i32 for use with std::process::exit
+    pub fn as_i32(self) -> i32 {
+        self as i32
+    }
+}
+
+impl fmt::Display for ExitCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExitCode::Success => write!(f, "Success (0)"),
+            ExitCode::VulnerabilitiesDetected => write!(f, "Vulnerabilities Detected (1)"),
+            ExitCode::InvalidArguments => write!(f, "Invalid Arguments (2)"),
+            ExitCode::ApplicationError => write!(f, "Application Error (3)"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum SbomError {
     LockfileNotFound {
@@ -102,6 +137,46 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
+    // ExitCode tests
+    #[test]
+    fn test_exit_code_values() {
+        assert_eq!(ExitCode::Success.as_i32(), 0);
+        assert_eq!(ExitCode::VulnerabilitiesDetected.as_i32(), 1);
+        assert_eq!(ExitCode::InvalidArguments.as_i32(), 2);
+        assert_eq!(ExitCode::ApplicationError.as_i32(), 3);
+    }
+
+    #[test]
+    fn test_exit_code_display() {
+        assert_eq!(format!("{}", ExitCode::Success), "Success (0)");
+        assert_eq!(
+            format!("{}", ExitCode::VulnerabilitiesDetected),
+            "Vulnerabilities Detected (1)"
+        );
+        assert_eq!(
+            format!("{}", ExitCode::InvalidArguments),
+            "Invalid Arguments (2)"
+        );
+        assert_eq!(
+            format!("{}", ExitCode::ApplicationError),
+            "Application Error (3)"
+        );
+    }
+
+    #[test]
+    fn test_exit_code_equality() {
+        assert_eq!(ExitCode::Success, ExitCode::Success);
+        assert_ne!(ExitCode::Success, ExitCode::ApplicationError);
+    }
+
+    #[test]
+    fn test_exit_code_clone() {
+        let code = ExitCode::VulnerabilitiesDetected;
+        let cloned = code;
+        assert_eq!(code, cloned);
+    }
+
+    // SbomError tests
     #[test]
     fn test_lockfile_not_found_display() {
         let error = SbomError::LockfileNotFound {

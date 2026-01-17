@@ -46,12 +46,6 @@ pub struct Args {
     pub cvss_threshold: Option<f32>,
 }
 
-impl Args {
-    pub fn parse_args() -> Self {
-        Self::parse()
-    }
-}
-
 fn parse_severity_threshold(s: &str) -> Result<Severity, String> {
     match s.to_lowercase().as_str() {
         "low" => Ok(Severity::Low),
