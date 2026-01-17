@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Pre-commit hook: Automatically format code with cargo fmt
+# This ensures all commits have consistent formatting.
+
+set -e
+
+echo "Running cargo fmt..."
+cargo fmt --all
+
+# Stage any formatting changes
+git diff --name-only | while read file; do
+    if [ -f "$file" ]; then
+        git add "$file"
+    fi
+done
+
+echo "Pre-commit checks passed."
