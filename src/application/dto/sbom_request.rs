@@ -18,12 +18,8 @@ pub struct SbomRequest {
     /// Whether to check for vulnerabilities using OSV API
     pub check_cve: bool,
     /// Severity threshold for vulnerability filtering
-    /// Note: Currently unused but prepared for threshold-based exit code feature (issue #94)
-    #[allow(dead_code)]
     pub severity_threshold: Option<Severity>,
     /// CVSS threshold for vulnerability filtering
-    /// Note: Currently unused but prepared for threshold-based exit code feature (issue #94)
-    #[allow(dead_code)]
     pub cvss_threshold: Option<f32>,
 }
 
