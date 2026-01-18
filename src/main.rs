@@ -134,13 +134,14 @@ async fn run(args: Args) -> Result<bool> {
     // Create formatter using factory
     let formatter = FormatterFactory::create(args.format);
     let vulnerability_report = response.vulnerability_report.as_deref();
+    let vulnerability_check_result = response.vulnerability_check_result.as_ref();
     let formatted_output = if let Some(dep_graph) = response.dependency_graph.as_ref() {
         formatter.format_with_dependencies(
             dep_graph,
             response.enriched_packages,
             &response.metadata,
             vulnerability_report,
-            None, // VulnerabilityCheckResult will be added in future implementation
+            vulnerability_check_result,
         )?
     } else {
         formatter.format(

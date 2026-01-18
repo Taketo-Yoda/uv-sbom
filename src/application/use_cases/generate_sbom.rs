@@ -3,6 +3,9 @@ use crate::ports::outbound::{
     EnrichedPackage, LicenseRepository, LockfileReader, ProgressReporter, ProjectConfigReader,
     VulnerabilityRepository,
 };
+use crate::sbom_generation::domain::services::{
+    ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker,
+};
 use crate::sbom_generation::domain::{Package, PackageName};
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
 use crate::shared::Result;
@@ -96,8 +99,19 @@ where
             .check_vulnerabilities_if_requested(&request, &filtered_packages)
             .await?;
 
-        // Step 6: Build and return response
-        Ok(self.build_response(enriched_packages, dependency_graph, vulnerability_report))
+        // Step 6: Apply threshold evaluation if vulnerabilities were found
+        let vulnerability_check_result = vulnerability_report.as_ref().map(|report| {
+            let threshold_config = Self::build_threshold_config(&request);
+            VulnerabilityChecker::check(report.clone(), threshold_config)
+        });
+
+        // Step 7: Build and return response
+        Ok(self.build_response(
+            enriched_packages,
+            dependency_graph,
+            vulnerability_report,
+            vulnerability_check_result,
+        ))
     }
 
     /// Reads and parses the lockfile, reporting progress
@@ -184,7 +198,7 @@ where
         self.progress_reporter
             .report_completion("Success: Configuration validated. No issues found.");
         let metadata = SbomGenerator::generate_default_metadata(false);
-        Ok(SbomResponse::new(vec![], None, metadata, None, false))
+        Ok(SbomResponse::new(vec![], None, metadata, None, false, None))
     }
 
     /// Analyzes dependencies if requested in the SBOM request
@@ -259,12 +273,29 @@ where
         self.check_vulnerabilities(packages).await
     }
 
+    /// Builds ThresholdConfig from SbomRequest options
+    ///
+    /// # Arguments
+    /// * `request` - The SBOM request containing threshold options
+    ///
+    /// # Returns
+    /// ThresholdConfig based on request options
+    fn build_threshold_config(request: &SbomRequest) -> ThresholdConfig {
+        match (&request.severity_threshold, &request.cvss_threshold) {
+            (Some(severity), None) => ThresholdConfig::Severity(*severity),
+            (None, Some(cvss)) => ThresholdConfig::Cvss(*cvss),
+            // Both None or unreachable (clap group prevents both being set)
+            _ => ThresholdConfig::None,
+        }
+    }
+
     /// Builds the final SBOM response
     ///
     /// # Arguments
     /// * `enriched_packages` - Packages with license information
     /// * `dependency_graph` - Optional dependency graph
     /// * `vulnerability_report` - Optional vulnerability report
+    /// * `vulnerability_check_result` - Optional threshold evaluation result
     ///
     /// # Returns
     /// Complete SbomResponse
@@ -273,13 +304,14 @@ where
         enriched_packages: Vec<EnrichedPackage>,
         dependency_graph: Option<crate::sbom_generation::domain::DependencyGraph>,
         vulnerability_report: Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>,
+        vulnerability_check_result: Option<VulnerabilityCheckResult>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata(vulnerability_report.is_some());
 
-        // Check if any vulnerabilities were found
-        let has_vulnerabilities_above_threshold = vulnerability_report
+        // Use threshold check result if available, otherwise check if any vulnerabilities exist
+        let has_vulnerabilities_above_threshold = vulnerability_check_result
             .as_ref()
-            .map(|report| report.iter().any(|pv| !pv.vulnerabilities().is_empty()))
+            .map(|result| result.threshold_exceeded)
             .unwrap_or(false);
 
         SbomResponse::new(
@@ -288,6 +320,7 @@ where
             metadata,
             vulnerability_report,
             has_vulnerabilities_above_threshold,
+            vulnerability_check_result,
         )
     }
 
@@ -1073,11 +1106,12 @@ version = "2024.8.30"
             Some("Test description".to_string()),
         )];
 
-        let response = use_case.build_response(enriched_packages.clone(), None, None);
+        let response = use_case.build_response(enriched_packages.clone(), None, None, None);
 
         assert_eq!(response.enriched_packages.len(), 1);
         assert!(response.dependency_graph.is_none());
         assert!(response.vulnerability_report.is_none());
+        assert!(response.vulnerability_check_result.is_none());
         assert!(!response.metadata.serial_number().is_empty());
         assert!(!response.metadata.timestamp().is_empty());
     }
@@ -1174,5 +1208,190 @@ version = "2024.8.30"
             .unwrap();
 
         assert!(result.is_some());
+    }
+
+    // ===== Tests for threshold configuration =====
+
+    #[test]
+    fn test_build_threshold_config_none() {
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,
+            vec![],
+            false,
+            true,
+            None, // no severity threshold
+            None, // no cvss threshold
+        );
+
+        let config = GenerateSbomUseCase::<
+            MockLockfileReader,
+            MockProjectConfigReader,
+            MockLicenseRepository,
+            MockProgressReporter,
+            MockVulnerabilityRepository,
+        >::build_threshold_config(&request);
+
+        assert_eq!(config, ThresholdConfig::None);
+    }
+
+    #[test]
+    fn test_build_threshold_config_severity() {
+        use crate::sbom_generation::domain::vulnerability::Severity;
+
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,
+            vec![],
+            false,
+            true,
+            Some(Severity::High), // severity threshold
+            None,                 // no cvss threshold
+        );
+
+        let config = GenerateSbomUseCase::<
+            MockLockfileReader,
+            MockProjectConfigReader,
+            MockLicenseRepository,
+            MockProgressReporter,
+            MockVulnerabilityRepository,
+        >::build_threshold_config(&request);
+
+        assert_eq!(config, ThresholdConfig::Severity(Severity::High));
+    }
+
+    #[test]
+    fn test_build_threshold_config_cvss() {
+        let request = SbomRequest::new(
+            std::path::PathBuf::from("/test/project"),
+            false,
+            vec![],
+            false,
+            true,
+            None,      // no severity threshold
+            Some(7.0), // cvss threshold
+        );
+
+        let config = GenerateSbomUseCase::<
+            MockLockfileReader,
+            MockProjectConfigReader,
+            MockLicenseRepository,
+            MockProgressReporter,
+            MockVulnerabilityRepository,
+        >::build_threshold_config(&request);
+
+        assert_eq!(config, ThresholdConfig::Cvss(7.0));
+    }
+
+    #[test]
+    fn test_build_response_with_threshold_exceeded() {
+        use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
+
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: String::new(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
+
+        let package = Package::new("test-pkg".to_string(), "1.0.0".to_string()).unwrap();
+        let enriched_packages = vec![EnrichedPackage::new(
+            package,
+            Some("MIT".to_string()),
+            Some("Test description".to_string()),
+        )];
+
+        // Create a vulnerability check result with threshold exceeded
+        let vuln = Vulnerability::new(
+            "CVE-2024-001".to_string(),
+            Some(CvssScore::new(9.0).unwrap()),
+            Severity::Critical,
+            None,
+            None,
+        )
+        .unwrap();
+        let pkg_vulns = crate::sbom_generation::domain::PackageVulnerabilities::new(
+            "test-pkg".to_string(),
+            "1.0.0".to_string(),
+            vec![vuln],
+        );
+        let check_result = VulnerabilityCheckResult {
+            above_threshold: vec![pkg_vulns],
+            below_threshold: vec![],
+            threshold_exceeded: true,
+        };
+
+        let response = use_case.build_response(enriched_packages, None, None, Some(check_result));
+
+        assert!(response.has_vulnerabilities_above_threshold);
+        assert!(response.vulnerability_check_result.is_some());
+        assert!(
+            response
+                .vulnerability_check_result
+                .unwrap()
+                .threshold_exceeded
+        );
+    }
+
+    #[test]
+    fn test_build_response_with_threshold_not_exceeded() {
+        use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
+
+        let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+            GenerateSbomUseCase::new(
+                MockLockfileReader {
+                    content: String::new(),
+                },
+                MockProjectConfigReader {
+                    project_name: "test".to_string(),
+                },
+                MockLicenseRepository,
+                MockProgressReporter,
+                None,
+            );
+
+        let package = Package::new("test-pkg".to_string(), "1.0.0".to_string()).unwrap();
+        let enriched_packages = vec![EnrichedPackage::new(
+            package,
+            Some("MIT".to_string()),
+            Some("Test description".to_string()),
+        )];
+
+        // Create a vulnerability check result with threshold NOT exceeded
+        let vuln = Vulnerability::new(
+            "CVE-2024-001".to_string(),
+            Some(CvssScore::new(3.0).unwrap()),
+            Severity::Low,
+            None,
+            None,
+        )
+        .unwrap();
+        let pkg_vulns = crate::sbom_generation::domain::PackageVulnerabilities::new(
+            "test-pkg".to_string(),
+            "1.0.0".to_string(),
+            vec![vuln],
+        );
+        let check_result = VulnerabilityCheckResult {
+            above_threshold: vec![],
+            below_threshold: vec![pkg_vulns],
+            threshold_exceeded: false,
+        };
+
+        let response = use_case.build_response(enriched_packages, None, None, Some(check_result));
+
+        assert!(!response.has_vulnerabilities_above_threshold);
+        assert!(response.vulnerability_check_result.is_some());
+        assert!(
+            !response
+                .vulnerability_check_result
+                .unwrap()
+                .threshold_exceeded
+        );
     }
 }
