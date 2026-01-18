@@ -5,11 +5,7 @@
 mod output_format;
 mod sbom_request;
 mod sbom_response;
-mod vulnerability_check_request;
-mod vulnerability_check_response;
 
 pub use output_format::OutputFormat;
 pub use sbom_request::SbomRequest;
 pub use sbom_response::SbomResponse;
-pub use vulnerability_check_request::VulnerabilityCheckRequest;
-pub use vulnerability_check_response::VulnerabilityCheckResponse;
