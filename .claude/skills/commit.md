@@ -6,6 +6,51 @@ Create commits with proper code quality checks and conventional commit messages.
 
 **IMPORTANT**: All commit messages MUST be written in **English**.
 
+## Step 0: Verify Branch (MANDATORY)
+
+**CRITICAL**: This step MUST be performed before any other step.
+
+### Check Current Branch
+
+```bash
+git branch --show-current
+```
+
+### Branch Validation Rules
+
+| Current Branch | Action |
+|----------------|--------|
+| `main` | ❌ **STOP** - Never commit directly to main |
+| `develop` | ❌ **STOP** - Never commit directly to develop |
+| `feature/*` | ✅ Proceed with commit |
+| `bugfix/*` | ✅ Proceed with commit |
+| `hotfix/*` | ✅ Proceed with commit |
+| `docs/*` | ✅ Proceed with commit |
+| `refactor/*` | ✅ Proceed with commit |
+
+### If on `develop` or `main`
+
+1. **STOP immediately** - Do not proceed with commit
+2. Inform the user about the branch policy violation
+3. Create a feature branch:
+   ```bash
+   git fetch origin
+   git checkout -b feature/<issue-number>-<description> origin/develop
+   ```
+4. After branch creation, proceed with the commit workflow
+
+### Error Message Template
+
+If on protected branch, display:
+```
+⚠️ ERROR: Cannot commit directly to '{branch_name}' branch.
+
+This project uses Git Flow. Please create a feature branch first:
+  git checkout -b feature/<issue>-<description> origin/develop
+
+See .claude/instructions.md for branching guidelines.
+```
+
 ## Pre-flight Checks (MANDATORY)
 
 ### 1. Format Code
