@@ -140,6 +140,7 @@ async fn run(args: Args) -> Result<bool> {
             response.enriched_packages,
             &response.metadata,
             vulnerability_report,
+            None, // VulnerabilityCheckResult will be added in future implementation
         )?
     } else {
         formatter.format(
