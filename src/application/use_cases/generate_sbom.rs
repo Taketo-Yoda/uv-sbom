@@ -3,7 +3,9 @@ use crate::ports::outbound::{
     EnrichedPackage, LicenseRepository, LockfileReader, ProgressReporter, ProjectConfigReader,
     VulnerabilityRepository,
 };
-use crate::sbom_generation::domain::services::{ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker};
+use crate::sbom_generation::domain::services::{
+    ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker,
+};
 use crate::sbom_generation::domain::{Package, PackageName};
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
 use crate::shared::Result;
@@ -1222,8 +1224,13 @@ version = "2024.8.30"
             None, // no cvss threshold
         );
 
-        let config =
-            GenerateSbomUseCase::<MockLockfileReader, MockProjectConfigReader, MockLicenseRepository, MockProgressReporter, MockVulnerabilityRepository>::build_threshold_config(&request);
+        let config = GenerateSbomUseCase::<
+            MockLockfileReader,
+            MockProjectConfigReader,
+            MockLicenseRepository,
+            MockProgressReporter,
+            MockVulnerabilityRepository,
+        >::build_threshold_config(&request);
 
         assert_eq!(config, ThresholdConfig::None);
     }
@@ -1242,8 +1249,13 @@ version = "2024.8.30"
             None,                 // no cvss threshold
         );
 
-        let config =
-            GenerateSbomUseCase::<MockLockfileReader, MockProjectConfigReader, MockLicenseRepository, MockProgressReporter, MockVulnerabilityRepository>::build_threshold_config(&request);
+        let config = GenerateSbomUseCase::<
+            MockLockfileReader,
+            MockProjectConfigReader,
+            MockLicenseRepository,
+            MockProgressReporter,
+            MockVulnerabilityRepository,
+        >::build_threshold_config(&request);
 
         assert_eq!(config, ThresholdConfig::Severity(Severity::High));
     }
@@ -1256,12 +1268,17 @@ version = "2024.8.30"
             vec![],
             false,
             true,
-            None,       // no severity threshold
-            Some(7.0),  // cvss threshold
+            None,      // no severity threshold
+            Some(7.0), // cvss threshold
         );
 
-        let config =
-            GenerateSbomUseCase::<MockLockfileReader, MockProjectConfigReader, MockLicenseRepository, MockProgressReporter, MockVulnerabilityRepository>::build_threshold_config(&request);
+        let config = GenerateSbomUseCase::<
+            MockLockfileReader,
+            MockProjectConfigReader,
+            MockLicenseRepository,
+            MockProgressReporter,
+            MockVulnerabilityRepository,
+        >::build_threshold_config(&request);
 
         assert_eq!(config, ThresholdConfig::Cvss(7.0));
     }
@@ -1310,16 +1327,16 @@ version = "2024.8.30"
             threshold_exceeded: true,
         };
 
-        let response = use_case.build_response(
-            enriched_packages,
-            None,
-            None,
-            Some(check_result),
-        );
+        let response = use_case.build_response(enriched_packages, None, None, Some(check_result));
 
         assert!(response.has_vulnerabilities_above_threshold);
         assert!(response.vulnerability_check_result.is_some());
-        assert!(response.vulnerability_check_result.unwrap().threshold_exceeded);
+        assert!(
+            response
+                .vulnerability_check_result
+                .unwrap()
+                .threshold_exceeded
+        );
     }
 
     #[test]
@@ -1366,15 +1383,15 @@ version = "2024.8.30"
             threshold_exceeded: false,
         };
 
-        let response = use_case.build_response(
-            enriched_packages,
-            None,
-            None,
-            Some(check_result),
-        );
+        let response = use_case.build_response(enriched_packages, None, None, Some(check_result));
 
         assert!(!response.has_vulnerabilities_above_threshold);
         assert!(response.vulnerability_check_result.is_some());
-        assert!(!response.vulnerability_check_result.unwrap().threshold_exceeded);
+        assert!(
+            !response
+                .vulnerability_check_result
+                .unwrap()
+                .threshold_exceeded
+        );
     }
 }
