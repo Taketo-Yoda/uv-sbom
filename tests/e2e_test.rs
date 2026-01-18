@@ -136,6 +136,7 @@ async fn test_e2e_markdown_format() {
         response.enriched_packages,
         &response.metadata,
         None,
+        None,
     );
 
     assert!(markdown_output.is_ok());

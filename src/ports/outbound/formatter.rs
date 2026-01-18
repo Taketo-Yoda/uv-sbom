@@ -1,3 +1,4 @@
+use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, Package, SbomMetadata};
 use crate::shared::Result;
@@ -56,6 +57,7 @@ pub trait SbomFormatter {
     /// * `packages` - List of enriched packages with license information
     /// * `metadata` - SBOM metadata
     /// * `vulnerability_report` - Optional vulnerability report from CVE check
+    /// * `vulnerability_result` - Optional threshold-evaluated vulnerability result
     ///
     /// # Returns
     /// Formatted SBOM content as a string
@@ -72,7 +74,10 @@ pub trait SbomFormatter {
         packages: Vec<EnrichedPackage>,
         metadata: &SbomMetadata,
         vulnerability_report: Option<&[PackageVulnerabilities]>,
+        vulnerability_result: Option<&VulnerabilityCheckResult>,
     ) -> Result<String> {
+        // Default implementation ignores vulnerability_result
+        let _ = vulnerability_result;
         self.format(packages, metadata, vulnerability_report)
     }
 }

@@ -1,5 +1,6 @@
 use crate::ports::outbound::{EnrichedPackage, SbomFormatter};
-use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
+use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
+use crate::sbom_generation::domain::vulnerability::{PackageVulnerabilities, Severity};
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata};
 use crate::shared::Result;
 use std::collections::HashMap;
@@ -9,6 +10,14 @@ const TABLE_HEADER: &str = "| Package | Version | License | Description |\n";
 
 /// Markdown table separator line
 const TABLE_SEPARATOR: &str = "|---------|---------|---------|-------------|\n";
+
+/// Markdown table header for vulnerability information
+const VULN_TABLE_HEADER: &str =
+    "| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID |\n";
+
+/// Markdown table separator line for vulnerability table
+const VULN_TABLE_SEPARATOR: &str =
+    "|---------|-----------------|---------------|------|----------|--------|\n";
 
 /// MarkdownFormatter adapter for generating detailed Markdown SBOM with dependency information
 ///
@@ -86,10 +95,8 @@ impl MarkdownFormatter {
         ));
 
         // Table header
-        output
-            .push_str("| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID |\n");
-        output
-            .push_str("|---------|----------------|---------------|------|----------|--------|\n");
+        output.push_str(VULN_TABLE_HEADER);
+        output.push_str(VULN_TABLE_SEPARATOR);
 
         // Table rows - one row per vulnerability
         for pkg_vuln in vulnerabilities {
@@ -130,6 +137,161 @@ impl MarkdownFormatter {
         output.push_str("---\n\n");
         output
             .push_str("*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*\n");
+        output
+    }
+
+    /// Counts total vulnerabilities across all packages
+    fn count_total_vulnerabilities(packages: &[PackageVulnerabilities]) -> usize {
+        packages.iter().map(|pv| pv.vulnerabilities().len()).sum()
+    }
+
+    /// Sorts package vulnerabilities by severity (Critical > High > Medium > Low > None)
+    fn sort_vulnerabilities_by_severity(
+        vulnerabilities: &[PackageVulnerabilities],
+    ) -> Vec<(String, String, String, String, Severity, String)> {
+        let mut rows: Vec<(String, String, String, String, Severity, String)> = Vec::new();
+
+        for pkg_vuln in vulnerabilities {
+            for vuln in pkg_vuln.vulnerabilities() {
+                let cvss_display = vuln
+                    .cvss_score()
+                    .map_or("N/A".to_string(), |s| format!("{:.1}", s.value()));
+                let fixed_version = vuln.fixed_version().unwrap_or("N/A").to_string();
+                let severity = vuln.severity();
+
+                rows.push((
+                    pkg_vuln.package_name().to_string(),
+                    pkg_vuln.current_version().to_string(),
+                    fixed_version,
+                    cvss_display,
+                    severity,
+                    vuln.id().to_string(),
+                ));
+            }
+        }
+
+        // Sort by severity in descending order (Critical first, then High, etc.)
+        rows.sort_by(|a, b| b.4.cmp(&a.4));
+        rows
+    }
+
+    /// Formats the Warning section for vulnerabilities above threshold
+    fn format_vulnerability_warning_section(vulnerabilities: &[PackageVulnerabilities]) -> String {
+        let mut output = String::new();
+
+        let total_vulns = Self::count_total_vulnerabilities(vulnerabilities);
+        let package_count = vulnerabilities.len();
+
+        output.push_str(&format!(
+            "### ⚠️Warning Found {} {} in {} {}.\n\n",
+            total_vulns,
+            if total_vulns == 1 {
+                "vulnerability"
+            } else {
+                "vulnerabilities"
+            },
+            package_count,
+            if package_count == 1 {
+                "package"
+            } else {
+                "packages"
+            }
+        ));
+
+        // Table header
+        output.push_str(VULN_TABLE_HEADER);
+        output.push_str(VULN_TABLE_SEPARATOR);
+
+        // Sort and format rows
+        let sorted_rows = Self::sort_vulnerabilities_by_severity(vulnerabilities);
+        for (pkg_name, current_version, fixed_version, cvss, severity, cve_id) in sorted_rows {
+            output.push_str(&format!(
+                "| {} | {} | {} | {} | {} {:?} | {} |\n",
+                Self::escape_markdown_table_cell(&pkg_name),
+                Self::escape_markdown_table_cell(&current_version),
+                Self::escape_markdown_table_cell(&fixed_version),
+                cvss,
+                severity.emoji(),
+                severity,
+                Self::escape_markdown_table_cell(&cve_id),
+            ));
+        }
+
+        output
+    }
+
+    /// Formats the Info section for vulnerabilities below threshold
+    fn format_vulnerability_info_section(vulnerabilities: &[PackageVulnerabilities]) -> String {
+        let mut output = String::new();
+
+        let total_vulns = Self::count_total_vulnerabilities(vulnerabilities);
+        let package_count = vulnerabilities.len();
+
+        output.push_str(&format!(
+            "### ℹ️Info Found {} {} in {} {}.\n\n",
+            total_vulns,
+            if total_vulns == 1 {
+                "vulnerability"
+            } else {
+                "vulnerabilities"
+            },
+            package_count,
+            if package_count == 1 {
+                "package"
+            } else {
+                "packages"
+            }
+        ));
+
+        // Table header
+        output.push_str(VULN_TABLE_HEADER);
+        output.push_str(VULN_TABLE_SEPARATOR);
+
+        // Sort and format rows
+        let sorted_rows = Self::sort_vulnerabilities_by_severity(vulnerabilities);
+        for (pkg_name, current_version, fixed_version, cvss, severity, cve_id) in sorted_rows {
+            output.push_str(&format!(
+                "| {} | {} | {} | {} | {} {:?} | {} |\n",
+                Self::escape_markdown_table_cell(&pkg_name),
+                Self::escape_markdown_table_cell(&current_version),
+                Self::escape_markdown_table_cell(&fixed_version),
+                cvss,
+                severity.emoji(),
+                severity,
+                Self::escape_markdown_table_cell(&cve_id),
+            ));
+        }
+
+        output
+    }
+
+    /// Formats vulnerability report with Warning and Info sections based on threshold
+    fn format_vulnerability_with_threshold(result: &VulnerabilityCheckResult) -> String {
+        let mut output = String::new();
+        output.push_str("\n## Vulnerability Report\n\n");
+
+        // Warning section (above threshold)
+        if result.above_threshold.is_empty() {
+            output.push_str("### ⚠️Warning No vulnerabilities found above threshold.\n\n");
+        } else {
+            output.push_str(&Self::format_vulnerability_warning_section(
+                &result.above_threshold,
+            ));
+            output.push('\n');
+        }
+
+        // Info section (below threshold)
+        if !result.below_threshold.is_empty() {
+            output.push_str(&Self::format_vulnerability_info_section(
+                &result.below_threshold,
+            ));
+        }
+
+        // Attribution
+        output.push_str("\n---\n\n");
+        output
+            .push_str("*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*\n");
+
         output
     }
 }
@@ -177,6 +339,7 @@ impl SbomFormatter for MarkdownFormatter {
         packages: Vec<EnrichedPackage>,
         _metadata: &SbomMetadata,
         vulnerability_report: Option<&[PackageVulnerabilities]>,
+        vulnerability_result: Option<&VulnerabilityCheckResult>,
     ) -> Result<String> {
         let mut output = String::new();
         let package_map = Self::create_package_map(&packages);
@@ -234,8 +397,15 @@ impl SbomFormatter for MarkdownFormatter {
             output.push_str("*No transitive dependencies*\n\n");
         }
 
-        // Add vulnerability section if present
-        if let Some(vulnerabilities) = vulnerability_report {
+        // Add vulnerability section
+        // Priority: use VulnerabilityCheckResult if available, otherwise fall back to vulnerability_report
+        if let Some(result) = vulnerability_result {
+            if result.above_threshold.is_empty() && result.below_threshold.is_empty() {
+                output.push_str(&Self::format_no_vulnerabilities());
+            } else {
+                output.push_str(&Self::format_vulnerability_with_threshold(result));
+            }
+        } else if let Some(vulnerabilities) = vulnerability_report {
             if vulnerabilities.is_empty() {
                 output.push_str(&Self::format_no_vulnerabilities());
             } else {
@@ -301,7 +471,7 @@ mod tests {
 
         let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
         let formatter = MarkdownFormatter::new();
-        let result = formatter.format_with_dependencies(&graph, enriched, &metadata, None);
+        let result = formatter.format_with_dependencies(&graph, enriched, &metadata, None, None);
 
         assert!(result.is_ok());
         let markdown = result.unwrap();
@@ -462,8 +632,13 @@ mod tests {
 
         let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
         let formatter = MarkdownFormatter::new();
-        let result =
-            formatter.format_with_dependencies(&graph, enriched, &metadata, Some(&[pkg_vulns]));
+        let result = formatter.format_with_dependencies(
+            &graph,
+            enriched,
+            &metadata,
+            Some(&[pkg_vulns]),
+            None,
+        );
 
         assert!(result.is_ok());
         let markdown = result.unwrap();
@@ -499,5 +674,304 @@ mod tests {
 
         assert!(output.contains("N/A")); // CVSS should be N/A
         assert!(output.contains("GHSA-xxxx-yyyy-zzzz"));
+    }
+
+    #[test]
+    fn test_vulnerability_warning_section() {
+        use crate::sbom_generation::domain::vulnerability::{
+            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+        };
+
+        let vuln1 = Vulnerability::new(
+            "CVE-2024-001".to_string(),
+            Some(CvssScore::new(9.8).unwrap()),
+            Severity::Critical,
+            Some("2.0.0".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let vuln2 = Vulnerability::new(
+            "CVE-2024-002".to_string(),
+            Some(CvssScore::new(7.5).unwrap()),
+            Severity::High,
+            Some("2.1.0".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let pkg_vulns = PackageVulnerabilities::new(
+            "requests".to_string(),
+            "2.25.0".to_string(),
+            vec![vuln1, vuln2],
+        );
+
+        let output = MarkdownFormatter::format_vulnerability_warning_section(&[pkg_vulns]);
+
+        assert!(output.contains("### ⚠️Warning Found 2 vulnerabilities in 1 package."));
+        assert!(output.contains("CVE-2024-001"));
+        assert!(output.contains("CVE-2024-002"));
+        assert!(output.contains("🔴"));
+        assert!(output.contains("🟠"));
+    }
+
+    #[test]
+    fn test_vulnerability_info_section() {
+        use crate::sbom_generation::domain::vulnerability::{
+            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+        };
+
+        let vuln1 = Vulnerability::new(
+            "CVE-2024-003".to_string(),
+            Some(CvssScore::new(3.1).unwrap()),
+            Severity::Low,
+            Some("6.0".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let vuln2 =
+            Vulnerability::new("CVE-2024-004".to_string(), None, Severity::None, None, None)
+                .unwrap();
+
+        let pkg_vulns = PackageVulnerabilities::new(
+            "pyyaml".to_string(),
+            "5.4".to_string(),
+            vec![vuln1, vuln2],
+        );
+
+        let output = MarkdownFormatter::format_vulnerability_info_section(&[pkg_vulns]);
+
+        assert!(output.contains("### ℹ️Info Found 2 vulnerabilities in 1 package."));
+        assert!(output.contains("CVE-2024-003"));
+        assert!(output.contains("CVE-2024-004"));
+        assert!(output.contains("🟢"));
+        assert!(output.contains("⚪"));
+    }
+
+    #[test]
+    fn test_vulnerability_with_threshold_result() {
+        use crate::sbom_generation::domain::vulnerability::{
+            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+        };
+
+        // Above threshold vulnerabilities
+        let vuln_critical = Vulnerability::new(
+            "CVE-2024-001".to_string(),
+            Some(CvssScore::new(9.8).unwrap()),
+            Severity::Critical,
+            Some("2.0.0".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let vuln_high = Vulnerability::new(
+            "CVE-2024-002".to_string(),
+            Some(CvssScore::new(7.5).unwrap()),
+            Severity::High,
+            Some("2.1.0".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let above_pkg = PackageVulnerabilities::new(
+            "requests".to_string(),
+            "2.25.0".to_string(),
+            vec![vuln_critical, vuln_high],
+        );
+
+        // Below threshold vulnerabilities
+        let vuln_low = Vulnerability::new(
+            "CVE-2024-003".to_string(),
+            Some(CvssScore::new(3.1).unwrap()),
+            Severity::Low,
+            Some("6.0".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let below_pkg =
+            PackageVulnerabilities::new("pyyaml".to_string(), "5.4".to_string(), vec![vuln_low]);
+
+        let result = VulnerabilityCheckResult {
+            above_threshold: vec![above_pkg],
+            below_threshold: vec![below_pkg],
+            threshold_exceeded: true,
+        };
+
+        let output = MarkdownFormatter::format_vulnerability_with_threshold(&result);
+
+        // Check Warning section
+        assert!(output.contains("## Vulnerability Report"));
+        assert!(output.contains("### ⚠️Warning Found 2 vulnerabilities in 1 package."));
+        assert!(output.contains("CVE-2024-001"));
+        assert!(output.contains("CVE-2024-002"));
+
+        // Check Info section
+        assert!(output.contains("### ℹ️Info Found 1 vulnerability in 1 package."));
+        assert!(output.contains("CVE-2024-003"));
+
+        // Check attribution
+        assert!(output.contains("OSV"));
+        assert!(output.contains("CC-BY 4.0"));
+    }
+
+    #[test]
+    fn test_vulnerability_with_threshold_empty_warning() {
+        let result = VulnerabilityCheckResult {
+            above_threshold: vec![],
+            below_threshold: vec![],
+            threshold_exceeded: false,
+        };
+
+        let output = MarkdownFormatter::format_vulnerability_with_threshold(&result);
+
+        assert!(output.contains("### ⚠️Warning No vulnerabilities found above threshold."));
+    }
+
+    #[test]
+    fn test_vulnerability_sorting_by_severity() {
+        use crate::sbom_generation::domain::vulnerability::{
+            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+        };
+
+        // Create vulnerabilities in random order
+        let vuln_low = Vulnerability::new(
+            "CVE-LOW".to_string(),
+            Some(CvssScore::new(2.0).unwrap()),
+            Severity::Low,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let vuln_critical = Vulnerability::new(
+            "CVE-CRITICAL".to_string(),
+            Some(CvssScore::new(9.8).unwrap()),
+            Severity::Critical,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let vuln_medium = Vulnerability::new(
+            "CVE-MEDIUM".to_string(),
+            Some(CvssScore::new(5.0).unwrap()),
+            Severity::Medium,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let vuln_high = Vulnerability::new(
+            "CVE-HIGH".to_string(),
+            Some(CvssScore::new(8.0).unwrap()),
+            Severity::High,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let pkg_vulns = PackageVulnerabilities::new(
+            "test-pkg".to_string(),
+            "1.0.0".to_string(),
+            vec![vuln_low, vuln_critical, vuln_medium, vuln_high],
+        );
+
+        let sorted = MarkdownFormatter::sort_vulnerabilities_by_severity(&[pkg_vulns]);
+
+        // Verify order: Critical, High, Medium, Low
+        assert_eq!(sorted.len(), 4);
+        assert_eq!(sorted[0].5, "CVE-CRITICAL");
+        assert_eq!(sorted[1].5, "CVE-HIGH");
+        assert_eq!(sorted[2].5, "CVE-MEDIUM");
+        assert_eq!(sorted[3].5, "CVE-LOW");
+    }
+
+    #[test]
+    fn test_format_with_dependencies_uses_vulnerability_result() {
+        use crate::sbom_generation::domain::vulnerability::{
+            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+        };
+
+        let pkg = Package::new("requests".to_string(), "2.31.0".to_string()).unwrap();
+        let enriched = vec![EnrichedPackage::new(pkg, None, None)];
+
+        let direct_deps = vec![PackageName::new("requests".to_string()).unwrap()];
+        let graph = DependencyGraph::new(direct_deps, HashMap::new());
+
+        let vuln = Vulnerability::new(
+            "CVE-2024-1234".to_string(),
+            Some(CvssScore::new(9.0).unwrap()),
+            Severity::Critical,
+            Some("3.0.0".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let above_pkg =
+            PackageVulnerabilities::new("requests".to_string(), "2.31.0".to_string(), vec![vuln]);
+
+        let result = VulnerabilityCheckResult {
+            above_threshold: vec![above_pkg],
+            below_threshold: vec![],
+            threshold_exceeded: true,
+        };
+
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let formatter = MarkdownFormatter::new();
+        let output = formatter
+            .format_with_dependencies(&graph, enriched, &metadata, None, Some(&result))
+            .unwrap();
+
+        // Should use VulnerabilityCheckResult format (Warning section)
+        assert!(output.contains("### ⚠️Warning Found 1 vulnerability in 1 package."));
+        assert!(output.contains("CVE-2024-1234"));
+    }
+
+    #[test]
+    fn test_count_total_vulnerabilities() {
+        use crate::sbom_generation::domain::vulnerability::{
+            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+        };
+
+        let vuln1 = Vulnerability::new(
+            "CVE-1".to_string(),
+            Some(CvssScore::new(5.0).unwrap()),
+            Severity::Medium,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let vuln2 = Vulnerability::new(
+            "CVE-2".to_string(),
+            Some(CvssScore::new(6.0).unwrap()),
+            Severity::Medium,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let vuln3 = Vulnerability::new(
+            "CVE-3".to_string(),
+            Some(CvssScore::new(7.0).unwrap()),
+            Severity::High,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let pkg1 = PackageVulnerabilities::new(
+            "pkg1".to_string(),
+            "1.0.0".to_string(),
+            vec![vuln1, vuln2],
+        );
+
+        let pkg2 =
+            PackageVulnerabilities::new("pkg2".to_string(), "2.0.0".to_string(), vec![vuln3]);
+
+        let total = MarkdownFormatter::count_total_vulnerabilities(&[pkg1, pkg2]);
+        assert_eq!(total, 3);
     }
 }
