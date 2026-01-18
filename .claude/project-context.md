@@ -11,6 +11,7 @@ This file provides complete project context for Claude Code and other developers
 - Generate SBOMs for security audits and compliance
 - Automatically collect and report license information
 - Analyze direct and transitive dependencies
+- Check for known vulnerabilities with configurable thresholds for CI integration
 
 ### Version Information
 - Current Version: 0.2.0
@@ -134,6 +135,30 @@ The project consists of four main layers:
 
 **Detailed Directory Structure**: See [ARCHITECTURE-JP.md](../ARCHITECTURE-JP.md)
 
+### Key Features
+
+#### Vulnerability Threshold Checking
+The tool supports configurable vulnerability thresholds for CI/CD integration:
+
+- **Severity Threshold** (`--severity-threshold`): Filter vulnerabilities by severity level
+  - Values: `low`, `medium`, `high`, `critical`
+  - Example: `--severity-threshold high` only triggers exit code 1 for High/Critical vulnerabilities
+
+- **CVSS Threshold** (`--cvss-threshold`): Filter vulnerabilities by CVSS score
+  - Values: `0.0` to `10.0`
+  - Example: `--cvss-threshold 7.0` only triggers exit code 1 for CVSS >= 7.0
+
+**Exit Code Behavior with Thresholds:**
+| Scenario | Exit Code |
+|----------|-----------|
+| No vulnerabilities | 0 |
+| Vulnerabilities below threshold | 0 |
+| Vulnerabilities above threshold | 1 |
+
+**Architecture Components:**
+- `VulnerabilityChecker` (Domain Service): Pure business logic for threshold evaluation
+- `CheckVulnerabilitiesUseCase` (Application Layer): Orchestrates the vulnerability check workflow
+
 ## Resources
 
 ### Documentation
@@ -148,4 +173,4 @@ The project consists of four main layers:
 
 ---
 
-Last Updated: 2026-01-15
+Last Updated: 2026-01-19
