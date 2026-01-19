@@ -233,6 +233,61 @@ uv-sbom --format markdown --check-cve --output SBOM.md
 uv-sbom --format markdown --check-cve -e "pytest" -e "*-dev"
 ```
 
+### Vulnerability Threshold Options
+
+You can control which vulnerabilities trigger a non-zero exit code using threshold options:
+
+```bash
+# Check for any vulnerabilities (exits with 1 if found)
+uv-sbom --format markdown --check-cve
+
+# Check for High or Critical severity only
+uv-sbom --format markdown --check-cve --severity-threshold high
+
+# Check for Critical severity only
+uv-sbom --format markdown --check-cve --severity-threshold critical
+
+# Check for CVSS >= 7.0 only
+uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+
+# Check for CVSS >= 9.0 (Critical) only
+uv-sbom --format markdown --check-cve --cvss-threshold 9.0
+```
+
+**Threshold Options:**
+- `--severity-threshold <LEVEL>`: Filter by severity level (low, medium, high, critical)
+- `--cvss-threshold <SCORE>`: Filter by CVSS score (0.0-10.0)
+
+**Notes:**
+- Only one threshold option can be used at a time
+- Requires `--check-cve` to be enabled
+- Vulnerabilities below the threshold are still shown in the report but don't trigger exit code 1
+- When using `--cvss-threshold`, vulnerabilities without CVSS scores (N/A) are excluded from threshold evaluation
+
+### CI Integration
+
+Use vulnerability thresholds for CI/CD pipeline integration:
+
+```yaml
+# GitHub Actions example
+- name: Generate SBOM
+  run: uv-sbom --format markdown --output sbom.md
+
+- name: Security Check (High and Critical only)
+  run: uv-sbom --format markdown --check-cve --severity-threshold high
+
+- name: Security Check (CVSS >= 7.0)
+  run: uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+```
+
+```yaml
+# GitLab CI example
+security_scan:
+  script:
+    - uv-sbom --format markdown --check-cve --severity-threshold high
+  allow_failure: false
+```
+
 **Important Notes:**
 - Vulnerability checking is **only available for Markdown format**
 - Requires internet connection to query OSV API
@@ -353,14 +408,18 @@ For more detailed security information, including threat model and attack vector
 
 ```
 Options:
-  -f, --format <FORMAT>    Output format: json or markdown [default: json]
-  -p, --path <PATH>        Path to the project directory [default: current directory]
-  -o, --output <OUTPUT>    Output file path (if not specified, outputs to stdout)
-  -e, --exclude <PATTERN>  Exclude packages matching patterns (supports wildcards: *)
-      --dry-run            Validate configuration without network communication or output generation
-      --check-cve          Check for known vulnerabilities using OSV API (Markdown format only)
-  -h, --help               Print help
-  -V, --version            Print version
+  -f, --format <FORMAT>              Output format: json or markdown [default: json]
+  -p, --path <PATH>                  Path to the project directory [default: current directory]
+  -o, --output <OUTPUT>              Output file path (if not specified, outputs to stdout)
+  -e, --exclude <PATTERN>            Exclude packages matching patterns (supports wildcards: *)
+      --dry-run                      Validate configuration without network communication or output generation
+      --check-cve                    Check for known vulnerabilities using OSV API (Markdown format only)
+      --severity-threshold <LEVEL>   Severity threshold for vulnerability check (low/medium/high/critical)
+                                     Requires --check-cve to be enabled
+      --cvss-threshold <SCORE>       CVSS threshold for vulnerability check (0.0-10.0)
+                                     Requires --check-cve to be enabled
+  -h, --help                         Print help
+  -V, --version                      Print version
 ```
 
 ## Exit Codes
@@ -369,9 +428,30 @@ uv-sbom returns the following exit codes:
 
 | Exit Code | Description | Examples |
 |-----------|-------------|----------|
-| 0 | Success | SBOM generated successfully, `--help` or `--version` displayed |
-| 1 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error |
+| 0 | Success | SBOM generated successfully, no vulnerabilities above threshold, `--help` or `--version` displayed |
+| 1 | Vulnerabilities detected (with `--check-cve`) | Vulnerabilities above threshold detected |
 | 2 | Invalid command-line arguments | Unknown option, invalid argument type |
+| 3 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error |
+
+### Exit Codes with Vulnerability Checking
+
+When using `--check-cve`, the exit code behavior changes based on threshold settings:
+
+| Scenario | Exit Code |
+|----------|-----------|
+| No vulnerabilities found | 0 |
+| Vulnerabilities found (no threshold specified) | 1 |
+| Vulnerabilities found, all below threshold | 0 |
+| Vulnerabilities found, some above threshold | 1 |
+
+**Examples:**
+```bash
+# Returns 0 if no High/Critical vulnerabilities, even if Low/Medium exist
+uv-sbom --format markdown --check-cve --severity-threshold high
+
+# Returns 0 if no vulnerabilities have CVSS >= 7.0
+uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+```
 
 ### Common Error Scenarios
 

@@ -232,6 +232,61 @@ uv-sbom --format markdown --check-cve --output SBOM.md
 uv-sbom --format markdown --check-cve -e "pytest" -e "*-dev"
 ```
 
+### 脆弱性しきい値オプション
+
+しきい値オプションを使用して、どの脆弱性が終了コード1をトリガーするかを制御できます：
+
+```bash
+# すべての脆弱性をチェック（見つかった場合は終了コード1）
+uv-sbom --format markdown --check-cve
+
+# High または Critical の深刻度のみをチェック
+uv-sbom --format markdown --check-cve --severity-threshold high
+
+# Critical の深刻度のみをチェック
+uv-sbom --format markdown --check-cve --severity-threshold critical
+
+# CVSS >= 7.0 のみをチェック
+uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+
+# CVSS >= 9.0（Critical）のみをチェック
+uv-sbom --format markdown --check-cve --cvss-threshold 9.0
+```
+
+**しきい値オプション:**
+- `--severity-threshold <LEVEL>`: 深刻度レベルでフィルタ（low, medium, high, critical）
+- `--cvss-threshold <SCORE>`: CVSSスコアでフィルタ（0.0-10.0）
+
+**注意事項:**
+- しきい値オプションは一度に1つのみ使用可能
+- `--check-cve`の有効化が必要
+- しきい値以下の脆弱性はレポートに表示されますが、終了コード1はトリガーしません
+- `--cvss-threshold`使用時、CVSSスコアのない脆弱性（N/A）はしきい値評価から除外されます
+
+### CI統合
+
+CI/CDパイプライン統合には脆弱性しきい値を使用します：
+
+```yaml
+# GitHub Actionsの例
+- name: Generate SBOM
+  run: uv-sbom --format markdown --output sbom.md
+
+- name: Security Check (High and Critical only)
+  run: uv-sbom --format markdown --check-cve --severity-threshold high
+
+- name: Security Check (CVSS >= 7.0)
+  run: uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+```
+
+```yaml
+# GitLab CIの例
+security_scan:
+  script:
+    - uv-sbom --format markdown --check-cve --severity-threshold high
+  allow_failure: false
+```
+
 **重要な注意事項:**
 - 脆弱性チェックは**Markdownフォーマットでのみ利用可能**です
 - OSV APIへのクエリにはインターネット接続が必要です
@@ -352,14 +407,18 @@ uv-sbom -e "$(cat /etc/passwd)" # シェルコマンド置換がブロックさ�
 
 ```
 Options:
-  -f, --format <FORMAT>    出力形式: json または markdown [デフォルト: json]
-  -p, --path <PATH>        プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
-  -o, --output <OUTPUT>    出力ファイルパス（指定しない場合は標準出力）
-  -e, --exclude <PATTERN>  パッケージ除外パターン（ワイルドカード対応: *）
-      --dry-run            ネットワーク通信や出力生成を行わずに設定を検証
-      --check-cve          OSV APIを使用して既知の脆弱性をチェック（Markdownフォーマットのみ）
-  -h, --help               ヘルプを表示
-  -V, --version            バージョンを表示
+  -f, --format <FORMAT>              出力形式: json または markdown [デフォルト: json]
+  -p, --path <PATH>                  プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
+  -o, --output <OUTPUT>              出力ファイルパス（指定しない場合は標準出力）
+  -e, --exclude <PATTERN>            パッケージ除外パターン（ワイルドカード対応: *）
+      --dry-run                      ネットワーク通信や出力生成を行わずに設定を検証
+      --check-cve                    OSV APIを使用して既知の脆弱性をチェック（Markdownフォーマットのみ）
+      --severity-threshold <LEVEL>   脆弱性チェックの深刻度しきい値（low/medium/high/critical）
+                                     --check-cveの有効化が必要
+      --cvss-threshold <SCORE>       脆弱性チェックのCVSSしきい値（0.0-10.0）
+                                     --check-cveの有効化が必要
+  -h, --help                         ヘルプを表示
+  -V, --version                      バージョンを表示
 ```
 
 ## 終了コード
@@ -368,9 +427,30 @@ uv-sbomは以下の終了コードを返します：
 
 | 終了コード | 説明 | 例 |
 |-----------|-------------|----------|
-| 0 | 成功 | SBOMの生成成功、`--help`や`--version`の表示 |
-| 1 | アプリケーションエラー | uv.lockファイルの欠損、無効なプロジェクトパス、無効な除外パターン、ネットワークエラー、ファイル書き込みエラー |
+| 0 | 成功 | SBOMの生成成功、しきい値を超える脆弱性なし、`--help`や`--version`の表示 |
+| 1 | 脆弱性検出（`--check-cve`使用時） | しきい値を超える脆弱性検出 |
 | 2 | 無効なコマンドライン引数 | 不明なオプション、無効な引数の型 |
+| 3 | アプリケーションエラー | uv.lockファイルの欠損、無効なプロジェクトパス、無効な除外パターン、ネットワークエラー、ファイル書き込みエラー |
+
+### 脆弱性チェック時の終了コード
+
+`--check-cve`使用時、終了コードの動作はしきい値設定によって変わります：
+
+| シナリオ | 終了コード |
+|----------|-----------|
+| 脆弱性が見つからない | 0 |
+| 脆弱性が見つかった（しきい値指定なし） | 1 |
+| 脆弱性が見つかった、すべてがしきい値以下 | 0 |
+| 脆弱性が見つかった、一部がしきい値を超過 | 1 |
+
+**例：**
+```bash
+# Low/Mediumの脆弱性があってもHigh/Criticalがなければ終了コード0を返す
+uv-sbom --format markdown --check-cve --severity-threshold high
+
+# CVSS >= 7.0の脆弱性がなければ終了コード0を返す
+uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+```
 
 ### よくあるエラーシナリオ
 

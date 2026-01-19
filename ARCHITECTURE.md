@@ -82,6 +82,7 @@ src/
 ### Domain Services
 - **DependencyAnalyzer**: Analyzes and builds dependency graph with cycle detection
 - **SbomGenerator**: Generates SBOM metadata (timestamp, serial number, tool info)
+- **VulnerabilityChecker**: Evaluates vulnerabilities against configurable thresholds (severity level or CVSS score)
 
 ### Policies
 - **LicensePriority**: Business rules for license selection (license > license_expression > classifiers)
@@ -95,7 +96,9 @@ src/
 ## Application Layer
 
 ### Use Cases
-**GenerateSbomUseCase**: Orchestrates the SBOM generation workflow
+
+#### GenerateSbomUseCase
+Orchestrates the SBOM generation workflow
 
 ```rust
 pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR> {
@@ -119,6 +122,36 @@ pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR> {
 - Lockfile/config read failures → Error
 - License fetch failures → Warning (package included without license)
 - Invalid TOML → Error
+
+#### CheckVulnerabilitiesUseCase
+Orchestrates vulnerability checking with threshold support
+
+```rust
+pub struct CheckVulnerabilitiesUseCase<R: VulnerabilityRepository> {
+    vulnerability_repository: R,
+}
+```
+
+**Workflow:**
+1. Filter out excluded packages
+2. Fetch vulnerabilities from repository (OSV API)
+3. Apply threshold evaluation using VulnerabilityChecker
+4. Return structured response with above/below threshold separation
+
+**Threshold Evaluation Flow:**
+```
+Packages → Fetch Vulnerabilities → Apply Threshold → Partition Results
+                                        ↓
+                              ┌─────────┴─────────┐
+                              ↓                   ↓
+                       Above Threshold      Below Threshold
+                       (triggers exit 1)    (informational)
+```
+
+**Threshold Types:**
+- `ThresholdConfig::None` - All vulnerabilities trigger exit code 1
+- `ThresholdConfig::Severity(level)` - Filter by severity (Low/Medium/High/Critical)
+- `ThresholdConfig::Cvss(score)` - Filter by CVSS score (0.0-10.0)
 
 ## Ports (Interfaces)
 

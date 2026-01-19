@@ -82,6 +82,7 @@ src/
 ### ドメインサービス
 - **DependencyAnalyzer**: 循環検出付き依存グラフの分析と構築
 - **SbomGenerator**: SBOMメタデータ生成（タイムスタンプ、シリアル番号、ツール情報）
+- **VulnerabilityChecker**: 設定可能なしきい値（深刻度レベルまたはCVSSスコア）に対する脆弱性評価
 
 ### ポリシー
 - **LicensePriority**: ライセンス選択のビジネスルール（license > license_expression > classifiers）
@@ -95,7 +96,9 @@ src/
 ## アプリケーション層
 
 ### ユースケース
-**GenerateSbomUseCase**: SBOM生成ワークフローのオーケストレーション
+
+#### GenerateSbomUseCase
+SBOM生成ワークフローのオーケストレーション
 
 ```rust
 pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR> {
@@ -119,6 +122,36 @@ pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR> {
 - ロックファイル/設定読み取り失敗 → エラー
 - ライセンス取得失敗 → 警告（ライセンス情報なしでパッケージを含める）
 - 不正なTOML → エラー
+
+#### CheckVulnerabilitiesUseCase
+しきい値サポート付き脆弱性チェックのオーケストレーション
+
+```rust
+pub struct CheckVulnerabilitiesUseCase<R: VulnerabilityRepository> {
+    vulnerability_repository: R,
+}
+```
+
+**ワークフロー:**
+1. 除外されたパッケージをフィルタリング
+2. リポジトリ（OSV API）から脆弱性を取得
+3. VulnerabilityCheckerを使用してしきい値評価を適用
+4. しきい値以上/以下で分類された構造化レスポンスを返す
+
+**しきい値評価フロー:**
+```
+パッケージ → 脆弱性取得 → しきい値適用 → 結果の分類
+                                ↓
+                    ┌───────────┴───────────┐
+                    ↓                       ↓
+              しきい値以上             しきい値以下
+              (終了コード1)            (情報として表示)
+```
+
+**しきい値タイプ:**
+- `ThresholdConfig::None` - すべての脆弱性が終了コード1をトリガー
+- `ThresholdConfig::Severity(level)` - 深刻度でフィルタ（Low/Medium/High/Critical）
+- `ThresholdConfig::Cvss(score)` - CVSSスコアでフィルタ（0.0-10.0）
 
 ## ポート（インターフェース）
 
