@@ -429,8 +429,9 @@ uv-sbom returns the following exit codes:
 | Exit Code | Description | Examples |
 |-----------|-------------|----------|
 | 0 | Success | SBOM generated successfully, no vulnerabilities above threshold, `--help` or `--version` displayed |
-| 1 | Vulnerabilities detected (with `--check-cve`) or Application error | Vulnerabilities above threshold detected, missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error |
+| 1 | Vulnerabilities detected (with `--check-cve`) | Vulnerabilities above threshold detected |
 | 2 | Invalid command-line arguments | Unknown option, invalid argument type |
+| 3 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error |
 
 ### Exit Codes with Vulnerability Checking
 
