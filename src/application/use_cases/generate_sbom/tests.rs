@@ -132,15 +132,10 @@ version = "3.4.0"
             None,
         );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,  // no dependency info
-        vec![], // no exclusion patterns
-        false,  // not dry-run
-        false,  // no CVE check
-        None,   // no severity threshold
-        None,   // no cvss threshold
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .build()
+        .unwrap();
 
     let response = use_case.execute(request).await.unwrap();
 
@@ -184,15 +179,11 @@ version = "1.26.0"
             None,
         );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        true,   // with dependency info
-        vec![], // no exclusion patterns
-        false,  // not dry-run
-        false,  // no CVE check
-        None,   // no severity threshold
-        None,   // no cvss threshold
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .include_dependency_info(true)
+        .build()
+        .unwrap();
 
     let response = use_case.execute(request).await.unwrap();
 
@@ -240,15 +231,11 @@ version = "3.4.0"
         Some(MockVulnerabilityRepository),
     );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,  // no dependency info
-        vec![], // no exclusion patterns
-        false,  // not dry-run
-        true,   // CVE check enabled
-        None,   // no severity threshold
-        None,   // no cvss threshold
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .check_cve(true)
+        .build()
+        .unwrap();
 
     let response = use_case.execute(request).await.unwrap();
 
@@ -277,15 +264,11 @@ version = "2024.8.30"
             None, // No vulnerability repository
         );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,  // no dependency info
-        vec![], // no exclusion patterns
-        false,  // not dry-run
-        true,   // CVE check enabled
-        None,   // no severity threshold
-        None,   // no cvss threshold
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .check_cve(true)
+        .build()
+        .unwrap();
 
     let response = use_case.execute(request).await.unwrap();
 
@@ -313,15 +296,10 @@ version = "2024.8.30"
         Some(MockVulnerabilityRepository),
     );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,  // no dependency info
-        vec![], // no exclusion patterns
-        false,  // not dry-run
-        false,  // CVE check disabled
-        None,   // no severity threshold
-        None,   // no cvss threshold
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .build()
+        .unwrap();
 
     let response = use_case.execute(request).await.unwrap();
 
@@ -349,15 +327,12 @@ version = "2024.8.30"
         Some(MockVulnerabilityRepository),
     );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,  // no dependency info
-        vec![], // no exclusion patterns
-        true,   // dry-run mode
-        true,   // CVE check enabled (but should be skipped due to dry-run)
-        None,   // no severity threshold
-        None,   // no cvss threshold
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .dry_run(true)
+        .check_cve(true)
+        .build()
+        .unwrap();
 
     let response = use_case.execute(request).await.unwrap();
 
@@ -387,15 +362,10 @@ fn test_apply_exclusion_filters_empty_patterns() {
         Package::new("pkg2".to_string(), "2.0.0".to_string()).unwrap(),
     ];
     let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,
-        vec![], // empty patterns
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .build()
+        .unwrap();
 
     let (filtered_pkgs, _filtered_deps) = use_case
         .apply_exclusion_filters(packages.clone(), dependency_map, &request)
@@ -425,15 +395,11 @@ fn test_apply_exclusion_filters_with_patterns() {
         Package::new("certifi".to_string(), "3.0.0".to_string()).unwrap(),
     ];
     let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,
-        vec!["requests".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .add_exclude_pattern("requests")
+        .build()
+        .unwrap();
 
     let (filtered_pkgs, _filtered_deps) = use_case
         .apply_exclusion_filters(packages, dependency_map, &request)
@@ -460,15 +426,11 @@ fn test_apply_exclusion_filters_all_excluded_error() {
 
     let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
     let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,
-        vec!["pkg1".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .add_exclude_pattern("pkg1")
+        .build()
+        .unwrap();
 
     let result = use_case.apply_exclusion_filters(packages, dependency_map, &request);
 
@@ -492,15 +454,10 @@ fn test_analyze_dependencies_disabled() {
             None,
         );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false, // dependency info disabled
-        vec![],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .build()
+        .unwrap();
     let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
 
     let result = use_case
@@ -525,15 +482,11 @@ fn test_analyze_dependencies_enabled() {
             None,
         );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        true, // dependency info enabled
-        vec![],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .include_dependency_info(true)
+        .build()
+        .unwrap();
     let mut dependency_map: HashMap<String, Vec<String>> = HashMap::new();
     dependency_map.insert("myproject".to_string(), vec!["requests".to_string()]);
     dependency_map.insert("requests".to_string(), vec![]);
@@ -621,15 +574,10 @@ async fn test_check_vulnerabilities_if_requested_disabled() {
         Some(MockVulnerabilityRepository),
     );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,
-        vec![],
-        false,
-        false, // CVE check disabled
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .build()
+        .unwrap();
     let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
 
     let result = use_case
@@ -654,15 +602,11 @@ async fn test_check_vulnerabilities_if_requested_enabled() {
         Some(MockVulnerabilityRepository),
     );
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,
-        vec![],
-        false,
-        true, // CVE check enabled
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .check_cve(true)
+        .build()
+        .unwrap();
     let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
 
     let result = use_case
@@ -677,15 +621,11 @@ async fn test_check_vulnerabilities_if_requested_enabled() {
 
 #[test]
 fn test_build_threshold_config_none() {
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,
-        vec![],
-        false,
-        true,
-        None, // no severity threshold
-        None, // no cvss threshold
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .check_cve(true)
+        .build()
+        .unwrap();
 
     let config = GenerateSbomUseCase::<
         MockLockfileReader,
@@ -702,15 +642,12 @@ fn test_build_threshold_config_none() {
 fn test_build_threshold_config_severity() {
     use crate::sbom_generation::domain::vulnerability::Severity;
 
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,
-        vec![],
-        false,
-        true,
-        Some(Severity::High), // severity threshold
-        None,                 // no cvss threshold
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .check_cve(true)
+        .severity_threshold(Severity::High)
+        .build()
+        .unwrap();
 
     let config = GenerateSbomUseCase::<
         MockLockfileReader,
@@ -725,15 +662,12 @@ fn test_build_threshold_config_severity() {
 
 #[test]
 fn test_build_threshold_config_cvss() {
-    let request = SbomRequest::new(
-        std::path::PathBuf::from("/test/project"),
-        false,
-        vec![],
-        false,
-        true,
-        None,      // no severity threshold
-        Some(7.0), // cvss threshold
-    );
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .check_cve(true)
+        .cvss_threshold(7.0)
+        .build()
+        .unwrap();
 
     let config = GenerateSbomUseCase::<
         MockLockfileReader,
