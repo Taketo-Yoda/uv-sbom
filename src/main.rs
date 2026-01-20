@@ -108,17 +108,17 @@ async fn run(args: Args) -> Result<bool> {
         vulnerability_repository,
     );
 
-    // Create request
+    // Create request using builder pattern
     let include_dependency_info = matches!(args.format, OutputFormat::Markdown);
-    let request = SbomRequest::new(
-        project_path,
-        include_dependency_info,
-        args.exclude,
-        args.dry_run,
-        args.check_cve,
-        args.severity_threshold,
-        args.cvss_threshold,
-    );
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .include_dependency_info(include_dependency_info)
+        .exclude_patterns(args.exclude)
+        .dry_run(args.dry_run)
+        .check_cve(args.check_cve)
+        .severity_threshold_opt(args.severity_threshold)
+        .cvss_threshold_opt(args.cvss_threshold)
+        .build()?;
 
     // Execute use case
     let response = use_case.execute(request).await?;

@@ -72,6 +72,10 @@ pub enum SbomError {
         path: PathBuf,
         reason: String,
     },
+    /// Validation error for builder patterns
+    Validation {
+        message: String,
+    },
 }
 
 impl fmt::Display for SbomError {
@@ -125,6 +129,9 @@ impl fmt::Display for SbomError {
                     path.display(),
                     reason
                 )
+            }
+            SbomError::Validation { message } => {
+                write!(f, "Validation error: {}", message)
             }
         }
     }

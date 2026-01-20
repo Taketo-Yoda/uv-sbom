@@ -1,7 +1,6 @@
 /// Integration tests for the application layer
 mod test_utilities;
 
-use std::path::PathBuf;
 use test_utilities::mocks::*;
 use uv_sbom::prelude::*;
 
@@ -41,7 +40,7 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
+    let request = SbomRequest::builder().project_path(".").build().unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -93,7 +92,11 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), true, vec![], false, false, None, None);
+    let request = SbomRequest::builder()
+        .project_path(".")
+        .include_dependency_info(true)
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -122,7 +125,7 @@ async fn test_generate_sbom_lockfile_read_failure() {
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
+    let request = SbomRequest::builder().project_path(".").build().unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_err());
@@ -154,7 +157,11 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), true, vec![], false, false, None, None);
+    let request = SbomRequest::builder()
+        .project_path(".")
+        .include_dependency_info(true)
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_err());
@@ -186,7 +193,7 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
+    let request = SbomRequest::builder().project_path(".").build().unwrap();
     let result = use_case.execute(request).await;
 
     // License repository failures are treated as warnings, not errors
@@ -220,7 +227,7 @@ async fn test_generate_sbom_invalid_toml() {
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
+    let request = SbomRequest::builder().project_path(".").build().unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_err());
@@ -256,7 +263,7 @@ source = { registry = "https://pypi.org/simple" }
         None,
     );
 
-    let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
+    let request = SbomRequest::builder().project_path(".").build().unwrap();
     let _result = use_case.execute(request).await;
 
     // Verify that progress was reported
@@ -305,15 +312,11 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude urllib3
-    let request = SbomRequest::new(
-        PathBuf::from("."),
-        false,
-        vec!["urllib3".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path(".")
+        .add_exclude_pattern("urllib3")
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -380,15 +383,11 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude urllib3 and certifi
-    let request = SbomRequest::new(
-        PathBuf::from("."),
-        false,
-        vec!["urllib3".to_string(), "certifi".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path(".")
+        .exclude_patterns(vec!["urllib3".to_string(), "certifi".to_string()])
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -440,15 +439,11 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude all pytest-related packages
-    let request = SbomRequest::new(
-        PathBuf::from("."),
-        false,
-        vec!["pytest*".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path(".")
+        .add_exclude_pattern("pytest*")
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -485,15 +480,11 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude all packages with a pattern that matches everything
-    let request = SbomRequest::new(
-        PathBuf::from("."),
-        false,
-        vec!["*requests*".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path(".")
+        .add_exclude_pattern("*requests*")
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     // Should fail because all packages would be excluded
@@ -550,15 +541,12 @@ source = { registry = "https://pypi.org/simple" }
     );
 
     // Exclude urllib3 and request dependency graph
-    let request = SbomRequest::new(
-        PathBuf::from("."),
-        true,
-        vec!["urllib3".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path(".")
+        .include_dependency_info(true)
+        .add_exclude_pattern("urllib3")
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());

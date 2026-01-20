@@ -37,7 +37,9 @@
 //! );
 //!
 //! // Execute
-//! let request = SbomRequest::new(PathBuf::from("."), false, vec![], false, false, None, None);
+//! let request = SbomRequest::builder()
+//!     .project_path(".")
+//!     .build()?;
 //! let response = use_case.execute(request).await?;
 //!
 //! // Format output
@@ -62,7 +64,9 @@ pub mod prelude {
     };
     pub use crate::adapters::outbound::formatters::{CycloneDxFormatter, MarkdownFormatter};
     pub use crate::adapters::outbound::network::PyPiLicenseRepository;
-    pub use crate::application::dto::{OutputFormat, SbomRequest, SbomResponse};
+    pub use crate::application::dto::{
+        OutputFormat, SbomRequest, SbomRequestBuilder, SbomResponse,
+    };
     pub use crate::application::factories::{FormatterFactory, PresenterFactory, PresenterType};
     pub use crate::application::use_cases::GenerateSbomUseCase;
     pub use crate::ports::outbound::{

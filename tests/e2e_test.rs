@@ -84,7 +84,10 @@ async fn test_e2e_json_format() {
         None,
     );
 
-    let request = SbomRequest::new(project_path, false, vec![], false, false, None, None);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -121,7 +124,11 @@ async fn test_e2e_markdown_format() {
         None,
     );
 
-    let request = SbomRequest::new(project_path, true, vec![], false, false, None, None);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .include_dependency_info(true)
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -167,7 +174,10 @@ async fn test_e2e_nonexistent_project() {
         None,
     );
 
-    let request = SbomRequest::new(project_path, false, vec![], false, false, None, None);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_err());
@@ -190,7 +200,11 @@ async fn test_e2e_package_count() {
         None,
     );
 
-    let request = SbomRequest::new(project_path, true, vec![], false, false, None, None);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .include_dependency_info(true)
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -225,15 +239,11 @@ async fn test_e2e_exclude_single_package() {
     );
 
     // Exclude urllib3
-    let request = SbomRequest::new(
-        project_path,
-        false,
-        vec!["urllib3".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .add_exclude_pattern("urllib3")
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -267,15 +277,11 @@ async fn test_e2e_exclude_multiple_packages() {
     );
 
     // Exclude urllib3 and certifi
-    let request = SbomRequest::new(
-        project_path,
-        false,
-        vec!["urllib3".to_string(), "certifi".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .exclude_patterns(vec!["urllib3".to_string(), "certifi".to_string()])
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -313,15 +319,11 @@ async fn test_e2e_exclude_with_wildcard() {
     );
 
     // Exclude packages starting with "char"
-    let request = SbomRequest::new(
-        project_path,
-        false,
-        vec!["char*".to_string()],
-        false,
-        false,
-        None,
-        None,
-    );
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .add_exclude_pattern("char*")
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
@@ -355,22 +357,18 @@ async fn test_e2e_exclude_all_packages_error() {
     );
 
     // Exclude all packages with a pattern that matches everything
-    let request = SbomRequest::new(
-        project_path,
-        false,
-        vec![
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .exclude_patterns(vec![
             "*requests*".to_string(),
             "*urllib3*".to_string(),
             "*charset*".to_string(),
             "*idna*".to_string(),
             "*certifi*".to_string(),
             "*sample*".to_string(),
-        ],
-        false,
-        false,
-        None,
-        None,
-    );
+        ])
+        .build()
+        .unwrap();
     let result = use_case.execute(request).await;
 
     // Should fail because all packages would be excluded
