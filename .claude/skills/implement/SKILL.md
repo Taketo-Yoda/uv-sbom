@@ -1,3 +1,8 @@
+---
+name: implement
+description: Orchestrate complete issue implementation workflow from branch to PR
+---
+
 # /implement - Issue Implementation Skill
 
 Orchestrates the complete workflow for implementing a GitHub issue, from branch creation to PR submission.

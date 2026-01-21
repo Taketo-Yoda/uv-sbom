@@ -1,3 +1,8 @@
+---
+name: commit
+description: Create commits with code quality checks and conventional commit messages
+---
+
 # /commit - Commit Creation Skill
 
 Create commits with proper code quality checks and conventional commit messages.
