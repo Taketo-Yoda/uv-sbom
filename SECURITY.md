@@ -56,6 +56,24 @@
 - 255 character limit: Matches typical maximum package name length in Python ecosystem
 - Combined limits ensure worst-case processing time remains acceptable (<20ms)
 
+## Automated Security Scanning
+
+### Dependency Scanning (Dependabot)
+
+- **Frequency**: Weekly scans
+- **Scope**: All dependencies in `Cargo.toml` / `Cargo.lock`
+- **Response Policy**: All alerts are reviewed and addressed as a matter of principle
+
+### Static Code Analysis (CodeQL)
+
+- **Trigger**: All pull requests
+- **Scope**: Full codebase analysis
+- **Response Policy**: All findings are reviewed and addressed before merging
+
+### Alert Response Policy
+
+All Dependabot and CodeQL alerts are reviewed. Critical and High severity issues are prioritized. Alerts are addressed in accordance with our Security Update Policy below.
+
 ## Reporting Security Vulnerabilities
 
 If you discover a security vulnerability, please report it by creating a [GitHub Security Advisory](https://github.com/Taketo-Yoda/uv-sbom/security/advisories/new).
