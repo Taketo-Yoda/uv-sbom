@@ -21,6 +21,7 @@ use std::time::Duration;
 /// - Implements rate limiting (10 req/sec) using tokio::time::sleep
 /// - Implements timeout (30 seconds)
 /// - Does not retry failed requests (fail fast for CVE checks)
+#[derive(Clone)]
 pub struct OsvClient {
     client: Client,
     api_url: String,

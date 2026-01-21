@@ -1,7 +1,7 @@
 use crate::application::dto::{VulnerabilityCheckRequest, VulnerabilityCheckResponse};
-use crate::ports::outbound::VulnerabilityRepository;
+use crate::ports::outbound::{ProgressCallback, VulnerabilityRepository};
 use crate::sbom_generation::domain::services::VulnerabilityChecker;
-use crate::sbom_generation::domain::Package;
+use crate::sbom_generation::domain::{Package, PackageVulnerabilities};
 use crate::shared::Result;
 
 /// CheckVulnerabilitiesUseCase - Use case for checking vulnerabilities with threshold support
@@ -12,16 +12,12 @@ use crate::shared::Result;
 /// 3. Applies threshold evaluation using VulnerabilityChecker
 /// 4. Returns a structured response
 ///
-/// Note: Will be used by issue #94 (threshold-based exit code feature)
-///
 /// # Type Parameters
 /// * `R` - VulnerabilityRepository implementation
-#[allow(dead_code)]
 pub struct CheckVulnerabilitiesUseCase<R: VulnerabilityRepository> {
     vulnerability_repository: R,
 }
 
-#[allow(dead_code)]
 impl<R: VulnerabilityRepository> CheckVulnerabilitiesUseCase<R> {
     /// Creates a new CheckVulnerabilitiesUseCase with injected repository
     ///
@@ -40,6 +36,7 @@ impl<R: VulnerabilityRepository> CheckVulnerabilitiesUseCase<R> {
     ///
     /// # Returns
     /// VulnerabilityCheckResponse with check results and threshold exceeded flag
+    #[allow(dead_code)]
     pub async fn execute(
         &self,
         request: VulnerabilityCheckRequest,
@@ -61,6 +58,48 @@ impl<R: VulnerabilityRepository> CheckVulnerabilitiesUseCase<R> {
         Ok(VulnerabilityCheckResponse::from_result(check_result))
     }
 
+    /// Fetches vulnerabilities for packages without threshold evaluation
+    ///
+    /// This method is used when only the raw vulnerability data is needed,
+    /// without applying threshold evaluation. It delegates to the repository
+    /// for the actual vulnerability fetching.
+    ///
+    /// # Arguments
+    /// * `packages` - Packages to check for vulnerabilities
+    ///
+    /// # Returns
+    /// Vector of PackageVulnerabilities for packages that have vulnerabilities
+    #[allow(dead_code)]
+    pub async fn fetch_vulnerabilities(
+        &self,
+        packages: Vec<Package>,
+    ) -> Result<Vec<PackageVulnerabilities>> {
+        self.vulnerability_repository
+            .fetch_vulnerabilities(packages)
+            .await
+    }
+
+    /// Fetches vulnerabilities with progress reporting
+    ///
+    /// This method is used when progress feedback is needed (e.g., CLI with progress bar).
+    /// It delegates to the repository's progress-aware method.
+    ///
+    /// # Arguments
+    /// * `packages` - Packages to check for vulnerabilities
+    /// * `progress_callback` - Callback for progress updates (current, total)
+    ///
+    /// # Returns
+    /// Vector of PackageVulnerabilities for packages that have vulnerabilities
+    pub async fn fetch_vulnerabilities_with_progress(
+        &self,
+        packages: Vec<Package>,
+        progress_callback: ProgressCallback<'static>,
+    ) -> Result<Vec<PackageVulnerabilities>> {
+        self.vulnerability_repository
+            .fetch_vulnerabilities_with_progress(packages, progress_callback)
+            .await
+    }
+
     /// Filters out packages that are in the exclusion list
     ///
     /// # Arguments
@@ -69,6 +108,7 @@ impl<R: VulnerabilityRepository> CheckVulnerabilitiesUseCase<R> {
     ///
     /// # Returns
     /// Filtered list of packages
+    #[allow(dead_code)]
     fn filter_excluded_packages(
         &self,
         packages: Vec<Package>,

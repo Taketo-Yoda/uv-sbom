@@ -195,6 +195,7 @@ version = "1.26.0"
     assert_eq!(graph.transitive_dependency_count(), 1);
 }
 
+#[derive(Clone)]
 struct MockVulnerabilityRepository;
 
 #[async_trait::async_trait]
