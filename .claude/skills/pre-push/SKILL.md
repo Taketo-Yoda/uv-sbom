@@ -1,3 +1,8 @@
+---
+name: pre-push
+description: Run all validations before pushing to remote
+---
+
 # /pre-push - Pre-push Validation Skill
 
 Final validation before pushing commits to remote repository.

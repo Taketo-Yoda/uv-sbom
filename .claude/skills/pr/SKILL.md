@@ -1,3 +1,8 @@
+---
+name: pr
+description: Create Pull Requests with pre-flight checks and proper formatting
+---
+
 # /pr - Pull Request Creation Skill
 
 Create Pull Requests that pass CI before creation and target the correct branch.

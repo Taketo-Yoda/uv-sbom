@@ -1,3 +1,8 @@
+---
+name: issue
+description: Create GitHub Issues with consistent formatting for autonomous implementation
+---
+
 # /issue - Issue Creation Skill
 
 Create GitHub Issues with consistent formatting and sufficient technical detail for autonomous implementation.
