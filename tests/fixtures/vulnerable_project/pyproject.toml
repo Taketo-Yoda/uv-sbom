@@ -1,0 +1,9 @@
+[project]
+name = "vulnerable-test-project"
+version = "0.1.0"
+description = "Test project with known vulnerabilities for E2E testing"
+requires-python = ">=3.8"
+dependencies = [
+    # certifi 2023.7.22 has known vulnerabilities (e.g., CVE-2023-37920)
+    "certifi==2023.7.22",
+]

@@ -1,27 +1,24 @@
-use crate::application::dto::{VulnerabilityCheckRequest, VulnerabilityCheckResponse};
 use crate::ports::outbound::VulnerabilityRepository;
-use crate::sbom_generation::domain::services::VulnerabilityChecker;
-use crate::sbom_generation::domain::Package;
+use crate::sbom_generation::domain::{Package, PackageVulnerabilities};
 use crate::shared::Result;
+use indicatif::{ProgressBar, ProgressStyle};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
-/// CheckVulnerabilitiesUseCase - Use case for checking vulnerabilities with threshold support
+/// CheckVulnerabilitiesUseCase - Use case for checking vulnerabilities
 ///
-/// This use case orchestrates the vulnerability checking workflow:
-/// 1. Filters out excluded packages
-/// 2. Fetches vulnerabilities from the repository
-/// 3. Applies threshold evaluation using VulnerabilityChecker
-/// 4. Returns a structured response
-///
-/// Note: Will be used by issue #94 (threshold-based exit code feature)
+/// This use case provides vulnerability fetching functionality with progress reporting.
+/// It encapsulates the progress bar display logic and delegates to the VulnerabilityRepository
+/// for the actual fetching.
 ///
 /// # Type Parameters
 /// * `R` - VulnerabilityRepository implementation
-#[allow(dead_code)]
 pub struct CheckVulnerabilitiesUseCase<R: VulnerabilityRepository> {
     vulnerability_repository: R,
 }
 
-#[allow(dead_code)]
 impl<R: VulnerabilityRepository> CheckVulnerabilitiesUseCase<R> {
     /// Creates a new CheckVulnerabilitiesUseCase with injected repository
     ///
@@ -33,64 +30,104 @@ impl<R: VulnerabilityRepository> CheckVulnerabilitiesUseCase<R> {
         }
     }
 
-    /// Executes the vulnerability check use case
+    /// Fetches vulnerabilities for packages with progress bar display
+    ///
+    /// This method handles the progress bar UI and delegates to the repository
+    /// for actual vulnerability fetching. The progress bar shows:
+    /// - A spinner during the batch query phase
+    /// - A progress bar during individual vulnerability detail fetching
     ///
     /// # Arguments
-    /// * `request` - Request containing packages, threshold, and exclusions
+    /// * `packages` - Packages to check for vulnerabilities
     ///
     /// # Returns
-    /// VulnerabilityCheckResponse with check results and threshold exceeded flag
-    pub async fn execute(
-        &self,
-        request: VulnerabilityCheckRequest,
-    ) -> Result<VulnerabilityCheckResponse> {
-        // Step 1: Filter out excluded packages
-        let filtered_packages =
-            self.filter_excluded_packages(request.packages, &request.excluded_packages);
-
-        // Step 2: Fetch vulnerabilities from repository
-        let vulnerabilities = self
-            .vulnerability_repository
-            .fetch_vulnerabilities(filtered_packages)
-            .await?;
-
-        // Step 3: Apply threshold evaluation using VulnerabilityChecker
-        let check_result = VulnerabilityChecker::check(vulnerabilities, request.threshold);
-
-        // Step 4: Build and return response
-        Ok(VulnerabilityCheckResponse::from_result(check_result))
-    }
-
-    /// Filters out packages that are in the exclusion list
-    ///
-    /// # Arguments
-    /// * `packages` - Original list of packages
-    /// * `excluded_packages` - List of package names to exclude
-    ///
-    /// # Returns
-    /// Filtered list of packages
-    fn filter_excluded_packages(
+    /// Vector of PackageVulnerabilities for packages that have vulnerabilities
+    pub async fn check_with_progress(
         &self,
         packages: Vec<Package>,
-        excluded_packages: &[String],
-    ) -> Vec<Package> {
-        if excluded_packages.is_empty() {
-            return packages;
-        }
+    ) -> Result<Vec<PackageVulnerabilities>> {
+        // Create atomic counters for thread-safe progress sharing
+        let progress_current = Arc::new(AtomicUsize::new(0));
+        let progress_total = Arc::new(AtomicUsize::new(0));
+        let is_done = Arc::new(AtomicBool::new(false));
 
-        packages
-            .into_iter()
-            .filter(|pkg| !excluded_packages.contains(&pkg.name().to_string()))
-            .collect()
+        // Clone references for the progress bar update thread
+        let current_clone = progress_current.clone();
+        let total_clone = progress_total.clone();
+        let done_clone = is_done.clone();
+
+        // Spawn a thread to update the progress bar
+        let progress_handle = thread::spawn(move || {
+            let pb = ProgressBar::new(0);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("   {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} - {msg}")
+                    .expect("Failed to set progress bar template")
+                    .progress_chars("=>-"),
+            );
+            pb.set_message("Fetching vulnerability details...");
+
+            // Poll for updates until done
+            while !done_clone.load(Ordering::Relaxed) {
+                let current = current_clone.load(Ordering::Relaxed);
+                let total = total_clone.load(Ordering::Relaxed);
+
+                if total > 0 {
+                    pb.set_length(total as u64);
+                    pb.set_position(current as u64);
+                } else {
+                    // Still in batch query phase - show spinner
+                    pb.tick();
+                }
+
+                thread::sleep(Duration::from_millis(50));
+            }
+
+            pb.finish_and_clear();
+        });
+
+        // Create progress callback that updates atomic counters
+        let progress_callback: Box<dyn Fn(usize, usize) + Send> =
+            Box::new(move |current: usize, total: usize| {
+                progress_current.store(current, Ordering::Relaxed);
+                progress_total.store(total, Ordering::Relaxed);
+            });
+
+        // Fetch vulnerabilities with progress reporting
+        let vulnerabilities = self
+            .vulnerability_repository
+            .fetch_vulnerabilities_with_progress(packages, progress_callback)
+            .await?;
+
+        // Signal completion and wait for progress bar thread
+        is_done.store(true, Ordering::Relaxed);
+        let _ = progress_handle.join();
+
+        Ok(vulnerabilities)
+    }
+
+    /// Returns a summary of vulnerabilities found
+    ///
+    /// # Arguments
+    /// * `vulnerabilities` - List of package vulnerabilities
+    ///
+    /// # Returns
+    /// Tuple of (total_vulnerabilities, affected_packages_count)
+    pub fn summarize(vulnerabilities: &[PackageVulnerabilities]) -> (usize, usize) {
+        let total_vulns: usize = vulnerabilities
+            .iter()
+            .map(|v| v.vulnerabilities().len())
+            .sum();
+        let affected_packages = vulnerabilities.len();
+        (total_vulns, affected_packages)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sbom_generation::domain::services::ThresholdConfig;
-    use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity};
-    use crate::sbom_generation::domain::{PackageVulnerabilities, Vulnerability};
+    use crate::ports::outbound::ProgressCallback;
+    use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
     use async_trait::async_trait;
 
     struct MockVulnerabilityRepository {
@@ -102,6 +139,14 @@ mod tests {
         async fn fetch_vulnerabilities(
             &self,
             _packages: Vec<Package>,
+        ) -> Result<Vec<PackageVulnerabilities>> {
+            Ok(self.vulnerabilities.clone())
+        }
+
+        async fn fetch_vulnerabilities_with_progress(
+            &self,
+            _packages: Vec<Package>,
+            _progress_callback: ProgressCallback<'static>,
         ) -> Result<Vec<PackageVulnerabilities>> {
             Ok(self.vulnerabilities.clone())
         }
@@ -117,7 +162,7 @@ mod tests {
             id.to_string(),
             cvss_score,
             severity,
-            None, // fixed_version
+            None,
             Some(format!("Test vulnerability {}", id)),
         )
         .unwrap()
@@ -131,28 +176,72 @@ mod tests {
         PackageVulnerabilities::new(name.to_string(), version.to_string(), vulns)
     }
 
+    // ========== summarize() tests ==========
+
+    #[test]
+    fn test_summarize_empty() {
+        let (total, packages) =
+            CheckVulnerabilitiesUseCase::<MockVulnerabilityRepository>::summarize(&[]);
+        assert_eq!(total, 0);
+        assert_eq!(packages, 0);
+    }
+
+    #[test]
+    fn test_summarize_single_package_single_vuln() {
+        let vuln = create_test_vulnerability("CVE-2024-0001", Severity::High, Some(7.5));
+        let pkg_vulns = create_test_pkg_vulns("requests", "2.31.0", vec![vuln]);
+
+        let (total, packages) =
+            CheckVulnerabilitiesUseCase::<MockVulnerabilityRepository>::summarize(&[pkg_vulns]);
+        assert_eq!(total, 1);
+        assert_eq!(packages, 1);
+    }
+
+    #[test]
+    fn test_summarize_single_package_multiple_vulns() {
+        let vuln1 = create_test_vulnerability("CVE-2024-0001", Severity::High, Some(7.5));
+        let vuln2 = create_test_vulnerability("CVE-2024-0002", Severity::Critical, Some(9.8));
+        let vuln3 = create_test_vulnerability("CVE-2024-0003", Severity::Low, Some(2.0));
+        let pkg_vulns = create_test_pkg_vulns("requests", "2.31.0", vec![vuln1, vuln2, vuln3]);
+
+        let (total, packages) =
+            CheckVulnerabilitiesUseCase::<MockVulnerabilityRepository>::summarize(&[pkg_vulns]);
+        assert_eq!(total, 3);
+        assert_eq!(packages, 1);
+    }
+
+    #[test]
+    fn test_summarize_multiple_packages() {
+        let vuln1 = create_test_vulnerability("CVE-2024-0001", Severity::High, Some(7.5));
+        let vuln2 = create_test_vulnerability("CVE-2024-0002", Severity::Critical, Some(9.8));
+        let pkg_vulns1 = create_test_pkg_vulns("requests", "2.31.0", vec![vuln1]);
+        let pkg_vulns2 = create_test_pkg_vulns("urllib3", "1.26.0", vec![vuln2]);
+
+        let (total, packages) =
+            CheckVulnerabilitiesUseCase::<MockVulnerabilityRepository>::summarize(&[
+                pkg_vulns1, pkg_vulns2,
+            ]);
+        assert_eq!(total, 2);
+        assert_eq!(packages, 2);
+    }
+
+    // ========== check_with_progress() tests ==========
+
     #[tokio::test]
-    async fn test_execute_with_no_vulnerabilities() {
+    async fn test_check_with_progress_no_vulnerabilities() {
         let repo = MockVulnerabilityRepository {
             vulnerabilities: vec![],
         };
         let use_case = CheckVulnerabilitiesUseCase::new(repo);
 
-        let request = VulnerabilityCheckRequest::new(
-            vec![create_test_package("requests", "2.31.0")],
-            ThresholdConfig::None,
-            vec![],
-        );
+        let packages = vec![create_test_package("requests", "2.31.0")];
+        let result = use_case.check_with_progress(packages).await.unwrap();
 
-        let response = use_case.execute(request).await.unwrap();
-
-        assert!(!response.has_threshold_exceeded);
-        assert!(response.result.above_threshold.is_empty());
-        assert!(response.result.below_threshold.is_empty());
+        assert!(result.is_empty());
     }
 
     #[tokio::test]
-    async fn test_execute_with_vulnerabilities_above_threshold() {
+    async fn test_check_with_progress_with_vulnerabilities() {
         let vuln = create_test_vulnerability("CVE-2024-0001", Severity::Critical, Some(9.8));
         let pkg_vulns = create_test_pkg_vulns("requests", "2.31.0", vec![vuln]);
 
@@ -161,133 +250,32 @@ mod tests {
         };
         let use_case = CheckVulnerabilitiesUseCase::new(repo);
 
-        let request = VulnerabilityCheckRequest::new(
-            vec![create_test_package("requests", "2.31.0")],
-            ThresholdConfig::Severity(Severity::High),
-            vec![],
-        );
+        let packages = vec![create_test_package("requests", "2.31.0")];
+        let result = use_case.check_with_progress(packages).await.unwrap();
 
-        let response = use_case.execute(request).await.unwrap();
-
-        assert!(response.has_threshold_exceeded);
-        assert_eq!(response.result.above_threshold.len(), 1);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].package_name(), "requests");
+        assert_eq!(result[0].vulnerabilities().len(), 1);
     }
 
     #[tokio::test]
-    async fn test_execute_with_vulnerabilities_below_threshold() {
-        let vuln = create_test_vulnerability("CVE-2024-0002", Severity::Low, Some(2.0));
-        let pkg_vulns = create_test_pkg_vulns("urllib3", "1.26.0", vec![vuln]);
+    async fn test_check_with_progress_multiple_packages() {
+        let vuln1 = create_test_vulnerability("CVE-2024-0001", Severity::High, Some(7.5));
+        let vuln2 = create_test_vulnerability("CVE-2024-0002", Severity::Critical, Some(9.8));
+        let pkg_vulns1 = create_test_pkg_vulns("requests", "2.31.0", vec![vuln1]);
+        let pkg_vulns2 = create_test_pkg_vulns("urllib3", "1.26.0", vec![vuln2]);
 
         let repo = MockVulnerabilityRepository {
-            vulnerabilities: vec![pkg_vulns],
-        };
-        let use_case = CheckVulnerabilitiesUseCase::new(repo);
-
-        let request = VulnerabilityCheckRequest::new(
-            vec![create_test_package("urllib3", "1.26.0")],
-            ThresholdConfig::Severity(Severity::High),
-            vec![],
-        );
-
-        let response = use_case.execute(request).await.unwrap();
-
-        assert!(!response.has_threshold_exceeded);
-        assert!(response.result.above_threshold.is_empty());
-        assert_eq!(response.result.below_threshold.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_execute_with_cvss_threshold() {
-        let vuln = create_test_vulnerability("CVE-2024-0003", Severity::High, Some(7.5));
-        let pkg_vulns = create_test_pkg_vulns("certifi", "2024.8.30", vec![vuln]);
-
-        let repo = MockVulnerabilityRepository {
-            vulnerabilities: vec![pkg_vulns],
-        };
-        let use_case = CheckVulnerabilitiesUseCase::new(repo);
-
-        let request = VulnerabilityCheckRequest::new(
-            vec![create_test_package("certifi", "2024.8.30")],
-            ThresholdConfig::Cvss(7.0),
-            vec![],
-        );
-
-        let response = use_case.execute(request).await.unwrap();
-
-        assert!(response.has_threshold_exceeded);
-        assert_eq!(response.result.above_threshold.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_execute_filters_excluded_packages() {
-        let repo = MockVulnerabilityRepository {
-            vulnerabilities: vec![],
-        };
-        let use_case = CheckVulnerabilitiesUseCase::new(repo);
-
-        let request = VulnerabilityCheckRequest::new(
-            vec![
-                create_test_package("requests", "2.31.0"),
-                create_test_package("urllib3", "1.26.0"),
-                create_test_package("certifi", "2024.8.30"),
-            ],
-            ThresholdConfig::None,
-            vec!["urllib3".to_string()],
-        );
-
-        let response = use_case.execute(request).await.unwrap();
-
-        // The repository receives filtered packages (without urllib3)
-        assert!(!response.has_threshold_exceeded);
-    }
-
-    #[test]
-    fn test_filter_excluded_packages_empty_exclusions() {
-        let repo = MockVulnerabilityRepository {
-            vulnerabilities: vec![],
+            vulnerabilities: vec![pkg_vulns1, pkg_vulns2],
         };
         let use_case = CheckVulnerabilitiesUseCase::new(repo);
 
         let packages = vec![
-            create_test_package("pkg1", "1.0.0"),
-            create_test_package("pkg2", "2.0.0"),
+            create_test_package("requests", "2.31.0"),
+            create_test_package("urllib3", "1.26.0"),
         ];
+        let result = use_case.check_with_progress(packages).await.unwrap();
 
-        let filtered = use_case.filter_excluded_packages(packages.clone(), &[]);
-
-        assert_eq!(filtered.len(), 2);
-    }
-
-    #[test]
-    fn test_filter_excluded_packages_with_exclusions() {
-        let repo = MockVulnerabilityRepository {
-            vulnerabilities: vec![],
-        };
-        let use_case = CheckVulnerabilitiesUseCase::new(repo);
-
-        let packages = vec![
-            create_test_package("pkg1", "1.0.0"),
-            create_test_package("pkg2", "2.0.0"),
-            create_test_package("pkg3", "3.0.0"),
-        ];
-
-        let filtered = use_case.filter_excluded_packages(packages, &["pkg2".to_string()]);
-
-        assert_eq!(filtered.len(), 2);
-        assert!(filtered.iter().all(|p| p.name() != "pkg2"));
-    }
-
-    #[test]
-    fn test_filter_excluded_packages_all_excluded() {
-        let repo = MockVulnerabilityRepository {
-            vulnerabilities: vec![],
-        };
-        let use_case = CheckVulnerabilitiesUseCase::new(repo);
-
-        let packages = vec![create_test_package("pkg1", "1.0.0")];
-
-        let filtered = use_case.filter_excluded_packages(packages, &["pkg1".to_string()]);
-
-        assert!(filtered.is_empty());
+        assert_eq!(result.len(), 2);
     }
 }
