@@ -7,7 +7,7 @@ mod shared;
 
 use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::FileSystemReader;
-use adapters::outbound::network::{OsvClient, PyPiLicenseRepository};
+use adapters::outbound::network::{CachingPyPiLicenseRepository, OsvClient, PyPiLicenseRepository};
 use application::dto::{OutputFormat, SbomRequest};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::use_cases::GenerateSbomUseCase;
@@ -89,7 +89,8 @@ async fn run(args: Args) -> Result<bool> {
     // Create adapters (Dependency Injection)
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
-    let license_repository = PyPiLicenseRepository::new()?;
+    let pypi_repository = PyPiLicenseRepository::new()?;
+    let license_repository = CachingPyPiLicenseRepository::new(pypi_repository);
     let progress_reporter = StderrProgressReporter::new();
 
     // Create vulnerability repository if CVE check is requested
