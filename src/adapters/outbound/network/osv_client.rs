@@ -97,55 +97,6 @@ impl OsvClient {
         Ok(vuln)
     }
 
-    /// Converts OSV vulnerabilities to domain model (async)
-    ///
-    /// For each vulnerability ID in the batch result, fetches detailed information
-    /// to get severity and other metadata that's not included in batch responses.
-    #[allow(dead_code)]
-    async fn convert_to_package_vulnerabilities(
-        &self,
-        package: &Package,
-        osv_result: &OsvResult,
-    ) -> Result<Option<PackageVulnerabilities>> {
-        if osv_result.vulns.is_empty() {
-            return Ok(None);
-        }
-
-        let mut vulnerabilities: Vec<Vulnerability> = Vec::new();
-
-        for osv_vuln in &osv_result.vulns {
-            // Fetch detailed vulnerability information
-            // Batch API only returns minimal data (id, summary), we need full details for severity
-            match self.fetch_vulnerability_details(&osv_vuln.id).await {
-                Ok(detailed_vuln) => {
-                    if let Ok(vuln) = self.convert_to_vulnerability(&detailed_vuln) {
-                        vulnerabilities.push(vuln);
-                    }
-                }
-                Err(e) => {
-                    // Log error but continue processing other vulnerabilities
-                    eprintln!(
-                        "Warning: Failed to fetch details for {}: {}",
-                        osv_vuln.id, e
-                    );
-                }
-            }
-
-            // Rate limiting: small delay between detail requests (async)
-            tokio::time::sleep(Duration::from_millis(Self::RATE_LIMIT_MS)).await;
-        }
-
-        if vulnerabilities.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(PackageVulnerabilities::new(
-            package.name().to_string(),
-            package.version().to_string(),
-            vulnerabilities,
-        )))
-    }
-
     /// Converts a single OSV vulnerability to domain model
     fn convert_to_vulnerability(&self, osv_vuln: &OsvVulnerability) -> Result<Vulnerability> {
         // Extract CVSS score - try V3 first, then V4
