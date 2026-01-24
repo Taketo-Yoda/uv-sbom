@@ -433,7 +433,7 @@ mod tests {
             Some("HTTP library".to_string()),
         )];
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
         let formatter = MarkdownFormatter::new();
         let result = formatter.format(enriched, &metadata, None);
 
@@ -469,7 +469,7 @@ mod tests {
         );
         let graph = DependencyGraph::new(direct_deps, transitive_deps);
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
         let formatter = MarkdownFormatter::new();
         let result = formatter.format_with_dependencies(&graph, enriched, &metadata, None, None);
 
@@ -528,7 +528,7 @@ mod tests {
             vec![vuln1, vuln2],
         );
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
         let formatter = MarkdownFormatter::new();
         let result = formatter.format(enriched, &metadata, Some(&[pkg_vulns]));
 
@@ -557,7 +557,7 @@ mod tests {
             Some("HTTP library".to_string()),
         )];
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
         let formatter = MarkdownFormatter::new();
         let result = formatter.format(enriched, &metadata, Some(&[]));
 
@@ -579,7 +579,7 @@ mod tests {
             Some("HTTP library".to_string()),
         )];
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
         let formatter = MarkdownFormatter::new();
         let result = formatter.format(enriched, &metadata, None);
 
@@ -630,7 +630,7 @@ mod tests {
         let pkg_vulns =
             PackageVulnerabilities::new("urllib3".to_string(), "1.26.0".to_string(), vec![vuln]);
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
         let formatter = MarkdownFormatter::new();
         let result = formatter.format_with_dependencies(
             &graph,
@@ -918,7 +918,7 @@ mod tests {
             threshold_exceeded: true,
         };
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
         let formatter = MarkdownFormatter::new();
         let output = formatter
             .format_with_dependencies(&graph, enriched, &metadata, None, Some(&result))

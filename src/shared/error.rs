@@ -46,24 +46,6 @@ pub enum SbomError {
         path: PathBuf,
         details: String,
     },
-    /// Error when fetching license information fails
-    ///
-    /// Note: Currently not used by the CLI implementation, but available for library consumers
-    /// implementing custom license repositories or error handling strategies.
-    #[allow(dead_code)]
-    LicenseFetchError {
-        package_name: String,
-        details: String,
-    },
-    /// Error when SBOM output generation fails
-    ///
-    /// Note: Currently not used by the CLI implementation, but available for library consumers
-    /// implementing custom formatters or error handling strategies.
-    #[allow(dead_code)]
-    OutputGenerationError {
-        format: String,
-        details: String,
-    },
     FileWriteError {
         path: PathBuf,
         details: String,
@@ -95,23 +77,6 @@ impl fmt::Display for SbomError {
                     "Failed to parse uv.lock file: {}\nDetails: {}\n\n💡 Hint: Please verify that the uv.lock file is in the correct format",
                     path.display(),
                     details
-                )
-            }
-            SbomError::LicenseFetchError {
-                package_name,
-                details,
-            } => {
-                write!(
-                    f,
-                    "Failed to fetch license information for package \"{}\"\nDetails: {}\n\n💡 Hint: Please check your internet connection",
-                    package_name, details
-                )
-            }
-            SbomError::OutputGenerationError { format, details } => {
-                write!(
-                    f,
-                    "Failed to generate {} format output\nDetails: {}",
-                    format, details
                 )
             }
             SbomError::FileWriteError { path, details } => {
@@ -208,31 +173,6 @@ mod tests {
         assert!(display.contains("/test/uv.lock"));
         assert!(display.contains("Invalid TOML syntax"));
         assert!(display.contains("💡 Hint:"));
-    }
-
-    #[test]
-    fn test_license_fetch_error_display() {
-        let error = SbomError::LicenseFetchError {
-            package_name: "test-package".to_string(),
-            details: "Network timeout".to_string(),
-        };
-        let display = format!("{}", error);
-        assert!(display.contains("Failed to fetch license information"));
-        assert!(display.contains("test-package"));
-        assert!(display.contains("Network timeout"));
-        assert!(display.contains("💡 Hint:"));
-        assert!(display.contains("internet connection"));
-    }
-
-    #[test]
-    fn test_output_generation_error_display() {
-        let error = SbomError::OutputGenerationError {
-            format: "JSON".to_string(),
-            details: "Serialization failed".to_string(),
-        };
-        let display = format!("{}", error);
-        assert!(display.contains("Failed to generate JSON format output"));
-        assert!(display.contains("Serialization failed"));
     }
 
     #[test]
