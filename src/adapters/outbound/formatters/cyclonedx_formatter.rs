@@ -149,7 +149,7 @@ mod tests {
             EnrichedPackage::new(pkg2, None, Some("Array library".to_string())),
         ];
 
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0", false);
+        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
         let formatter = CycloneDxFormatter::new();
         let result = formatter.format(enriched, &metadata, None);
 

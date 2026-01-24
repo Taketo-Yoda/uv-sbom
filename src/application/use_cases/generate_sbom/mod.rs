@@ -198,7 +198,7 @@ where
     fn build_dry_run_response(&self) -> Result<SbomResponse> {
         self.progress_reporter
             .report_completion("Success: Configuration validated. No issues found.");
-        let metadata = SbomGenerator::generate_default_metadata(false);
+        let metadata = SbomGenerator::generate_default_metadata();
         Ok(SbomResponse::new(vec![], None, metadata, None, false, None))
     }
 
@@ -341,7 +341,7 @@ where
         vulnerability_report: Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>,
         vulnerability_check_result: Option<VulnerabilityCheckResult>,
     ) -> SbomResponse {
-        let metadata = SbomGenerator::generate_default_metadata(vulnerability_report.is_some());
+        let metadata = SbomGenerator::generate_default_metadata();
 
         // Use threshold check result if available, otherwise check if any vulnerabilities exist
         let has_vulnerabilities_above_threshold = vulnerability_check_result

@@ -1,6 +1,3 @@
-// Note: This module will be used in subsequent subtasks for CVE check feature
-#![allow(dead_code)]
-
 use crate::ports::outbound::{ProgressCallback, VulnerabilityRepository};
 use crate::sbom_generation::domain::vulnerability::{
     CvssScore, PackageVulnerabilities, Severity, Vulnerability,
@@ -104,6 +101,7 @@ impl OsvClient {
     ///
     /// For each vulnerability ID in the batch result, fetches detailed information
     /// to get severity and other metadata that's not included in batch responses.
+    #[allow(dead_code)]
     async fn convert_to_package_vulnerabilities(
         &self,
         package: &Package,
