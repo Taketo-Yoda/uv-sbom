@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2025-01-24
+
+### 🎉 First Stable Release
+
+This is the first stable release of uv-sbom, marking the tool as production-ready. All core features have been implemented and thoroughly tested (500+ tests).
+
+### Added
+
+#### Vulnerability Checking (OSV API Integration)
+- **`--check-cve` option**: Check packages for known vulnerabilities using the [OSV.dev](https://osv.dev/) API
+- **Severity threshold** (`--severity-threshold`): Filter vulnerabilities by severity level (low/medium/high/critical)
+- **CVSS threshold** (`--cvss-threshold`): Filter vulnerabilities by CVSS score (0.0-10.0)
+- **Exit code system**: 0 = OK, 1 = Vulnerabilities above threshold found, 3 = Application error
+- **Progress indicator**: Visual progress bar during vulnerability checking
+- **Warning/Info sections**: Enhanced Markdown output with threshold context
+
+#### Performance & Reliability
+- **Asynchronous processing**: Parallel license fetching from PyPI and vulnerability checking from OSV
+- **License caching**: In-memory caching of PyPI license responses for repeated lookups
+- **Severity parsing fallback**: Robust CVSS-to-severity mapping when API data is incomplete
+
+#### Developer Experience
+- **`--dry-run` option**: Validate configuration without generating SBOM
+- **Agent Skills**: Automated workflow enforcement via `/commit`, `/pr`, `/issue`, `/implement` skills
+- **Pre-commit hook**: Automatic `cargo fmt` on staged Rust files
+- **Dependabot**: Automated dependency updates for Cargo and GitHub Actions
+
+#### Documentation
+- Exit codes and network requirements sections in README
+- `--check-cve` documentation with OSV attribution
+- Security measures documentation for exclude patterns
+- Comprehensive vulnerability threshold documentation (English and Japanese)
+
+### Changed
+
+#### Architecture Improvements
+- **CheckVulnerabilitiesUseCase**: Consolidated vulnerability checking logic in dedicated use case
+- **SbomRequestBuilder pattern**: Cleaner, more intuitive API for SBOM generation
+- **Async refactoring**: `GenerateSbomUseCase`, `PyPiLicenseRepository`, and `OsvClient` now async
+
+#### CI/CD Improvements
+- GitHub Actions updated: checkout v6, upload-artifact v6, download-artifact v7, cache v5, setup-python v6
+- Explicit workflow permissions for security
+- Documentation-only changes skip CI runs
+
+#### Code Quality
+- Removed all unused dead_code (YAGNI compliance)
+- Split large methods into smaller, focused functions
+- Extracted test modules for better organization
+
+### Fixed
+- Severity parsing with API fallback strategy when CVSS data is incomplete
+- CI workflow permissions for artifact uploads
+
+### Dependencies
+- `toml`: 0.8.23 → 0.9.11
+- `reqwest`: 0.12.28 → 0.13.1
+- `indicatif`: 0.17.11 → 0.18.3
+
 ## [0.2.0] - 2025-01-06
 
 ### Added
