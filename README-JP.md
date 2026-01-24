@@ -2,6 +2,7 @@
 
 [![GitHub release](https://img.shields.io/github/release/Taketo-Yoda/uv-sbom.svg)](https://github.com/Taketo-Yoda/uv-sbom/releases) [![PyPI - Version](https://img.shields.io/pypi/v/uv-sbom-bin?logo=python&logoColor=white&label=PyPI)](https://pypi.org/project/uv-sbom-bin/) [![Crates.io Version](https://img.shields.io/crates/v/uv-sbom?logo=rust&logoColor=white)](https://crates.io/crates/uv-sbom)
 [![shield_license]][license_file] [![CI](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/ci.yml/badge.svg)](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/ci.yml)
+[![Dependabot Updates](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/dependabot/dependabot-updates) [![CodeQL](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/github-code-scanning/codeql)
 
 [English](README.md) | [日本語](README-JP.md)
 
@@ -13,6 +14,7 @@
 
 - 📦 `uv.lock`ファイルを解析して依存関係情報を抽出
 - 🔍 PyPIからライセンス情報を自動取得（リトライロジック付き）
+- 🛡️ OSV APIを使用した既知の脆弱性チェック（Markdownフォーマットのみ）
 - 📊 複数のフォーマットに対応:
   - **CycloneDX 1.6** JSON形式（標準SBOM形式）
   - **Markdown**形式（直接依存と推移的依存を明確に分離）
@@ -39,7 +41,7 @@
 
 ### CycloneDX公式ツールとの比較
 
-2026年1月1日時点で、CycloneDX公式ツールはまだuvを直接サポートしていません。Pythonプロジェクトの SBOMを生成する場合:
+CycloneDX公式ツール (v7.2.1時点) は、まだ uv を直接サポートしていません。PythonプロジェクトのSBOMを生成する場合:
 
 | 側面 | uv-sbom（このツール） | CycloneDX公式ツール |
 |--------|---------------------|--------------------------|
@@ -61,6 +63,8 @@
 
 ### Cargo（Rustユーザー向け推奨）
 
+![Crates.io Total Downloads](https://img.shields.io/crates/d/uv-sbom)
+
 [crates.io](https://crates.io/crates/uv-sbom)からインストール:
 
 ```bash
@@ -68,6 +72,8 @@ cargo install uv-sbom
 ```
 
 ### uv tool（Pythonユーザー向け）
+
+![PyPI - Downloads](https://img.shields.io/pypi/dm/uv-sbom-bin?logo=PyPI&logoColor=white)
 
 Pythonラッパーパッケージをインストール:
 
@@ -90,6 +96,8 @@ uv-sbom --version
 **注意**: パッケージ名は `uv-sbom-bin` ですが、インストールされるコマンド名は `uv-sbom` です。
 
 ### プリビルドバイナリ
+
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Taketo-Yoda/uv-sbom/total?logo=GitHub)
 
 [GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases)からプリビルドバイナリをダウンロード:
 
@@ -207,16 +215,306 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 - パターンは大文字小文字を区別します
 - 1回の実行につき最大64個のパターンを指定できます
 
+**情報の外部送信を防止する:**
+独自の社内ライブラリなど、PyPI等の外部レジストリに名前を送信したくないパッケージがある場合は、`--exclude` オプションを使用してください。これにより、メタデータ取得時の通信から特定のライブラリ名を除外し、秘匿性を保つことができます。
+
+### 脆弱性のチェック
+
+`--check-cve`オプションを使用して、[OSV (Open Source Vulnerability) データベース](https://osv.dev)を使用したパッケージの既知のセキュリティ脆弱性をチェックできます：
+
+```bash
+# Markdown出力で脆弱性をチェック
+uv-sbom --format markdown --check-cve
+
+# 脆弱性レポートをファイルに保存
+uv-sbom --format markdown --check-cve --output SBOM.md
+
+# 除外パターンと組み合わせて使用
+uv-sbom --format markdown --check-cve -e "pytest" -e "*-dev"
+```
+
+### 脆弱性しきい値オプション
+
+しきい値オプションを使用して、どの脆弱性が終了コード1をトリガーするかを制御できます：
+
+```bash
+# すべての脆弱性をチェック（見つかった場合は終了コード1）
+uv-sbom --format markdown --check-cve
+
+# High または Critical の深刻度のみをチェック
+uv-sbom --format markdown --check-cve --severity-threshold high
+
+# Critical の深刻度のみをチェック
+uv-sbom --format markdown --check-cve --severity-threshold critical
+
+# CVSS >= 7.0 のみをチェック
+uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+
+# CVSS >= 9.0（Critical）のみをチェック
+uv-sbom --format markdown --check-cve --cvss-threshold 9.0
+```
+
+**しきい値オプション:**
+- `--severity-threshold <LEVEL>`: 深刻度レベルでフィルタ（low, medium, high, critical）
+- `--cvss-threshold <SCORE>`: CVSSスコアでフィルタ（0.0-10.0）
+
+**注意事項:**
+- しきい値オプションは一度に1つのみ使用可能
+- `--check-cve`の有効化が必要
+- しきい値以下の脆弱性はレポートに表示されますが、終了コード1はトリガーしません
+- `--cvss-threshold`使用時、CVSSスコアのない脆弱性（N/A）はしきい値評価から除外されます
+
+### CI統合
+
+CI/CDパイプライン統合には脆弱性しきい値を使用します：
+
+```yaml
+# GitHub Actionsの例
+- name: Generate SBOM
+  run: uv-sbom --format markdown --output sbom.md
+
+- name: Security Check (High and Critical only)
+  run: uv-sbom --format markdown --check-cve --severity-threshold high
+
+- name: Security Check (CVSS >= 7.0)
+  run: uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+```
+
+```yaml
+# GitLab CIの例
+security_scan:
+  script:
+    - uv-sbom --format markdown --check-cve --severity-threshold high
+  allow_failure: false
+```
+
+**重要な注意事項:**
+- 脆弱性チェックは**Markdownフォーマットでのみ利用可能**です
+- OSV APIへのクエリにはインターネット接続が必要です
+- `--dry-run`モードでは利用できません（ネットワーク操作をスキップします）
+- 内部パッケージがOSV APIに送信されないようにするには`--exclude`を使用してください
+
+**出力例:**
+
+脆弱性が見つかった場合、Markdown出力に次のようなセクションが追加されます：
+
+```markdown
+## Vulnerability Report
+
+**⚠️ Security Issues Detected**
+
+The following packages have known security vulnerabilities:
+
+| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID |
+|---------|----------------|---------------|------|----------|--------|
+| urllib3 | 2.0.0 | 2.0.7 | 9.8 | 🔴 CRITICAL | CVE-2023-45803 |
+| requests | 2.28.0 | 2.31.0 | 7.5 | 🟠 HIGH | CVE-2023-32681 |
+
+---
+
+*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
+```
+
+脆弱性が見つからなかった場合:
+
+```markdown
+## Vulnerability Report
+
+**✅ No Known Vulnerabilities**
+
+No security vulnerabilities were found in the scanned packages.
+
+---
+
+*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
+```
+
+### dry-runモードで設定を検証する
+
+`--dry-run`オプションを使用して、ツールが外部レジストリと通信する前に設定を検証できます：
+
+```bash
+# 除外パターンが正しく動作するか確認
+uv-sbom --dry-run -e "internal-*" -e "proprietary-pkg"
+
+# すべてのオプションを含めた設定をテスト
+uv-sbom --dry-run --path /path/to/project --format json -e "*-dev"
+```
+
+**--dry-runを使用する理由:**
+- **除外パターンの検証**: `--exclude`パターンが意図したパッケージを正しく除外しているか確認できます
+- **情報漏洩の防止**: ツールがPyPIレジストリと通信する**前に**、機密性の高い内部パッケージが除外されていることを確認できます
+- **高速な検証**: ネットワーク通信なしで入力検証が行われます
+- **早期エラー検出**: 設定の問題（uv.lockの欠損、無効なパターンなど）を即座に検出できます
+
+**dry-runモードでの動作:**
+- ✅ `uv.lock`ファイルを読み込んで解析
+- ✅ すべてのコマンドライン引数を検証
+- ✅ 除外パターンをチェックし、マッチしないパターンを警告
+- ✅ 問題がなければ成功メッセージを出力
+- ❌ PyPIからのライセンス取得をスキップ（ネットワーク通信なし）
+- ❌ SBOM出力生成をスキップ
+
+## セキュリティ
+
+### 除外パターンの入力検証
+
+`-e`/`--exclude`オプションは、悪意のある入力から保護するために以下のセキュリティ対策を実装しています：
+
+#### 文字制限
+
+パターンには以下の文字のみが許可されています：
+- **英数字**: a-z, A-Z, 0-9, Unicode文字/数字
+- **ハイフン** (`-`)、**アンダースコア** (`_`)、**ドット** (`.`): パッケージ名で一般的
+- **角括弧** (`[`, `]`): パッケージのエクストラ用（例: `requests[security]`）
+- **アスタリスク** (`*`): ワイルドカードマッチング用
+
+制御文字、シェルメタキャラクタ、パス区切り文字は以下を防ぐためにブロックされています：
+- ターミナルエスケープシーケンスインジェクション
+- ログインジェクション攻撃
+- コマンドインジェクション（多層防御）
+
+#### パターンの制限
+
+- **最大パターン数**: 1回の実行につき最大64個のパターンを指定可能
+- **最大長**: パターンあたり255文字
+- **最小内容**: パターンには少なくとも1つの非ワイルドカード文字が必要
+
+これらの制限は、以下によるサービス拒否攻撃を防ぎます：
+- 過剰なメモリ消費
+- 複雑なパターンマッチングによるCPU枯渇
+
+#### 例
+
+**有効なパターン**:
+```bash
+uv-sbom -e 'pytest'           # 完全一致
+uv-sbom -e 'test-*'           # プレフィックスワイルドカード
+uv-sbom -e '*-dev'            # サフィックスワイルドカード
+uv-sbom -e 'package[extra]'   # エクストラ付きパッケージ
+```
+
+**無効なパターン**（エラーで拒否）:
+```bash
+uv-sbom -e ''                 # 空のパターン
+uv-sbom -e '***'              # ワイルドカードのみ
+uv-sbom -e 'pkg;rm -rf /'     # シェルメタキャラクタを含む
+uv-sbom -e "$(cat /etc/passwd)" # シェルコマンド置換がブロックされる
+```
+
+脅威モデルや攻撃ベクトルを含む詳細なセキュリティ情報については、[SECURITY.md](SECURITY.md)を参照してください。
+
 ## コマンドラインオプション
 
 ```
 Options:
-  -f, --format <FORMAT>    出力形式: json または markdown [デフォルト: json]
-  -p, --path <PATH>        プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
-  -o, --output <OUTPUT>    出力ファイルパス（指定しない場合は標準出力）
-  -e, --exclude <PATTERN>  パッケージ除外パターン（ワイルドカード対応: *）
-  -h, --help               ヘルプを表示
-  -V, --version            バージョンを表示
+  -f, --format <FORMAT>              出力形式: json または markdown [デフォルト: json]
+  -p, --path <PATH>                  プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
+  -o, --output <OUTPUT>              出力ファイルパス（指定しない場合は標準出力）
+  -e, --exclude <PATTERN>            パッケージ除外パターン（ワイルドカード対応: *）
+      --dry-run                      ネットワーク通信や出力生成を行わずに設定を検証
+      --check-cve                    OSV APIを使用して既知の脆弱性をチェック（Markdownフォーマットのみ）
+      --severity-threshold <LEVEL>   脆弱性チェックの深刻度しきい値（low/medium/high/critical）
+                                     --check-cveの有効化が必要
+      --cvss-threshold <SCORE>       脆弱性チェックのCVSSしきい値（0.0-10.0）
+                                     --check-cveの有効化が必要
+  -h, --help                         ヘルプを表示
+  -V, --version                      バージョンを表示
+```
+
+## 終了コード
+
+uv-sbomは以下の終了コードを返します：
+
+| 終了コード | 説明 | 例 |
+|-----------|-------------|----------|
+| 0 | 成功 | SBOMの生成成功、しきい値を超える脆弱性なし、`--help`や`--version`の表示 |
+| 1 | 脆弱性検出（`--check-cve`使用時） | しきい値を超える脆弱性検出 |
+| 2 | 無効なコマンドライン引数 | 不明なオプション、無効な引数の型 |
+| 3 | アプリケーションエラー | uv.lockファイルの欠損、無効なプロジェクトパス、無効な除外パターン、ネットワークエラー、ファイル書き込みエラー |
+
+### 脆弱性チェック時の終了コード
+
+`--check-cve`使用時、終了コードの動作はしきい値設定によって変わります：
+
+| シナリオ | 終了コード |
+|----------|-----------|
+| 脆弱性が見つからない | 0 |
+| 脆弱性が見つかった（しきい値指定なし） | 1 |
+| 脆弱性が見つかった、すべてがしきい値以下 | 0 |
+| 脆弱性が見つかった、一部がしきい値を超過 | 1 |
+
+**例：**
+```bash
+# Low/Mediumの脆弱性があってもHigh/Criticalがなければ終了コード0を返す
+uv-sbom --format markdown --check-cve --severity-threshold high
+
+# CVSS >= 7.0の脆弱性がなければ終了コード0を返す
+uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+```
+
+### よくあるエラーシナリオ
+
+**終了コード 1 - アプリケーションエラー:**
+```bash
+# uv.lockファイルが見つからない
+$ uv-sbom --path /path/without/uv-lock
+❌ An error occurred:
+uv.lock file not found: /path/without/uv-lock/uv.lock
+# 終了コード: 1
+
+# 無効な除外パターン（空）
+$ uv-sbom -e ""
+❌ An error occurred:
+Exclusion pattern cannot be empty
+# 終了コード: 1
+
+# 無効な除外パターン（無効な文字）
+$ uv-sbom -e "pkg;name"
+❌ An error occurred:
+Exclusion pattern contains invalid character ';' in pattern 'pkg;name'
+# 終了コード: 1
+
+# 存在しないプロジェクトパス
+$ uv-sbom --path /nonexistent
+❌ An error occurred:
+Invalid project path: /nonexistent
+# 終了コード: 1
+```
+
+**終了コード 2 - CLI引数エラー:**
+```bash
+# 不明なオプション
+$ uv-sbom --unknown-option
+error: unexpected argument '--unknown-option' found
+# 終了コード: 2
+
+# 無効なフォーマット値
+$ uv-sbom --format invalid
+error: invalid value 'invalid' for '--format <FORMAT>'
+# 終了コード: 2
+```
+
+### スクリプトでの使用例
+
+```bash
+#!/bin/bash
+
+uv-sbom --format json --output sbom.json
+
+case $? in
+  0)
+    echo "SBOMの生成に成功しました"
+    ;;
+  1)
+    echo "アプリケーションエラーが発生しました"
+    exit 1
+    ;;
+  2)
+    echo "無効なコマンドライン引数です"
+    exit 2
+    ;;
+esac
 ```
 
 ## 出力例
@@ -300,6 +598,72 @@ Secondary dependencies introduced by the primary packages.
 - `uv`で管理されており、`uv.lock`ファイルを持つPythonプロジェクト
 - PyPIからライセンス情報を取得するためのインターネット接続
 
+## ネットワーク要件
+
+### アクセスする外部ドメイン
+
+`uv-sbom`は、SBOM生成時に以下の外部サービスにHTTPリクエストを送信します：
+
+#### すべての操作で必須:
+
+1. **PyPI (Python Package Index)**
+   - ドメイン: `https://pypi.org`
+   - 目的: Pythonパッケージのライセンス情報を取得
+   - タイミング: すべてのSBOM生成時（`--dry-run`を除く）
+   - レート制限: 公式制限なし、ツールはリトライロジックを実装
+   - エンドポイント: `/pypi/{package_name}/json`
+
+#### オプション（`--check-cve`使用時のみ）:
+
+2. **OSV (Open Source Vulnerability Database)**
+   - ドメイン: `https://api.osv.dev`
+   - 目的: セキュリティスキャンのための脆弱性情報を取得
+   - タイミング: `--check-cve`フラグ使用時のみ
+   - レート制限: ツールは10リクエスト/秒の制限を実装
+   - エンドポイント:
+     - `/v1/querybatch` - 脆弱性IDのバッチクエリ
+     - `/v1/vulns/{vuln_id}` - 詳細な脆弱性情報
+
+### ファイアウォール設定
+
+企業のファイアウォールやプロキシの内側にいる場合は、以下のドメインを許可リストに追加してください：
+
+```
+# 必須
+pypi.org
+
+# オプション（--check-cveのみ）
+api.osv.dev
+```
+
+### プロキシ設定
+
+ツールは標準のHTTP/HTTPSプロキシ環境変数を尊重します：
+
+```bash
+export HTTP_PROXY=http://proxy.company.com:8080
+export HTTPS_PROXY=http://proxy.company.com:8080
+export NO_PROXY=localhost,127.0.0.1
+
+uv-sbom --format json
+```
+
+### オフラインモード
+
+ネットワークリクエストなしで設定を検証するには、`--dry-run`を使用します：
+
+```bash
+uv-sbom --dry-run
+```
+
+このモードでは：
+- `uv.lock`ファイルを検証
+- コマンドライン引数を検証
+- 除外パターンをチェック
+- ライセンス取得をスキップ（PyPIアクセスなし）
+- 脆弱性チェックをスキップ（OSVアクセスなし）
+- SBOM出力生成をスキップ
+
 ## エラーハンドリング
 
 uv-sbomは親切な提案を含む詳細なエラーメッセージを提供します:
@@ -351,6 +715,19 @@ uv.lock file not found: /path/to/project/uv.lock
 - [.claude/instructions.md](.claude/instructions.md) - Claude Code用のコーディングガイドラインと指示
 
 これらのファイルは、Claude Codeを使用したAI支援開発のための包括的なコンテキストを提供します。
+
+## 帰属表示
+
+### 脆弱性データ
+
+`--check-cve`オプションを使用する場合、このツールは[OSV (Open Source Vulnerability)](https://osv.dev)から脆弱性データを取得します。これは[Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/)の下で提供されています。
+
+**必要な帰属表示:**
+- OSVが提供する脆弱性データ
+- 利用可能: https://osv.dev
+- ライセンス: CC-BY 4.0
+
+OSVデータベースは、オープンソースソフトウェアの包括的で正確かつアクセスしやすい脆弱性情報を提供するためのオープンな共同プロジェクトです。
 
 ## ライセンス
 

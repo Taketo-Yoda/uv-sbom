@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::collections::HashMap;
 use uv_sbom::ports::outbound::PyPiMetadata;
 use uv_sbom::prelude::*;
@@ -49,8 +50,9 @@ impl Default for MockLicenseRepository {
     }
 }
 
+#[async_trait]
 impl LicenseRepository for MockLicenseRepository {
-    fn fetch_license_info(&self, package_name: &str, version: &str) -> Result<PyPiMetadata> {
+    async fn fetch_license_info(&self, package_name: &str, version: &str) -> Result<PyPiMetadata> {
         if self.should_fail {
             anyhow::bail!("Mock license repository failure");
         }

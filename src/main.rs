@@ -7,40 +7,78 @@ mod shared;
 
 use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::FileSystemReader;
-use adapters::outbound::network::PyPiLicenseRepository;
+use adapters::outbound::network::{CachingPyPiLicenseRepository, OsvClient, PyPiLicenseRepository};
 use application::dto::{OutputFormat, SbomRequest};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::use_cases::GenerateSbomUseCase;
+use clap::Parser;
 use cli::Args;
 use owo_colors::OwoColorize;
-use shared::error::SbomError;
+use shared::error::{ExitCode, SbomError};
 use shared::Result;
 use std::path::{Path, PathBuf};
 use std::process;
 
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("\n❌ An error occurred:\n");
-        eprintln!("{}", e);
+#[tokio::main]
+async fn main() {
+    // Parse command-line arguments first to catch argument errors early
+    let args = match Args::try_parse() {
+        Ok(args) => args,
+        Err(e) => {
+            // Print the error message (clap formats these nicely)
+            let _ = e.print();
 
-        // Display error chain
-        let mut source = e.source();
-        while let Some(err) = source {
-            eprintln!("\nCaused by: {}", err);
-            source = err.source();
+            // Use exit code 0 for help/version, exit code 2 for actual argument errors
+            let exit_code = if e.use_stderr() {
+                ExitCode::InvalidArguments
+            } else {
+                ExitCode::Success
+            };
+            process::exit(exit_code.as_i32());
         }
+    };
 
-        eprintln!();
-        process::exit(1);
+    // Run the main application logic
+    match run(args).await {
+        Ok(has_vulnerabilities) => {
+            if has_vulnerabilities {
+                process::exit(ExitCode::VulnerabilitiesDetected.as_i32());
+            }
+            process::exit(ExitCode::Success.as_i32());
+        }
+        Err(e) => {
+            eprintln!("\n❌ An error occurred:\n");
+            eprintln!("{}", e);
+
+            // Display error chain
+            let mut source = e.source();
+            while let Some(err) = source {
+                eprintln!("\nCaused by: {}", err);
+                source = err.source();
+            }
+
+            eprintln!();
+            process::exit(ExitCode::ApplicationError.as_i32());
+        }
     }
 }
 
-fn run() -> Result<()> {
+/// Runs the main application logic.
+///
+/// Returns `Ok(true)` if vulnerabilities were detected above threshold,
+/// `Ok(false)` if no vulnerabilities (or all below threshold),
+/// or `Err` for application errors.
+async fn run(args: Args) -> Result<bool> {
     // Display startup banner
     display_banner();
 
-    // Parse command-line arguments
-    let args = Args::parse_args();
+    // Warn if check_cve is used with JSON format
+    if args.check_cve && args.format == OutputFormat::Json {
+        eprintln!("⚠️  Warning: --check-cve has no effect with JSON format.");
+        eprintln!("   Vulnerability data is not included in JSON output.");
+        eprintln!("   Use --format markdown to see vulnerability report.");
+        eprintln!();
+    }
 
     // Validate project directory
     let project_dir = args.path.as_deref().unwrap_or(".");
@@ -51,8 +89,16 @@ fn run() -> Result<()> {
     // Create adapters (Dependency Injection)
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
-    let license_repository = PyPiLicenseRepository::new()?;
+    let pypi_repository = PyPiLicenseRepository::new()?;
+    let license_repository = CachingPyPiLicenseRepository::new(pypi_repository);
     let progress_reporter = StderrProgressReporter::new();
+
+    // Create vulnerability repository if CVE check is requested
+    let vulnerability_repository = if args.check_cve {
+        Some(OsvClient::new()?)
+    } else {
+        None
+    };
 
     // Create use case with injected dependencies
     let use_case = GenerateSbomUseCase::new(
@@ -60,28 +106,50 @@ fn run() -> Result<()> {
         project_config_reader,
         license_repository,
         progress_reporter,
+        vulnerability_repository,
     );
 
-    // Create request
+    // Create request using builder pattern
     let include_dependency_info = matches!(args.format, OutputFormat::Markdown);
-    let request = SbomRequest::new(project_path, include_dependency_info, args.exclude);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .include_dependency_info(include_dependency_info)
+        .exclude_patterns(args.exclude)
+        .dry_run(args.dry_run)
+        .check_cve(args.check_cve)
+        .severity_threshold_opt(args.severity_threshold)
+        .cvss_threshold_opt(args.cvss_threshold)
+        .build()?;
 
     // Execute use case
-    let response = use_case.execute(request)?;
+    let response = use_case.execute(request).await?;
+
+    // Skip output generation for dry-run mode
+    if args.dry_run {
+        return Ok(false);
+    }
 
     // Display progress message
     eprintln!("{}", FormatterFactory::progress_message(args.format));
 
     // Create formatter using factory
     let formatter = FormatterFactory::create(args.format);
+    let vulnerability_report = response.vulnerability_report.as_deref();
+    let vulnerability_check_result = response.vulnerability_check_result.as_ref();
     let formatted_output = if let Some(dep_graph) = response.dependency_graph.as_ref() {
         formatter.format_with_dependencies(
             dep_graph,
             response.enriched_packages,
             &response.metadata,
+            vulnerability_report,
+            vulnerability_check_result,
         )?
     } else {
-        formatter.format(response.enriched_packages, &response.metadata)?
+        formatter.format(
+            response.enriched_packages,
+            &response.metadata,
+            vulnerability_report,
+        )?
     };
 
     // Create presenter using factory
@@ -94,7 +162,10 @@ fn run() -> Result<()> {
     let presenter = PresenterFactory::create(presenter_type);
     presenter.present(&formatted_output)?;
 
-    Ok(())
+    // Determine if vulnerabilities were detected above threshold
+    let has_vulnerabilities = response.has_vulnerabilities_above_threshold;
+
+    Ok(has_vulnerabilities)
 }
 
 fn display_banner() {

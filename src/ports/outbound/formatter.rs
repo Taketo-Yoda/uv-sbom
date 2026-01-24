@@ -1,3 +1,5 @@
+use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
+use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, Package, SbomMetadata};
 use crate::shared::Result;
 
@@ -31,13 +33,19 @@ pub trait SbomFormatter {
     /// # Arguments
     /// * `packages` - List of enriched packages with license information
     /// * `metadata` - SBOM metadata (timestamp, tool info, serial number)
+    /// * `vulnerability_report` - Optional vulnerability report from CVE check
     ///
     /// # Returns
     /// Formatted SBOM content as a string
     ///
     /// # Errors
     /// Returns an error if formatting or serialization fails
-    fn format(&self, packages: Vec<EnrichedPackage>, metadata: &SbomMetadata) -> Result<String>;
+    fn format(
+        &self,
+        packages: Vec<EnrichedPackage>,
+        metadata: &SbomMetadata,
+        vulnerability_report: Option<&[PackageVulnerabilities]>,
+    ) -> Result<String>;
 
     /// Formats packages with dependency graph information
     ///
@@ -48,6 +56,8 @@ pub trait SbomFormatter {
     /// * `dependency_graph` - Complete dependency graph
     /// * `packages` - List of enriched packages with license information
     /// * `metadata` - SBOM metadata
+    /// * `vulnerability_report` - Optional vulnerability report from CVE check
+    /// * `vulnerability_result` - Optional threshold-evaluated vulnerability result
     ///
     /// # Returns
     /// Formatted SBOM content as a string
@@ -63,7 +73,11 @@ pub trait SbomFormatter {
         _dependency_graph: &DependencyGraph,
         packages: Vec<EnrichedPackage>,
         metadata: &SbomMetadata,
+        vulnerability_report: Option<&[PackageVulnerabilities]>,
+        vulnerability_result: Option<&VulnerabilityCheckResult>,
     ) -> Result<String> {
-        self.format(packages, metadata)
+        // Default implementation ignores vulnerability_result
+        let _ = vulnerability_result;
+        self.format(packages, metadata, vulnerability_report)
     }
 }

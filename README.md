@@ -2,6 +2,7 @@
 
 [![GitHub release](https://img.shields.io/github/release/Taketo-Yoda/uv-sbom.svg)](https://github.com/Taketo-Yoda/uv-sbom/releases) [![PyPI - Version](https://img.shields.io/pypi/v/uv-sbom-bin?logo=python&logoColor=white&label=PyPI)](https://pypi.org/project/uv-sbom-bin/) [![Crates.io Version](https://img.shields.io/crates/v/uv-sbom?logo=rust&logoColor=white)](https://crates.io/crates/uv-sbom)
 [![shield_license]][license_file] [![CI](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/ci.yml/badge.svg)](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/ci.yml)
+[![Dependabot Updates](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/dependabot/dependabot-updates) [![CodeQL](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Taketo-Yoda/uv-sbom/actions/workflows/github-code-scanning/codeql)
 
 [English](README.md) | [日本語](README-JP.md)
 
@@ -13,6 +14,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 
 - 📦 Parses `uv.lock` files to extract dependency information
 - 🔍 Automatically fetches license information from PyPI with retry logic
+- 🛡️ Checks for known vulnerabilities using OSV API (Markdown format only)
 - 📊 Outputs in multiple formats:
   - **CycloneDX 1.6** JSON format (standard SBOM format)
   - **Markdown** format with direct and transitive dependencies clearly separated
@@ -39,7 +41,7 @@ This tool generates SBOMs based on **uv.lock** file contents, which includes:
 
 ### Comparison with CycloneDX Official Tools
 
-As of 2026-01-01, the official CycloneDX tools do not yet support uv directly. When generating SBOMs for Python projects:
+As of v7.2.1, the official cyclonedx-python library does not yet provide direct support for uv. When generating SBOMs for Python projects:
 
 | Aspect | uv-sbom (this tool) | CycloneDX Official Tools |
 |--------|---------------------|--------------------------|
@@ -61,6 +63,8 @@ The focused approach of `uv-sbom` reduces noise in security vulnerability scanni
 
 ### Cargo (Recommended for Rust users)
 
+![Crates.io Total Downloads](https://img.shields.io/crates/d/uv-sbom)
+
 Install from [crates.io](https://crates.io/crates/uv-sbom):
 
 ```bash
@@ -68,6 +72,8 @@ cargo install uv-sbom
 ```
 
 ### uv tool (Python users)
+
+![PyPI - Downloads](https://img.shields.io/pypi/dm/uv-sbom-bin?logo=PyPI&logoColor=white)
 
 Install the Python wrapper package:
 
@@ -90,6 +96,9 @@ uv-sbom --version
 **Note**: The package name is `uv-sbom-bin`, but the installed command is `uv-sbom`.
 
 ### Pre-built Binaries
+
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Taketo-Yoda/uv-sbom/total?logo=GitHub)
+
 
 Download pre-built binaries from [GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases):
 
@@ -207,16 +216,306 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 - Patterns are case-sensitive
 - Maximum 64 patterns per invocation
 
+**Preventing Information Leakage:**
+Use the `--exclude` option to skip specific internal or proprietary libraries. This prevents their names from being sent to external registries (like PyPI) during metadata retrieval, ensuring your internal project structure remains private.
+
+### Checking for vulnerabilities
+
+Use the `--check-cve` option to check packages for known security vulnerabilities using the [OSV (Open Source Vulnerability) database](https://osv.dev):
+
+```bash
+# Check for vulnerabilities in Markdown output
+uv-sbom --format markdown --check-cve
+
+# Save vulnerability report to file
+uv-sbom --format markdown --check-cve --output SBOM.md
+
+# Combine with exclude patterns
+uv-sbom --format markdown --check-cve -e "pytest" -e "*-dev"
+```
+
+### Vulnerability Threshold Options
+
+You can control which vulnerabilities trigger a non-zero exit code using threshold options:
+
+```bash
+# Check for any vulnerabilities (exits with 1 if found)
+uv-sbom --format markdown --check-cve
+
+# Check for High or Critical severity only
+uv-sbom --format markdown --check-cve --severity-threshold high
+
+# Check for Critical severity only
+uv-sbom --format markdown --check-cve --severity-threshold critical
+
+# Check for CVSS >= 7.0 only
+uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+
+# Check for CVSS >= 9.0 (Critical) only
+uv-sbom --format markdown --check-cve --cvss-threshold 9.0
+```
+
+**Threshold Options:**
+- `--severity-threshold <LEVEL>`: Filter by severity level (low, medium, high, critical)
+- `--cvss-threshold <SCORE>`: Filter by CVSS score (0.0-10.0)
+
+**Notes:**
+- Only one threshold option can be used at a time
+- Requires `--check-cve` to be enabled
+- Vulnerabilities below the threshold are still shown in the report but don't trigger exit code 1
+- When using `--cvss-threshold`, vulnerabilities without CVSS scores (N/A) are excluded from threshold evaluation
+
+### CI Integration
+
+Use vulnerability thresholds for CI/CD pipeline integration:
+
+```yaml
+# GitHub Actions example
+- name: Generate SBOM
+  run: uv-sbom --format markdown --output sbom.md
+
+- name: Security Check (High and Critical only)
+  run: uv-sbom --format markdown --check-cve --severity-threshold high
+
+- name: Security Check (CVSS >= 7.0)
+  run: uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+```
+
+```yaml
+# GitLab CI example
+security_scan:
+  script:
+    - uv-sbom --format markdown --check-cve --severity-threshold high
+  allow_failure: false
+```
+
+**Important Notes:**
+- Vulnerability checking is **only available for Markdown format**
+- Requires internet connection to query OSV API
+- Not available in `--dry-run` mode (skips network operations)
+- Use `--exclude` to prevent internal packages from being sent to OSV API
+
+**Example Output:**
+
+When vulnerabilities are found, a section like this is added to the Markdown output:
+
+```markdown
+## Vulnerability Report
+
+**⚠️ Security Issues Detected**
+
+The following packages have known security vulnerabilities:
+
+| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID |
+|---------|----------------|---------------|------|----------|--------|
+| urllib3 | 2.0.0 | 2.0.7 | 9.8 | 🔴 CRITICAL | CVE-2023-45803 |
+| requests | 2.28.0 | 2.31.0 | 7.5 | 🟠 HIGH | CVE-2023-32681 |
+
+---
+
+*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
+```
+
+When no vulnerabilities are found:
+
+```markdown
+## Vulnerability Report
+
+**✅ No Known Vulnerabilities**
+
+No security vulnerabilities were found in the scanned packages.
+
+---
+
+*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
+```
+
+### Validating configuration with dry-run
+
+Use the `--dry-run` option to validate your configuration before the tool communicates with external registries:
+
+```bash
+# Verify exclude patterns work correctly
+uv-sbom --dry-run -e "internal-*" -e "proprietary-pkg"
+
+# Test configuration with all options
+uv-sbom --dry-run --path /path/to/project --format json -e "*-dev"
+```
+
+**Why use --dry-run:**
+- **Verify exclude patterns**: Ensure your `--exclude` patterns correctly match the packages you want to skip
+- **Prevent information leakage**: Confirm that sensitive internal packages are excluded BEFORE the tool communicates with PyPI registry
+- **Fast validation**: All input validation happens without network overhead
+- **Early error detection**: Catch configuration issues (missing uv.lock, invalid patterns, etc.) immediately
+
+**What happens in dry-run mode:**
+- ✅ Reads and parses `uv.lock` file
+- ✅ Validates all command-line arguments
+- ✅ Checks exclude patterns and warns about unmatched patterns
+- ✅ Outputs success message if no issues found
+- ❌ Skips license fetching from PyPI (no network communication)
+- ❌ Skips SBOM output generation
+
+## Security
+
+### Exclude Pattern Input Validation
+
+The `-e`/`--exclude` option implements the following security measures to protect against malicious input:
+
+#### Character Restrictions
+
+Only the following characters are allowed in patterns:
+- **Alphanumeric characters**: a-z, A-Z, 0-9, Unicode letters/numbers
+- **Hyphens** (`-`), **underscores** (`_`), **dots** (`.`): Common in package names
+- **Square brackets** (`[`, `]`): For package extras (e.g., `requests[security]`)
+- **Asterisks** (`*`): For wildcard matching
+
+Control characters, shell metacharacters, and path separators are blocked to prevent:
+- Terminal escape sequence injection
+- Log injection attacks
+- Command injection (defense in depth)
+
+#### Pattern Limits
+
+- **Maximum patterns**: 64 patterns can be specified per invocation
+- **Maximum length**: 255 characters per pattern
+- **Minimum content**: Patterns must contain at least one non-wildcard character
+
+These limits prevent denial-of-service attacks via:
+- Excessive memory consumption
+- CPU exhaustion from complex pattern matching
+
+#### Examples
+
+**Valid patterns**:
+```bash
+uv-sbom -e 'pytest'           # Exact match
+uv-sbom -e 'test-*'           # Prefix wildcard
+uv-sbom -e '*-dev'            # Suffix wildcard
+uv-sbom -e 'package[extra]'   # Package with extras
+```
+
+**Invalid patterns** (rejected with error):
+```bash
+uv-sbom -e ''                 # Empty pattern
+uv-sbom -e '***'              # Only wildcards
+uv-sbom -e 'pkg;rm -rf /'     # Contains shell metacharacter
+uv-sbom -e "$(cat /etc/passwd)" # Shell command substitution blocked
+```
+
+For more detailed security information, including threat model and attack vectors, see [SECURITY.md](SECURITY.md).
+
 ## Command-line options
 
 ```
 Options:
-  -f, --format <FORMAT>    Output format: json or markdown [default: json]
-  -p, --path <PATH>        Path to the project directory [default: current directory]
-  -o, --output <OUTPUT>    Output file path (if not specified, outputs to stdout)
-  -e, --exclude <PATTERN>  Exclude packages matching patterns (supports wildcards: *)
-  -h, --help               Print help
-  -V, --version            Print version
+  -f, --format <FORMAT>              Output format: json or markdown [default: json]
+  -p, --path <PATH>                  Path to the project directory [default: current directory]
+  -o, --output <OUTPUT>              Output file path (if not specified, outputs to stdout)
+  -e, --exclude <PATTERN>            Exclude packages matching patterns (supports wildcards: *)
+      --dry-run                      Validate configuration without network communication or output generation
+      --check-cve                    Check for known vulnerabilities using OSV API (Markdown format only)
+      --severity-threshold <LEVEL>   Severity threshold for vulnerability check (low/medium/high/critical)
+                                     Requires --check-cve to be enabled
+      --cvss-threshold <SCORE>       CVSS threshold for vulnerability check (0.0-10.0)
+                                     Requires --check-cve to be enabled
+  -h, --help                         Print help
+  -V, --version                      Print version
+```
+
+## Exit Codes
+
+uv-sbom returns the following exit codes:
+
+| Exit Code | Description | Examples |
+|-----------|-------------|----------|
+| 0 | Success | SBOM generated successfully, no vulnerabilities above threshold, `--help` or `--version` displayed |
+| 1 | Vulnerabilities detected (with `--check-cve`) | Vulnerabilities above threshold detected |
+| 2 | Invalid command-line arguments | Unknown option, invalid argument type |
+| 3 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error |
+
+### Exit Codes with Vulnerability Checking
+
+When using `--check-cve`, the exit code behavior changes based on threshold settings:
+
+| Scenario | Exit Code |
+|----------|-----------|
+| No vulnerabilities found | 0 |
+| Vulnerabilities found (no threshold specified) | 1 |
+| Vulnerabilities found, all below threshold | 0 |
+| Vulnerabilities found, some above threshold | 1 |
+
+**Examples:**
+```bash
+# Returns 0 if no High/Critical vulnerabilities, even if Low/Medium exist
+uv-sbom --format markdown --check-cve --severity-threshold high
+
+# Returns 0 if no vulnerabilities have CVSS >= 7.0
+uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+```
+
+### Common Error Scenarios
+
+**Exit code 1 - Application errors:**
+```bash
+# Missing uv.lock file
+$ uv-sbom --path /path/without/uv-lock
+❌ An error occurred:
+uv.lock file not found: /path/without/uv-lock/uv.lock
+# Exit code: 1
+
+# Invalid exclude pattern (empty)
+$ uv-sbom -e ""
+❌ An error occurred:
+Exclusion pattern cannot be empty
+# Exit code: 1
+
+# Invalid exclude pattern (invalid characters)
+$ uv-sbom -e "pkg;name"
+❌ An error occurred:
+Exclusion pattern contains invalid character ';' in pattern 'pkg;name'
+# Exit code: 1
+
+# Nonexistent project path
+$ uv-sbom --path /nonexistent
+❌ An error occurred:
+Invalid project path: /nonexistent
+# Exit code: 1
+```
+
+**Exit code 2 - CLI argument errors:**
+```bash
+# Unknown option
+$ uv-sbom --unknown-option
+error: unexpected argument '--unknown-option' found
+# Exit code: 2
+
+# Invalid format value
+$ uv-sbom --format invalid
+error: invalid value 'invalid' for '--format <FORMAT>'
+# Exit code: 2
+```
+
+### Usage in Scripts
+
+```bash
+#!/bin/bash
+
+uv-sbom --format json --output sbom.json
+
+case $? in
+  0)
+    echo "SBOM generated successfully"
+    ;;
+  1)
+    echo "Application error occurred"
+    exit 1
+    ;;
+  2)
+    echo "Invalid command-line arguments"
+    exit 2
+    ;;
+esac
 ```
 
 ## Output Examples
@@ -300,6 +599,72 @@ Secondary dependencies introduced by the primary packages.
 - A Python project managed by `uv` with a `uv.lock` file
 - Internet connection for fetching license information from PyPI
 
+## Network Requirements
+
+### External Domains Accessed
+
+`uv-sbom` makes HTTP requests to the following external services during SBOM generation:
+
+#### Required for all operations:
+
+1. **PyPI (Python Package Index)**
+   - Domain: `https://pypi.org`
+   - Purpose: Fetch license information for Python packages
+   - When: Every SBOM generation (unless using `--dry-run`)
+   - Rate limit: No official limit, but tool implements retry logic
+   - Endpoint: `/pypi/{package_name}/json`
+
+#### Optional (only when using `--check-cve`):
+
+2. **OSV (Open Source Vulnerability Database)**
+   - Domain: `https://api.osv.dev`
+   - Purpose: Fetch vulnerability information for security scanning
+   - When: Only when `--check-cve` flag is used
+   - Rate limit: Tool implements 10 requests/second limit
+   - Endpoints:
+     - `/v1/querybatch` - Batch query for vulnerability IDs
+     - `/v1/vulns/{vuln_id}` - Detailed vulnerability information
+
+### Firewall Configuration
+
+If you are behind a corporate firewall or proxy, ensure the following domains are on the allowlist:
+
+```
+# Required
+pypi.org
+
+# Optional (only for --check-cve)
+api.osv.dev
+```
+
+### Proxy Configuration
+
+The tool respects standard HTTP/HTTPS proxy environment variables:
+
+```bash
+export HTTP_PROXY=http://proxy.company.com:8080
+export HTTPS_PROXY=http://proxy.company.com:8080
+export NO_PROXY=localhost,127.0.0.1
+
+uv-sbom --format json
+```
+
+### Offline Mode
+
+To validate configuration without making network requests, use `--dry-run`:
+
+```bash
+uv-sbom --dry-run
+```
+
+This mode:
+- Validates `uv.lock` file
+- Validates command-line arguments
+- Checks exclude patterns
+- Skips license fetching (no PyPI access)
+- Skips vulnerability checking (no OSV access)
+- Skips SBOM output generation
+
 ## Error Handling
 
 uv-sbom provides detailed error messages with helpful suggestions:
@@ -351,6 +716,19 @@ If you're behind a proxy or firewall, ensure that you can access `https://pypi.o
 - [.claude/instructions.md](.claude/instructions.md) - Coding guidelines and instructions for Claude Code
 
 These files provide comprehensive context for AI-assisted development with Claude Code.
+
+## Attribution
+
+### Vulnerability Data
+
+When using the `--check-cve` option, this tool retrieves vulnerability data from [OSV (Open Source Vulnerability)](https://osv.dev), which is provided under the [Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+**Required Attribution:**
+- Vulnerability data provided by OSV
+- Available at: https://osv.dev
+- License: CC-BY 4.0
+
+The OSV database is a collaborative effort to provide comprehensive, accurate, and accessible vulnerability information for open source software.
 
 ## License
 

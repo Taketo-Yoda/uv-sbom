@@ -1,50 +1,50 @@
-# Claude Codeへの指示
+# Instructions for Claude Code
 
-このファイルは、Claude Codeがこのプロジェクトを扱う際の具体的な指示を含みます。
+This file contains specific instructions for Claude Code when working with this project.
 
-## プロジェクトの性質
+## Project Nature
 
-このプロジェクトは**Rust製のCLIツール**で、**ヘキサゴナルアーキテクチャ + DDD**を採用しています:
+This project is a **Rust-based CLI tool** that adopts **Hexagonal Architecture + DDD**:
 
-- 言語: Rust (Edition 2021)
-- ビルドシステム: Cargo
-- アーキテクチャ: ヘキサゴナル（ポート&アダプター）
-- エラーハンドリング: anyhowベース、カスタムエラー型使用
-- 依存性注入: Generic-based（静的ディスパッチ）
+- Language: Rust (Edition 2021)
+- Build System: Cargo
+- Architecture: Hexagonal (Ports & Adapters)
+- Error Handling: anyhow-based with custom error types
+- Dependency Injection: Generic-based (static dispatch)
 
-## アーキテクチャの理解
+## Understanding the Architecture
 
-### レイヤーの責務
+### Layer Responsibilities
 
-1. **ドメイン層** (`sbom_generation/`)
-   - 純粋なビジネスロジック
-   - I/O操作は一切禁止
-   - `std::fs`, `reqwest`などの使用禁止
-   - すべて純粋関数として実装
+1. **Domain Layer** (`sbom_generation/`)
+   - Pure business logic
+   - I/O operations strictly prohibited
+   - No use of `std::fs`, `reqwest`, etc.
+   - All implemented as pure functions
 
-2. **アプリケーション層** (`application/`)
-   - ユースケースのオーケストレーション
-   - ポートを通じてインフラと通信
-   - ビジネスフローの制御
+2. **Application Layer** (`application/`)
+   - Use case orchestration
+   - Communication with infrastructure through ports
+   - Business flow control
 
-3. **ポート層** (`ports/`)
-   - インターフェース定義のみ
-   - トレイトとして実装
-   - 実装は含まない
+3. **Ports Layer** (`ports/`)
+   - Interface definitions only
+   - Implemented as traits
+   - No implementations
 
-4. **アダプター層** (`adapters/`)
-   - インフラストラクチャの具体実装
-   - ポートを実装
-   - I/O操作を実行
+4. **Adapters Layer** (`adapters/`)
+   - Concrete infrastructure implementations
+   - Implements ports
+   - Executes I/O operations
 
-5. **共有層** (`shared/`)
-   - エラー型
-   - 型エイリアス
-   - セキュリティ検証関数
+5. **Shared Layer** (`shared/`)
+   - Error types
+   - Type aliases
+   - Security validation functions
 
-### 依存関係のルール
+### Dependency Rules
 
-**CRITICAL**: 依存関係の方向を厳守すること
+**CRITICAL**: Strictly adhere to dependency direction
 
 ```
 Adapters → Application → Domain
@@ -52,68 +52,68 @@ Adapters → Application → Domain
   Ports   ←   Ports
 ```
 
-- ドメイン層は他のレイヤーに依存しない
-- アプリケーション層はドメイン層とポート層のみに依存
-- アダプター層はポート層を実装
+- Domain layer depends on no other layers
+- Application layer depends only on Domain and Ports layers
+- Adapters layer implements Ports
 
-## コード変更時の注意事項
+## Code Modification Guidelines
 
-### 1. レイヤー違反の禁止
+### 1. Prohibit Layer Violations
 
 ```rust
-// ❌ 悪い例: ドメイン層でI/O操作
-// domain/package.rs内
-use std::fs;  // NG!!
+// ❌ Bad: I/O operations in domain layer
+// Inside domain/package.rs
+use std::fs;  // NOT ALLOWED!!
 
-// ✅ 良い例: ポート経由
-// application/use_cases/generate_sbom.rs内
+// ✅ Good: Via ports
+// Inside application/use_cases/generate_sbom.rs
 fn execute(&self, request: SbomRequest) -> Result<SbomResponse> {
-    // ポート経由でI/O操作
+    // I/O operations via ports
     let content = self.lockfile_reader.read_lockfile(&path)?;
 }
 ```
 
-### 2. エラーハンドリング
+### 2. Error Handling
 
-ユーザーフレンドリーなメッセージを提供:
+Provide user-friendly messages:
 
 ```rust
-// ❌ 悪い例
+// ❌ Bad
 return Err(anyhow::anyhow!("Failed"));
 
-// ✅ 良い例
+// ✅ Good
 return Err(SbomError::LockfileParseError {
     path: lockfile_path.clone(),
     details: e.to_string(),
 }.into());
 ```
 
-### 3. セキュリティ検証
+### 3. Security Validation
 
-ファイル操作時は必ず`shared/security.rs`の関数を使用:
+Always use functions from `shared/security.rs` for file operations:
 
 ```rust
-// ✅ 良い例
+// ✅ Good
 use crate::shared::security::{validate_regular_file, validate_file_size};
 
 validate_regular_file(path, "uv.lock")?;
 validate_file_size(file_size, path, MAX_FILE_SIZE)?;
 ```
 
-### 4. 型エイリアスの使用
+### 4. Type Aliases
 
-複雑な型には型エイリアスを使用（Clippy警告回避）:
+Use type aliases for complex types (to avoid Clippy warnings):
 
 ```rust
-// ✅ 良い例
+// ✅ Good
 pub type PyPiMetadata = (Option<String>, Option<String>, Vec<String>, Option<String>);
 
 fn fetch_license_info(&self, name: &str, version: &str) -> Result<PyPiMetadata>;
 ```
 
-### 5. テストの追加
+### 5. Adding Tests
 
-すべての新機能にテストを追加:
+Add tests for all new features:
 
 ```rust
 #[cfg(test)]
@@ -122,37 +122,37 @@ mod tests {
 
     #[test]
     fn test_new_feature() {
-        // ドメイン層: 純粋関数のテスト
-        // アプリケーション層: モックを使用
-        // アダプター層: tempfileなどで実環境テスト
+        // Domain layer: test pure functions
+        // Application layer: use mocks
+        // Adapters layer: test with real environment using tempfile, etc.
     }
 }
 ```
 
-## モジュール別のガイドライン
+## Module-Specific Guidelines
 
 ### sbom_generation/domain/
 
-**責務**: ビジネスロジックの中核
-**禁止事項**:
-- I/O操作（ファイル、ネットワーク、データベース）
-- 外部クレートへの依存（`std`のみ許可）
-- 副作用のある操作
+**Responsibility**: Core business logic
+**Prohibited**:
+- I/O operations (file, network, database)
+- External crate dependencies (only `std` allowed)
+- Operations with side effects
 
-**許可事項**:
-- バリューオブジェクトの定義
-- ドメインサービス（純粋関数）
-- ビジネスポリシー
+**Allowed**:
+- Value object definitions
+- Domain services (pure functions)
+- Business policies
 
 ### sbom_generation/services/
 
-**責務**: ドメインサービス
-**特徴**:
-- すべて純粋関数
-- I/O依存なし
-- テストが容易
+**Responsibility**: Domain services
+**Characteristics**:
+- All pure functions
+- No I/O dependencies
+- Easy to test
 
-**例**:
+**Example**:
 ```rust
 pub struct DependencyAnalyzer;
 
@@ -161,15 +161,15 @@ impl DependencyAnalyzer {
         project_name: &PackageName,
         dependency_map: &HashMap<String, Vec<String>>,
     ) -> Result<DependencyGraph> {
-        // 純粋なアルゴリズム
+        // Pure algorithm
     }
 }
 ```
 
 ### application/use_cases/
 
-**責務**: ワークフローのオーケストレーション
-**パターン**: Generic-based DI
+**Responsibility**: Workflow orchestration
+**Pattern**: Generic-based DI
 
 ```rust
 pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR> {
@@ -187,15 +187,15 @@ where
     PR: ProgressReporter,
 {
     pub fn execute(&self, request: SbomRequest) -> Result<SbomResponse> {
-        // オーケストレーション
+        // Orchestration
     }
 }
 ```
 
 ### ports/outbound/
 
-**責務**: インターフェース定義
-**パターン**: トレイト定義
+**Responsibility**: Interface definitions
+**Pattern**: Trait definitions
 
 ```rust
 pub trait LockfileReader {
@@ -205,17 +205,17 @@ pub trait LockfileReader {
 
 ### adapters/outbound/
 
-**責務**: ポートの具体実装
-**必須**: セキュリティチェック
+**Responsibility**: Concrete port implementations
+**Required**: Security checks
 
-**ファイルシステムアダプター**:
+**File System Adapter**:
 ```rust
 impl LockfileReader for FileSystemReader {
     fn read_lockfile(&self, project_path: &Path) -> Result<String> {
-        // セキュリティ検証
+        // Security validation
         validate_regular_file(&lockfile_path, "uv.lock")?;
-        
-        // 実装
+
+        // Implementation
         self.safe_read_file(&lockfile_path, "uv.lock")
     }
 }
@@ -223,63 +223,63 @@ impl LockfileReader for FileSystemReader {
 
 ### shared/
 
-**責務**: 共通機能
-**内容**:
-- `error.rs`: エラー型定義
-- `result.rs`: 型エイリアス
-- `security.rs`: セキュリティ検証関数
+**Responsibility**: Common functionality
+**Contents**:
+- `error.rs`: Error type definitions
+- `result.rs`: Type aliases
+- `security.rs`: Security validation functions
 
-## セキュリティガイドライン
+## Security Guidelines
 
-### ファイル操作のセキュリティ
+### File Operation Security
 
-**必須チェック** (`shared/security.rs`使用):
-1. シンボリックリンク検証 - `validate_not_symlink()`
-2. 通常ファイル検証 - `validate_regular_file()`
-3. ファイルサイズ制限 - `validate_file_size()`
+**Required Checks** (use `shared/security.rs`):
+1. Symlink validation - `validate_not_symlink()`
+2. Regular file validation - `validate_regular_file()`
+3. File size limit - `validate_file_size()`
 
-**対策する脅威**:
-- 任意ファイル読み取り（シンボリックリンク経由）
-- DoS攻撃（巨大ファイル）
-- TOCTOU攻撃（二重チェック）
-- パストラバーサル
+**Threats to Mitigate**:
+- Arbitrary file read (via symlinks)
+- DoS attacks (huge files)
+- TOCTOU attacks (time-of-check-time-of-use)
+- Path traversal
 
-### ネットワーク操作のセキュリティ
+### Network Operation Security
 
-**必須実装**:
-1. タイムアウト設定
-2. リトライ制限
-3. レート制限（DoS防止）
-4. HTTPS通信
+**Required Implementation**:
+1. Timeout settings
+2. Retry limits
+3. Rate limiting (DoS prevention)
+4. HTTPS communication
 
-**例** (PyPiLicenseRepository):
+**Example** (PyPiLicenseRepository):
 ```rust
 const MAX_RETRIES: u32 = 3;
 const TIMEOUT_SECONDS: u64 = 10;
 const RATE_LIMIT_MS: u64 = 100;  // 10 req/sec
 ```
 
-## コーディングスタイル
+## Coding Style
 
-### 命名規則
-- 関数名: `snake_case`
-- 型名: `PascalCase`
-- 定数: `UPPER_SNAKE_CASE`
-- トレイト: `PascalCase`（動詞推奨）
+### Naming Conventions
+- Function names: `snake_case`
+- Type names: `PascalCase`
+- Constants: `UPPER_SNAKE_CASE`
+- Traits: `PascalCase` (verbs preferred)
 
-### コメント
-- 公開API: `///` ドキュメントコメント必須
-- 複雑なロジック: `//` 説明コメント
-- セキュリティ関連: `// Security:` プレフィックス
+### Comments
+- Public APIs: `///` documentation comments required
+- Complex logic: `//` explanatory comments
+- Security-related: `// Security:` prefix
 
-### エラーハンドリング
-- `?`演算子を積極的に使用
-- `unwrap()`や`expect()`は避ける（テスト以外）
-- エラーコンテキストを追加
+### Error Handling
+- Use `?` operator extensively
+- Avoid `unwrap()` and `expect()` (except in tests)
+- Add error context
 
-## テスト戦略
+## Testing Strategy
 
-### ドメイン層のテスト
+### Domain Layer Tests
 ```rust
 #[cfg(test)]
 mod tests {
@@ -287,250 +287,748 @@ mod tests {
 
     #[test]
     fn test_domain_logic() {
-        // 純粋関数なのでモック不要
+        // Pure functions, no mocks needed
         let result = DependencyAnalyzer::analyze(...);
         assert_eq!(result, expected);
     }
 }
 ```
 
-### アプリケーション層のテスト
+### Application Layer Tests
 ```rust
 #[test]
 fn test_use_case() {
-    // モックを使用
+    // Use mocks
     let mock_reader = MockLockfileReader { ... };
     let use_case = GenerateSbomUseCase::new(mock_reader, ...);
-    
+
     let result = use_case.execute(request);
     assert!(result.is_ok());
 }
 ```
 
-### アダプター層のテスト
+### Adapters Layer Tests
 ```rust
 #[test]
 fn test_file_reader() {
-    // tempfileで実環境テスト
+    // Test with real environment using tempfile
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("uv.lock");
     fs::write(&file_path, "content").unwrap();
-    
+
     let reader = FileSystemReader::new();
     let result = reader.read_lockfile(temp_dir.path());
     assert!(result.is_ok());
 }
 ```
 
-## パフォーマンス考慮
+## Performance Considerations
 
-### ボトルネック
-1. PyPI API呼び出し（レート制限あり）
-2. ネットワークレイテンシ
+### Bottlenecks
+1. PyPI API calls (rate limited)
+2. Network latency
 
-### 最適化時の注意
-- ベンチマーク計測を必ず行う
-- プロファイリング結果に基づく
-- 早すぎる最適化を避ける
+### Optimization Notes
+- Always perform benchmarking
+- Base on profiling results
+- Avoid premature optimization
 
-## ドキュメント更新
+## Documentation Updates
 
-新機能追加時に更新すべきファイル:
-1. `README.md` - ユーザー向け使用方法
-2. `.claude/project-context.md` - アーキテクチャ情報
-3. コード内ドキュメントコメント
-4. テストケース
+Files to update when adding new features:
+1. `README.md` - User guide
+2. `.claude/project-context.md` - Architecture information
+3. Documentation comments in code
+4. Test cases
 
-## 依存関係の追加
+## Adding Dependencies
 
-新しい依存関係を追加する場合:
+When adding new dependencies:
 
-1. **必要性を検討**: 既存で解決できないか確認
-2. **最小限の機能**: `features`で必要な機能のみ
-3. **適切なレイヤー**: 
-   - ドメイン層: `std`のみ
-   - アプリケーション層: anyhow, 基本的なユーティリティ
-   - アダプター層: I/Oライブラリ許可
-4. **ドキュメント更新**: `.claude/project-context.md`を更新
+1. **Consider necessity**: Check if existing tools can solve the problem
+2. **Minimal features**: Use only required `features`
+3. **Appropriate layer**:
+   - Domain layer: `std` only
+   - Application layer: anyhow, basic utilities
+   - Adapters layer: I/O libraries allowed
+4. **Update documentation**: Update `.claude/project-context.md`
 
-## よくある質問
+## Frequently Asked Questions
 
-### Q: 重複コードや複雑な条件分岐を見つけた場合、どうすべきか
-A: GoFデザインパターンの適用を検討してください:
-1. **重複コードが複数箇所にある場合**:
-   - Template Methodパターン: 共通アルゴリズムを抽出
-   - Strategyパターン: アルゴリズムの切り替えが必要な場合（例: Issue #9のFormatter選択）
-2. **複雑な条件分岐（match/if-else）がある場合**:
-   - Strategyパターン: 振る舞いの切り替え
-   - Factoryパターン: オブジェクト生成の切り替え
-   - Polymorphism: トレイトによる動的ディスパッチ
-3. **実装前にGitHub Issueを起票して設計を相談すること**
+### Q: What should I do when I find duplicate code or complex conditional branches?
+A: Consider applying GoF design patterns:
+1. **When duplicate code exists in multiple places**:
+   - Template Method pattern: Extract common algorithms
+   - Strategy pattern: When algorithm switching is needed (e.g., Formatter selection in Issue #9)
+2. **When complex conditional branches (match/if-else) exist**:
+   - Strategy pattern: Switch behaviors
+   - Factory pattern: Switch object creation
+   - Polymorphism: Dynamic dispatch via traits
+3. **Always open a GitHub Issue to discuss the design before implementation**
 
-### Q: 新しいフォーマットを追加したい
+### Q: How do I add a new format?
 A:
-1. `ports/outbound/formatter.rs`の`SbomFormatter`トレイトを確認
-2. `adapters/outbound/formatters/`に新しいフォーマッターを実装
-3. `application/dto/output_format.rs`の`OutputFormat`enumに新しいフォーマット種別を追加
-4. `application/factories/formatter_factory.rs`の`FormatterFactory::create()`メソッドを更新
-5. `FormatterFactory::progress_message()`を更新（必要に応じて）
-6. テスト追加（OutputFormatのFromStrテストとFormatterFactoryのテスト）
+1. Check the `SbomFormatter` trait in `ports/outbound/formatter.rs`
+2. Implement new formatter in `adapters/outbound/formatters/`
+3. Add new format type to `OutputFormat` enum in `application/dto/output_format.rs`
+4. Update `FormatterFactory::create()` method in `application/factories/formatter_factory.rs`
+5. Update `FormatterFactory::progress_message()` (if needed)
+6. Add tests (FromStr test for OutputFormat and FormatterFactory tests)
 
-### Q: 新しいライセンスソースを追加したい
+### Q: How do I add a new license source?
 A:
-1. `LicenseRepository`トレイトを実装
-2. `adapters/outbound/`に新しいアダプター作成
-3. `main.rs`でDI配線
-4. テスト追加
+1. Implement `LicenseRepository` trait
+2. Create new adapter in `adapters/outbound/`
+3. Wire DI in `main.rs`
+4. Add tests
 
-### Q: ドメイン層で外部APIを呼びたい
-A: **NG!** ポートを定義してアダプターで実装すること
+### Q: Can I call external APIs in the domain layer?
+A: **NO!** Define a port and implement it in an adapter
 
-### Q: テストでファイルI/Oが必要
-A: `tempfile`クレートを使用してテンポラリファイル作成
+### Q: What if I need file I/O in tests?
+A: Use the `tempfile` crate to create temporary files
 
-### Q: ファイル操作のセキュリティチェックを忘れた場合
-A: **必ず修正してください**:
-1. `shared/security.rs`の検証関数を使用
-2. シンボリックリンク、ファイルサイズ、通常ファイルのチェック
-3. テストでセキュリティ違反のケースも確認
+### Q: What if I forgot security checks for file operations?
+A: **Must fix immediately**:
+1. Use validation functions from `shared/security.rs`
+2. Check symlinks, file size, and regular files
+3. Verify security violation cases in tests
 
-## Git/ブランチ戦略
+## Git/Branch Strategy
 
-このプロジェクトではGit Flowベースのブランチ戦略を採用しています（詳細は `DEVELOPMENT.md` 参照）。
+This project adopts a Git Flow-based branching strategy (see `DEVELOPMENT.md` for details).
 
-### 作業前のブランチ確認
+### Branch Creation Rule (CRITICAL)
 
-**CRITICAL**: コーディング開始前に必ず現在のブランチを確認してください：
+**ALWAYS create new branches from `origin/develop`** (NOT from `main`):
 
 ```bash
-git status
-git branch --show-current
+git fetch origin
+git checkout -b feature/<issue-number>-<description> origin/develop
 ```
 
-### ブランチルール
+### Branch Rules
 
-1. **`develop`ブランチで直接作業しない**
-   - 必ずfeatureブランチを作成してから作業
+1. **Do not work directly on the `develop` branch** - Always create a feature branch first
+2. **Never work on the `main` branch** - main is for production releases only
+3. **PRs target `develop`** (except hotfix/release which target `main`)
 
-2. **`main`ブランチでは絶対に作業しない**
-   - mainは本番リリース用
+### Branch Naming Conventions
 
-3. **適切なブランチ命名規則**:
-   - Feature: `feature/<issue-number>-<short-description>`
-   - Bugfix: `bugfix/<issue-number>-<short-description>`
-   - Hotfix: `hotfix/<issue-number>-<short-description>`
+**Determine branch prefix based on Issue labels (priority order):**
 
-### 作業開始時のチェックリスト
+| Priority | Issue Label | Branch Prefix | Example |
+|----------|-------------|---------------|---------|
+| 1 | `enhancement` | `feature/` | `feature/88-add-new-feature` |
+| 2 | `bug` | `bugfix/` | `bugfix/42-fix-parsing-error` |
+| 3 | `refactor` | `refactor/` | `refactor/30-cleanup-code` |
+| 4 | `documentation` | `doc/` | `doc/50-update-readme` |
+| 5 | (no label) | `feature/` | `feature/99-misc-task` |
 
+**Additional branch types:**
+- Hotfix (critical production fixes): `hotfix/<issue-number>-<short-description>`
+
+**Format**: `<prefix>/<issue-number>-<short-description>`
+
+**Example workflow:**
 ```bash
-# 1. 現在のブランチを確認
-git branch --show-current
+# Check Issue #88 labels
+gh issue view 88 --json labels
 
-# 2. developブランチまたはmainブランチの場合、featureブランチを作成
-git checkout develop
-git pull origin develop
-git checkout -b feature/<issue-number>-<description>
+# If label is "enhancement" → use feature/
+git checkout -b feature/88-add-new-feature origin/develop
 
-# 3. 作業開始
+# If label is "bug" → use bugfix/
+git checkout -b bugfix/88-fix-something origin/develop
 ```
 
-### コミット前の確認
+### Agent Skills (Git Operations)
 
-すべての変更をコミットする前に：
+For detailed Git workflow procedures, use the following Agent Skills:
 
-1. **正しいブランチにいることを確認**
+- **`/implement`** - End-to-end issue implementation (branch creation → implementation → commit → PR)
+- **`/commit`** - Commit creation (includes branch guard, format/clippy checks)
+- **`/pr`** - PR creation (includes CI pre-validation, base branch: `develop`)
+- **`/pre-push`** - Pre-push validation
+- **`/issue`** - Issue creation
+
+**IMPORTANT**: GitHub Issues/PRs MUST be written in **English**.
+
+### CRITICAL: Never Bypass Skills for Common Operations
+
+**This section documents a critical workflow requirement based on Issue #59 incident.**
+
+**Root Cause of Failure**: When instructed to run Clippy before push, executing `cargo clippy --all-targets` directly **without** the `-D warnings` flag (instead of invoking the `/pre-push` skill) caused CI failures. The CI caught `dead_code` warnings that were not treated as errors locally.
+
+**Mandatory Skill Usage**:
+
+| Operation | Required Skill | Why |
+|-----------|---------------|-----|
+| Clippy check | `/pre-push` | Ensures `-D warnings` flag is included |
+| PR Creation | `/pr` | Runs all pre-flight checks before creating PR |
+| Push | `/pre-push` | Runs all CI-equivalent checks |
+
+**Note**: `cargo fmt` is handled by pre-commit hook (see below).
+
+**⚠️ WARNING**: Executing clippy directly (without skills) risks missing the `-D warnings` flag that CI enforces.
+
+**Correct Usage**:
+```bash
+# ❌ WRONG: Direct command execution (missing -D warnings)
+cargo clippy --all-targets
+
+# ✅ CORRECT: Use /pre-push skill which includes:
+# cargo clippy --all-targets --all-features -- -D warnings
+```
+
+**Why `-D warnings` is mandatory**:
+- Without `-D warnings`, Clippy warnings are not treated as errors
+- CI always runs with `-D warnings`, so local checks must match
+- Warnings like `dead_code` will pass locally but fail in CI
+
+**Failure Pattern Example (Issue #59)**:
+1. Agent ran `cargo clippy --all-targets` (without `-D warnings`)
+2. Clippy showed warnings but exit code was 0 (success)
+3. Push proceeded despite warnings
+4. CI failed because it uses `-D warnings` which treats warnings as errors
+
+**Prevention**: Always invoke `/pre-push` skill before pushing.
+
+### Pre-commit Hook
+
+This project has a pre-commit hook that automatically runs `cargo fmt --all`.
+
+**Setup** (run once after cloning):
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook handles formatting only. Clippy and tests require `/pre-push` skill.
+
+## Claude Code Workflow
+
+### When Starting Work
+
+1. **Check branch (required)**: Verify current branch with `git status`
+   - If on `develop` or `main` → Create a feature branch **from `origin/develop`**:
+     ```bash
+     git fetch origin
+     git checkout -b feature/<issue>-<desc> origin/develop
+     ```
+   - If on a feature branch → Continue work
+2. **Check context**: Read `.claude/project-context.md`
+3. **Verify architecture**: Understand layer responsibilities
+
+### During Coding
+
+4. **Identify changes**: Make changes in the appropriate layer
+4-1. **CRITICAL - For Rust file changes (.rs files)**:
+   - After making ANY changes to .rs files (adding, modifying, or deleting), you MUST run format check BEFORE pushing
+   - This is MANDATORY and cannot be skipped
+   - Non-Rust file changes (e.g., README.md, .yml) do not require format check
    ```bash
-   git branch --show-current
-   # feature/*, bugfix/*, または hotfix/* であることを確認
+   # MANDATORY before git push when .rs files are changed
+   cargo fmt --all
+   cargo fmt --all -- --check  # Verify formatting is correct
+   ```
+5. **Consider design patterns**: Before implementation, consider applying GoF design patterns
+   - For duplicate code or complex conditionals, consider appropriate patterns (Strategy, Factory, Template Method, etc.)
+   - Verify consistency with existing architecture patterns (Hexagonal, DDD)
+6. **Security review**: During implementation, verify:
+   - File operations: Use validation functions from `shared/security.rs`
+   - Network operations: Implement timeouts, retries, rate limiting
+   - Input validation: Properly validate user input and external data
+   - Error messages: Do not include sensitive information (paths, internal structures, etc.)
+7. **Add tests**: Always add tests for new features
+8. **Verify build**: `cargo build`
+9. **Run tests**: `cargo test`
+10. **Quality checks (required)** - ⚠️ **USE `/pre-push` SKILL INSTEAD OF MANUAL COMMANDS**:
+    - **Format check**: `cargo fmt --all -- --check` (if errors, fix with `cargo fmt --all`)
+    - **Clippy check**: `cargo clippy --all-targets --all-features -- -D warnings` (zero warnings required)
+      - ⚠️ **CRITICAL**: The `-D warnings` flag is **MANDATORY** - never omit it!
+      - Without `-D warnings`, warnings pass locally but fail CI (see Issue #59)
+
+### When Completing Work
+
+11. **Update documentation**: As needed
+12. **Check branch**: Verify branch again before committing
+13. **Commit**: Commit changes with appropriate commit message
+
+**Important**:
+- Step 1 branch check is **mandatory at the start of work**
+- Step 5 design pattern consideration is **mandatory before implementation**
+- Step 6 security review is **continuously performed during implementation**
+- Step 10 quality checks are **mandatory upon coding completion**
+- Code is not considered complete unless all these checks pass
+
+## PR Creation and Review Response Checklist
+
+### Before Creating a Pull Request
+
+**CRITICAL**: Always complete this checklist before pushing code and creating a PR:
+
+1. **Run code formatter (MANDATORY)**:
+   ```bash
+   cargo fmt --all
+   ```
+   - This must be done BEFORE `git push`
+   - Prevents CI failures due to formatting issues
+   - **Common mistake**: Forgetting to run formatter before push (Issue #23, PR #31)
+
+2. **Run quality checks**:
+   ```bash
+   cargo fmt --all -- --check  # Verify formatting
+   cargo clippy --all-targets --all-features -- -D warnings  # Zero warnings
+   cargo test  # All tests must pass
    ```
 
-2. **変更内容を確認**
+3. **Verify target branch (MANDATORY)**:
+   - **Default base branch**: `develop` (NOT `main`)
+   - **Common mistake**: Creating PR with `main` as base branch (Issue #23, PR #31)
+   - When creating PR via `gh pr create`:
+     ```bash
+     gh pr create --base develop --title "..." --body "..."
+     ```
+   - When creating PR via GitHub web UI: Double-check the base branch dropdown
+
+4. **Review all changes before push**:
    ```bash
    git status
    git diff
    ```
 
-3. **品質チェックを実行**（後述）
+### When Responding to Review Comments
 
-## Claude Codeでの作業フロー
+**CRITICAL**: Follow this checklist to avoid missing review feedback:
 
-### 作業開始時
+1. **Read ALL review comments thoroughly**:
+   ```bash
+   gh pr view <PR-number> --comments
+   ```
+   - Read each comment completely
+   - **Common mistake**: Missing individual review comments (Issue #23, PR #31 - missed emoji addition)
 
-1. **ブランチ確認（必須）**: `git status` で現在のブランチを確認
-   - `develop`または`main`の場合 → featureブランチを作成
-   - featureブランチの場合 → そのまま作業継続
-2. **コンテキスト確認**: `.claude/project-context.md`を読む
-3. **アーキテクチャ確認**: レイヤーの責務を理解
+2. **Create a checklist of all review items**:
+   - List all requested changes
+   - Use TodoWrite tool to track each item
+   - Example:
+     ```
+     [ ] Fix formatting issue in file X
+     [ ] Add emoji to warning message
+     [ ] Change base branch to develop
+     [ ] Update documentation
+     ```
 
-### コーディング中
+3. **Address each item one by one**:
+   - Mark items as completed only after verification
+   - Test each change before committing
 
-4. **変更箇所の特定**: 適切なレイヤーに変更を加える
-5. **デザインパターンの検討**: 実装前にGoFデザインパターンの適用を検討
-   - 重複コードや複雑な条件分岐がある場合、適切なパターン（Strategy, Factory, Template Method等）を検討
-   - 既存のアーキテクチャパターン（ヘキサゴナル、DDD）との整合性を確認
-6. **セキュリティレビュー**: 実装中に以下を確認
-   - ファイル操作: `shared/security.rs`の検証関数を使用
-   - ネットワーク操作: タイムアウト・リトライ・レート制限の実装
-   - 入力検証: ユーザー入力や外部データの適切なバリデーション
-   - エラーメッセージ: 機密情報（パス、内部構造等）を含まない
-7. **テストの追加**: 新機能には必ずテストを追加
-8. **ビルド確認**: `cargo build`
-9. **テスト実行**: `cargo test`
-10. **品質確認（必須）**:
-    - **フォーマットチェック**: `cargo fmt --all -- --check` （エラーが出たら `cargo fmt --all` で修正）
-    - **Clippyチェック**: `cargo clippy --all-targets --all-features -- -D warnings` （警告ゼロ必須）
+4. **Verify all changes before push**:
+   ```bash
+   cargo fmt --all  # Run formatter again
+   cargo test       # Verify tests still pass
+   git diff         # Review all changes
+   ```
 
-### 作業完了時
+5. **Cross-check with review comments after push**:
+   - Re-read all review comments
+   - Verify each point has been addressed
+   - Update PR comment with response to each review item
 
-11. **ドキュメント更新**: 必要に応じて
-12. **ブランチ確認**: コミット前に再度ブランチを確認
-13. **コミット**: 適切なコミットメッセージで変更をコミット
+### Common Mistakes to Avoid (Lessons from PR #31)
 
-**重要**:
-- ステップ1のブランチ確認は**作業開始時に必ず実行**すること
-- ステップ5のデザインパターン検討は**実装前に必ず実施**すること
-- ステップ6のセキュリティレビューは**実装中に継続的に実施**すること
-- ステップ10の品質確認は**コーディング完了時に必ず実行**すること
-- これらのチェックがパスしない限り、コードは完成していないと見なされます
+**Mistake 1: Wrong base branch**
+- ❌ Creating PR with `main` as base
+- ✅ Always use `develop` as base branch
+- **Prevention**: Always specify `--base develop` when using `gh pr create`
 
-## 注意事項
+**Mistake 2: Forgetting to run formatter before push**
+- ❌ Pushing code without running `cargo fmt --all`
+- ✅ Always run `cargo fmt --all` immediately before `git push`
+- **Prevention**: Add this to your pre-push mental checklist
 
-### 破壊的変更の禁止
-- 公開APIの変更は慎重に
-- 既存のCLIオプションを削除・変更しない
-- 下位互換性を保つ
+**Mistake 3: Missing review comment items**
+- ❌ Addressing only some review comments
+- ✅ Read ALL comments, create checklist, address all items
+- **Prevention**: Use `gh pr view <PR> --comments` to see all comments, use TodoWrite tool
 
-### コード品質
+**Mistake 4: Running Clippy without `-D warnings` flag (Issue #59)**
+- ❌ Running `cargo clippy --all-targets` directly without `-D warnings`
+- ✅ Always use `/pre-push` skill which includes the correct flags
+- **What happens**: Warnings are displayed but treated as non-fatal, push succeeds, CI fails
+- **Prevention**: NEVER run individual quality commands manually - always use `/pre-push` skill
+- **Root cause**: Bypassing skills means missing critical flags that match CI configuration
 
-**コーディング完了時の必須チェック**:
-1. **デザインパターン検証**:
-   - 重複コードや複雑な条件分岐にGoFパターンを適用したか確認
-   - Strategy, Factory, Template Method, Builder等の適用可能性を検討
-   - 既存のアーキテクチャ（ヘキサゴナル、DDD）との整合性を確認
-2. **セキュリティ検証**:
-   - ファイル操作: `shared/security.rs`の検証関数使用確認
-   - ネットワーク操作: タイムアウト、リトライ、レート制限の実装確認
-   - 入力検証: ユーザー入力や外部データのバリデーション確認
-   - エラーメッセージ: 機密情報の漏洩がないか確認
-   - OWASP Top 10の脆弱性（パストラバーサル、インジェクション等）を考慮
-3. **フォーマット**: `cargo fmt --all -- --check` がパスすること
-4. **Clippy**: `cargo clippy --all-targets --all-features -- -D warnings` で警告ゼロ
-5. **テスト**: `cargo test` が全テストパス
-6. **テストカバレッジ**: 新機能には必ずテストを追加
-7. **ドキュメント**: 公開APIには必ずドキュメントコメント
+**Mistake 5: Bypassing Agent Skills for common operations (Issue #59)**
+- ❌ Running `cargo fmt --check` or `cargo clippy` manually instead of using skills
+- ✅ Always invoke `/pre-push` skill for all pre-push validation
+- **Why skills exist**: They encode the exact commands and flags that CI uses
+- **Prevention**: Treat skills as the ONLY way to run these checks before push
 
-これらのチェックが全てパスしない限り、コードは完成していません。
+### Pre-Push Final Checklist
 
-### セキュリティ
-- ファイル操作: 必ず`shared/security.rs`使用
-- ネットワーク操作: タイムアウト・リトライ設定
-- エラーメッセージ: 機密情報を含めない
+**CRITICAL**: If you have changed ANY Rust files (.rs), you MUST complete this checklist before `git push`:
+
+**⚠️ RECOMMENDED: Use `/pre-push` skill instead of manual commands**
+
+The `/pre-push` skill automatically runs all necessary checks with the correct flags. This is the safest way to validate your code before pushing.
+
+If you must run commands manually (not recommended), verify ALL of the following:
+
+```bash
+# 1. Code formatter (MANDATORY for .rs file changes)
+# Skip this step ONLY if you changed non-Rust files (e.g., README.md, .yml)
+cargo fmt --all
+
+# 2. Quality checks
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings  # ⚠️ -D warnings is MANDATORY!
+cargo test
+
+# 3. Review changes
+git status
+git diff
+
+# 4. Verify branch
+git branch --show-current  # Should be feature/*, bugfix/*, etc.
+
+# 5. Push
+git push
+
+# 6. Create PR with correct base branch
+gh pr create --base develop --title "..." --body "..."
+```
+
+**Remember**:
+- These steps are MANDATORY, not optional. Skipping any step may result in CI failures or review delays.
+- **STRONGLY PREFERRED**: Invoke `/pre-push` skill instead of running these commands manually
+- **Issue #59 Lesson**: Running `cargo clippy` without `-D warnings` caused CI failures
+
+## GitHub Issue Creation Guidelines
+
+### Purpose
+
+Issues serve as the foundation for development work in this project. Well-written issues enable:
+- AI agents to implement features autonomously
+- Clear communication of requirements and technical specifications
+- Consistent documentation of decisions and rationale
+- Efficient collaboration between team members
+
+### Key Principles
+
+1. **Language**: Always write issues in **English**
+   - Reason: Project standard for all public documentation
+   - Applies to: Issue title, description, code examples, acceptance criteria
+   - No exceptions
+
+2. **AI-First Design**: Issues must contain sufficient detail for autonomous AI implementation
+   - Include technical specifications, not just high-level descriptions
+   - Provide concrete code examples and file paths
+   - Document design decisions and rationale explicitly
+   - Anticipate implementation questions and address them proactively
+
+3. **Completeness**: An issue should answer the question "Can an AI implement this without asking for clarification?"
+   - If the answer is no, add more detail
+   - Include context, constraints, and assumptions
+   - Reference related issues, PRs, or documentation
+
+### Issue Structure Template
+
+Use this structure for all issues:
+
+```markdown
+## Description
+[Clear, concise description of the problem or feature]
+[Explain why this is needed and what value it provides]
+
+## Current Situation / Background
+[Explain current behavior or implementation]
+[Provide context that helps understand the need]
+[Reference related code, issues, or documentation]
+
+## Proposed Solution / Technical Details
+[Detailed technical specification]
+[Architecture considerations]
+[Design decisions and trade-offs]
+[Security implications (if any)]
+
+## Implementation Examples
+
+### Example 1: [Specific file or component]
+```[language]
+[Concrete code example or documentation snippet]
+```
+[Explanation of the example]
+[Why this approach was chosen]
+
+### Example 2: [Another file or component]
+```[language]
+[Another concrete example]
+```
+[Explanation]
+
+## Acceptance Criteria
+- [ ] [Specific, testable criterion 1]
+- [ ] [Specific, testable criterion 2]
+- [ ] [Specific, testable criterion 3]
+- [ ] All existing tests pass
+- [ ] New tests added for new functionality (if applicable)
+- [ ] Documentation updated (if applicable)
+- [ ] Code formatted with `cargo fmt --all`
+- [ ] Clippy warnings resolved (`cargo clippy -- -D warnings`)
+
+## Files to Update/Create
+1. `path/to/file1.rs` - [What changes are needed]
+2. `path/to/file2.md` - [What changes are needed]
+3. `path/to/new_file.rs` - [What to create and why]
+
+## Additional Notes
+[Any other relevant information]
+[Links to related issues or PRs]
+[Dependencies or blockers]
+[Security considerations]
+```
+
+### When to Create an Issue
+
+Create an issue in these situations:
+
+1. **Before starting implementation work**
+   - Allows for discussion and design review
+   - Documents the plan for future reference
+
+2. **For documenting bugs**
+   - Include reproduction steps
+   - Document expected vs. actual behavior
+   - Provide environment details
+
+3. **For proposing new features or enhancements**
+   - Explain the use case and value
+   - Consider alternative approaches
+   - Document design decisions
+
+4. **For tracking technical debt**
+   - Document what needs improvement and why
+   - Explain impact and priority
+
+### Writing for AI Implementation
+
+To ensure AI agents can implement your issue autonomously:
+
+1. **Provide Concrete Examples**
+   - Don't just describe what to do, show it
+   - Include code snippets for each file to be modified
+   - Use actual code, not pseudocode
+
+2. **Include File Paths**
+   - Specify exact paths: `src/sbom_generation/services/package_filter.rs`
+   - List all files that need changes
+   - Indicate whether files are new or existing
+
+3. **Specify Design Decisions Explicitly**
+   - Don't leave room for interpretation
+   - Example: "Use Strategy pattern" not "Improve the design"
+   - Explain why a particular approach was chosen
+
+4. **Document Assumptions and Constraints**
+   - Security requirements
+   - Performance constraints
+   - Backward compatibility needs
+   - API stability guarantees
+
+5. **Provide Context**
+   - Reference related code or issues
+   - Explain architectural patterns in use
+   - Link to relevant documentation
+
+### Pre-Submission Verification (MANDATORY)
+
+**CRITICAL**: Before submitting ANY issue via `gh issue create` or GitHub UI, complete this checklist:
+
+```bash
+# Step 1: Verify language (MANDATORY)
+# Check your drafted issue content for any non-English text
+# Look for Japanese characters: ぁ-ん, ァ-ヶ, 一-龯
+# If found, translate to English before submission
+
+# Step 2: Review against template
+# Ensure all sections are present:
+# - Description ✓
+# - Current Situation / Background ✓
+# - Proposed Solution / Technical Details ✓
+# - Implementation Examples ✓
+# - Acceptance Criteria ✓
+# - Files to Update/Create ✓
+
+# Step 3: Quality check
+# - Issue written in English (title and body) ✓
+# - Code examples use proper markdown formatting ✓
+# - Acceptance criteria use checklist format ✓
+# - File paths are absolute and specific ✓
+```
+
+**Checklist for AI Agents** (use TodoWrite tool):
+
+When creating an issue, add these todos BEFORE drafting content:
+- [ ] Verify issue will be written in English (MANDATORY)
+- [ ] Review `.claude/instructions.md` GitHub Issue Creation Guidelines
+- [ ] Prepare code examples with proper formatting
+- [ ] Write acceptance criteria in checklist format
+- [ ] **FINAL CHECK**: Re-verify entire issue is in English before `gh issue create`
+
+**Why this checklist is necessary**:
+- Catches language violations before submission
+- Provides a moment for reflection and review
+- Creates a mental checkpoint in the workflow
+- Prevents the need to edit issues after creation
+
+### Quality Checklist
+
+Before submitting an issue, verify:
+
+- [ ] **COMPLETED Pre-Submission Verification above** ⚠️
+- [ ] Issue written in English (title and body)
+- [ ] Clear description of problem/feature with context
+- [ ] Technical details sufficient for implementation
+- [ ] At least one concrete code example provided
+- [ ] Acceptance criteria in checklist format (testable)
+- [ ] Files to update/create are listed with explanations
+- [ ] Design decisions documented with rationale
+- [ ] Question: "Can an AI implement this without asking questions?" - Answer: Yes
+
+### Examples of Good Issues
+
+**Example 1: Feature Request (Issue #23)**
+
+✅ **Good because**:
+- Clear description of expected behavior
+- Technical implementation hints provided
+- Example scenarios with expected output
+- Message format specified (emoji + text)
+- Output channel specified (stderr)
+
+**Example 2: Documentation (Issue #32)**
+
+✅ **Good because**:
+- Detailed documentation of what currently exists
+- Specific examples for each file to update
+- Code snippets for documentation comments
+- Clear acceptance criteria
+- Rationale for each security measure
+
+**Example 3: This Issue (Issue #33)**
+
+✅ **Good because**:
+- Comprehensive template structure
+- Multiple concrete examples
+- Clear quality checklist
+- References to existing good issues
+
+### Examples of Issues to Avoid
+
+**❌ Bad Example 1: Vague Description**
+```
+Title: "Fix bug"
+Body: "The exclude option doesn't work right. Please fix."
+```
+**Problems**:
+- No specific behavior described
+- No reproduction steps
+- No expected vs. actual behavior
+- Impossible for AI to implement
+
+**❌ Bad Example 2: Missing Technical Details**
+```
+Title: "Add logging"
+Body: "We should add logging to the application."
+```
+**Problems**:
+- No specification of what to log
+- No logging framework specified
+- No log level strategy
+- No examples of log messages
+- No file paths
+
+**❌ Bad Example 3: No Acceptance Criteria**
+```
+Title: "Improve performance"
+Body: "The application is slow. Make it faster."
+```
+**Problems**:
+- No baseline performance metrics
+- No target performance goals
+- No specific bottlenecks identified
+- No clear definition of "done"
+
+**❌ Bad Example 4: Insufficient Examples**
+```
+Title: "Add security validation"
+Body: "Add security validation to file operations."
+```
+**Problems**:
+- No code examples showing what validation to add
+- No specific files mentioned
+- No explanation of security threats being mitigated
+
+### Integration with Development Workflow
+
+1. **Issue Creation** → Discussion/Review → Implementation → PR → Review → Merge
+2. Always reference the issue number in commits: `feat: add feature X (#123)`
+3. Use `Closes #123` in PR description to auto-close issues
+4. Update issues with implementation notes if approach changes
+
+### Maintaining Issue Quality
+
+- Review existing issues periodically for quality
+- Update old issues to match current template
+- Close outdated or duplicate issues
+- Add labels to categorize issues (bug, feature, documentation, security, etc.)
+
+## Important Notes
+
+### Prohibit Breaking Changes
+- Be careful with public API changes
+- Do not delete or modify existing CLI options
+- Maintain backward compatibility
+
+### Code Quality
+
+**Required checks upon coding completion**:
+1. **Design pattern verification**:
+   - Verify GoF patterns are applied to duplicate code or complex conditionals
+   - Consider applicability of Strategy, Factory, Template Method, Builder, etc.
+   - Verify consistency with existing architecture (Hexagonal, DDD)
+2. **Security verification**:
+   - File operations: Verify use of validation functions from `shared/security.rs`
+   - Network operations: Verify implementation of timeouts, retries, rate limiting
+   - Input validation: Verify validation of user input and external data
+   - Error messages: Verify no sensitive information leakage
+   - Consider OWASP Top 10 vulnerabilities (path traversal, injection, etc.)
+3. **Format**: `cargo fmt --all -- --check` must pass
+4. **Clippy**: `cargo clippy --all-targets --all-features -- -D warnings` must have zero warnings
+5. **Tests**: `cargo test` must pass all tests
+6. **Test coverage**: Always add tests for new features
+7. **Documentation**: Always add documentation comments to public APIs
+
+Code is not complete unless all these checks pass.
+
+### Security
+- File operations: Always use `shared/security.rs`
+- Network operations: Configure timeouts and retries
+- Error messages: Do not include sensitive information
 
 ---
 
-最終更新: 2025-01-04
+Last Updated: 2026-01-17
 
-## 変更履歴
+## Change History
 
-- 2025-01-04: Git/ブランチ戦略セクション追加
-- 2025-01-04: デザインパターン検討・セキュリティレビューをワークフローに追加
+- 2026-01-17: Added pre-commit hook for automatic formatting (Issue #102)
+- 2026-01-17: Added "CRITICAL: Never Bypass Skills for Common Operations" section with skill enforcement table and failure pattern documentation (Issue #88)
+- 2026-01-17: Added Mistake 4 & 5 to "Common Mistakes to Avoid" section documenting Clippy `-D warnings` and skill bypass issues (Issue #88)
+- 2026-01-17: Updated "Pre-Push Final Checklist" to strongly recommend using `/pre-push` skill (Issue #88)
+- 2026-01-13: Added "Pre-Submission Verification (MANDATORY)" section to prevent non-English issues (Issue #69)
+- 2026-01-09: Added "GitHub Issue Creation Guidelines" section (Issue #33)
+- 2026-01-09: Added "PR Creation and Review Response Checklist" section (Lessons from PR #31)
+- 2025-01-04: Added Git/Branch Strategy section
+- 2025-01-04: Added design pattern consideration and security review to workflow

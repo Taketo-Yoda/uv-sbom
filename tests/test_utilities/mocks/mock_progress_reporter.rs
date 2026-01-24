@@ -27,15 +27,6 @@ impl ProgressReporter for MockProgressReporter {
         self.messages.lock().unwrap().push(message.to_string());
     }
 
-    fn report_progress(&self, current: usize, total: usize, message: Option<&str>) {
-        let msg = if let Some(m) = message {
-            format!("Progress: {}/{} - {}", current, total, m)
-        } else {
-            format!("Progress: {}/{}", current, total)
-        };
-        self.messages.lock().unwrap().push(msg);
-    }
-
     fn report_error(&self, message: &str) {
         self.messages
             .lock()

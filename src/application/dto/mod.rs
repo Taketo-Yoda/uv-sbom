@@ -7,5 +7,6 @@ mod sbom_request;
 mod sbom_response;
 
 pub use output_format::OutputFormat;
-pub use sbom_request::SbomRequest;
+#[allow(unused_imports)]
+pub use sbom_request::{SbomRequest, SbomRequestBuilder};
 pub use sbom_response::SbomResponse;

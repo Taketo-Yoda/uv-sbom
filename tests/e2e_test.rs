@@ -2,8 +2,70 @@
 use std::path::PathBuf;
 use uv_sbom::prelude::*;
 
-#[test]
-fn test_e2e_json_format() {
+// Exit code tests for CLI
+mod exit_code_tests {
+    use assert_cmd::cargo::cargo_bin_cmd;
+
+    /// Exit code 0: Success - normal execution
+    #[test]
+    fn test_exit_code_success() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["-p", "tests/fixtures/sample-project"])
+            .assert()
+            .code(0);
+    }
+
+    /// Exit code 0: --help should return success
+    #[test]
+    fn test_exit_code_help() {
+        cargo_bin_cmd!("uv-sbom").arg("--help").assert().code(0);
+    }
+
+    /// Exit code 0: --version should return success
+    #[test]
+    fn test_exit_code_version() {
+        cargo_bin_cmd!("uv-sbom").arg("--version").assert().code(0);
+    }
+
+    /// Exit code 2: Invalid arguments
+    #[test]
+    fn test_exit_code_invalid_argument() {
+        cargo_bin_cmd!("uv-sbom")
+            .arg("--invalid-option")
+            .assert()
+            .code(2);
+    }
+
+    /// Exit code 2: Invalid format value
+    #[test]
+    fn test_exit_code_invalid_format() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["-f", "invalid_format"])
+            .assert()
+            .code(2);
+    }
+
+    /// Exit code 3: Application error - non-existent project path
+    #[test]
+    fn test_exit_code_application_error_nonexistent_path() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["-p", "/nonexistent/path/that/does/not/exist"])
+            .assert()
+            .code(3);
+    }
+
+    /// Exit code 3: Application error - path is a file, not a directory
+    #[test]
+    fn test_exit_code_application_error_file_not_directory() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["-p", "Cargo.toml"])
+            .assert()
+            .code(3);
+    }
+}
+
+#[tokio::test]
+async fn test_e2e_json_format() {
     // Use the sample project fixture
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
@@ -14,22 +76,26 @@ fn test_e2e_json_format() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
-    let request = SbomRequest::new(project_path, false, vec![]);
-    let result = use_case.execute(request);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
 
     // Format as JSON
     let formatter = CycloneDxFormatter::new();
-    let json_output = formatter.format(response.enriched_packages, &response.metadata);
+    let json_output = formatter.format(response.enriched_packages, &response.metadata, None);
 
     assert!(json_output.is_ok());
     let json = json_output.unwrap();
@@ -41,8 +107,8 @@ fn test_e2e_json_format() {
     assert!(json.contains("urllib3"));
 }
 
-#[test]
-fn test_e2e_markdown_format() {
+#[tokio::test]
+async fn test_e2e_markdown_format() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -50,15 +116,20 @@ fn test_e2e_markdown_format() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
-    let request = SbomRequest::new(project_path, true, vec![]);
-    let result = use_case.execute(request);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .include_dependency_info(true)
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -71,6 +142,8 @@ fn test_e2e_markdown_format() {
             .expect("Dependency graph should be present"),
         response.enriched_packages,
         &response.metadata,
+        None,
+        None,
     );
 
     assert!(markdown_output.is_ok());
@@ -84,8 +157,8 @@ fn test_e2e_markdown_format() {
     assert!(markdown.contains("requests"));
 }
 
-#[test]
-fn test_e2e_nonexistent_project() {
+#[tokio::test]
+async fn test_e2e_nonexistent_project() {
     let project_path = PathBuf::from("tests/fixtures/nonexistent");
 
     let lockfile_reader = FileSystemReader::new();
@@ -93,21 +166,25 @@ fn test_e2e_nonexistent_project() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
-    let request = SbomRequest::new(project_path, false, vec![]);
-    let result = use_case.execute(request);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
 
     assert!(result.is_err());
 }
 
-#[test]
-fn test_e2e_package_count() {
+#[tokio::test]
+async fn test_e2e_package_count() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -115,15 +192,20 @@ fn test_e2e_package_count() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
-    let request = SbomRequest::new(project_path, true, vec![]);
-    let result = use_case.execute(request);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .include_dependency_info(true)
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -139,8 +221,8 @@ fn test_e2e_package_count() {
     assert!(graph.transitive_dependency_count() > 0); // requests has transitive deps
 }
 
-#[test]
-fn test_e2e_exclude_single_package() {
+#[tokio::test]
+async fn test_e2e_exclude_single_package() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -148,16 +230,21 @@ fn test_e2e_exclude_single_package() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     // Exclude urllib3
-    let request = SbomRequest::new(project_path, false, vec!["urllib3".to_string()]);
-    let result = use_case.execute(request);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .add_exclude_pattern("urllib3")
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -172,8 +259,8 @@ fn test_e2e_exclude_single_package() {
         .any(|p| p.package.name() == "urllib3"));
 }
 
-#[test]
-fn test_e2e_exclude_multiple_packages() {
+#[tokio::test]
+async fn test_e2e_exclude_multiple_packages() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -181,20 +268,21 @@ fn test_e2e_exclude_multiple_packages() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     // Exclude urllib3 and certifi
-    let request = SbomRequest::new(
-        project_path,
-        false,
-        vec!["urllib3".to_string(), "certifi".to_string()],
-    );
-    let result = use_case.execute(request);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .exclude_patterns(vec!["urllib3".to_string(), "certifi".to_string()])
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -213,8 +301,8 @@ fn test_e2e_exclude_multiple_packages() {
         .any(|p| p.package.name() == "certifi"));
 }
 
-#[test]
-fn test_e2e_exclude_with_wildcard() {
+#[tokio::test]
+async fn test_e2e_exclude_with_wildcard() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -222,16 +310,21 @@ fn test_e2e_exclude_with_wildcard() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     // Exclude packages starting with "char"
-    let request = SbomRequest::new(project_path, false, vec!["char*".to_string()]);
-    let result = use_case.execute(request);
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .add_exclude_pattern("char*")
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -246,8 +339,8 @@ fn test_e2e_exclude_with_wildcard() {
         .any(|p| p.package.name() == "charset-normalizer"));
 }
 
-#[test]
-fn test_e2e_exclude_all_packages_error() {
+#[tokio::test]
+async fn test_e2e_exclude_all_packages_error() {
     let project_path = PathBuf::from("tests/fixtures/sample-project");
 
     let lockfile_reader = FileSystemReader::new();
@@ -255,27 +348,28 @@ fn test_e2e_exclude_all_packages_error() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new();
 
-    let use_case = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
     );
 
     // Exclude all packages with a pattern that matches everything
-    let request = SbomRequest::new(
-        project_path,
-        false,
-        vec![
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .exclude_patterns(vec![
             "*requests*".to_string(),
             "*urllib3*".to_string(),
             "*charset*".to_string(),
             "*idna*".to_string(),
             "*certifi*".to_string(),
             "*sample*".to_string(),
-        ],
-    );
-    let result = use_case.execute(request);
+        ])
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
 
     // Should fail because all packages would be excluded
     assert!(result.is_err());
@@ -348,8 +442,9 @@ fn create_test_license_repository() -> impl LicenseRepository {
         }
     }
 
+    #[async_trait::async_trait]
     impl LicenseRepository for TestLicenseRepository {
-        fn fetch_license_info(
+        async fn fetch_license_info(
             &self,
             package_name: &str,
             version: &str,

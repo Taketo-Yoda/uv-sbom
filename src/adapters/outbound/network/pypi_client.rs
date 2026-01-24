@@ -1,5 +1,6 @@
 use crate::ports::outbound::{LicenseRepository, PyPiMetadata};
 use crate::shared::Result;
+use async_trait::async_trait;
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -22,10 +23,14 @@ struct PyPiInfo {
 
 /// PyPiLicenseRepository adapter for fetching license information from PyPI API
 ///
-/// This adapter implements the LicenseRepository port, providing network access
+/// This adapter implements the LicenseRepository port, providing async network access
 /// to the PyPI JSON API for package metadata.
+///
+/// # Async Support
+/// Uses async reqwest client for non-blocking HTTP requests, enabling parallel
+/// license fetching for improved performance.
 pub struct PyPiLicenseRepository {
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
     max_retries: u32,
 }
 
@@ -34,7 +39,7 @@ impl PyPiLicenseRepository {
     pub fn new() -> Result<Self> {
         let version = env!("CARGO_PKG_VERSION");
         let user_agent = format!("uv-sbom/{}", version);
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .user_agent(user_agent)
             .build()?;
@@ -45,18 +50,18 @@ impl PyPiLicenseRepository {
         })
     }
 
-    /// Fetches package information from PyPI with retry logic
-    fn fetch_with_retry(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
+    /// Fetches package information from PyPI with retry logic (async)
+    async fn fetch_with_retry(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
         let mut last_error = None;
 
         for attempt in 1..=self.max_retries {
-            match self.fetch_from_pypi(package_name, version) {
+            match self.fetch_from_pypi(package_name, version).await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     last_error = Some(e);
                     if attempt < self.max_retries {
-                        // Retry after a short wait
-                        std::thread::sleep(Duration::from_millis(100 * attempt as u64));
+                        // Retry after a short wait (async)
+                        tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
                     }
                 }
             }
@@ -93,8 +98,8 @@ impl PyPiLicenseRepository {
         Ok(())
     }
 
-    /// Fetches package information from PyPI API
-    fn fetch_from_pypi(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
+    /// Fetches package information from PyPI API (async)
+    async fn fetch_from_pypi(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
         // Security: Validate URL components before using them
         Self::validate_url_component(package_name, "Package name")?;
         Self::validate_url_component(version, "Version")?;
@@ -108,13 +113,13 @@ impl PyPiLicenseRepository {
             encoded_package, encoded_version
         );
 
-        let response = self.client.get(&url).send()?;
+        let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
             anyhow::bail!("PyPI API returned status code {}", response.status());
         }
 
-        let package_info: PyPiPackageInfo = response.json()?;
+        let package_info: PyPiPackageInfo = response.json().await?;
         Ok(package_info)
     }
 }
@@ -123,9 +128,10 @@ impl PyPiLicenseRepository {
 // Default::default() would panic if client creation fails, which is not safe for production.
 // Use PyPiLicenseRepository::new() explicitly and handle the Result.
 
+#[async_trait]
 impl LicenseRepository for PyPiLicenseRepository {
-    fn fetch_license_info(&self, package_name: &str, version: &str) -> Result<PyPiMetadata> {
-        let package_info = self.fetch_with_retry(package_name, version)?;
+    async fn fetch_license_info(&self, package_name: &str, version: &str) -> Result<PyPiMetadata> {
+        let package_info = self.fetch_with_retry(package_name, version).await?;
 
         Ok((
             package_info.info.license,

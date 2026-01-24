@@ -1,8 +1,16 @@
 [project]
 name = "sample-project"
 version = "0.1.0"
-description = "A sample project for testing uv-sbom"
+description = "A sample project for testing uv-sbom with various CVE severity levels"
 requires-python = ">=3.11"
 dependencies = [
-    "requests>=2.32.0",
+    # Packages with known vulnerabilities at various severity levels
+    # NOTE: These are intentionally old versions for demonstration purposes only
+    "pillow==8.3.2",       # CRITICAL severity vulnerabilities
+    "urllib3==1.26.5",     # HIGH severity vulnerabilities
+    "requests==2.25.0",    # HIGH severity vulnerabilities
+    "jinja2==2.11.3",      # HIGH/MEDIUM severity vulnerabilities
+    "werkzeug==1.0.0",     # MEDIUM/LOW severity vulnerabilities
+    "pyyaml==5.4",         # MEDIUM severity vulnerabilities
+    "certifi>=2024.0.0",   # Current version (no known vulnerabilities)
 ]
