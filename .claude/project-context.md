@@ -14,7 +14,7 @@ This file provides complete project context for Claude Code and other developers
 - Check for known vulnerabilities with configurable thresholds for CI integration
 
 ### Version Information
-- Current Version: 0.2.0
+- Current Version: 1.0.0
 - Rust Edition: 2021
 - CycloneDX Specification: 1.6
 - Architecture: Hexagonal Architecture + DDD
@@ -53,15 +53,15 @@ The following files do **NOT** need updates:
 #### Version Update Procedure
 ```bash
 # 1. Update Cargo.toml version
-sed -i '' 's/version = "0.2.0"/version = "0.3.0"/' Cargo.toml
+sed -i '' 's/version = "1.0.0"/version = "1.1.0"/' Cargo.toml
 
 # 2. Update Python wrapper version
-sed -i '' 's/version = "0.2.0"/version = "0.3.0"/' python-wrapper/pyproject.toml
-sed -i '' 's/__version__ = "0.2.0"/__version__ = "0.3.0"/' python-wrapper/uv_sbom_bin/__init__.py
-sed -i '' 's/UV_SBOM_VERSION = "0.2.0"/UV_SBOM_VERSION = "0.3.0"/' python-wrapper/uv_sbom_bin/install.py
+sed -i '' 's/version = "1.0.0"/version = "1.1.0"/' python-wrapper/pyproject.toml
+sed -i '' 's/__version__ = "1.0.0"/__version__ = "1.1.0"/' python-wrapper/uv_sbom_bin/__init__.py
+sed -i '' 's/UV_SBOM_VERSION = "1.0.0"/UV_SBOM_VERSION = "1.1.0"/' python-wrapper/uv_sbom_bin/install.py
 
 # 3. Update this file's version
-sed -i '' 's/Current Version: 0.2.0/Current Version: 0.3.0/' .claude/project-context.md
+sed -i '' 's/Current Version: 1.0.0/Current Version: 1.1.0/' .claude/project-context.md
 
 # 4. Build and test
 cargo build
@@ -69,7 +69,7 @@ cargo test
 
 # 5. Commit
 git add Cargo.toml python-wrapper/ .claude/project-context.md
-git commit -m "chore: bump version to 0.3.0"
+git commit -m "chore: bump version to 1.1.0"
 ```
 
 ## Technology Stack
@@ -173,4 +173,4 @@ The tool supports configurable vulnerability thresholds for CI/CD integration:
 
 ---
 
-Last Updated: 2026-01-19
+Last Updated: 2025-01-24

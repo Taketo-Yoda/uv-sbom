@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.request import urlretrieve
 
 # Version of uv-sbom to install
-UV_SBOM_VERSION = "0.2.0"
+UV_SBOM_VERSION = "1.0.0"
 
 # GitHub release URL template
 RELEASE_URL_TEMPLATE = (
