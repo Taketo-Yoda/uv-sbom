@@ -102,7 +102,6 @@ struct MockProgressReporter;
 
 impl ProgressReporter for MockProgressReporter {
     fn report(&self, _message: &str) {}
-    fn report_progress(&self, _current: usize, _total: usize, _message: Option<&str>) {}
     fn report_error(&self, _message: &str) {}
     fn report_completion(&self, _message: &str) {}
 }
