@@ -58,6 +58,16 @@ pub enum SbomError {
     /// Validation error for builder patterns
     #[error("Validation error: {message}")]
     Validation { message: String },
+
+    #[error("Failed to read file: {path}\nDetails: {details}\n\n💡 Hint: Please verify that the file exists and you have read permissions")]
+    FileReadError { path: PathBuf, details: String },
+
+    #[error("Security violation: {path}\nReason: {reason}\n\n💡 Hint: {hint}")]
+    SecurityError {
+        path: PathBuf,
+        reason: String,
+        hint: String,
+    },
 }
 
 #[cfg(test)]
@@ -155,5 +165,32 @@ mod tests {
         assert!(display.contains("/invalid/path"));
         assert!(display.contains("Directory does not exist"));
         assert!(display.contains("💡 Hint:"));
+    }
+
+    #[test]
+    fn test_file_read_error_display() {
+        let error = SbomError::FileReadError {
+            path: PathBuf::from("/test/file.txt"),
+            details: "File not found".to_string(),
+        };
+        let display = format!("{}", error);
+        assert!(display.contains("Failed to read file"));
+        assert!(display.contains("/test/file.txt"));
+        assert!(display.contains("File not found"));
+        assert!(display.contains("💡 Hint:"));
+    }
+
+    #[test]
+    fn test_security_error_display() {
+        let error = SbomError::SecurityError {
+            path: PathBuf::from("/test/symlink"),
+            reason: "Symbolic links are not allowed".to_string(),
+            hint: "Use a regular file instead".to_string(),
+        };
+        let display = format!("{}", error);
+        assert!(display.contains("Security violation"));
+        assert!(display.contains("/test/symlink"));
+        assert!(display.contains("Symbolic links are not allowed"));
+        assert!(display.contains("Use a regular file instead"));
     }
 }

@@ -1,11 +1,9 @@
 use crate::ports::outbound::{LockfileParseResult, LockfileReader, ProjectConfigReader};
 use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
-use crate::shared::security::{validate_file_size, validate_regular_file, MAX_FILE_SIZE};
+use crate::shared::security::{read_file_with_security, MAX_FILE_SIZE};
 use crate::shared::Result;
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::Read;
 use std::path::Path;
 
 /// FileSystemReader adapter for reading files from the file system
@@ -27,46 +25,16 @@ impl Default for FileSystemReader {
 }
 
 impl FileSystemReader {
-    /// Safely read a file with security checks:
-    /// - Reject symbolic links
-    /// - Check file size limits
-    /// - Validate file is a regular file
-    /// - Mitigate TOCTOU by opening file and checking metadata on the file descriptor
+    /// Safely read a file with security checks.
+    ///
+    /// Delegates to the consolidated `read_file_with_security` function in `shared::security`,
+    /// which provides:
+    /// - Symlink rejection
+    /// - File type validation
+    /// - File size limits
+    /// - TOCTOU mitigation
     fn safe_read_file(&self, path: &Path, file_type: &str) -> Result<String> {
-        // Security check 1: Validate it's a regular file (not a symlink or directory)
-        validate_regular_file(path, file_type)?;
-
-        // Security check 2: Get file size and validate it's within limits
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|e| anyhow::anyhow!("Failed to read {} metadata: {}", file_type, e))?;
-        let file_size = metadata.len();
-        validate_file_size(file_size, path, MAX_FILE_SIZE)?;
-
-        // TOCTOU mitigation: Open file and verify metadata again
-        // This reduces (but doesn't eliminate) the race window
-        let mut file =
-            File::open(path).map_err(|e| anyhow::anyhow!("Failed to open {}: {}", file_type, e))?;
-
-        // Re-check metadata on the opened file descriptor
-        let fd_metadata = file.metadata().map_err(|e| {
-            anyhow::anyhow!("Failed to read {} metadata after opening: {}", file_type, e)
-        })?;
-
-        // Verify the file hasn't changed (same size indicates likely same file)
-        // This is not perfect but provides additional protection
-        if fd_metadata.len() != file_size {
-            anyhow::bail!(
-                "Security: {} changed between check and open (possible TOCTOU attack)",
-                path.display()
-            );
-        }
-
-        // Read file contents
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", file_type, e))?;
-
-        Ok(contents)
+        read_file_with_security(path, file_type, MAX_FILE_SIZE)
     }
 }
 
