@@ -455,31 +455,31 @@ uv-sbom --format markdown --check-cve --cvss-threshold 7.0
 
 ### よくあるエラーシナリオ
 
-**終了コード 1 - アプリケーションエラー:**
+**終了コード 3 - アプリケーションエラー:**
 ```bash
 # uv.lockファイルが見つからない
 $ uv-sbom --path /path/without/uv-lock
 ❌ An error occurred:
 uv.lock file not found: /path/without/uv-lock/uv.lock
-# 終了コード: 1
+# 終了コード: 3
 
 # 無効な除外パターン（空）
 $ uv-sbom -e ""
 ❌ An error occurred:
 Exclusion pattern cannot be empty
-# 終了コード: 1
+# 終了コード: 3
 
 # 無効な除外パターン（無効な文字）
 $ uv-sbom -e "pkg;name"
 ❌ An error occurred:
 Exclusion pattern contains invalid character ';' in pattern 'pkg;name'
-# 終了コード: 1
+# 終了コード: 3
 
 # 存在しないプロジェクトパス
 $ uv-sbom --path /nonexistent
 ❌ An error occurred:
 Invalid project path: /nonexistent
-# 終了コード: 1
+# 終了コード: 3
 ```
 
 **終了コード 2 - CLI引数エラー:**
@@ -507,12 +507,16 @@ case $? in
     echo "SBOMの生成に成功しました"
     ;;
   1)
-    echo "アプリケーションエラーが発生しました"
+    echo "しきい値を超える脆弱性が検出されました"
     exit 1
     ;;
   2)
     echo "無効なコマンドライン引数です"
     exit 2
+    ;;
+  3)
+    echo "アプリケーションエラーが発生しました"
+    exit 3
     ;;
 esac
 ```

@@ -456,31 +456,31 @@ uv-sbom --format markdown --check-cve --cvss-threshold 7.0
 
 ### Common Error Scenarios
 
-**Exit code 1 - Application errors:**
+**Exit code 3 - Application errors:**
 ```bash
 # Missing uv.lock file
 $ uv-sbom --path /path/without/uv-lock
 ❌ An error occurred:
 uv.lock file not found: /path/without/uv-lock/uv.lock
-# Exit code: 1
+# Exit code: 3
 
 # Invalid exclude pattern (empty)
 $ uv-sbom -e ""
 ❌ An error occurred:
 Exclusion pattern cannot be empty
-# Exit code: 1
+# Exit code: 3
 
 # Invalid exclude pattern (invalid characters)
 $ uv-sbom -e "pkg;name"
 ❌ An error occurred:
 Exclusion pattern contains invalid character ';' in pattern 'pkg;name'
-# Exit code: 1
+# Exit code: 3
 
 # Nonexistent project path
 $ uv-sbom --path /nonexistent
 ❌ An error occurred:
 Invalid project path: /nonexistent
-# Exit code: 1
+# Exit code: 3
 ```
 
 **Exit code 2 - CLI argument errors:**
@@ -508,12 +508,16 @@ case $? in
     echo "SBOM generated successfully"
     ;;
   1)
-    echo "Application error occurred"
+    echo "Vulnerabilities detected above threshold"
     exit 1
     ;;
   2)
     echo "Invalid command-line arguments"
     exit 2
+    ;;
+  3)
+    echo "Application error occurred"
+    exit 3
     ;;
 esac
 ```
