@@ -1,5 +1,6 @@
 use std::fmt;
 use std::path::PathBuf;
+use thiserror::Error;
 
 /// Exit codes for the CLI application.
 ///
@@ -36,73 +37,28 @@ impl fmt::Display for ExitCode {
     }
 }
 
-#[derive(Debug)]
+/// Application-specific errors for SBOM generation.
+///
+/// Uses thiserror to derive Display and Error traits automatically,
+/// reducing boilerplate while maintaining user-friendly error messages.
+#[derive(Debug, Error)]
 pub enum SbomError {
-    LockfileNotFound {
-        path: PathBuf,
-        suggestion: String,
-    },
-    LockfileParseError {
-        path: PathBuf,
-        details: String,
-    },
-    FileWriteError {
-        path: PathBuf,
-        details: String,
-    },
-    InvalidProjectPath {
-        path: PathBuf,
-        reason: String,
-    },
+    #[error("uv.lock file not found: {path}\n\n💡 Hint: {suggestion}")]
+    LockfileNotFound { path: PathBuf, suggestion: String },
+
+    #[error("Failed to parse uv.lock file: {path}\nDetails: {details}\n\n💡 Hint: Please verify that the uv.lock file is in the correct format")]
+    LockfileParseError { path: PathBuf, details: String },
+
+    #[error("Failed to write to file: {path}\nDetails: {details}\n\n💡 Hint: Please verify that the directory exists and you have write permissions")]
+    FileWriteError { path: PathBuf, details: String },
+
+    #[error("Invalid project path: {path}\nReason: {reason}\n\n💡 Hint: Please specify a valid project directory")]
+    InvalidProjectPath { path: PathBuf, reason: String },
+
     /// Validation error for builder patterns
-    Validation {
-        message: String,
-    },
+    #[error("Validation error: {message}")]
+    Validation { message: String },
 }
-
-impl fmt::Display for SbomError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SbomError::LockfileNotFound { path, suggestion } => {
-                write!(
-                    f,
-                    "uv.lock file not found: {}\n\n💡 Hint: {}",
-                    path.display(),
-                    suggestion
-                )
-            }
-            SbomError::LockfileParseError { path, details } => {
-                write!(
-                    f,
-                    "Failed to parse uv.lock file: {}\nDetails: {}\n\n💡 Hint: Please verify that the uv.lock file is in the correct format",
-                    path.display(),
-                    details
-                )
-            }
-            SbomError::FileWriteError { path, details } => {
-                write!(
-                    f,
-                    "Failed to write to file: {}\nDetails: {}\n\n💡 Hint: Please verify that the directory exists and you have write permissions",
-                    path.display(),
-                    details
-                )
-            }
-            SbomError::InvalidProjectPath { path, reason } => {
-                write!(
-                    f,
-                    "Invalid project path: {}\nReason: {}\n\n💡 Hint: Please specify a valid project directory",
-                    path.display(),
-                    reason
-                )
-            }
-            SbomError::Validation { message } => {
-                write!(f, "Validation error: {}", message)
-            }
-        }
-    }
-}
-
-impl std::error::Error for SbomError {}
 
 #[cfg(test)]
 mod tests {
