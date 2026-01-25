@@ -14,9 +14,10 @@ use application::use_cases::GenerateSbomUseCase;
 use clap::Parser;
 use cli::Args;
 use owo_colors::OwoColorize;
-use shared::error::{ExitCode, SbomError};
+use shared::error::ExitCode;
+use shared::security::validate_directory_path;
 use shared::Result;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process;
 
 #[tokio::main]
@@ -179,56 +180,16 @@ fn display_banner() {
     eprintln!();
 }
 
-fn validate_project_path(path: &Path) -> Result<()> {
-    if !path.exists() {
-        return Err(SbomError::InvalidProjectPath {
-            path: path.to_path_buf(),
-            reason: "Directory does not exist".to_string(),
-        }
-        .into());
-    }
-
-    // Security check: Reject symbolic links for project paths
-    let metadata = std::fs::symlink_metadata(path).map_err(|e| SbomError::InvalidProjectPath {
-        path: path.to_path_buf(),
-        reason: format!("Failed to read path metadata: {}", e),
-    })?;
-
-    if metadata.is_symlink() {
-        return Err(SbomError::InvalidProjectPath {
-            path: path.to_path_buf(),
-            reason: "Security: Project path is a symbolic link. For security reasons, symbolic links are not allowed.".to_string(),
-        }
-        .into());
-    }
-
-    if !path.is_dir() {
-        return Err(SbomError::InvalidProjectPath {
-            path: path.to_path_buf(),
-            reason: "Not a directory".to_string(),
-        }
-        .into());
-    }
-
-    // Security check: Canonicalize path to prevent path traversal
-    let canonical_path = path
-        .canonicalize()
-        .map_err(|e| SbomError::InvalidProjectPath {
-            path: path.to_path_buf(),
-            reason: format!("Failed to canonicalize path: {}", e),
-        })?;
-
-    // Validate that the canonical path is actually a directory
-    // (additional check after canonicalization)
-    if !canonical_path.is_dir() {
-        return Err(SbomError::InvalidProjectPath {
-            path: path.to_path_buf(),
-            reason: "Resolved path is not a directory".to_string(),
-        }
-        .into());
-    }
-
-    Ok(())
+/// Validates that the project path is a valid directory.
+///
+/// This delegates to `validate_directory_path` in `shared::security`,
+/// which provides comprehensive security validation including:
+/// - Existence check
+/// - Symlink rejection
+/// - Directory type verification
+/// - Path canonicalization for traversal prevention
+fn validate_project_path(path: &std::path::Path) -> Result<()> {
+    validate_directory_path(path)
 }
 
 #[cfg(test)]
