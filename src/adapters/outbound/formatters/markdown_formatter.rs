@@ -1,6 +1,8 @@
 use crate::ports::outbound::{EnrichedPackage, SbomFormatter};
-use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
-use crate::sbom_generation::domain::vulnerability::{PackageVulnerabilities, Severity};
+use crate::sbom_generation::domain::services::{
+    VulnerabilityCheckResult, VulnerabilityChecker, VulnerabilityRow,
+};
+use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata};
 use crate::shared::Result;
 use std::collections::HashMap;
@@ -145,34 +147,18 @@ impl MarkdownFormatter {
         packages.iter().map(|pv| pv.vulnerabilities().len()).sum()
     }
 
-    /// Sorts package vulnerabilities by severity (Critical > High > Medium > Low > None)
-    fn sort_vulnerabilities_by_severity(
-        vulnerabilities: &[PackageVulnerabilities],
-    ) -> Vec<(String, String, String, String, Severity, String)> {
-        let mut rows: Vec<(String, String, String, String, Severity, String)> = Vec::new();
-
-        for pkg_vuln in vulnerabilities {
-            for vuln in pkg_vuln.vulnerabilities() {
-                let cvss_display = vuln
-                    .cvss_score()
-                    .map_or("N/A".to_string(), |s| format!("{:.1}", s.value()));
-                let fixed_version = vuln.fixed_version().unwrap_or("N/A").to_string();
-                let severity = vuln.severity();
-
-                rows.push((
-                    pkg_vuln.package_name().to_string(),
-                    pkg_vuln.current_version().to_string(),
-                    fixed_version,
-                    cvss_display,
-                    severity,
-                    vuln.id().to_string(),
-                ));
-            }
-        }
-
-        // Sort by severity in descending order (Critical first, then High, etc.)
-        rows.sort_by(|a, b| b.4.cmp(&a.4));
-        rows
+    /// Formats a single vulnerability row for markdown table output
+    fn format_vulnerability_row(row: &VulnerabilityRow) -> String {
+        format!(
+            "| {} | {} | {} | {} | {} {:?} | {} |\n",
+            Self::escape_markdown_table_cell(&row.package_name),
+            Self::escape_markdown_table_cell(&row.current_version),
+            Self::escape_markdown_table_cell(&row.fixed_version),
+            row.cvss_display,
+            row.severity.emoji(),
+            row.severity,
+            Self::escape_markdown_table_cell(&row.cve_id),
+        )
     }
 
     /// Formats the Warning section for vulnerabilities above threshold
@@ -202,19 +188,10 @@ impl MarkdownFormatter {
         output.push_str(VULN_TABLE_HEADER);
         output.push_str(VULN_TABLE_SEPARATOR);
 
-        // Sort and format rows
-        let sorted_rows = Self::sort_vulnerabilities_by_severity(vulnerabilities);
-        for (pkg_name, current_version, fixed_version, cvss, severity, cve_id) in sorted_rows {
-            output.push_str(&format!(
-                "| {} | {} | {} | {} | {} {:?} | {} |\n",
-                Self::escape_markdown_table_cell(&pkg_name),
-                Self::escape_markdown_table_cell(&current_version),
-                Self::escape_markdown_table_cell(&fixed_version),
-                cvss,
-                severity.emoji(),
-                severity,
-                Self::escape_markdown_table_cell(&cve_id),
-            ));
+        // Sort and format rows using domain service
+        let sorted_rows = VulnerabilityChecker::sort_by_severity(vulnerabilities);
+        for row in &sorted_rows {
+            output.push_str(&Self::format_vulnerability_row(row));
         }
 
         output
@@ -247,19 +224,10 @@ impl MarkdownFormatter {
         output.push_str(VULN_TABLE_HEADER);
         output.push_str(VULN_TABLE_SEPARATOR);
 
-        // Sort and format rows
-        let sorted_rows = Self::sort_vulnerabilities_by_severity(vulnerabilities);
-        for (pkg_name, current_version, fixed_version, cvss, severity, cve_id) in sorted_rows {
-            output.push_str(&format!(
-                "| {} | {} | {} | {} | {} {:?} | {} |\n",
-                Self::escape_markdown_table_cell(&pkg_name),
-                Self::escape_markdown_table_cell(&current_version),
-                Self::escape_markdown_table_cell(&fixed_version),
-                cvss,
-                severity.emoji(),
-                severity,
-                Self::escape_markdown_table_cell(&cve_id),
-            ));
+        // Sort and format rows using domain service
+        let sorted_rows = VulnerabilityChecker::sort_by_severity(vulnerabilities);
+        for row in &sorted_rows {
+            output.push_str(&Self::format_vulnerability_row(row));
         }
 
         output
@@ -827,65 +795,6 @@ mod tests {
         let output = MarkdownFormatter::format_vulnerability_with_threshold(&result);
 
         assert!(output.contains("### ⚠️Warning No vulnerabilities found above threshold."));
-    }
-
-    #[test]
-    fn test_vulnerability_sorting_by_severity() {
-        use crate::sbom_generation::domain::vulnerability::{
-            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
-        };
-
-        // Create vulnerabilities in random order
-        let vuln_low = Vulnerability::new(
-            "CVE-LOW".to_string(),
-            Some(CvssScore::new(2.0).unwrap()),
-            Severity::Low,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let vuln_critical = Vulnerability::new(
-            "CVE-CRITICAL".to_string(),
-            Some(CvssScore::new(9.8).unwrap()),
-            Severity::Critical,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let vuln_medium = Vulnerability::new(
-            "CVE-MEDIUM".to_string(),
-            Some(CvssScore::new(5.0).unwrap()),
-            Severity::Medium,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let vuln_high = Vulnerability::new(
-            "CVE-HIGH".to_string(),
-            Some(CvssScore::new(8.0).unwrap()),
-            Severity::High,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let pkg_vulns = PackageVulnerabilities::new(
-            "test-pkg".to_string(),
-            "1.0.0".to_string(),
-            vec![vuln_low, vuln_critical, vuln_medium, vuln_high],
-        );
-
-        let sorted = MarkdownFormatter::sort_vulnerabilities_by_severity(&[pkg_vulns]);
-
-        // Verify order: Critical, High, Medium, Low
-        assert_eq!(sorted.len(), 4);
-        assert_eq!(sorted[0].5, "CVE-CRITICAL");
-        assert_eq!(sorted[1].5, "CVE-HIGH");
-        assert_eq!(sorted[2].5, "CVE-MEDIUM");
-        assert_eq!(sorted[3].5, "CVE-LOW");
     }
 
     #[test]
