@@ -142,11 +142,6 @@ impl MarkdownFormatter {
         output
     }
 
-    /// Counts total vulnerabilities across all packages
-    fn count_total_vulnerabilities(packages: &[PackageVulnerabilities]) -> usize {
-        packages.iter().map(|pv| pv.vulnerabilities().len()).sum()
-    }
-
     /// Formats a single vulnerability row for markdown table output
     fn format_vulnerability_row(row: &VulnerabilityRow) -> String {
         format!(
@@ -162,11 +157,11 @@ impl MarkdownFormatter {
     }
 
     /// Formats the Warning section for vulnerabilities above threshold
-    fn format_vulnerability_warning_section(vulnerabilities: &[PackageVulnerabilities]) -> String {
+    fn format_vulnerability_warning_section(result: &VulnerabilityCheckResult) -> String {
         let mut output = String::new();
 
-        let total_vulns = Self::count_total_vulnerabilities(vulnerabilities);
-        let package_count = vulnerabilities.len();
+        let total_vulns = result.actionable_count();
+        let package_count = result.actionable_package_count();
 
         output.push_str(&format!(
             "### ⚠️Warning Found {} {} in {} {}.\n\n",
@@ -189,7 +184,7 @@ impl MarkdownFormatter {
         output.push_str(VULN_TABLE_SEPARATOR);
 
         // Sort and format rows using domain service
-        let sorted_rows = VulnerabilityChecker::sort_by_severity(vulnerabilities);
+        let sorted_rows = VulnerabilityChecker::sort_by_severity(&result.above_threshold);
         for row in &sorted_rows {
             output.push_str(&Self::format_vulnerability_row(row));
         }
@@ -198,11 +193,11 @@ impl MarkdownFormatter {
     }
 
     /// Formats the Info section for vulnerabilities below threshold
-    fn format_vulnerability_info_section(vulnerabilities: &[PackageVulnerabilities]) -> String {
+    fn format_vulnerability_info_section(result: &VulnerabilityCheckResult) -> String {
         let mut output = String::new();
 
-        let total_vulns = Self::count_total_vulnerabilities(vulnerabilities);
-        let package_count = vulnerabilities.len();
+        let total_vulns = result.informational_count();
+        let package_count = result.informational_package_count();
 
         output.push_str(&format!(
             "### ℹ️Info Found {} {} in {} {}.\n\n",
@@ -225,7 +220,7 @@ impl MarkdownFormatter {
         output.push_str(VULN_TABLE_SEPARATOR);
 
         // Sort and format rows using domain service
-        let sorted_rows = VulnerabilityChecker::sort_by_severity(vulnerabilities);
+        let sorted_rows = VulnerabilityChecker::sort_by_severity(&result.below_threshold);
         for row in &sorted_rows {
             output.push_str(&Self::format_vulnerability_row(row));
         }
@@ -239,20 +234,16 @@ impl MarkdownFormatter {
         output.push_str("\n## Vulnerability Report\n\n");
 
         // Warning section (above threshold)
-        if result.above_threshold.is_empty() {
+        if !result.has_actionable_vulnerabilities() {
             output.push_str("### ⚠️Warning No vulnerabilities found above threshold.\n\n");
         } else {
-            output.push_str(&Self::format_vulnerability_warning_section(
-                &result.above_threshold,
-            ));
+            output.push_str(&Self::format_vulnerability_warning_section(result));
             output.push('\n');
         }
 
         // Info section (below threshold)
-        if !result.below_threshold.is_empty() {
-            output.push_str(&Self::format_vulnerability_info_section(
-                &result.below_threshold,
-            ));
+        if result.has_informational_vulnerabilities() {
+            output.push_str(&Self::format_vulnerability_info_section(result));
         }
 
         // Attribution
@@ -368,7 +359,9 @@ impl SbomFormatter for MarkdownFormatter {
         // Add vulnerability section
         // Priority: use VulnerabilityCheckResult if available, otherwise fall back to vulnerability_report
         if let Some(result) = vulnerability_result {
-            if result.above_threshold.is_empty() && result.below_threshold.is_empty() {
+            if !result.has_actionable_vulnerabilities()
+                && !result.has_informational_vulnerabilities()
+            {
                 output.push_str(&Self::format_no_vulnerabilities());
             } else {
                 output.push_str(&Self::format_vulnerability_with_threshold(result));
@@ -674,7 +667,13 @@ mod tests {
             vec![vuln1, vuln2],
         );
 
-        let output = MarkdownFormatter::format_vulnerability_warning_section(&[pkg_vulns]);
+        let result = VulnerabilityCheckResult {
+            above_threshold: vec![pkg_vulns],
+            below_threshold: vec![],
+            threshold_exceeded: true,
+        };
+
+        let output = MarkdownFormatter::format_vulnerability_warning_section(&result);
 
         assert!(output.contains("### ⚠️Warning Found 2 vulnerabilities in 1 package."));
         assert!(output.contains("CVE-2024-001"));
@@ -708,7 +707,13 @@ mod tests {
             vec![vuln1, vuln2],
         );
 
-        let output = MarkdownFormatter::format_vulnerability_info_section(&[pkg_vulns]);
+        let result = VulnerabilityCheckResult {
+            above_threshold: vec![],
+            below_threshold: vec![pkg_vulns],
+            threshold_exceeded: false,
+        };
+
+        let output = MarkdownFormatter::format_vulnerability_info_section(&result);
 
         assert!(output.contains("### ℹ️Info Found 2 vulnerabilities in 1 package."));
         assert!(output.contains("CVE-2024-003"));
@@ -836,51 +841,5 @@ mod tests {
         // Should use VulnerabilityCheckResult format (Warning section)
         assert!(output.contains("### ⚠️Warning Found 1 vulnerability in 1 package."));
         assert!(output.contains("CVE-2024-1234"));
-    }
-
-    #[test]
-    fn test_count_total_vulnerabilities() {
-        use crate::sbom_generation::domain::vulnerability::{
-            CvssScore, PackageVulnerabilities, Severity, Vulnerability,
-        };
-
-        let vuln1 = Vulnerability::new(
-            "CVE-1".to_string(),
-            Some(CvssScore::new(5.0).unwrap()),
-            Severity::Medium,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let vuln2 = Vulnerability::new(
-            "CVE-2".to_string(),
-            Some(CvssScore::new(6.0).unwrap()),
-            Severity::Medium,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let vuln3 = Vulnerability::new(
-            "CVE-3".to_string(),
-            Some(CvssScore::new(7.0).unwrap()),
-            Severity::High,
-            None,
-            None,
-        )
-        .unwrap();
-
-        let pkg1 = PackageVulnerabilities::new(
-            "pkg1".to_string(),
-            "1.0.0".to_string(),
-            vec![vuln1, vuln2],
-        );
-
-        let pkg2 =
-            PackageVulnerabilities::new("pkg2".to_string(), "2.0.0".to_string(), vec![vuln3]);
-
-        let total = MarkdownFormatter::count_total_vulnerabilities(&[pkg1, pkg2]);
-        assert_eq!(total, 3);
     }
 }
