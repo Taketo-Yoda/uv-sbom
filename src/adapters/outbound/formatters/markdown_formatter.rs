@@ -1,5 +1,6 @@
 use crate::application::read_models::{
-    ComponentView, DependencyView, SbomReadModel, VulnerabilityReportView, VulnerabilityView,
+    ComponentView, DependencyView, SbomReadModel, VulnerabilityReportView, VulnerabilitySummary,
+    VulnerabilityView,
 };
 use crate::ports::outbound::{EnrichedPackage, SbomFormatter};
 use crate::sbom_generation::domain::services::{
@@ -389,78 +390,127 @@ impl MarkdownFormatter {
     fn render_vulnerabilities_v2(&self, output: &mut String, vulns: &VulnerabilityReportView) {
         output.push_str("\n## Vulnerability Report\n\n");
 
-        // Warning section (actionable vulnerabilities)
+        // Summary section
+        self.render_vulnerability_summary_v2(output, &vulns.summary);
+
+        // Actionable vulnerabilities (warning section)
         if vulns.actionable.is_empty() {
             output.push_str("### ⚠️Warning No vulnerabilities found above threshold.\n\n");
         } else {
-            let total_vulns = vulns.actionable.len();
-            let package_count = vulns.summary.affected_package_count.max(1);
-
-            output.push_str(&format!(
-                "### ⚠️Warning Found {} {} in {} {}.\n\n",
-                total_vulns,
-                if total_vulns == 1 {
-                    "vulnerability"
-                } else {
-                    "vulnerabilities"
-                },
-                package_count,
-                if package_count == 1 {
-                    "package"
-                } else {
-                    "packages"
-                }
-            ));
-
-            output.push_str(VULN_TABLE_HEADER);
-            output.push_str(VULN_TABLE_SEPARATOR);
-
-            // Sort by severity (Critical first)
-            let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.actionable.iter().collect();
-            sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
-
-            for vuln in sorted_vulns {
-                self.render_vulnerability_row_v2(output, vuln);
-            }
-            output.push('\n');
+            self.render_actionable_vulnerabilities_v2(output, &vulns.actionable);
         }
 
-        // Info section (informational vulnerabilities)
+        // Informational vulnerabilities
         if !vulns.informational.is_empty() {
-            let total_vulns = vulns.informational.len();
-            let package_count = vulns.summary.affected_package_count.max(1);
-
-            output.push_str(&format!(
-                "### ℹ️Info Found {} {} in {} {}.\n\n",
-                total_vulns,
-                if total_vulns == 1 {
-                    "vulnerability"
-                } else {
-                    "vulnerabilities"
-                },
-                package_count,
-                if package_count == 1 {
-                    "package"
-                } else {
-                    "packages"
-                }
-            ));
-
-            output.push_str(VULN_TABLE_HEADER);
-            output.push_str(VULN_TABLE_SEPARATOR);
-
-            let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.informational.iter().collect();
-            sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
-
-            for vuln in sorted_vulns {
-                self.render_vulnerability_row_v2(output, vuln);
-            }
+            self.render_informational_vulnerabilities_v2(output, &vulns.informational);
         }
 
         // Attribution
         output.push_str("\n---\n\n");
         output
             .push_str("*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*\n");
+    }
+
+    /// Renders vulnerability summary statistics for format_v2 output
+    fn render_vulnerability_summary_v2(&self, output: &mut String, summary: &VulnerabilitySummary) {
+        output.push_str(&format!(
+            "**Found {} {} in {} {}.**\n\n",
+            summary.total_count,
+            if summary.total_count == 1 {
+                "vulnerability"
+            } else {
+                "vulnerabilities"
+            },
+            summary.affected_package_count,
+            if summary.affected_package_count == 1 {
+                "package"
+            } else {
+                "packages"
+            }
+        ));
+    }
+
+    /// Renders the warning section for actionable vulnerabilities in format_v2 output
+    fn render_actionable_vulnerabilities_v2(
+        &self,
+        output: &mut String,
+        vulns: &[VulnerabilityView],
+    ) {
+        let total_vulns = vulns.len();
+        let unique_packages = Self::count_unique_packages(vulns);
+
+        output.push_str(&format!(
+            "### ⚠️Warning Found {} {} in {} {}.\n\n",
+            total_vulns,
+            if total_vulns == 1 {
+                "vulnerability"
+            } else {
+                "vulnerabilities"
+            },
+            unique_packages,
+            if unique_packages == 1 {
+                "package"
+            } else {
+                "packages"
+            }
+        ));
+
+        output.push_str(VULN_TABLE_HEADER);
+        output.push_str(VULN_TABLE_SEPARATOR);
+
+        // Sort by severity (Critical first)
+        let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
+        sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
+
+        for vuln in sorted_vulns {
+            self.render_vulnerability_row_v2(output, vuln);
+        }
+        output.push('\n');
+    }
+
+    /// Renders the info section for informational vulnerabilities in format_v2 output
+    fn render_informational_vulnerabilities_v2(
+        &self,
+        output: &mut String,
+        vulns: &[VulnerabilityView],
+    ) {
+        let total_vulns = vulns.len();
+        let unique_packages = Self::count_unique_packages(vulns);
+
+        output.push_str(&format!(
+            "### ℹ️Info Found {} {} in {} {}.\n\n",
+            total_vulns,
+            if total_vulns == 1 {
+                "vulnerability"
+            } else {
+                "vulnerabilities"
+            },
+            unique_packages,
+            if unique_packages == 1 {
+                "package"
+            } else {
+                "packages"
+            }
+        ));
+
+        output.push_str(VULN_TABLE_HEADER);
+        output.push_str(VULN_TABLE_SEPARATOR);
+
+        let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
+        sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
+
+        for vuln in sorted_vulns {
+            self.render_vulnerability_row_v2(output, vuln);
+        }
+    }
+
+    /// Counts unique affected packages from a list of vulnerability views
+    fn count_unique_packages(vulns: &[VulnerabilityView]) -> usize {
+        let unique: std::collections::HashSet<&str> = vulns
+            .iter()
+            .map(|v| v.affected_component.as_str())
+            .collect();
+        unique.len().max(1)
     }
 
     /// Renders a single vulnerability row for format_v2 output
@@ -1307,5 +1357,255 @@ mod tests {
         assert!(sbom_pos.unwrap() < inventory_pos.unwrap());
         assert!(inventory_pos.unwrap() < direct_pos.unwrap());
         assert!(direct_pos.unwrap() < transitive_pos.unwrap());
+    }
+
+    // ============================================================
+    // format_v2 vulnerability rendering unit tests
+    // ============================================================
+
+    #[test]
+    fn test_render_vulnerability_summary_v2() {
+        let formatter = MarkdownFormatter::new();
+        let summary = VulnerabilitySummary {
+            total_count: 3,
+            actionable_count: 2,
+            informational_count: 1,
+            affected_package_count: 2,
+        };
+
+        let mut output = String::new();
+        formatter.render_vulnerability_summary_v2(&mut output, &summary);
+
+        assert!(output.contains("**Found 3 vulnerabilities in 2 packages.**"));
+    }
+
+    #[test]
+    fn test_render_vulnerability_summary_v2_singular() {
+        let formatter = MarkdownFormatter::new();
+        let summary = VulnerabilitySummary {
+            total_count: 1,
+            actionable_count: 1,
+            informational_count: 0,
+            affected_package_count: 1,
+        };
+
+        let mut output = String::new();
+        formatter.render_vulnerability_summary_v2(&mut output, &summary);
+
+        assert!(output.contains("**Found 1 vulnerability in 1 package.**"));
+    }
+
+    #[test]
+    fn test_render_actionable_vulnerabilities_v2() {
+        let formatter = MarkdownFormatter::new();
+        let vulns = vec![
+            VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1111".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                severity: SeverityView::Critical,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            },
+            VulnerabilityView {
+                bom_ref: "vuln-002".to_string(),
+                id: "CVE-2024-2222".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(7.5),
+                cvss_vector: None,
+                severity: SeverityView::High,
+                fixed_version: None,
+                description: None,
+                source_url: None,
+            },
+        ];
+
+        let mut output = String::new();
+        formatter.render_actionable_vulnerabilities_v2(&mut output, &vulns);
+
+        assert!(output.contains("### ⚠️Warning Found 2 vulnerabilities in 1 package."));
+        assert!(output.contains("CVE-2024-1111"));
+        assert!(output.contains("CVE-2024-2222"));
+        assert!(output.contains("🔴"));
+        assert!(output.contains("🟠"));
+        assert!(output.contains("9.8"));
+        assert!(output.contains("7.5"));
+    }
+
+    #[test]
+    fn test_render_informational_vulnerabilities_v2() {
+        let formatter = MarkdownFormatter::new();
+        let vulns = vec![VulnerabilityView {
+            bom_ref: "vuln-003".to_string(),
+            id: "CVE-2024-3333".to_string(),
+            affected_component: "pkg:pypi/urllib3@1.26.0".to_string(),
+            affected_component_name: "urllib3".to_string(),
+            affected_version: "1.26.0".to_string(),
+            cvss_score: Some(2.5),
+            cvss_vector: None,
+            severity: SeverityView::Low,
+            fixed_version: Some("1.27.0".to_string()),
+            description: None,
+            source_url: None,
+        }];
+
+        let mut output = String::new();
+        formatter.render_informational_vulnerabilities_v2(&mut output, &vulns);
+
+        assert!(output.contains("### ℹ️Info Found 1 vulnerability in 1 package."));
+        assert!(output.contains("CVE-2024-3333"));
+        assert!(output.contains("🟢"));
+        assert!(output.contains("2.5"));
+        assert!(output.contains("1.27.0"));
+    }
+
+    #[test]
+    fn test_render_actionable_vulnerabilities_v2_multiple_packages() {
+        let formatter = MarkdownFormatter::new();
+        let vulns = vec![
+            VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1111".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                severity: SeverityView::Critical,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            },
+            VulnerabilityView {
+                bom_ref: "vuln-002".to_string(),
+                id: "CVE-2024-4444".to_string(),
+                affected_component: "pkg:pypi/urllib3@1.26.0".to_string(),
+                affected_component_name: "urllib3".to_string(),
+                affected_version: "1.26.0".to_string(),
+                cvss_score: Some(8.0),
+                cvss_vector: None,
+                severity: SeverityView::High,
+                fixed_version: None,
+                description: None,
+                source_url: None,
+            },
+        ];
+
+        let mut output = String::new();
+        formatter.render_actionable_vulnerabilities_v2(&mut output, &vulns);
+
+        assert!(output.contains("### ⚠️Warning Found 2 vulnerabilities in 2 packages."));
+    }
+
+    #[test]
+    fn test_count_unique_packages() {
+        let vulns = vec![
+            VulnerabilityView {
+                bom_ref: "v1".to_string(),
+                id: "CVE-1".to_string(),
+                affected_component: "pkg:pypi/a@1.0".to_string(),
+                affected_component_name: "a".to_string(),
+                affected_version: "1.0".to_string(),
+                cvss_score: None,
+                cvss_vector: None,
+                severity: SeverityView::High,
+                fixed_version: None,
+                description: None,
+                source_url: None,
+            },
+            VulnerabilityView {
+                bom_ref: "v2".to_string(),
+                id: "CVE-2".to_string(),
+                affected_component: "pkg:pypi/a@1.0".to_string(),
+                affected_component_name: "a".to_string(),
+                affected_version: "1.0".to_string(),
+                cvss_score: None,
+                cvss_vector: None,
+                severity: SeverityView::Medium,
+                fixed_version: None,
+                description: None,
+                source_url: None,
+            },
+            VulnerabilityView {
+                bom_ref: "v3".to_string(),
+                id: "CVE-3".to_string(),
+                affected_component: "pkg:pypi/b@2.0".to_string(),
+                affected_component_name: "b".to_string(),
+                affected_version: "2.0".to_string(),
+                cvss_score: None,
+                cvss_vector: None,
+                severity: SeverityView::Low,
+                fixed_version: None,
+                description: None,
+                source_url: None,
+            },
+        ];
+
+        assert_eq!(MarkdownFormatter::count_unique_packages(&vulns), 2);
+    }
+
+    #[test]
+    fn test_format_v2_vulnerability_section_ordering() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                severity: SeverityView::Critical,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![VulnerabilityView {
+                bom_ref: "vuln-002".to_string(),
+                id: "CVE-2024-5678".to_string(),
+                affected_component: "pkg:pypi/urllib3@1.26.0".to_string(),
+                affected_component_name: "urllib3".to_string(),
+                affected_version: "1.26.0".to_string(),
+                cvss_score: Some(2.0),
+                cvss_vector: None,
+                severity: SeverityView::Low,
+                fixed_version: None,
+                description: None,
+                source_url: None,
+            }],
+            threshold_exceeded: true,
+            summary: VulnerabilitySummary {
+                total_count: 2,
+                actionable_count: 1,
+                informational_count: 1,
+                affected_package_count: 2,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format_v2(&model).unwrap();
+
+        // Verify sections appear in correct order
+        let summary_pos = markdown.find("**Found 2 vulnerabilities in 2 packages.**");
+        let warning_pos = markdown.find("### ⚠️Warning");
+        let info_pos = markdown.find("### ℹ️Info");
+        let attribution_pos = markdown.find("*Vulnerability data provided by");
+
+        assert!(summary_pos.is_some());
+        assert!(warning_pos.is_some());
+        assert!(info_pos.is_some());
+        assert!(attribution_pos.is_some());
+
+        assert!(summary_pos.unwrap() < warning_pos.unwrap());
+        assert!(warning_pos.unwrap() < info_pos.unwrap());
+        assert!(info_pos.unwrap() < attribution_pos.unwrap());
     }
 }
