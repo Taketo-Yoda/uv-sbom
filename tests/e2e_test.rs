@@ -93,9 +93,15 @@ async fn test_e2e_json_format() {
     assert!(result.is_ok());
     let response = result.unwrap();
 
-    // Format as JSON
+    // Build read model and format as JSON
+    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
+        response.enriched_packages,
+        &response.metadata,
+        response.dependency_graph.as_ref(),
+        response.vulnerability_check_result.as_ref(),
+    );
     let formatter = CycloneDxFormatter::new();
-    let json_output = formatter.format(response.enriched_packages, &response.metadata, None);
+    let json_output = formatter.format(&read_model);
 
     assert!(json_output.is_ok());
     let json = json_output.unwrap();
@@ -134,17 +140,15 @@ async fn test_e2e_markdown_format() {
     assert!(result.is_ok());
     let response = result.unwrap();
 
-    // Format as Markdown
-    let formatter = MarkdownFormatter::new();
-    let markdown_output = formatter.format_with_dependencies(
-        &response
-            .dependency_graph
-            .expect("Dependency graph should be present"),
+    // Build read model and format as Markdown
+    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
         response.enriched_packages,
         &response.metadata,
-        None,
-        None,
+        response.dependency_graph.as_ref(),
+        response.vulnerability_check_result.as_ref(),
     );
+    let formatter = MarkdownFormatter::new();
+    let markdown_output = formatter.format(&read_model);
 
     assert!(markdown_output.is_ok());
     let markdown = markdown_output.unwrap();

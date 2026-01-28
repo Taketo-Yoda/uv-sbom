@@ -2,9 +2,7 @@ use crate::application::read_models::{
     ComponentView, DependencyView, LicenseView, SbomMetadataView, SbomReadModel,
     VulnerabilityReportView, VulnerabilityView,
 };
-use crate::ports::outbound::{EnrichedPackage, SbomFormatter};
-use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
-use crate::sbom_generation::domain::SbomMetadata;
+use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
 use serde::Serialize;
 
@@ -123,86 +121,28 @@ impl Default for CycloneDxFormatter {
 }
 
 impl SbomFormatter for CycloneDxFormatter {
-    fn format(
-        &self,
-        packages: Vec<EnrichedPackage>,
-        metadata: &SbomMetadata,
-        // NOTE: Vulnerability data is not included in CycloneDX JSON format output.
-        // The CycloneDX specification does support vulnerability information,
-        // but that feature is not yet implemented in this formatter.
-        // For now, only the Markdown formatter displays vulnerability information.
-        _vulnerability_report: Option<&[PackageVulnerabilities]>,
-    ) -> Result<String> {
-        let components: Vec<Component> = packages
-            .into_iter()
-            .map(|enriched| {
-                let pkg = enriched.package;
-                let purl = format!("pkg:pypi/{}@{}", pkg.name(), pkg.version());
-
-                let licenses = enriched.license.map(|license_name| {
-                    vec![License {
-                        license: LicenseContent {
-                            id: None,
-                            name: Some(license_name),
-                        },
-                    }]
-                });
-
-                Component {
-                    component_type: "library".to_string(),
-                    name: pkg.name().to_string(),
-                    version: pkg.version().to_string(),
-                    description: enriched.description,
-                    licenses,
-                    purl,
-                }
-            })
-            .collect();
-
-        let bom = Bom {
-            bom_format: "CycloneDX".to_string(),
-            spec_version: "1.6".to_string(),
-            version: 1,
-            serial_number: metadata.serial_number().to_string(),
-            metadata: Metadata {
-                timestamp: metadata.timestamp().to_string(),
-                tools: vec![Tool {
-                    name: metadata.tool_name().to_string(),
-                    version: metadata.tool_version().to_string(),
-                }],
-            },
-            components,
-            dependencies: None,
-            vulnerabilities: None,
-        };
-
-        let json = serde_json::to_string_pretty(&bom)?;
-        Ok(json)
-    }
-
-    fn format_v2(&self, model: &SbomReadModel) -> Result<String> {
+    fn format(&self, model: &SbomReadModel) -> Result<String> {
         let bom = Bom {
             bom_format: "CycloneDX".to_string(),
             spec_version: "1.6".to_string(),
             version: 1,
             serial_number: model.metadata.serial_number.clone(),
             metadata: self.build_metadata(&model.metadata),
-            components: self.build_components_from_view(&model.components),
+            components: self.build_components(&model.components),
             dependencies: model
                 .dependencies
                 .as_ref()
-                .map(|d| self.build_dependencies_from_view(d)),
+                .map(|d| self.build_dependencies(d)),
             vulnerabilities: model
                 .vulnerabilities
                 .as_ref()
-                .map(|v| self.build_vulnerabilities_from_view(v)),
+                .map(|v| self.build_vulnerabilities(v)),
         };
 
         serde_json::to_string_pretty(&bom).map_err(Into::into)
     }
 }
 
-#[allow(dead_code)]
 impl CycloneDxFormatter {
     /// Build metadata from SbomMetadataView
     fn build_metadata(&self, metadata: &SbomMetadataView) -> Metadata {
@@ -216,7 +156,7 @@ impl CycloneDxFormatter {
     }
 
     /// Build components from ComponentView slice
-    fn build_components_from_view(&self, components: &[ComponentView]) -> Vec<Component> {
+    fn build_components(&self, components: &[ComponentView]) -> Vec<Component> {
         components
             .iter()
             .map(|c| {
@@ -244,7 +184,7 @@ impl CycloneDxFormatter {
     }
 
     /// Build dependencies from DependencyView
-    fn build_dependencies_from_view(&self, dep_view: &DependencyView) -> Vec<Dependency> {
+    fn build_dependencies(&self, dep_view: &DependencyView) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
 
         // Add direct dependencies
@@ -274,10 +214,7 @@ impl CycloneDxFormatter {
     }
 
     /// Build vulnerabilities from VulnerabilityReportView
-    fn build_vulnerabilities_from_view(
-        &self,
-        report: &VulnerabilityReportView,
-    ) -> Vec<Vulnerability> {
+    fn build_vulnerabilities(&self, report: &VulnerabilityReportView) -> Vec<Vulnerability> {
         let mut vulnerabilities = Vec::new();
 
         // Process actionable vulnerabilities
@@ -323,35 +260,7 @@ impl CycloneDxFormatter {
 mod tests {
     use super::*;
     use crate::application::read_models::{SeverityView, VulnerabilitySummary};
-    use crate::sbom_generation::domain::Package;
-    use crate::sbom_generation::services::SbomGenerator;
     use std::collections::HashMap;
-
-    #[test]
-    fn test_cyclonedx_formatter() {
-        let pkg1 = Package::new("requests".to_string(), "2.31.0".to_string()).unwrap();
-        let pkg2 = Package::new("numpy".to_string(), "1.24.0".to_string()).unwrap();
-
-        let enriched = vec![
-            EnrichedPackage::new(
-                pkg1,
-                Some("Apache 2.0".to_string()),
-                Some("HTTP library".to_string()),
-            ),
-            EnrichedPackage::new(pkg2, None, Some("Array library".to_string())),
-        ];
-
-        let metadata = SbomGenerator::generate_metadata("test-tool", "1.0.0");
-        let formatter = CycloneDxFormatter::new();
-        let result = formatter.format(enriched, &metadata, None);
-
-        assert!(result.is_ok());
-        let json = result.unwrap();
-        assert!(json.contains("\"bomFormat\": \"CycloneDX\""));
-        assert!(json.contains("\"specVersion\": \"1.6\""));
-        assert!(json.contains("requests"));
-        assert!(json.contains("numpy"));
-    }
 
     fn create_test_read_model() -> SbomReadModel {
         SbomReadModel {
@@ -393,11 +302,11 @@ mod tests {
     }
 
     #[test]
-    fn test_format_v2_basic() {
+    fn test_format_basic() {
         let model = create_test_read_model();
         let formatter = CycloneDxFormatter::new();
 
-        let result = formatter.format_v2(&model);
+        let result = formatter.format(&model);
 
         assert!(result.is_ok());
         let json = result.unwrap();
@@ -410,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_v2_with_dependencies() {
+    fn test_format_with_dependencies() {
         let mut model = create_test_read_model();
         let mut transitive = HashMap::new();
         transitive.insert(
@@ -424,7 +333,7 @@ mod tests {
         });
 
         let formatter = CycloneDxFormatter::new();
-        let result = formatter.format_v2(&model);
+        let result = formatter.format(&model);
 
         assert!(result.is_ok());
         let json = result.unwrap();
@@ -434,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_v2_with_vulnerabilities() {
+    fn test_format_with_vulnerabilities() {
         let mut model = create_test_read_model();
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![VulnerabilityView {
@@ -461,7 +370,7 @@ mod tests {
         });
 
         let formatter = CycloneDxFormatter::new();
-        let result = formatter.format_v2(&model);
+        let result = formatter.format(&model);
 
         assert!(result.is_ok());
         let json = result.unwrap();
@@ -472,11 +381,11 @@ mod tests {
     }
 
     #[test]
-    fn test_format_v2_with_license() {
+    fn test_format_with_license() {
         let model = create_test_read_model();
         let formatter = CycloneDxFormatter::new();
 
-        let result = formatter.format_v2(&model);
+        let result = formatter.format(&model);
 
         assert!(result.is_ok());
         let json = result.unwrap();

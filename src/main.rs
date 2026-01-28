@@ -137,14 +137,14 @@ async fn run(args: Args) -> Result<bool> {
     // Create formatter using factory
     let formatter = FormatterFactory::create(args.format);
 
-    // Build read model and format using format_v2
+    // Build read model and format
     let read_model = SbomReadModelBuilder::build(
         response.enriched_packages,
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
     );
-    let formatted_output = formatter.format_v2(&read_model)?;
+    let formatted_output = formatter.format(&read_model)?;
 
     // Create presenter using factory
     let presenter_type = if let Some(output_path) = args.output {
