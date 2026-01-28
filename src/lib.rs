@@ -42,9 +42,15 @@
 //!     .build()?;
 //! let response = use_case.execute(request).await?;
 //!
-//! // Format output
+//! // Build read model and format output
+//! let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
+//!     response.enriched_packages,
+//!     &response.metadata,
+//!     None,
+//!     None,
+//! );
 //! let formatter = CycloneDxFormatter::new();
-//! let output = formatter.format(response.enriched_packages, &response.metadata, None)?;
+//! let output = formatter.format(&read_model)?;
 //! println!("{}", output);
 //! # Ok(())
 //! # }
@@ -70,8 +76,8 @@ pub mod prelude {
     pub use crate::application::factories::{FormatterFactory, PresenterFactory, PresenterType};
     pub use crate::application::use_cases::GenerateSbomUseCase;
     pub use crate::ports::outbound::{
-        EnrichedPackage, LicenseRepository, LockfileParseResult, LockfileReader, OutputPresenter,
-        ProgressReporter, ProjectConfigReader, SbomFormatter,
+        LicenseRepository, LockfileParseResult, LockfileReader, OutputPresenter, ProgressReporter,
+        ProjectConfigReader, SbomFormatter,
     };
     pub use crate::sbom_generation::domain::{
         DependencyGraph, LicenseInfo, Package, PackageName, SbomMetadata,
