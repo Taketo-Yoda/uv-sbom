@@ -41,6 +41,7 @@ pub trait SbomFormatter {
     ///
     /// # Errors
     /// Returns an error if formatting or serialization fails
+    #[allow(dead_code)]
     fn format(
         &self,
         packages: Vec<EnrichedPackage>,
@@ -69,6 +70,7 @@ pub trait SbomFormatter {
     /// # Default Implementation
     /// By default, this calls `format()` and ignores the dependency graph.
     /// Formatters that support dependency information should override this.
+    #[allow(dead_code)]
     fn format_with_dependencies(
         &self,
         _dependency_graph: &DependencyGraph,
@@ -100,7 +102,6 @@ pub trait SbomFormatter {
     /// # Default Implementation
     /// By default, this method is unimplemented and will panic.
     /// Formatters should override this method to provide their implementation.
-    #[allow(dead_code)]
     fn format_v2(&self, _model: &SbomReadModel) -> Result<String> {
         unimplemented!("format_v2 not yet implemented for this formatter")
     }

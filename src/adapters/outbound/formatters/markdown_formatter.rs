@@ -42,6 +42,7 @@ impl MarkdownFormatter {
     }
 
     /// Creates a package lookup map for quick access by name
+    #[allow(dead_code)]
     fn create_package_map(packages: &[EnrichedPackage]) -> HashMap<String, &EnrichedPackage> {
         packages
             .iter()
@@ -50,6 +51,7 @@ impl MarkdownFormatter {
     }
 
     /// Formats a table row for a package
+    #[allow(dead_code)]
     fn format_package_row(enriched: &EnrichedPackage) -> String {
         let pkg = &enriched.package;
         let license = enriched.license.as_deref().unwrap_or("N/A");
@@ -72,6 +74,7 @@ impl MarkdownFormatter {
     /// - CVSS score
     /// - Severity with emoji indicator
     /// - CVE identifier
+    #[allow(dead_code)]
     fn format_vulnerability_section(vulnerabilities: &[PackageVulnerabilities]) -> String {
         let mut output = String::new();
         output.push_str("\n## Vulnerability Report\n\n");
@@ -135,6 +138,7 @@ impl MarkdownFormatter {
     }
 
     /// Formats message when no vulnerabilities are found
+    #[allow(dead_code)]
     fn format_no_vulnerabilities() -> String {
         let mut output = String::new();
         output.push_str("\n## Vulnerability Report\n\n");
@@ -147,6 +151,7 @@ impl MarkdownFormatter {
     }
 
     /// Formats a single vulnerability row for markdown table output
+    #[allow(dead_code)]
     fn format_vulnerability_row(row: &VulnerabilityRow) -> String {
         format!(
             "| {} | {} | {} | {} | {} {:?} | {} |\n",
@@ -161,6 +166,7 @@ impl MarkdownFormatter {
     }
 
     /// Formats the Warning section for vulnerabilities above threshold
+    #[allow(dead_code)]
     fn format_vulnerability_warning_section(result: &VulnerabilityCheckResult) -> String {
         let mut output = String::new();
 
@@ -197,6 +203,7 @@ impl MarkdownFormatter {
     }
 
     /// Formats the Info section for vulnerabilities below threshold
+    #[allow(dead_code)]
     fn format_vulnerability_info_section(result: &VulnerabilityCheckResult) -> String {
         let mut output = String::new();
 
@@ -233,6 +240,7 @@ impl MarkdownFormatter {
     }
 
     /// Formats vulnerability report with Warning and Info sections based on threshold
+    #[allow(dead_code)]
     fn format_vulnerability_with_threshold(result: &VulnerabilityCheckResult) -> String {
         let mut output = String::new();
         output.push_str("\n## Vulnerability Report\n\n");

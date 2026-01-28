@@ -17,6 +17,7 @@ pub struct SbomResponse {
     pub metadata: SbomMetadata,
     /// Optional vulnerability report (only present when CVE check is enabled)
     /// None = not checked, Some(vec) = checked (empty vec means no vulnerabilities found)
+    #[allow(dead_code)]
     pub vulnerability_report: Option<Vec<PackageVulnerabilities>>,
     /// Whether vulnerabilities above threshold were detected
     /// Used to determine exit code for CI integration
