@@ -22,10 +22,8 @@ use std::collections::{HashMap, HashSet};
 /// This builder transforms domain objects into a query-optimized read model.
 /// Initial implementation focuses on metadata and components, with dependencies
 /// and vulnerabilities being handled in future iterations.
-#[allow(dead_code)]
 pub struct SbomReadModelBuilder;
 
-#[allow(dead_code)]
 impl SbomReadModelBuilder {
     /// Builds a SbomReadModel from domain objects
     ///

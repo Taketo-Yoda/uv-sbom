@@ -11,7 +11,6 @@ use super::vulnerability_view::VulnerabilityReportView;
 ///
 /// This struct provides a denormalized, query-optimized view of SBOM data
 /// following the CQRS-lite pattern.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SbomReadModel {
     /// SBOM metadata
@@ -25,7 +24,6 @@ pub struct SbomReadModel {
 }
 
 /// View representation of SBOM metadata
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SbomMetadataView {
     /// Timestamp when the SBOM was created
