@@ -1,3 +1,6 @@
+use crate::application::read_models::{
+    ComponentView, DependencyView, SbomReadModel, VulnerabilityReportView, VulnerabilityView,
+};
 use crate::ports::outbound::{EnrichedPackage, SbomFormatter};
 use crate::sbom_generation::domain::services::{
     VulnerabilityCheckResult, VulnerabilityChecker, VulnerabilityRow,
@@ -255,6 +258,238 @@ impl MarkdownFormatter {
     }
 }
 
+/// format_v2 helper methods
+#[allow(dead_code)]
+impl MarkdownFormatter {
+    /// Renders the header section for format_v2 output
+    fn render_header_v2(&self, output: &mut String) {
+        output.push_str("# Software Bill of Materials (SBOM)\n\n");
+    }
+
+    /// Renders the components section for format_v2 output
+    fn render_components_v2(&self, output: &mut String, components: &[ComponentView]) {
+        output.push_str("## Component Inventory\n\n");
+        output.push_str(
+            "A comprehensive list of all software components and libraries included in this project.\n\n",
+        );
+        output.push_str(TABLE_HEADER);
+        output.push_str(TABLE_SEPARATOR);
+
+        for component in components {
+            let license = component
+                .license
+                .as_ref()
+                .map(|l| l.name.as_str())
+                .unwrap_or("N/A");
+            let description = component.description.as_deref().unwrap_or("");
+
+            output.push_str(&format!(
+                "| {} | {} | {} | {} |\n",
+                Self::escape_markdown_table_cell(&component.name),
+                Self::escape_markdown_table_cell(&component.version),
+                Self::escape_markdown_table_cell(license),
+                Self::escape_markdown_table_cell(description)
+            ));
+        }
+        output.push('\n');
+    }
+
+    /// Renders the dependencies section for format_v2 output
+    fn render_dependencies_v2(
+        &self,
+        output: &mut String,
+        deps: &DependencyView,
+        components: &[ComponentView],
+    ) {
+        // Create component lookup map by bom_ref
+        let component_map: HashMap<&str, &ComponentView> =
+            components.iter().map(|c| (c.bom_ref.as_str(), c)).collect();
+
+        // Direct Dependencies section
+        output.push_str("## Direct Dependencies\n\n");
+        output.push_str(
+            "Primary packages explicitly defined in the project configuration(e.g., pyproject.toml).\n\n",
+        );
+
+        if !deps.direct.is_empty() {
+            output.push_str(TABLE_HEADER);
+            output.push_str(TABLE_SEPARATOR);
+
+            for bom_ref in &deps.direct {
+                if let Some(component) = component_map.get(bom_ref.as_str()) {
+                    let license = component
+                        .license
+                        .as_ref()
+                        .map(|l| l.name.as_str())
+                        .unwrap_or("N/A");
+                    let description = component.description.as_deref().unwrap_or("");
+
+                    output.push_str(&format!(
+                        "| {} | {} | {} | {} |\n",
+                        Self::escape_markdown_table_cell(&component.name),
+                        Self::escape_markdown_table_cell(&component.version),
+                        Self::escape_markdown_table_cell(license),
+                        Self::escape_markdown_table_cell(description)
+                    ));
+                }
+            }
+            output.push('\n');
+        } else {
+            output.push_str("*No direct dependencies*\n\n");
+        }
+
+        // Transitive Dependencies section
+        output.push_str("## Transitive Dependencies\n\n");
+        output.push_str("Secondary dependencies introduced by the primary packages.\n\n");
+
+        if !deps.transitive.is_empty() {
+            for direct_ref in &deps.direct {
+                if let Some(trans_deps) = deps.transitive.get(direct_ref) {
+                    if trans_deps.is_empty() {
+                        continue;
+                    }
+
+                    // Get direct dependency name for header
+                    let parent_name = component_map
+                        .get(direct_ref.as_str())
+                        .map(|c| c.name.as_str())
+                        .unwrap_or(direct_ref);
+
+                    output.push_str(&format!("### Dependencies for {}\n\n", parent_name));
+                    output.push_str(TABLE_HEADER);
+                    output.push_str(TABLE_SEPARATOR);
+
+                    for trans_ref in trans_deps {
+                        if let Some(component) = component_map.get(trans_ref.as_str()) {
+                            let license = component
+                                .license
+                                .as_ref()
+                                .map(|l| l.name.as_str())
+                                .unwrap_or("N/A");
+                            let description = component.description.as_deref().unwrap_or("");
+
+                            output.push_str(&format!(
+                                "| {} | {} | {} | {} |\n",
+                                Self::escape_markdown_table_cell(&component.name),
+                                Self::escape_markdown_table_cell(&component.version),
+                                Self::escape_markdown_table_cell(license),
+                                Self::escape_markdown_table_cell(description)
+                            ));
+                        }
+                    }
+                    output.push('\n');
+                }
+            }
+        } else {
+            output.push_str("*No transitive dependencies*\n\n");
+        }
+    }
+
+    /// Renders the vulnerabilities section for format_v2 output
+    fn render_vulnerabilities_v2(&self, output: &mut String, vulns: &VulnerabilityReportView) {
+        output.push_str("\n## Vulnerability Report\n\n");
+
+        // Warning section (actionable vulnerabilities)
+        if vulns.actionable.is_empty() {
+            output.push_str("### ⚠️Warning No vulnerabilities found above threshold.\n\n");
+        } else {
+            let total_vulns = vulns.actionable.len();
+            let package_count = vulns.summary.affected_package_count.max(1);
+
+            output.push_str(&format!(
+                "### ⚠️Warning Found {} {} in {} {}.\n\n",
+                total_vulns,
+                if total_vulns == 1 {
+                    "vulnerability"
+                } else {
+                    "vulnerabilities"
+                },
+                package_count,
+                if package_count == 1 {
+                    "package"
+                } else {
+                    "packages"
+                }
+            ));
+
+            output.push_str(VULN_TABLE_HEADER);
+            output.push_str(VULN_TABLE_SEPARATOR);
+
+            // Sort by severity (Critical first)
+            let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.actionable.iter().collect();
+            sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
+
+            for vuln in sorted_vulns {
+                self.render_vulnerability_row_v2(output, vuln);
+            }
+            output.push('\n');
+        }
+
+        // Info section (informational vulnerabilities)
+        if !vulns.informational.is_empty() {
+            let total_vulns = vulns.informational.len();
+            let package_count = vulns.summary.affected_package_count.max(1);
+
+            output.push_str(&format!(
+                "### ℹ️Info Found {} {} in {} {}.\n\n",
+                total_vulns,
+                if total_vulns == 1 {
+                    "vulnerability"
+                } else {
+                    "vulnerabilities"
+                },
+                package_count,
+                if package_count == 1 {
+                    "package"
+                } else {
+                    "packages"
+                }
+            ));
+
+            output.push_str(VULN_TABLE_HEADER);
+            output.push_str(VULN_TABLE_SEPARATOR);
+
+            let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.informational.iter().collect();
+            sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
+
+            for vuln in sorted_vulns {
+                self.render_vulnerability_row_v2(output, vuln);
+            }
+        }
+
+        // Attribution
+        output.push_str("\n---\n\n");
+        output
+            .push_str("*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*\n");
+    }
+
+    /// Renders a single vulnerability row for format_v2 output
+    fn render_vulnerability_row_v2(&self, output: &mut String, vuln: &VulnerabilityView) {
+        let cvss_display = vuln
+            .cvss_score
+            .map_or("N/A".to_string(), |s| format!("{:.1}", s));
+        let fixed_version = vuln.fixed_version.as_deref().unwrap_or("N/A");
+        let severity_emoji = match vuln.severity {
+            crate::application::read_models::SeverityView::Critical => "🔴",
+            crate::application::read_models::SeverityView::High => "🟠",
+            crate::application::read_models::SeverityView::Medium => "🟡",
+            crate::application::read_models::SeverityView::Low => "🟢",
+            crate::application::read_models::SeverityView::None => "⚪",
+        };
+
+        output.push_str(&format!(
+            "| {} | {} | {} | {} | {} {} | {} |\n",
+            Self::escape_markdown_table_cell(&vuln.affected_component_name),
+            Self::escape_markdown_table_cell(&vuln.affected_version),
+            Self::escape_markdown_table_cell(fixed_version),
+            cvss_display,
+            severity_emoji,
+            vuln.severity.as_str(),
+            Self::escape_markdown_table_cell(&vuln.id),
+        ));
+    }
+}
+
 impl Default for MarkdownFormatter {
     fn default() -> Self {
         Self::new()
@@ -376,11 +611,36 @@ impl SbomFormatter for MarkdownFormatter {
 
         Ok(output)
     }
+
+    fn format_v2(&self, model: &SbomReadModel) -> Result<String> {
+        let mut output = String::new();
+
+        // Header section
+        self.render_header_v2(&mut output);
+
+        // Components section
+        self.render_components_v2(&mut output, &model.components);
+
+        // Dependencies section (if present)
+        if let Some(deps) = &model.dependencies {
+            self.render_dependencies_v2(&mut output, deps, &model.components);
+        }
+
+        // Vulnerabilities section (if present)
+        if let Some(vulns) = &model.vulnerabilities {
+            self.render_vulnerabilities_v2(&mut output, vulns);
+        }
+
+        Ok(output)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::read_models::{
+        LicenseView, SbomMetadataView, SeverityView, VulnerabilitySummary,
+    };
     use crate::sbom_generation::domain::{Package, PackageName};
     use crate::sbom_generation::services::SbomGenerator;
     use std::collections::HashMap;
@@ -841,5 +1101,211 @@ mod tests {
         // Should use VulnerabilityCheckResult format (Warning section)
         assert!(output.contains("### ⚠️Warning Found 1 vulnerability in 1 package."));
         assert!(output.contains("CVE-2024-1234"));
+    }
+
+    // ============================================================
+    // format_v2 tests
+    // ============================================================
+
+    fn create_test_read_model() -> SbomReadModel {
+        SbomReadModel {
+            metadata: SbomMetadataView {
+                timestamp: "2024-01-01T00:00:00Z".to_string(),
+                tool_name: "uv-sbom".to_string(),
+                tool_version: "1.0.0".to_string(),
+                serial_number: "urn:uuid:test-123".to_string(),
+            },
+            components: vec![
+                ComponentView {
+                    bom_ref: "pkg:pypi/requests@2.31.0".to_string(),
+                    name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                    purl: "pkg:pypi/requests@2.31.0".to_string(),
+                    license: Some(LicenseView {
+                        spdx_id: Some("Apache-2.0".to_string()),
+                        name: "Apache License 2.0".to_string(),
+                        url: None,
+                    }),
+                    description: Some("HTTP library".to_string()),
+                    sha256_hash: None,
+                    is_direct_dependency: true,
+                },
+                ComponentView {
+                    bom_ref: "pkg:pypi/urllib3@1.26.0".to_string(),
+                    name: "urllib3".to_string(),
+                    version: "1.26.0".to_string(),
+                    purl: "pkg:pypi/urllib3@1.26.0".to_string(),
+                    license: Some(LicenseView {
+                        spdx_id: Some("MIT".to_string()),
+                        name: "MIT License".to_string(),
+                        url: None,
+                    }),
+                    description: None,
+                    sha256_hash: None,
+                    is_direct_dependency: false,
+                },
+            ],
+            dependencies: None,
+            vulnerabilities: None,
+        }
+    }
+
+    #[test]
+    fn test_format_v2_basic() {
+        let model = create_test_read_model();
+        let formatter = MarkdownFormatter::new();
+
+        let result = formatter.format_v2(&model);
+
+        assert!(result.is_ok());
+        let markdown = result.unwrap();
+        assert!(markdown.contains("# Software Bill of Materials (SBOM)"));
+        assert!(markdown.contains("## Component Inventory"));
+        assert!(markdown.contains("requests"));
+        assert!(markdown.contains("2.31.0"));
+        assert!(markdown.contains("Apache License 2.0"));
+        assert!(markdown.contains("urllib3"));
+    }
+
+    #[test]
+    fn test_format_v2_with_dependencies() {
+        let mut model = create_test_read_model();
+        let mut transitive = HashMap::new();
+        transitive.insert(
+            "pkg:pypi/requests@2.31.0".to_string(),
+            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
+        );
+
+        model.dependencies = Some(DependencyView {
+            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
+            transitive,
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let result = formatter.format_v2(&model);
+
+        assert!(result.is_ok());
+        let markdown = result.unwrap();
+        assert!(markdown.contains("## Direct Dependencies"));
+        assert!(markdown.contains("## Transitive Dependencies"));
+        assert!(markdown.contains("### Dependencies for requests"));
+        assert!(markdown.contains("urllib3"));
+    }
+
+    #[test]
+    fn test_format_v2_with_vulnerabilities() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                severity: SeverityView::Critical,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: true,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let result = formatter.format_v2(&model);
+
+        assert!(result.is_ok());
+        let markdown = result.unwrap();
+        assert!(markdown.contains("## Vulnerability Report"));
+        assert!(markdown.contains("### ⚠️Warning Found 1 vulnerability in 1 package."));
+        assert!(markdown.contains("CVE-2024-1234"));
+        assert!(markdown.contains("9.8"));
+        assert!(markdown.contains("🔴"));
+        assert!(markdown.contains("CRITICAL"));
+        assert!(markdown.contains("2.32.0"));
+    }
+
+    #[test]
+    fn test_format_v2_with_informational_vulnerabilities() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![],
+            informational: vec![VulnerabilityView {
+                bom_ref: "vuln-002".to_string(),
+                id: "CVE-2024-5678".to_string(),
+                affected_component: "pkg:pypi/urllib3@1.26.0".to_string(),
+                affected_component_name: "urllib3".to_string(),
+                affected_version: "1.26.0".to_string(),
+                cvss_score: Some(3.1),
+                cvss_vector: None,
+                severity: SeverityView::Low,
+                fixed_version: None,
+                description: None,
+                source_url: None,
+            }],
+            threshold_exceeded: false,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 0,
+                informational_count: 1,
+                affected_package_count: 1,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let result = formatter.format_v2(&model);
+
+        assert!(result.is_ok());
+        let markdown = result.unwrap();
+        assert!(markdown.contains("### ⚠️Warning No vulnerabilities found above threshold."));
+        assert!(markdown.contains("### ℹ️Info Found 1 vulnerability in 1 package."));
+        assert!(markdown.contains("CVE-2024-5678"));
+        assert!(markdown.contains("🟢"));
+        assert!(markdown.contains("LOW"));
+    }
+
+    #[test]
+    fn test_format_v2_output_matches_format_with_dependencies() {
+        // Test that format_v2 produces similar output structure to format_with_dependencies
+        let mut model = create_test_read_model();
+        let mut transitive = HashMap::new();
+        transitive.insert(
+            "pkg:pypi/requests@2.31.0".to_string(),
+            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
+        );
+        model.dependencies = Some(DependencyView {
+            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
+            transitive,
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let result = formatter.format_v2(&model);
+
+        assert!(result.is_ok());
+        let markdown = result.unwrap();
+
+        // Check key sections exist in correct order
+        let sbom_pos = markdown.find("# Software Bill of Materials (SBOM)");
+        let inventory_pos = markdown.find("## Component Inventory");
+        let direct_pos = markdown.find("## Direct Dependencies");
+        let transitive_pos = markdown.find("## Transitive Dependencies");
+
+        assert!(sbom_pos.is_some());
+        assert!(inventory_pos.is_some());
+        assert!(direct_pos.is_some());
+        assert!(transitive_pos.is_some());
+
+        // Verify ordering
+        assert!(sbom_pos.unwrap() < inventory_pos.unwrap());
+        assert!(inventory_pos.unwrap() < direct_pos.unwrap());
+        assert!(direct_pos.unwrap() < transitive_pos.unwrap());
     }
 }
