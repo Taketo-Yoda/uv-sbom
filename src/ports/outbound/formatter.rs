@@ -1,3 +1,4 @@
+use crate::application::read_models::SbomReadModel;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, Package, SbomMetadata};
@@ -79,5 +80,28 @@ pub trait SbomFormatter {
         // Default implementation ignores vulnerability_result
         let _ = vulnerability_result;
         self.format(packages, metadata, vulnerability_report)
+    }
+
+    /// Formats SBOM output using the unified read model
+    ///
+    /// This method provides a simplified interface that accepts the pre-built
+    /// `SbomReadModel` containing all necessary data for formatting.
+    ///
+    /// # Arguments
+    /// * `model` - The unified SBOM read model containing metadata, components,
+    ///   dependencies, and vulnerability information
+    ///
+    /// # Returns
+    /// Formatted SBOM content as a string
+    ///
+    /// # Errors
+    /// Returns an error if formatting or serialization fails
+    ///
+    /// # Default Implementation
+    /// By default, this method is unimplemented and will panic.
+    /// Formatters should override this method to provide their implementation.
+    #[allow(dead_code)]
+    fn format_v2(&self, _model: &SbomReadModel) -> Result<String> {
+        unimplemented!("format_v2 not yet implemented for this formatter")
     }
 }
