@@ -4,4 +4,5 @@
 /// domain services and coordinates with infrastructure through ports.
 pub mod dto;
 pub mod factories;
+pub mod read_models;
 pub mod use_cases;
