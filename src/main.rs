@@ -10,6 +10,7 @@ use adapters::outbound::filesystem::FileSystemReader;
 use adapters::outbound::network::{CachingPyPiLicenseRepository, OsvClient, PyPiLicenseRepository};
 use application::dto::{OutputFormat, SbomRequest};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
+use application::read_models::SbomReadModelBuilder;
 use application::use_cases::GenerateSbomUseCase;
 use clap::Parser;
 use cli::Args;
@@ -135,23 +136,15 @@ async fn run(args: Args) -> Result<bool> {
 
     // Create formatter using factory
     let formatter = FormatterFactory::create(args.format);
-    let vulnerability_report = response.vulnerability_report.as_deref();
-    let vulnerability_check_result = response.vulnerability_check_result.as_ref();
-    let formatted_output = if let Some(dep_graph) = response.dependency_graph.as_ref() {
-        formatter.format_with_dependencies(
-            dep_graph,
-            response.enriched_packages,
-            &response.metadata,
-            vulnerability_report,
-            vulnerability_check_result,
-        )?
-    } else {
-        formatter.format(
-            response.enriched_packages,
-            &response.metadata,
-            vulnerability_report,
-        )?
-    };
+
+    // Build read model and format using format_v2
+    let read_model = SbomReadModelBuilder::build(
+        response.enriched_packages,
+        &response.metadata,
+        response.dependency_graph.as_ref(),
+        response.vulnerability_check_result.as_ref(),
+    );
+    let formatted_output = formatter.format_v2(&read_model)?;
 
     // Create presenter using factory
     let presenter_type = if let Some(output_path) = args.output {
