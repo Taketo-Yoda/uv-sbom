@@ -3,7 +3,6 @@
 //! These structs provide a flattened, query-optimized view of component data.
 
 /// View representation of a software component
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ComponentView {
     /// BOM reference identifier
@@ -19,13 +18,14 @@ pub struct ComponentView {
     /// Component description
     pub description: Option<String>,
     /// SHA256 hash of the component
+    #[allow(dead_code)]
     pub sha256_hash: Option<String>,
     /// Whether this is a direct dependency
+    #[allow(dead_code)]
     pub is_direct_dependency: bool,
 }
 
 /// View representation of license information
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct LicenseView {
     /// SPDX license identifier
@@ -33,5 +33,6 @@ pub struct LicenseView {
     /// License name
     pub name: String,
     /// URL to license text
+    #[allow(dead_code)]
     pub url: Option<String>,
 }

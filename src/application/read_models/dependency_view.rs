@@ -8,7 +8,6 @@ use std::collections::HashMap;
 ///
 /// Provides a flattened view of direct and transitive dependencies
 /// for efficient querying.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct DependencyView {
     /// BOM references of direct dependencies
