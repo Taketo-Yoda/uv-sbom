@@ -4,6 +4,8 @@
 //! all SBOM data in a query-optimized format.
 
 use super::component_view::ComponentView;
+use super::dependency_view::DependencyView;
+use super::vulnerability_view::VulnerabilityReportView;
 
 /// Main read model for SBOM data
 ///
@@ -34,18 +36,4 @@ pub struct SbomMetadataView {
     pub tool_version: String,
     /// Serial number of the SBOM
     pub serial_number: String,
-}
-
-/// Placeholder for dependency view (to be implemented in future issues)
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct DependencyView {
-    // To be defined in a future issue
-}
-
-/// Placeholder for vulnerability report view (to be implemented in future issues)
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct VulnerabilityReportView {
-    // To be defined in a future issue
 }
