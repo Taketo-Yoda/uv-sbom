@@ -126,11 +126,13 @@ impl PyPiLicenseRepository {
 }
 
 impl PyPiLicenseRepository {
-    /// Verify that a package exists on PyPI by sending an HTTP HEAD request.
-    /// Returns true if the package page responds with a success status.
+    /// Verify that a package exists on PyPI by sending an HTTP HEAD request
+    /// to the PyPI JSON API endpoint, which correctly returns 404 for
+    /// non-existent packages (unlike the /project/ HTML endpoint which
+    /// returns 200 for all requests).
     pub async fn verify_package_exists(&self, package_name: &str) -> bool {
         let normalized = package_name.to_lowercase().replace('_', "-");
-        let url = format!("https://pypi.org/project/{}/", normalized);
+        let url = format!("https://pypi.org/pypi/{}/json", normalized);
         match self
             .client
             .head(&url)
