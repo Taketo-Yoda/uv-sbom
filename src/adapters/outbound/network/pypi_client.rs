@@ -2,6 +2,7 @@ use crate::ports::outbound::{LicenseRepository, PyPiMetadata};
 use crate::shared::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
@@ -124,6 +125,49 @@ impl PyPiLicenseRepository {
     }
 }
 
+impl PyPiLicenseRepository {
+    /// Verify that a package exists on PyPI by sending an HTTP HEAD request
+    /// to the PyPI JSON API endpoint, which correctly returns 404 for
+    /// non-existent packages (unlike the /project/ HTML endpoint which
+    /// returns 200 for all requests).
+    pub async fn verify_package_exists(&self, package_name: &str) -> bool {
+        let normalized = package_name.to_lowercase().replace('_', "-");
+        let url = format!("https://pypi.org/pypi/{}/json", normalized);
+        match self
+            .client
+            .head(&url)
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+        {
+            Ok(response) => response.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
+    /// Verify multiple packages in parallel, returning a set of verified package names.
+    /// Uses a concurrency limit to avoid overwhelming PyPI.
+    pub async fn verify_packages(&self, names: &[String]) -> HashSet<String> {
+        use futures::stream::{self, StreamExt};
+
+        const MAX_CONCURRENT: usize = 10;
+
+        let results: Vec<(String, bool)> = stream::iter(names.iter().cloned())
+            .map(|name| async move {
+                let exists = self.verify_package_exists(&name).await;
+                (name, exists)
+            })
+            .buffer_unordered(MAX_CONCURRENT)
+            .collect()
+            .await;
+
+        results
+            .into_iter()
+            .filter_map(|(name, exists)| if exists { Some(name) } else { None })
+            .collect()
+    }
+}
+
 // Note: Default implementation removed for security reasons.
 // Default::default() would panic if client creation fails, which is not safe for production.
 // Use PyPiLicenseRepository::new() explicitly and handle the Result.
@@ -152,12 +196,33 @@ mod tests {
         assert!(client.is_ok());
     }
 
-    // Integration test - requires network access
+    #[tokio::test]
+    async fn test_verify_packages_empty_list() {
+        let client = PyPiLicenseRepository::new().unwrap();
+        let result = client.verify_packages(&[]).await;
+        assert!(result.is_empty());
+    }
+
+    // Integration tests - require network access
     // Uncomment to run with real PyPI API
-    // #[test]
-    // fn test_fetch_license_info_real() {
+    // #[tokio::test]
+    // async fn test_verify_package_exists_real() {
     //     let client = PyPiLicenseRepository::new().unwrap();
-    //     let result = client.fetch_license_info("requests", "2.31.0");
-    //     assert!(result.is_ok());
+    //     assert!(client.verify_package_exists("requests").await);
+    // }
+    //
+    // #[tokio::test]
+    // async fn test_verify_package_not_exists_real() {
+    //     let client = PyPiLicenseRepository::new().unwrap();
+    //     assert!(!client.verify_package_exists("nonexistent-pkg-xyz-123456").await);
+    // }
+    //
+    // #[tokio::test]
+    // async fn test_verify_packages_real() {
+    //     let client = PyPiLicenseRepository::new().unwrap();
+    //     let names = vec!["requests".to_string(), "nonexistent-pkg-xyz-123456".to_string()];
+    //     let verified = client.verify_packages(&names).await;
+    //     assert!(verified.contains("requests"));
+    //     assert!(!verified.contains("nonexistent-pkg-xyz-123456"));
     // }
 }
