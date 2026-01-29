@@ -4,7 +4,7 @@ use crate::application::read_models::{
 };
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Markdown table header for package information
 const TABLE_HEADER: &str = "| Package | Version | License | Description |\n";
@@ -24,11 +24,25 @@ const VULN_TABLE_SEPARATOR: &str =
 ///
 /// This adapter implements the SbomFormatter port for Markdown format,
 /// including dependency graph visualization.
-pub struct MarkdownFormatter;
+pub struct MarkdownFormatter {
+    /// When Some, only packages in this set get PyPI hyperlinks.
+    /// When None, all packages get PyPI hyperlinks (default behavior).
+    verified_packages: Option<HashSet<String>>,
+}
 
 impl MarkdownFormatter {
     pub fn new() -> Self {
-        Self
+        Self {
+            verified_packages: None,
+        }
+    }
+
+    /// Creates a new MarkdownFormatter with a set of verified PyPI packages.
+    /// Only packages in the set will get hyperlinks; others render as plain text.
+    pub fn with_verified_packages(verified_packages: HashSet<String>) -> Self {
+        Self {
+            verified_packages: Some(verified_packages),
+        }
     }
 
     /// Escapes pipe characters and newlines for safe Markdown table rendering
@@ -49,6 +63,22 @@ impl MarkdownFormatter {
             Self::escape_markdown_table_cell(name),
             normalized
         )
+    }
+
+    /// Format a package name as a PyPI link or plain text based on verification results.
+    /// - If no verification was performed (verified_packages is None), always generate a link.
+    /// - If verification was performed, only generate a link for verified packages.
+    fn format_package_name(&self, name: &str) -> String {
+        match &self.verified_packages {
+            None => Self::package_to_pypi_link(name),
+            Some(verified) => {
+                if verified.contains(name) {
+                    Self::package_to_pypi_link(name)
+                } else {
+                    Self::escape_markdown_table_cell(name)
+                }
+            }
+        }
     }
 }
 
@@ -78,7 +108,7 @@ impl MarkdownFormatter {
 
             output.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
-                Self::package_to_pypi_link(&component.name),
+                self.format_package_name(&component.name),
                 Self::escape_markdown_table_cell(&component.version),
                 Self::escape_markdown_table_cell(license),
                 Self::escape_markdown_table_cell(description)
@@ -119,7 +149,7 @@ impl MarkdownFormatter {
 
                     output.push_str(&format!(
                         "| {} | {} | {} | {} |\n",
-                        Self::package_to_pypi_link(&component.name),
+                        self.format_package_name(&component.name),
                         Self::escape_markdown_table_cell(&component.version),
                         Self::escape_markdown_table_cell(license),
                         Self::escape_markdown_table_cell(description)
@@ -163,7 +193,7 @@ impl MarkdownFormatter {
 
                             output.push_str(&format!(
                                 "| {} | {} | {} | {} |\n",
-                                Self::package_to_pypi_link(&component.name),
+                                self.format_package_name(&component.name),
                                 Self::escape_markdown_table_cell(&component.version),
                                 Self::escape_markdown_table_cell(license),
                                 Self::escape_markdown_table_cell(description)
@@ -317,7 +347,7 @@ impl MarkdownFormatter {
 
         output.push_str(&format!(
             "| {} | {} | {} | {} | {} {} | {} |\n",
-            Self::package_to_pypi_link(&vuln.affected_component_name),
+            self.format_package_name(&vuln.affected_component_name),
             Self::escape_markdown_table_cell(&vuln.affected_version),
             Self::escape_markdown_table_cell(fixed_version),
             cvss_display,
@@ -936,5 +966,113 @@ mod tests {
         let formatter = MarkdownFormatter::new();
         let markdown = formatter.format(&model).unwrap();
         assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
+    }
+
+    // ============================================================
+    // Verified packages (--verify-links) tests
+    // ============================================================
+
+    #[test]
+    fn test_format_with_verified_packages_only_verified_get_links() {
+        let model = create_test_read_model();
+        let mut verified = HashSet::new();
+        verified.insert("requests".to_string());
+        // "urllib3" is NOT in verified set
+
+        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let markdown = formatter.format(&model).unwrap();
+
+        // "requests" is verified → gets a hyperlink
+        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
+        // "urllib3" is NOT verified → plain text, no hyperlink
+        assert!(!markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
+        assert!(markdown.contains("| urllib3 |"));
+    }
+
+    #[test]
+    fn test_format_without_verified_packages_all_get_links() {
+        let model = create_test_read_model();
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        // Without verification, all packages get hyperlinks
+        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
+        assert!(markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
+    }
+
+    #[test]
+    fn test_format_with_empty_verified_set_no_links() {
+        let model = create_test_read_model();
+        let verified = HashSet::new();
+
+        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let markdown = formatter.format(&model).unwrap();
+
+        // Empty verified set → no packages get hyperlinks
+        assert!(!markdown.contains("[requests](https://pypi.org/project/requests/)"));
+        assert!(!markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
+        assert!(markdown.contains("| requests |"));
+        assert!(markdown.contains("| urllib3 |"));
+    }
+
+    #[test]
+    fn test_format_vulnerability_with_verified_packages() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                severity: SeverityView::Critical,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: true,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        // "requests" is NOT in verified set
+        let verified = HashSet::new();
+        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let markdown = formatter.format(&model).unwrap();
+
+        // Vulnerability table should show plain text for unverified package
+        assert!(!markdown.contains("[requests](https://pypi.org/project/requests/)"));
+        assert!(markdown.contains("| requests |"));
+    }
+
+    #[test]
+    fn test_format_package_name_with_none_verified() {
+        let formatter = MarkdownFormatter::new();
+        let result = formatter.format_package_name("requests");
+        assert_eq!(result, "[requests](https://pypi.org/project/requests/)");
+    }
+
+    #[test]
+    fn test_format_package_name_with_verified_present() {
+        let mut verified = HashSet::new();
+        verified.insert("requests".to_string());
+        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let result = formatter.format_package_name("requests");
+        assert_eq!(result, "[requests](https://pypi.org/project/requests/)");
+    }
+
+    #[test]
+    fn test_format_package_name_with_verified_absent() {
+        let verified = HashSet::new();
+        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let result = formatter.format_package_name("nonexistent-pkg");
+        assert_eq!(result, "nonexistent-pkg");
     }
 }

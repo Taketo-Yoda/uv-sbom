@@ -82,6 +82,14 @@ async fn run(args: Args) -> Result<bool> {
         eprintln!();
     }
 
+    // Warn if verify_links is used with JSON format
+    if args.verify_links && args.format == OutputFormat::Json {
+        eprintln!("⚠️  Warning: --verify-links has no effect with JSON format.");
+        eprintln!("   PyPI link verification only applies to Markdown output.");
+        eprintln!("   Use --format markdown to use link verification.");
+        eprintln!();
+    }
+
     // Validate project directory
     let project_dir = args.path.as_deref().unwrap_or(".");
     let project_path = PathBuf::from(project_dir);
@@ -134,16 +142,30 @@ async fn run(args: Args) -> Result<bool> {
     // Display progress message
     eprintln!("{}", FormatterFactory::progress_message(args.format));
 
-    // Create formatter using factory
-    let formatter = FormatterFactory::create(args.format);
-
-    // Build read model and format
+    // Build read model first so we can extract package names for verification
     let read_model = SbomReadModelBuilder::build(
         response.enriched_packages,
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
     );
+
+    // Verify PyPI links if requested
+    let verified_packages = if args.verify_links && args.format == OutputFormat::Markdown {
+        eprintln!("🔗 Verifying PyPI links...");
+        let pypi_verifier = PyPiLicenseRepository::new()?;
+        let package_names: Vec<String> = read_model
+            .components
+            .iter()
+            .map(|c| c.name.clone())
+            .collect();
+        Some(pypi_verifier.verify_packages(&package_names).await)
+    } else {
+        None
+    };
+
+    // Create formatter using factory with optional verified packages
+    let formatter = FormatterFactory::create(args.format, verified_packages);
     let formatted_output = formatter.format(&read_model)?;
 
     // Create presenter using factory

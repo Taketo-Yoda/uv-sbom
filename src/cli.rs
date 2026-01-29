@@ -44,6 +44,10 @@ pub struct Args {
     /// Requires --check-cve to be enabled
     #[arg(long, value_parser = parse_cvss_threshold, group = "threshold", requires = "check_cve")]
     pub cvss_threshold: Option<f32>,
+
+    /// Verify PyPI links exist before generating hyperlinks (requires network access, Markdown format only)
+    #[arg(long)]
+    pub verify_links: bool,
 }
 
 fn parse_severity_threshold(s: &str) -> Result<Severity, String> {
