@@ -35,6 +35,21 @@ impl MarkdownFormatter {
     fn escape_markdown_table_cell(text: &str) -> String {
         text.replace('|', "\\|").replace('\n', " ")
     }
+
+    /// Normalize package name for PyPI URL (lowercase, replace _ with -)
+    fn normalize_for_pypi(name: &str) -> String {
+        name.to_lowercase().replace('_', "-")
+    }
+
+    /// Generate a Markdown hyperlink to the package's PyPI page
+    fn package_to_pypi_link(name: &str) -> String {
+        let normalized = Self::normalize_for_pypi(name);
+        format!(
+            "[{}](https://pypi.org/project/{}/)",
+            Self::escape_markdown_table_cell(name),
+            normalized
+        )
+    }
 }
 
 /// Helper methods for rendering sections
@@ -63,7 +78,7 @@ impl MarkdownFormatter {
 
             output.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
-                Self::escape_markdown_table_cell(&component.name),
+                Self::package_to_pypi_link(&component.name),
                 Self::escape_markdown_table_cell(&component.version),
                 Self::escape_markdown_table_cell(license),
                 Self::escape_markdown_table_cell(description)
@@ -104,7 +119,7 @@ impl MarkdownFormatter {
 
                     output.push_str(&format!(
                         "| {} | {} | {} | {} |\n",
-                        Self::escape_markdown_table_cell(&component.name),
+                        Self::package_to_pypi_link(&component.name),
                         Self::escape_markdown_table_cell(&component.version),
                         Self::escape_markdown_table_cell(license),
                         Self::escape_markdown_table_cell(description)
@@ -148,7 +163,7 @@ impl MarkdownFormatter {
 
                             output.push_str(&format!(
                                 "| {} | {} | {} | {} |\n",
-                                Self::escape_markdown_table_cell(&component.name),
+                                Self::package_to_pypi_link(&component.name),
                                 Self::escape_markdown_table_cell(&component.version),
                                 Self::escape_markdown_table_cell(license),
                                 Self::escape_markdown_table_cell(description)
@@ -302,7 +317,7 @@ impl MarkdownFormatter {
 
         output.push_str(&format!(
             "| {} | {} | {} | {} | {} {} | {} |\n",
-            Self::escape_markdown_table_cell(&vuln.affected_component_name),
+            Self::package_to_pypi_link(&vuln.affected_component_name),
             Self::escape_markdown_table_cell(&vuln.affected_version),
             Self::escape_markdown_table_cell(fixed_version),
             cvss_display,
@@ -807,5 +822,119 @@ mod tests {
         assert!(summary_pos.unwrap() < warning_pos.unwrap());
         assert!(warning_pos.unwrap() < info_pos.unwrap());
         assert!(info_pos.unwrap() < attribution_pos.unwrap());
+    }
+
+    // ============================================================
+    // PyPI hyperlink tests
+    // ============================================================
+
+    #[test]
+    fn test_normalize_for_pypi_underscore() {
+        assert_eq!(
+            MarkdownFormatter::normalize_for_pypi("typing_extensions"),
+            "typing-extensions"
+        );
+    }
+
+    #[test]
+    fn test_normalize_for_pypi_uppercase() {
+        assert_eq!(MarkdownFormatter::normalize_for_pypi("Flask"), "flask");
+    }
+
+    #[test]
+    fn test_normalize_for_pypi_already_normalized() {
+        assert_eq!(
+            MarkdownFormatter::normalize_for_pypi("ruamel-yaml"),
+            "ruamel-yaml"
+        );
+    }
+
+    #[test]
+    fn test_package_to_pypi_link_simple() {
+        assert_eq!(
+            MarkdownFormatter::package_to_pypi_link("requests"),
+            "[requests](https://pypi.org/project/requests/)"
+        );
+    }
+
+    #[test]
+    fn test_package_to_pypi_link_with_underscore() {
+        assert_eq!(
+            MarkdownFormatter::package_to_pypi_link("typing_extensions"),
+            "[typing_extensions](https://pypi.org/project/typing-extensions/)"
+        );
+    }
+
+    #[test]
+    fn test_package_to_pypi_link_with_uppercase() {
+        assert_eq!(
+            MarkdownFormatter::package_to_pypi_link("Flask"),
+            "[Flask](https://pypi.org/project/flask/)"
+        );
+    }
+
+    #[test]
+    fn test_format_basic_contains_pypi_links() {
+        let model = create_test_read_model();
+        let formatter = MarkdownFormatter::new();
+
+        let markdown = formatter.format(&model).unwrap();
+        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
+        assert!(markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
+    }
+
+    #[test]
+    fn test_format_with_dependencies_contains_pypi_links() {
+        let mut model = create_test_read_model();
+        let mut transitive = HashMap::new();
+        transitive.insert(
+            "pkg:pypi/requests@2.31.0".to_string(),
+            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
+        );
+
+        model.dependencies = Some(DependencyView {
+            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
+            transitive,
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        // Direct dependencies section should have PyPI link
+        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
+        // Transitive dependencies section should have PyPI link
+        assert!(markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
+    }
+
+    #[test]
+    fn test_vulnerability_table_contains_pypi_links() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                severity: SeverityView::Critical,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: true,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
     }
 }
