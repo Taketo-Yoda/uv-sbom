@@ -14,11 +14,11 @@ const TABLE_SEPARATOR: &str = "|---------|---------|---------|-------------|\n";
 
 /// Markdown table header for vulnerability information
 const VULN_TABLE_HEADER: &str =
-    "| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID |\n";
+    "| Package | Current Version | Fixed Version | CVSS | Severity | Vulnerability ID |\n";
 
 /// Markdown table separator line for vulnerability table
 const VULN_TABLE_SEPARATOR: &str =
-    "|---------|-----------------|---------------|------|----------|--------|\n";
+    "|---------|-----------------|---------------|------|----------|------------------|\n";
 
 /// MarkdownFormatter adapter for generating detailed Markdown SBOM with dependency information
 ///
@@ -63,6 +63,22 @@ impl MarkdownFormatter {
             Self::escape_markdown_table_cell(name),
             normalized
         )
+    }
+
+    /// Generate a Markdown hyperlink for a vulnerability ID based on its prefix.
+    ///
+    /// - `CVE-*` → NVD (NIST)
+    /// - `GHSA-*` → GitHub Advisories
+    /// - All others (PYSEC, RUSTSEC, etc.) → OSV.dev
+    fn vulnerability_id_to_link(id: &str) -> String {
+        let url = if id.starts_with("CVE-") {
+            format!("https://nvd.nist.gov/vuln/detail/{}", id)
+        } else if id.starts_with("GHSA-") {
+            format!("https://github.com/advisories/{}", id)
+        } else {
+            format!("https://osv.dev/vulnerability/{}", id)
+        };
+        format!("[{}]({})", Self::escape_markdown_table_cell(id), url)
     }
 
     /// Format a package name as a PyPI link or plain text based on verification results.
@@ -353,7 +369,7 @@ impl MarkdownFormatter {
             cvss_display,
             severity_emoji,
             vuln.severity.as_str(),
-            Self::escape_markdown_table_cell(&vuln.id),
+            Self::vulnerability_id_to_link(&vuln.id),
         ));
     }
 }
@@ -522,7 +538,9 @@ mod tests {
         let markdown = result.unwrap();
         assert!(markdown.contains("## Vulnerability Report"));
         assert!(markdown.contains("### ⚠️Warning Found 1 vulnerability in 1 package."));
-        assert!(markdown.contains("CVE-2024-1234"));
+        assert!(
+            markdown.contains("[CVE-2024-1234](https://nvd.nist.gov/vuln/detail/CVE-2024-1234)")
+        );
         assert!(markdown.contains("9.8"));
         assert!(markdown.contains("🔴"));
         assert!(markdown.contains("CRITICAL"));
@@ -563,7 +581,9 @@ mod tests {
         let markdown = result.unwrap();
         assert!(markdown.contains("### ⚠️Warning No vulnerabilities found above threshold."));
         assert!(markdown.contains("### ℹ️Info Found 1 vulnerability in 1 package."));
-        assert!(markdown.contains("CVE-2024-5678"));
+        assert!(
+            markdown.contains("[CVE-2024-5678](https://nvd.nist.gov/vuln/detail/CVE-2024-5678)")
+        );
         assert!(markdown.contains("🟢"));
         assert!(markdown.contains("LOW"));
     }
@@ -676,8 +696,8 @@ mod tests {
         formatter.render_actionable_vulnerabilities(&mut output, &vulns);
 
         assert!(output.contains("### ⚠️Warning Found 2 vulnerabilities in 1 package."));
-        assert!(output.contains("CVE-2024-1111"));
-        assert!(output.contains("CVE-2024-2222"));
+        assert!(output.contains("[CVE-2024-1111](https://nvd.nist.gov/vuln/detail/CVE-2024-1111)"));
+        assert!(output.contains("[CVE-2024-2222](https://nvd.nist.gov/vuln/detail/CVE-2024-2222)"));
         assert!(output.contains("🔴"));
         assert!(output.contains("🟠"));
         assert!(output.contains("9.8"));
@@ -705,7 +725,7 @@ mod tests {
         formatter.render_informational_vulnerabilities(&mut output, &vulns);
 
         assert!(output.contains("### ℹ️Info Found 1 vulnerability in 1 package."));
-        assert!(output.contains("CVE-2024-3333"));
+        assert!(output.contains("[CVE-2024-3333](https://nvd.nist.gov/vuln/detail/CVE-2024-3333)"));
         assert!(output.contains("🟢"));
         assert!(output.contains("2.5"));
         assert!(output.contains("1.27.0"));
@@ -1066,6 +1086,42 @@ mod tests {
         let formatter = MarkdownFormatter::with_verified_packages(verified);
         let result = formatter.format_package_name("requests");
         assert_eq!(result, "[requests](https://pypi.org/project/requests/)");
+    }
+
+    // ============================================================
+    // Vulnerability ID hyperlink tests
+    // ============================================================
+
+    #[test]
+    fn test_vulnerability_id_to_link_cve() {
+        assert_eq!(
+            MarkdownFormatter::vulnerability_id_to_link("CVE-2024-1234"),
+            "[CVE-2024-1234](https://nvd.nist.gov/vuln/detail/CVE-2024-1234)"
+        );
+    }
+
+    #[test]
+    fn test_vulnerability_id_to_link_ghsa() {
+        assert_eq!(
+            MarkdownFormatter::vulnerability_id_to_link("GHSA-abcd-efgh-ijkl"),
+            "[GHSA-abcd-efgh-ijkl](https://github.com/advisories/GHSA-abcd-efgh-ijkl)"
+        );
+    }
+
+    #[test]
+    fn test_vulnerability_id_to_link_pysec() {
+        assert_eq!(
+            MarkdownFormatter::vulnerability_id_to_link("PYSEC-2021-108"),
+            "[PYSEC-2021-108](https://osv.dev/vulnerability/PYSEC-2021-108)"
+        );
+    }
+
+    #[test]
+    fn test_vulnerability_id_to_link_rustsec() {
+        assert_eq!(
+            MarkdownFormatter::vulnerability_id_to_link("RUSTSEC-2023-0001"),
+            "[RUSTSEC-2023-0001](https://osv.dev/vulnerability/RUSTSEC-2023-0001)"
+        );
     }
 
     #[test]
