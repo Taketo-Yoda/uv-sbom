@@ -58,6 +58,7 @@
 
 pub mod adapters;
 pub mod application;
+pub mod config;
 pub mod ports;
 pub mod sbom_generation;
 pub mod shared;
