@@ -103,7 +103,7 @@ where
         // Step 6: Apply threshold evaluation if vulnerabilities were found
         let vulnerability_check_result = vulnerability_report.as_ref().map(|report| {
             let threshold_config = Self::build_threshold_config(&request);
-            VulnerabilityChecker::check(report.clone(), threshold_config)
+            VulnerabilityChecker::check(report.clone(), threshold_config, &request.ignore_cves)
         });
 
         // Step 7: Build and return response

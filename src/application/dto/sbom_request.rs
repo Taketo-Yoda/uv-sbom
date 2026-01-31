@@ -25,7 +25,6 @@ pub struct SbomRequest {
     /// CVSS threshold for vulnerability filtering
     pub cvss_threshold: Option<f32>,
     /// CVE IDs to ignore during vulnerability checks
-    #[allow(dead_code)] // Will be used by vulnerability filtering in sub-issue #188
     pub ignore_cves: Vec<IgnoreCve>,
 }
 
