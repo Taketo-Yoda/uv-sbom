@@ -27,7 +27,7 @@ pub struct ConfigFile {
 }
 
 /// A CVE entry to ignore during vulnerability checks.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct IgnoreCve {
     pub id: String,
     pub reason: Option<String>,

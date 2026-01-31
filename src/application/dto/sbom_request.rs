@@ -1,3 +1,4 @@
+use crate::config::IgnoreCve;
 use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
@@ -23,6 +24,9 @@ pub struct SbomRequest {
     pub severity_threshold: Option<Severity>,
     /// CVSS threshold for vulnerability filtering
     pub cvss_threshold: Option<f32>,
+    /// CVE IDs to ignore during vulnerability checks
+    #[allow(dead_code)] // Will be used by vulnerability filtering in sub-issue #188
+    pub ignore_cves: Vec<IgnoreCve>,
 }
 
 impl SbomRequest {
@@ -79,6 +83,7 @@ pub struct SbomRequestBuilder {
     check_cve: bool,
     severity_threshold: Option<Severity>,
     cvss_threshold: Option<f32>,
+    ignore_cves: Vec<IgnoreCve>,
 }
 
 impl SbomRequestBuilder {
@@ -101,6 +106,7 @@ impl SbomRequestBuilder {
             check_cve: false,
             severity_threshold: None,
             cvss_threshold: None,
+            ignore_cves: Vec::new(),
         }
     }
 
@@ -175,6 +181,12 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets the CVE IDs to ignore during vulnerability checks.
+    pub fn ignore_cves(mut self, cves: Vec<IgnoreCve>) -> Self {
+        self.ignore_cves = cves;
+        self
+    }
+
     /// Builds the SbomRequest, validating that all required fields are set.
     ///
     /// # Errors
@@ -193,6 +205,7 @@ impl SbomRequestBuilder {
             check_cve: self.check_cve,
             severity_threshold: self.severity_threshold,
             cvss_threshold: self.cvss_threshold,
+            ignore_cves: self.ignore_cves,
         })
     }
 }
@@ -206,6 +219,7 @@ impl Default for SbomRequestBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::IgnoreCve;
 
     #[test]
     fn test_builder_with_only_project_path() {
@@ -221,6 +235,7 @@ mod tests {
         assert!(!request.check_cve);
         assert!(request.severity_threshold.is_none());
         assert!(request.cvss_threshold.is_none());
+        assert!(request.ignore_cves.is_empty());
     }
 
     #[test]
@@ -242,6 +257,10 @@ mod tests {
             .check_cve(true)
             .severity_threshold(Severity::High)
             .cvss_threshold(7.5)
+            .ignore_cves(vec![IgnoreCve {
+                id: "CVE-2024-1234".to_string(),
+                reason: Some("test".to_string()),
+            }])
             .build()
             .unwrap();
 
@@ -252,6 +271,8 @@ mod tests {
         assert!(request.check_cve);
         assert_eq!(request.severity_threshold, Some(Severity::High));
         assert_eq!(request.cvss_threshold, Some(7.5));
+        assert_eq!(request.ignore_cves.len(), 1);
+        assert_eq!(request.ignore_cves[0].id, "CVE-2024-1234");
     }
 
     #[test]

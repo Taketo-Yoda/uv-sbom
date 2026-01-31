@@ -48,6 +48,14 @@ pub struct Args {
     /// Verify PyPI links exist before generating hyperlinks (requires network access, Markdown format only)
     #[arg(long)]
     pub verify_links: bool,
+
+    /// Explicit config file path (overrides auto-discovery)
+    #[arg(short = 'c', long = "config", value_name = "PATH")]
+    pub config: Option<String>,
+
+    /// CVE IDs to ignore (can be specified multiple times)
+    #[arg(short = 'i', long = "ignore-cve", value_name = "CVE_ID")]
+    pub ignore_cve: Vec<String>,
 }
 
 fn parse_severity_threshold(s: &str) -> Result<Severity, String> {
