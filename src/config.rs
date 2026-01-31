@@ -33,6 +33,13 @@ pub struct IgnoreCve {
     pub reason: Option<String>,
 }
 
+impl IgnoreCve {
+    /// Returns the reason for ignoring this CVE, if provided
+    pub fn reason(&self) -> Option<&str> {
+        self.reason.as_deref()
+    }
+}
+
 /// Load config from an explicit path. Returns an error if the file is not found.
 pub fn load_config_from_path(path: &Path) -> Result<ConfigFile> {
     let content = std::fs::read_to_string(path).with_context(|| {
