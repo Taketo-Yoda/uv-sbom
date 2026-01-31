@@ -31,7 +31,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.20", features = ["v4", "serde"] }
 urlencoding = "2.1"
-serde_yml = "0.0.12"
+serde_yaml_ng = "0.10"
 indicatif = "0.18"
 dashmap = "6"
 owo-colors = "4.1"
