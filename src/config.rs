@@ -23,7 +23,7 @@ pub struct ConfigFile {
     pub ignore_cves: Option<Vec<IgnoreCve>>,
     /// Captures unknown fields for warnings.
     #[serde(flatten)]
-    pub unknown_fields: HashMap<String, serde_yml::Value>,
+    pub unknown_fields: HashMap<String, serde_yaml_ng::Value>,
 }
 
 /// A CVE entry to ignore during vulnerability checks.
@@ -49,7 +49,7 @@ pub fn load_config_from_path(path: &Path) -> Result<ConfigFile> {
         )
     })?;
 
-    let config: ConfigFile = serde_yml::from_str(&content).with_context(|| {
+    let config: ConfigFile = serde_yaml_ng::from_str(&content).with_context(|| {
         format!(
             "Failed to parse config file: {}\n\n💡 Hint: Ensure the file contains valid YAML syntax.",
             path.display()
