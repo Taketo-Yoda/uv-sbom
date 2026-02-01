@@ -10,7 +10,64 @@ use std::path::Path;
 
 use crate::shared::Result;
 
-const CONFIG_FILENAME: &str = "uv-sbom.config.yml";
+pub const CONFIG_FILENAME: &str = "uv-sbom.config.yml";
+
+/// Template content for `uv-sbom.config.yml`.
+const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
+# Documentation: https://github.com/Taketo-Yoda/uv-sbom#configuration
+
+# Output format: json | markdown
+# format: json
+
+# Package exclusion patterns (supports wildcards)
+# exclude_packages:
+#   - "debug-*"
+#   - "test-*"
+
+# Enable CVE vulnerability checking
+# check_cve: false
+
+# Severity threshold: low | medium | high | critical
+# severity_threshold: high
+
+# CVSS score threshold (0.0 - 10.0)
+# cvss_threshold: 7.0
+
+# CVEs to ignore during vulnerability checks
+# ignore_cves:
+#   - id: CVE-2024-1234
+#     reason: "False positive: code path not reachable"
+#   - id: CVE-2024-5678
+"#;
+
+/// Generate a config template file in the specified directory.
+///
+/// Returns the absolute path of the created file on success.
+/// Returns an error if the file already exists.
+pub fn generate_config_template(dir: &Path) -> Result<std::path::PathBuf> {
+    let file_path = dir.join(CONFIG_FILENAME);
+
+    if file_path.exists() {
+        let abs_path = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+        bail!(
+            "{} already exists in {}. Use a different directory or remove the existing file.",
+            CONFIG_FILENAME,
+            abs_path.display()
+        );
+    }
+
+    std::fs::write(&file_path, CONFIG_TEMPLATE).with_context(|| {
+        format!(
+            "Failed to write config template to: {}",
+            file_path.display()
+        )
+    })?;
+
+    let abs_path = file_path
+        .canonicalize()
+        .unwrap_or_else(|_| file_path.clone());
+    Ok(abs_path)
+}
 
 /// Top-level configuration file schema.
 #[derive(Debug, Deserialize, Default)]
@@ -265,5 +322,69 @@ another_unknown: value
         assert!(config.cvss_threshold.is_none());
         assert!(config.ignore_cves.is_none());
         assert!(config.unknown_fields.is_empty());
+    }
+
+    #[test]
+    fn test_template_is_valid_yaml_when_uncommented() {
+        // Remove comment markers from YAML config lines (skip header comments)
+        let uncommented: String = CONFIG_TEMPLATE
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim_start();
+                if let Some(content) = trimmed.strip_prefix("# ") {
+                    // Skip non-YAML header lines (no colon = not a key-value pair or list item)
+                    if content.contains(':')
+                        || content.starts_with("  - ")
+                        || content.starts_with("- ")
+                    {
+                        Some(content.to_string())
+                    } else {
+                        None
+                    }
+                } else if trimmed == "#" {
+                    None
+                } else {
+                    Some(line.to_string())
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let result: std::result::Result<ConfigFile, _> = serde_yaml_ng::from_str(&uncommented);
+        assert!(
+            result.is_ok(),
+            "Template should be valid YAML when uncommented: {:?}\nContent:\n{}",
+            result.err(),
+            uncommented
+        );
+    }
+
+    #[test]
+    fn test_generate_config_template_creates_file() {
+        let dir = TempDir::new().unwrap();
+        let result = generate_config_template(dir.path());
+        assert!(result.is_ok());
+
+        let created_path = result.unwrap();
+        assert!(created_path.exists());
+
+        let content = fs::read_to_string(&created_path).unwrap();
+        assert!(content.contains("uv-sbom configuration file"));
+        assert!(content.contains("format: json"));
+        assert!(content.contains("exclude_packages:"));
+        assert!(content.contains("check_cve:"));
+        assert!(content.contains("ignore_cves:"));
+    }
+
+    #[test]
+    fn test_generate_config_template_fails_if_exists() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(CONFIG_FILENAME);
+        fs::write(&config_path, "existing content").unwrap();
+
+        let result = generate_config_template(dir.path());
+        assert!(result.is_err());
+        let err = format!("{}", result.unwrap_err());
+        assert!(err.contains("already exists"));
     }
 }

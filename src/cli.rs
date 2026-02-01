@@ -56,6 +56,10 @@ pub struct Args {
     /// CVE IDs to ignore (can be specified multiple times)
     #[arg(short = 'i', long = "ignore-cve", value_name = "CVE_ID")]
     pub ignore_cve: Vec<String>,
+
+    /// Generate a uv-sbom.config.yml template file
+    #[arg(long)]
+    pub init: bool,
 }
 
 fn parse_severity_threshold(s: &str) -> Result<Severity, String> {
