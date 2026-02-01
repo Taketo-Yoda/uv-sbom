@@ -265,6 +265,24 @@ uv-sbom --format markdown --check-cve --cvss-threshold 9.0
 - Vulnerabilities below the threshold are still shown in the report but don't trigger exit code 1
 - When using `--cvss-threshold`, vulnerabilities without CVSS scores (N/A) are excluded from threshold evaluation
 
+### PyPI Link Verification
+
+Use the `--verify-links` option to validate that packages exist on PyPI before generating hyperlinks. Packages that don't exist on PyPI will be rendered as plain text:
+
+```bash
+# Generate Markdown with verified PyPI links
+uv-sbom --format markdown --verify-links
+
+# Combine with other options
+uv-sbom --format markdown --verify-links --check-cve --output SBOM.md
+```
+
+**Behavior:**
+- Without `--verify-links`: All package names get PyPI hyperlinks (default, fast)
+- With `--verify-links`: Only verified packages get hyperlinks; unverified packages render as plain text
+- Network errors gracefully fall back to plain text (no crash)
+- Requests are executed in parallel (max 10 concurrent) for performance
+
 ### CI Integration
 
 Use vulnerability thresholds for CI/CD pipeline integration:
@@ -315,6 +333,8 @@ The following packages have known security vulnerabilities:
 
 *Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
 ```
+
+> **Note:** Vulnerability IDs (CVE, GHSA, PYSEC, RUSTSEC, etc.) in the vulnerability report are always rendered as hyperlinks, regardless of `--verify-links`. These IDs are sourced from the OSV database and link to authoritative vulnerability databases (NVD, GitHub Advisories, OSV.dev), so link verification is unnecessary.
 
 When no vulnerabilities are found:
 
@@ -414,6 +434,7 @@ Options:
   -o, --output <OUTPUT>              Output file path (if not specified, outputs to stdout)
   -e, --exclude <PATTERN>            Exclude packages matching patterns (supports wildcards: *)
       --dry-run                      Validate configuration without network communication or output generation
+      --verify-links                 Verify PyPI links exist before generating hyperlinks (Markdown format only)
       --check-cve                    Check for known vulnerabilities using OSV API (Markdown format only)
       --severity-threshold <LEVEL>   Severity threshold for vulnerability check (low/medium/high/critical)
                                      Requires --check-cve to be enabled
@@ -618,9 +639,16 @@ Secondary dependencies introduced by the primary packages.
    - Rate limit: No official limit, but tool implements retry logic
    - Endpoint: `/pypi/{package_name}/json`
 
-#### Optional (only when using `--check-cve`):
+#### Optional (only when using `--check-cve` or `--verify-links`):
 
-2. **OSV (Open Source Vulnerability Database)**
+2. **PyPI Link Verification**
+   - Domain: `https://pypi.org`
+   - Purpose: Verify package existence on PyPI via HTTP HEAD requests
+   - When: Only when `--verify-links` flag is used
+   - Rate limit: Max 10 concurrent requests
+   - Endpoint: `/project/{package_name}/`
+
+3. **OSV (Open Source Vulnerability Database)**
    - Domain: `https://api.osv.dev`
    - Purpose: Fetch vulnerability information for security scanning
    - When: Only when `--check-cve` flag is used
@@ -637,8 +665,9 @@ If you are behind a corporate firewall or proxy, ensure the following domains ar
 # Required
 pypi.org
 
-# Optional (only for --check-cve)
-api.osv.dev
+# Optional (for --verify-links and --check-cve)
+pypi.org       # Also used for --verify-links
+api.osv.dev    # Only for --check-cve
 ```
 
 ### Proxy Configuration
