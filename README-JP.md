@@ -218,6 +218,86 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 **情報の外部送信を防止する:**
 独自の社内ライブラリなど、PyPI等の外部レジストリに名前を送信したくないパッケージがある場合は、`--exclude` オプションを使用してください。これにより、メタデータ取得時の通信から特定のライブラリ名を除外し、秘匿性を保つことができます。
 
+### 設定ファイル
+
+設定ファイル（`uv-sbom.config.yml`）を使用して、毎回コマンドラインでオプションを渡す代わりにデフォルトオプションを設定できます。
+
+**自動検出**: プロジェクトディレクトリ（`uv.lock`がある場所）に`uv-sbom.config.yml`ファイルを配置します。ツールが自動的に検出して読み込みます。
+
+**明示的なパス指定**: `--config` / `-c`で任意の場所の設定ファイルを指定できます。
+
+```bash
+# 自動検出される設定ファイル（プロジェクトディレクトリに配置）
+uv-sbom --check-cve
+
+# 明示的な設定ファイルパス
+uv-sbom --config ./custom-config.yml --check-cve
+```
+
+**設定ファイルの例**（`uv-sbom.config.yml`）:
+
+```yaml
+# 出力形式: json または markdown
+format: markdown
+
+# SBOMから除外するパッケージ（ワイルドカード対応）
+exclude_packages:
+  - "pytest"
+  - "mypy"
+  - "*-dev"
+
+# CVE脆弱性チェックを有効化
+check_cve: true
+
+# 脆弱性チェックの深刻度しきい値（low/medium/high/critical）
+severity_threshold: high
+
+# 脆弱性チェックのCVSSしきい値（0.0-10.0）
+# cvss_threshold: 7.0
+
+# 無視するCVE（オプションで理由を記載可能）
+ignore_cves:
+  - id: CVE-2024-1234
+    reason: "このユースケースでは誤検出"
+  - id: CVE-2024-5678
+    reason: "ネットワーク設定で緩和済み"
+```
+
+#### 設定ファイルスキーマリファレンス
+
+| フィールド | 型 | 必須 | 説明 |
+|-------|------|----------|-------------|
+| `format` | string | No | 出力形式（`json` / `markdown`） |
+| `exclude_packages` | string[] | No | パッケージ除外パターン（ワイルドカード対応） |
+| `check_cve` | bool | No | CVEチェックを有効化 |
+| `severity_threshold` | string | No | 深刻度しきい値（`low` / `medium` / `high` / `critical`） |
+| `cvss_threshold` | number | No | CVSSしきい値（0.0 - 10.0） |
+| `ignore_cves` | object[] | No | 無視するCVEのリスト |
+| `ignore_cves[].id` | string | Yes | CVE ID（例: `CVE-2024-1234`） |
+| `ignore_cves[].reason` | string | No | 無視する理由 |
+
+#### 優先度とマージルール
+
+- **CLIの引数が設定ファイルの値を上書き**します（スカラーフィールド: `format`, `severity_threshold`, `cvss_threshold`）
+- **`check_cve`** はCLIフラグまたは設定ファイルのいずれかで設定されていれば有効化（論理OR）
+- **`exclude_packages`** はCLIと設定ファイルの両方から**マージ**され、重複が除去されます
+- **`ignore_cves`** はCLI（`--ignore-cve`）と設定ファイルの両方から**マージ**され、IDで重複が除去されます（重複時はCLIの指定が優先）
+
+### 特定のCVEを無視する
+
+コマンドラインから`--ignore-cve` / `-i`を使用して特定のCVEを無視できます：
+
+```bash
+# CLIから特定のCVEを無視
+uv-sbom --check-cve --ignore-cve CVE-2024-1234 --ignore-cve CVE-2024-5678
+
+# 短縮形
+uv-sbom --check-cve -i CVE-2024-1234 -i CVE-2024-5678
+
+# 設定ファイルとCLIの無視設定を組み合わせ（両方がマージされます）
+uv-sbom --config ./config.yml --check-cve -i CVE-2024-9999
+```
+
 ### 脆弱性のチェック
 
 `--check-cve`オプションを使用して、[OSV (Open Source Vulnerability) データベース](https://osv.dev)を使用したパッケージの既知のセキュリティ脆弱性をチェックできます：
@@ -432,6 +512,8 @@ Options:
   -p, --path <PATH>                  プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
   -o, --output <OUTPUT>              出力ファイルパス（指定しない場合は標準出力）
   -e, --exclude <PATTERN>            パッケージ除外パターン（ワイルドカード対応: *）
+  -c, --config <PATH>               設定ファイルのパス（指定しない場合はuv-sbom.config.ymlを自動検出）
+  -i, --ignore-cve <CVE_ID>         無視するCVE ID（複数回指定可能）
       --dry-run                      ネットワーク通信や出力生成を行わずに設定を検証
       --verify-links                 ハイパーリンク生成前にPyPIリンクの存在を検証（Markdownフォーマットのみ）
       --check-cve                    OSV APIを使用して既知の脆弱性をチェック（Markdownフォーマットのみ）
