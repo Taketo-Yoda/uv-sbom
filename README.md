@@ -223,6 +223,20 @@ Use the `--exclude` option to skip specific internal or proprietary libraries. T
 
 You can use a configuration file (`uv-sbom.config.yml`) to set default options instead of passing them on the command line every time.
 
+#### Generating a config template
+
+Use the `--init` option to generate a template configuration file with all available fields as commented examples:
+
+```bash
+# Generate template in the current directory
+uv-sbom --init
+
+# Generate template in a specific directory
+uv-sbom --init --path ./my-project
+```
+
+This creates a `uv-sbom.config.yml` file with inline documentation for every option. If the file already exists, the command exits with an error to prevent accidental overwriting.
+
 **Auto-discovery**: Place a `uv-sbom.config.yml` file in your project directory (where `uv.lock` is located). The tool automatically detects and loads it.
 
 **Explicit path**: Use `--config` / `-c` to specify a config file at a custom location.
@@ -515,6 +529,7 @@ Options:
   -e, --exclude <PATTERN>            Exclude packages matching patterns (supports wildcards: *)
   -c, --config <PATH>               Path to config file (auto-discovers uv-sbom.config.yml if not specified)
   -i, --ignore-cve <CVE_ID>         CVE IDs to ignore (can be specified multiple times)
+      --init                         Generate a uv-sbom.config.yml template file
       --dry-run                      Validate configuration without network communication or output generation
       --verify-links                 Verify PyPI links exist before generating hyperlinks (Markdown format only)
       --check-cve                    Check for known vulnerabilities using OSV API (Markdown format only)

@@ -43,6 +43,26 @@ async fn main() {
         }
     };
 
+    // Handle --init before normal flow
+    if args.init {
+        let dir = args.path.as_deref().unwrap_or(".");
+        let dir_path = std::path::Path::new(dir);
+        match config::generate_config_template(dir_path) {
+            Ok(abs_path) => {
+                eprintln!(
+                    "Created {} in {}",
+                    config::CONFIG_FILENAME,
+                    abs_path.parent().unwrap_or(dir_path).display()
+                );
+                process::exit(ExitCode::Success.as_i32());
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                process::exit(ExitCode::ApplicationError.as_i32());
+            }
+        }
+    }
+
     // Run the main application logic
     match run(args).await {
         Ok(has_vulnerabilities) => {
