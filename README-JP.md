@@ -264,6 +264,24 @@ uv-sbom --format markdown --check-cve --cvss-threshold 9.0
 - しきい値以下の脆弱性はレポートに表示されますが、終了コード1はトリガーしません
 - `--cvss-threshold`使用時、CVSSスコアのない脆弱性（N/A）はしきい値評価から除外されます
 
+### PyPIリンク検証
+
+`--verify-links`オプションを使用して、ハイパーリンクを生成する前にパッケージがPyPIに存在するかを検証できます。PyPIに存在しないパッケージはプレーンテキストとして表示されます：
+
+```bash
+# 検証済みPyPIリンク付きのMarkdownを生成
+uv-sbom --format markdown --verify-links
+
+# 他のオプションと組み合わせて使用
+uv-sbom --format markdown --verify-links --check-cve --output SBOM.md
+```
+
+**動作:**
+- `--verify-links`なし: すべてのパッケージ名にPyPIハイパーリンクを付与（デフォルト、高速）
+- `--verify-links`あり: 検証済みのパッケージのみハイパーリンクを付与。未検証のパッケージはプレーンテキスト
+- ネットワークエラー時はプレーンテキストにフォールバック（クラッシュなし）
+- リクエストは並列実行（最大10同時接続）でパフォーマンスを確保
+
 ### CI統合
 
 CI/CDパイプライン統合には脆弱性しきい値を使用します：
@@ -314,6 +332,8 @@ The following packages have known security vulnerabilities:
 
 *Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
 ```
+
+> **注:** 脆弱性レポート内の脆弱性ID（CVE, GHSA, PYSEC, RUSTSECなど）は、`--verify-links`の設定に関係なく常にハイパーリンクとして表示されます。これらのIDはOSVデータベースから取得され、権威ある脆弱性データベース（NVD、GitHub Advisories、OSV.dev）にリンクするため、リンク検証は不要です。
 
 脆弱性が見つからなかった場合:
 
@@ -413,6 +433,7 @@ Options:
   -o, --output <OUTPUT>              出力ファイルパス（指定しない場合は標準出力）
   -e, --exclude <PATTERN>            パッケージ除外パターン（ワイルドカード対応: *）
       --dry-run                      ネットワーク通信や出力生成を行わずに設定を検証
+      --verify-links                 ハイパーリンク生成前にPyPIリンクの存在を検証（Markdownフォーマットのみ）
       --check-cve                    OSV APIを使用して既知の脆弱性をチェック（Markdownフォーマットのみ）
       --severity-threshold <LEVEL>   脆弱性チェックの深刻度しきい値（low/medium/high/critical）
                                      --check-cveの有効化が必要
@@ -617,9 +638,16 @@ Secondary dependencies introduced by the primary packages.
    - レート制限: 公式制限なし、ツールはリトライロジックを実装
    - エンドポイント: `/pypi/{package_name}/json`
 
-#### オプション（`--check-cve`使用時のみ）:
+#### オプション（`--check-cve`または`--verify-links`使用時）:
 
-2. **OSV (Open Source Vulnerability Database)**
+2. **PyPIリンク検証**
+   - ドメイン: `https://pypi.org`
+   - 目的: HTTP HEADリクエストでPyPI上のパッケージ存在を検証
+   - タイミング: `--verify-links`フラグ使用時のみ
+   - レート制限: 最大10同時リクエスト
+   - エンドポイント: `/project/{package_name}/`
+
+3. **OSV (Open Source Vulnerability Database)**
    - ドメイン: `https://api.osv.dev`
    - 目的: セキュリティスキャンのための脆弱性情報を取得
    - タイミング: `--check-cve`フラグ使用時のみ
@@ -636,8 +664,9 @@ Secondary dependencies introduced by the primary packages.
 # 必須
 pypi.org
 
-# オプション（--check-cveのみ）
-api.osv.dev
+# オプション（--verify-linksおよび--check-cve）
+pypi.org       # --verify-linksでも使用
+api.osv.dev    # --check-cveのみ
 ```
 
 ### プロキシ設定
