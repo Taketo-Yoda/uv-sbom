@@ -222,6 +222,20 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 
 設定ファイル（`uv-sbom.config.yml`）を使用して、毎回コマンドラインでオプションを渡す代わりにデフォルトオプションを設定できます。
 
+#### 設定テンプレートの生成
+
+`--init`オプションを使用して、すべての設定項目をコメント付きで含むテンプレートファイルを生成できます：
+
+```bash
+# カレントディレクトリにテンプレートを生成
+uv-sbom --init
+
+# 指定したディレクトリにテンプレートを生成
+uv-sbom --init --path ./my-project
+```
+
+これにより、すべてのオプションのインラインドキュメントを含む`uv-sbom.config.yml`ファイルが作成されます。ファイルが既に存在する場合、誤って上書きしないようにエラーで終了します。
+
 **自動検出**: プロジェクトディレクトリ（`uv.lock`がある場所）に`uv-sbom.config.yml`ファイルを配置します。ツールが自動的に検出して読み込みます。
 
 **明示的なパス指定**: `--config` / `-c`で任意の場所の設定ファイルを指定できます。
@@ -514,6 +528,7 @@ Options:
   -e, --exclude <PATTERN>            パッケージ除外パターン（ワイルドカード対応: *）
   -c, --config <PATH>               設定ファイルのパス（指定しない場合はuv-sbom.config.ymlを自動検出）
   -i, --ignore-cve <CVE_ID>         無視するCVE ID（複数回指定可能）
+      --init                         uv-sbom.config.ymlテンプレートファイルを生成
       --dry-run                      ネットワーク通信や出力生成を行わずに設定を検証
       --verify-links                 ハイパーリンク生成前にPyPIリンクの存在を検証（Markdownフォーマットのみ）
       --check-cve                    OSV APIを使用して既知の脆弱性をチェック（Markdownフォーマットのみ）
