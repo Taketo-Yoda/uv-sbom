@@ -552,16 +552,19 @@ source = { registry = "https://pypi.org/simple" }
     assert!(result.is_ok());
     let response = result.unwrap();
 
-    // Should have 2 packages (myproject + requests, urllib3 excluded)
+    // Should have 2 packages (myproject + requests, urllib3 excluded from package list)
     assert_eq!(response.enriched_packages.len(), 2);
 
-    // Verify dependency graph exists but urllib3 is not in it
+    // Verify dependency graph exists
     assert!(response.dependency_graph.is_some());
     let graph = response.dependency_graph.unwrap();
 
     // requests should still be a direct dependency
     assert_eq!(graph.direct_dependency_count(), 1);
 
-    // urllib3 should not be in transitive dependencies (it was excluded)
-    assert_eq!(graph.transitive_dependency_count(), 0);
+    // urllib3 is still counted as a transitive dependency in the graph
+    // (dependency classification is preserved even when packages are excluded)
+    // This is expected behavior per issue #206 - exclusion filters packages
+    // but preserves dependency_map for correct direct/transitive classification
+    assert_eq!(graph.transitive_dependency_count(), 1);
 }

@@ -361,14 +361,13 @@ fn test_apply_exclusion_filters_empty_patterns() {
         Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap(),
         Package::new("pkg2".to_string(), "2.0.0".to_string()).unwrap(),
     ];
-    let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
     let request = SbomRequest::builder()
         .project_path("/test/project")
         .build()
         .unwrap();
 
-    let (filtered_pkgs, _filtered_deps) = use_case
-        .apply_exclusion_filters(packages.clone(), dependency_map, &request)
+    let filtered_pkgs = use_case
+        .apply_exclusion_filters(packages.clone(), &request)
         .unwrap();
 
     assert_eq!(filtered_pkgs.len(), 2);
@@ -394,15 +393,14 @@ fn test_apply_exclusion_filters_with_patterns() {
         Package::new("urllib3".to_string(), "2.0.0".to_string()).unwrap(),
         Package::new("certifi".to_string(), "3.0.0".to_string()).unwrap(),
     ];
-    let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
     let request = SbomRequest::builder()
         .project_path("/test/project")
         .add_exclude_pattern("requests")
         .build()
         .unwrap();
 
-    let (filtered_pkgs, _filtered_deps) = use_case
-        .apply_exclusion_filters(packages, dependency_map, &request)
+    let filtered_pkgs = use_case
+        .apply_exclusion_filters(packages, &request)
         .unwrap();
 
     assert_eq!(filtered_pkgs.len(), 2);
@@ -425,14 +423,13 @@ fn test_apply_exclusion_filters_all_excluded_error() {
         );
 
     let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
-    let dependency_map: HashMap<String, Vec<String>> = HashMap::new();
     let request = SbomRequest::builder()
         .project_path("/test/project")
         .add_exclude_pattern("pkg1")
         .build()
         .unwrap();
 
-    let result = use_case.apply_exclusion_filters(packages, dependency_map, &request);
+    let result = use_case.apply_exclusion_filters(packages, &request);
 
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
@@ -790,4 +787,210 @@ fn test_build_response_with_threshold_not_exceeded() {
             .unwrap()
             .threshold_exceeded
     );
+}
+
+// ===== Tests for issue #206: Excluding root project preserves dependency classification =====
+
+#[tokio::test]
+async fn test_execute_with_root_excluded_preserves_dependency_classification() {
+    // This test verifies that when the root project is excluded using -e flag,
+    // the dependency classification (direct vs transitive) is preserved.
+    // See: https://github.com/Taketo-Yoda/uv-sbom/issues/206
+    let lockfile_content = r#"
+[[package]]
+name = "myproject"
+version = "1.0.0"
+dependencies = [
+    { name = "requests" },
+    { name = "numpy" }
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+dependencies = [
+    { name = "urllib3" },
+    { name = "certifi" }
+]
+
+[[package]]
+name = "urllib3"
+version = "1.26.0"
+
+[[package]]
+name = "certifi"
+version = "2024.8.30"
+
+[[package]]
+name = "numpy"
+version = "1.26.0"
+"#;
+
+    let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+        GenerateSbomUseCase::new(
+            MockLockfileReader {
+                content: lockfile_content.to_string(),
+            },
+            MockProjectConfigReader {
+                project_name: "myproject".to_string(),
+            },
+            MockLicenseRepository,
+            MockProgressReporter,
+            None,
+        );
+
+    // Request with root project excluded but dependency info enabled
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .include_dependency_info(true)
+        .add_exclude_pattern("myproject")
+        .build()
+        .unwrap();
+
+    let response = use_case.execute(request).await.unwrap();
+
+    // Root project should be excluded from packages
+    // Original: myproject, requests, numpy, urllib3, certifi = 5 packages
+    // After excluding myproject: 4 packages
+    assert_eq!(response.enriched_packages.len(), 4);
+    assert!(!response
+        .enriched_packages
+        .iter()
+        .any(|p| p.package.name() == "myproject"));
+
+    // Dependency graph should still be present
+    assert!(response.dependency_graph.is_some());
+    let graph = response.dependency_graph.unwrap();
+
+    // Direct dependencies should be preserved (requests, numpy)
+    assert_eq!(graph.direct_dependency_count(), 2);
+    let direct_dep_names: Vec<&str> = graph
+        .direct_dependencies()
+        .iter()
+        .map(|p| p.as_str())
+        .collect();
+    assert!(direct_dep_names.contains(&"requests"));
+    assert!(direct_dep_names.contains(&"numpy"));
+
+    // Transitive dependencies should be preserved (urllib3, certifi)
+    assert_eq!(graph.transitive_dependency_count(), 2);
+}
+
+#[tokio::test]
+async fn test_execute_without_root_excluded_baseline() {
+    // Baseline test: without exclusion, dependency classification should work
+    let lockfile_content = r#"
+[[package]]
+name = "myproject"
+version = "1.0.0"
+dependencies = [
+    { name = "requests" }
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+dependencies = [
+    { name = "urllib3" }
+]
+
+[[package]]
+name = "urllib3"
+version = "1.26.0"
+"#;
+
+    let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+        GenerateSbomUseCase::new(
+            MockLockfileReader {
+                content: lockfile_content.to_string(),
+            },
+            MockProjectConfigReader {
+                project_name: "myproject".to_string(),
+            },
+            MockLicenseRepository,
+            MockProgressReporter,
+            None,
+        );
+
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .include_dependency_info(true)
+        .build()
+        .unwrap();
+
+    let response = use_case.execute(request).await.unwrap();
+
+    assert_eq!(response.enriched_packages.len(), 3);
+    assert!(response.dependency_graph.is_some());
+
+    let graph = response.dependency_graph.unwrap();
+    assert_eq!(graph.direct_dependency_count(), 1);
+    assert_eq!(graph.transitive_dependency_count(), 1);
+}
+
+#[tokio::test]
+async fn test_execute_exclude_non_root_preserves_dependency_classification() {
+    // Test that excluding a non-root package still works correctly
+    let lockfile_content = r#"
+[[package]]
+name = "myproject"
+version = "1.0.0"
+dependencies = [
+    { name = "requests" },
+    { name = "pytest" }
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+dependencies = [
+    { name = "urllib3" }
+]
+
+[[package]]
+name = "urllib3"
+version = "1.26.0"
+
+[[package]]
+name = "pytest"
+version = "7.0.0"
+"#;
+
+    let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository> =
+        GenerateSbomUseCase::new(
+            MockLockfileReader {
+                content: lockfile_content.to_string(),
+            },
+            MockProjectConfigReader {
+                project_name: "myproject".to_string(),
+            },
+            MockLicenseRepository,
+            MockProgressReporter,
+            None,
+        );
+
+    // Exclude pytest (a direct dependency)
+    let request = SbomRequest::builder()
+        .project_path("/test/project")
+        .include_dependency_info(true)
+        .add_exclude_pattern("pytest")
+        .build()
+        .unwrap();
+
+    let response = use_case.execute(request).await.unwrap();
+
+    // pytest should be excluded from packages
+    // Original: myproject, requests, urllib3, pytest = 4 packages
+    // After excluding pytest: 3 packages
+    assert_eq!(response.enriched_packages.len(), 3);
+    assert!(!response
+        .enriched_packages
+        .iter()
+        .any(|p| p.package.name() == "pytest"));
+
+    // Dependency graph should still show both direct deps (requests and pytest are both direct)
+    // but pytest won't be in the filtered package list
+    assert!(response.dependency_graph.is_some());
+    let graph = response.dependency_graph.unwrap();
+    assert_eq!(graph.direct_dependency_count(), 2); // requests and pytest are direct deps
 }
