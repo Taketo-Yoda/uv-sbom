@@ -88,11 +88,17 @@ impl PackageFilter {
     ///
     /// Removes excluded packages from both map keys and dependency lists
     ///
+    /// Note: This method is intentionally not used in the main SBOM generation flow
+    /// (see issue #206). The dependency_map is preserved to maintain correct dependency
+    /// classification even when the root project is excluded. However, this method is
+    /// kept for future use cases where filtering the dependency map is desired.
+    ///
     /// # Arguments
     /// * `dependency_map` - HashMap mapping package names to their dependencies
     ///
     /// # Returns
     /// Filtered dependency map with excluded packages removed
+    #[allow(dead_code)]
     pub fn filter_dependency_map(
         &self,
         mut dependency_map: HashMap<String, Vec<String>>,
