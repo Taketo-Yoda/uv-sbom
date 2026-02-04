@@ -35,3 +35,21 @@ When a user requests any operation listed above (even in Japanese), Claude MUST:
 2. Invoke the corresponding skill
 3. Follow ALL steps defined in the skill, including pre-flight checks
 4. Ensure all outputs (commits, PRs, Issues) are in English
+
+## README Update Checklist
+
+When updating README.md, check if the following files also need updates:
+
+| File | Action Required | Notes |
+|------|-----------------|-------|
+| README-JP.md | Translate changes | Full translation of README.md |
+| python-wrapper/README.md | Reflect if applicable | PyPI-focused, keep concise |
+
+### When to update each file
+
+- **README-JP.md**: Always update when README.md content changes
+- **python-wrapper/README.md**: Update when changes affect:
+  - Installation instructions
+  - Basic usage examples
+  - New user-facing features (brief mention)
+  - Version/badge updates
