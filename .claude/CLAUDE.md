@@ -11,6 +11,7 @@ When the user requests any of the following operations, ALWAYS invoke the corres
 | Push to remote | /pre-push | Run all validations before push |
 | Create Issue | /issue | English title/body, proper template |
 | Implement Issue | /implement | Full workflow from branch to PR |
+| Dependabot Alert | /dependabot | Use CVE/GHSA ID (never alert number), `security` label |
 
 ### Why This Rule Exists
 
