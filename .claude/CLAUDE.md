@@ -12,6 +12,7 @@ When the user requests any of the following operations, ALWAYS invoke the corres
 | Create Issue | /issue | English title/body, proper template |
 | Implement Issue | /implement | Full workflow from branch to PR |
 | Dependabot Alert | /dependabot | Use CVE/GHSA ID (never alert number), `security` label |
+| Prepare Release | /release | Version bump, CHANGELOG update, PR to main |
 
 ### Why This Rule Exists
 
