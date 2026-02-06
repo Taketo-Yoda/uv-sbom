@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-02-06
+
+### Added
+
+#### Config File Support
+- **`--config` option**: Load settings from YAML configuration file
+- **`--ignore-cve` option**: Ignore specific CVEs from vulnerability checks
+- **`--init` option**: Generate config file template for quick setup
+- **`--verify-links` flag**: Validate that PyPI package URLs actually exist
+
+#### Output Enhancements
+- **PyPI hyperlinks**: Package names link directly to PyPI in Markdown output
+- **CVE hyperlinks**: Vulnerability IDs link to OSV/GHSA/CVE sources
+
+#### Developer Experience
+- **`/dependabot` skill**: Standardized workflow for handling Dependabot security alerts
+- **`/release` skill**: Standardized release preparation workflow
+- **`AGENTS.md`**: Codebase context documentation for AI-assisted development
+
+### Fixed
+- **Dependency classification**: Preserve dependency classification when root project is excluded (#213)
+- **Vulnerable dependency**: Replace vulnerable `serde_yml` with `serde_yaml_ng` (#199)
+
+### Changed
+
+#### Architecture Improvements
+- **`SbomReadModel` and `SbomReadModelBuilder`**: Cleaner formatting pipeline
+- **`format_v2` method**: Replacing legacy format methods
+- **`thiserror` crate**: Better error handling with derive macros
+- **Semantic methods**: Added semantic methods in `VulnerabilityCheckResult`
+
+#### Documentation
+- README updates for config file, CVE ignore, and `--verify-links` features
+- Japanese README kept in sync with English README
+
+### Dependencies
+- `bytes`: 1.11.0 → 1.11.1
+- `thiserror`: 1.0.69 → 2.0.17
+- `serde_yml` replaced with `serde_yaml_ng` (security fix)
+- Other dependency group updates
+
 ## [1.0.0] - 2025-01-24
 
 ### 🎉 First Stable Release

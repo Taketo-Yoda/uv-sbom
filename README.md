@@ -219,6 +219,100 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 **Preventing Information Leakage:**
 Use the `--exclude` option to skip specific internal or proprietary libraries. This prevents their names from being sent to external registries (like PyPI) during metadata retrieval, ensuring your internal project structure remains private.
 
+### Configuration file
+
+You can use a configuration file (`uv-sbom.config.yml`) to set default options instead of passing them on the command line every time.
+
+#### Generating a config template
+
+Use the `--init` option to generate a template configuration file with all available fields as commented examples:
+
+```bash
+# Generate template in the current directory
+uv-sbom --init
+
+# Generate template in a specific directory
+uv-sbom --init --path ./my-project
+```
+
+This creates a `uv-sbom.config.yml` file with inline documentation for every option. If the file already exists, the command exits with an error to prevent accidental overwriting.
+
+**Auto-discovery**: Place a `uv-sbom.config.yml` file in your project directory (where `uv.lock` is located). The tool automatically detects and loads it.
+
+**Explicit path**: Use `--config` / `-c` to specify a config file at a custom location.
+
+```bash
+# Auto-discovered config file (place in project directory)
+uv-sbom --check-cve
+
+# Explicit config file path
+uv-sbom --config ./custom-config.yml --check-cve
+```
+
+**Example configuration file** (`uv-sbom.config.yml`):
+
+```yaml
+# Output format: json or markdown
+format: markdown
+
+# Packages to exclude from SBOM (supports wildcards)
+exclude_packages:
+  - "pytest"
+  - "mypy"
+  - "*-dev"
+
+# Enable CVE vulnerability checking
+check_cve: true
+
+# Severity threshold for vulnerability check (low/medium/high/critical)
+severity_threshold: high
+
+# CVSS threshold for vulnerability check (0.0-10.0)
+# cvss_threshold: 7.0
+
+# CVEs to ignore (with optional reason)
+ignore_cves:
+  - id: CVE-2024-1234
+    reason: "False positive for our use case"
+  - id: CVE-2024-5678
+    reason: "Mitigated by network configuration"
+```
+
+#### Config File Schema Reference
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `format` | string | No | Output format (`json` / `markdown`) |
+| `exclude_packages` | string[] | No | Package exclusion patterns (supports wildcards) |
+| `check_cve` | bool | No | Enable CVE checking |
+| `severity_threshold` | string | No | Severity threshold (`low` / `medium` / `high` / `critical`) |
+| `cvss_threshold` | number | No | CVSS threshold (0.0 - 10.0) |
+| `ignore_cves` | object[] | No | List of CVEs to ignore |
+| `ignore_cves[].id` | string | Yes | CVE ID (e.g., `CVE-2024-1234`) |
+| `ignore_cves[].reason` | string | No | Reason for ignoring |
+
+#### Priority and Merge Rules
+
+- **CLI arguments override config file values** for scalar fields (`format`, `severity_threshold`, `cvss_threshold`)
+- **`check_cve`** is enabled if set via CLI flag OR config file (logical OR)
+- **`exclude_packages`** are **merged** from both CLI and config file, then deduplicated
+- **`ignore_cves`** are **merged** from both CLI (`--ignore-cve`) and config file, deduplicated by ID (CLI entry takes precedence for duplicates)
+
+### Ignoring specific CVEs
+
+You can ignore specific CVEs from the command line using `--ignore-cve` / `-i`:
+
+```bash
+# Ignore specific CVEs from CLI
+uv-sbom --check-cve --ignore-cve CVE-2024-1234 --ignore-cve CVE-2024-5678
+
+# Short form
+uv-sbom --check-cve -i CVE-2024-1234 -i CVE-2024-5678
+
+# Combine config file and CLI ignores (both sources are merged)
+uv-sbom --config ./config.yml --check-cve -i CVE-2024-9999
+```
+
 ### Checking for vulnerabilities
 
 Use the `--check-cve` option to check packages for known security vulnerabilities using the [OSV (Open Source Vulnerability) database](https://osv.dev):
@@ -264,6 +358,24 @@ uv-sbom --format markdown --check-cve --cvss-threshold 9.0
 - Requires `--check-cve` to be enabled
 - Vulnerabilities below the threshold are still shown in the report but don't trigger exit code 1
 - When using `--cvss-threshold`, vulnerabilities without CVSS scores (N/A) are excluded from threshold evaluation
+
+### PyPI Link Verification
+
+Use the `--verify-links` option to validate that packages exist on PyPI before generating hyperlinks. Packages that don't exist on PyPI will be rendered as plain text:
+
+```bash
+# Generate Markdown with verified PyPI links
+uv-sbom --format markdown --verify-links
+
+# Combine with other options
+uv-sbom --format markdown --verify-links --check-cve --output SBOM.md
+```
+
+**Behavior:**
+- Without `--verify-links`: All package names get PyPI hyperlinks (default, fast)
+- With `--verify-links`: Only verified packages get hyperlinks; unverified packages render as plain text
+- Network errors gracefully fall back to plain text (no crash)
+- Requests are executed in parallel (max 10 concurrent) for performance
 
 ### CI Integration
 
@@ -315,6 +427,8 @@ The following packages have known security vulnerabilities:
 
 *Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
 ```
+
+> **Note:** Vulnerability IDs (CVE, GHSA, PYSEC, RUSTSEC, etc.) in the vulnerability report are always rendered as hyperlinks, regardless of `--verify-links`. These IDs are sourced from the OSV database and link to authoritative vulnerability databases (NVD, GitHub Advisories, OSV.dev), so link verification is unnecessary.
 
 When no vulnerabilities are found:
 
@@ -413,7 +527,11 @@ Options:
   -p, --path <PATH>                  Path to the project directory [default: current directory]
   -o, --output <OUTPUT>              Output file path (if not specified, outputs to stdout)
   -e, --exclude <PATTERN>            Exclude packages matching patterns (supports wildcards: *)
+  -c, --config <PATH>               Path to config file (auto-discovers uv-sbom.config.yml if not specified)
+  -i, --ignore-cve <CVE_ID>         CVE IDs to ignore (can be specified multiple times)
+      --init                         Generate a uv-sbom.config.yml template file
       --dry-run                      Validate configuration without network communication or output generation
+      --verify-links                 Verify PyPI links exist before generating hyperlinks (Markdown format only)
       --check-cve                    Check for known vulnerabilities using OSV API (Markdown format only)
       --severity-threshold <LEVEL>   Severity threshold for vulnerability check (low/medium/high/critical)
                                      Requires --check-cve to be enabled
@@ -618,9 +736,16 @@ Secondary dependencies introduced by the primary packages.
    - Rate limit: No official limit, but tool implements retry logic
    - Endpoint: `/pypi/{package_name}/json`
 
-#### Optional (only when using `--check-cve`):
+#### Optional (only when using `--check-cve` or `--verify-links`):
 
-2. **OSV (Open Source Vulnerability Database)**
+2. **PyPI Link Verification**
+   - Domain: `https://pypi.org`
+   - Purpose: Verify package existence on PyPI via HTTP HEAD requests
+   - When: Only when `--verify-links` flag is used
+   - Rate limit: Max 10 concurrent requests
+   - Endpoint: `/project/{package_name}/`
+
+3. **OSV (Open Source Vulnerability Database)**
    - Domain: `https://api.osv.dev`
    - Purpose: Fetch vulnerability information for security scanning
    - When: Only when `--check-cve` flag is used
@@ -637,8 +762,9 @@ If you are behind a corporate firewall or proxy, ensure the following domains ar
 # Required
 pypi.org
 
-# Optional (only for --check-cve)
-api.osv.dev
+# Optional (for --verify-links and --check-cve)
+pypi.org       # Also used for --verify-links
+api.osv.dev    # Only for --check-cve
 ```
 
 ### Proxy Configuration

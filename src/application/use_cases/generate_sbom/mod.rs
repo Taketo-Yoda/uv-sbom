@@ -79,9 +79,11 @@ where
         // Step 1: Read and parse lockfile
         let (packages, dependency_map) = self.read_and_report_lockfile(&request)?;
 
-        // Step 2: Apply exclusion filters
-        let (filtered_packages, filtered_dependency_map) =
-            self.apply_exclusion_filters(packages, dependency_map, &request)?;
+        // Step 2: Apply exclusion filters to packages only
+        // Note: We pass dependency_map by reference to preserve it for dependency analysis.
+        // The root project may be excluded from packages but we still need its entry
+        // in dependency_map to correctly identify direct vs transitive dependencies.
+        let filtered_packages = self.apply_exclusion_filters(packages, &request)?;
 
         // Early return for dry-run mode (validation only)
         if request.dry_run {
@@ -89,8 +91,9 @@ where
         }
 
         // Step 3: Analyze dependencies if requested
-        let dependency_graph =
-            self.analyze_dependencies_if_requested(&request, &filtered_dependency_map)?;
+        // Use original dependency_map to preserve dependency classification even when
+        // root project is excluded from the package list (fixes #206)
+        let dependency_graph = self.analyze_dependencies_if_requested(&request, &dependency_map)?;
 
         // Step 4: Enrich packages with license information
         let enriched_packages = self.fetch_license_info(filtered_packages.clone()).await?;
@@ -103,7 +106,7 @@ where
         // Step 6: Apply threshold evaluation if vulnerabilities were found
         let vulnerability_check_result = vulnerability_report.as_ref().map(|report| {
             let threshold_config = Self::build_threshold_config(&request);
-            VulnerabilityChecker::check(report.clone(), threshold_config)
+            VulnerabilityChecker::check(report.clone(), threshold_config, &request.ignore_cves)
         });
 
         // Step 7: Build and return response
@@ -138,32 +141,34 @@ where
         Ok((packages, dependency_map))
     }
 
-    /// Applies exclusion filters to packages and dependency map
+    /// Applies exclusion filters to packages
+    ///
+    /// Note: This method intentionally does NOT filter the dependency_map.
+    /// The dependency_map is preserved to maintain correct dependency classification
+    /// (direct vs transitive) even when the root project is excluded from the package list.
+    /// See issue #206 for details.
     ///
     /// # Arguments
     /// * `packages` - Original packages from lockfile
-    /// * `dependency_map` - Original dependency map
     /// * `request` - The SBOM request containing exclusion patterns
     ///
     /// # Returns
-    /// Tuple of (filtered_packages, filtered_dependency_map)
+    /// Filtered packages list
     ///
     /// # Errors
     /// Returns an error if all packages are excluded
     fn apply_exclusion_filters(
         &self,
         packages: Vec<Package>,
-        dependency_map: std::collections::HashMap<String, Vec<String>>,
         request: &SbomRequest,
-    ) -> Result<PackagesWithDependencyMap> {
+    ) -> Result<Vec<Package>> {
         if request.exclude_patterns.is_empty() {
-            return Ok((packages, dependency_map));
+            return Ok(packages);
         }
 
         let filter = PackageFilter::new(request.exclude_patterns.clone())?;
         let original_count = packages.len();
         let filtered_pkgs = filter.filter_packages(packages);
-        let filtered_deps = filter.filter_dependency_map(dependency_map);
 
         let excluded_count = original_count - filtered_pkgs.len();
         if excluded_count > 0 {
@@ -191,7 +196,7 @@ where
             ));
         }
 
-        Ok((filtered_pkgs, filtered_deps))
+        Ok(filtered_pkgs)
     }
 
     /// Builds a response for dry-run mode (validation only)

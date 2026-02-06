@@ -93,9 +93,15 @@ async fn test_e2e_json_format() {
     assert!(result.is_ok());
     let response = result.unwrap();
 
-    // Format as JSON
+    // Build read model and format as JSON
+    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
+        response.enriched_packages,
+        &response.metadata,
+        response.dependency_graph.as_ref(),
+        response.vulnerability_check_result.as_ref(),
+    );
     let formatter = CycloneDxFormatter::new();
-    let json_output = formatter.format(response.enriched_packages, &response.metadata, None);
+    let json_output = formatter.format(&read_model);
 
     assert!(json_output.is_ok());
     let json = json_output.unwrap();
@@ -134,17 +140,15 @@ async fn test_e2e_markdown_format() {
     assert!(result.is_ok());
     let response = result.unwrap();
 
-    // Format as Markdown
-    let formatter = MarkdownFormatter::new();
-    let markdown_output = formatter.format_with_dependencies(
-        &response
-            .dependency_graph
-            .expect("Dependency graph should be present"),
+    // Build read model and format as Markdown
+    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
         response.enriched_packages,
         &response.metadata,
-        None,
-        None,
+        response.dependency_graph.as_ref(),
+        response.vulnerability_check_result.as_ref(),
     );
+    let formatter = MarkdownFormatter::new();
+    let markdown_output = formatter.format(&read_model);
 
     assert!(markdown_output.is_ok());
     let markdown = markdown_output.unwrap();
@@ -376,6 +380,121 @@ async fn test_e2e_exclude_all_packages_error() {
     let error = result.unwrap_err();
     assert!(error.to_string().contains("All"));
     assert!(error.to_string().contains("excluded"));
+}
+
+/// Test for issue #206: Excluding root project preserves dependency classification
+///
+/// When the root project is excluded using the -e flag, the dependency classification
+/// (direct vs transitive) should be preserved. Previously, this would result in
+/// 0 direct and 0 transitive dependencies because the dependency_map was also filtered.
+#[tokio::test]
+async fn test_e2e_exclude_root_project_preserves_dependency_classification() {
+    let project_path = PathBuf::from("tests/fixtures/sample-project");
+
+    let lockfile_reader = FileSystemReader::new();
+    let project_config_reader = FileSystemReader::new();
+    let license_repository = create_test_license_repository();
+    let progress_reporter = StderrProgressReporter::new();
+
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+        lockfile_reader,
+        project_config_reader,
+        license_repository,
+        progress_reporter,
+        None,
+    );
+
+    // Exclude the root project (sample-project) and request dependency info
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .include_dependency_info(true)
+        .add_exclude_pattern("sample-project")
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+
+    // Root project should be excluded from packages
+    // Original: sample-project, requests, urllib3, charset-normalizer, idna, certifi = 6 packages
+    // After excluding sample-project: 5 packages
+    assert_eq!(response.enriched_packages.len(), 5);
+    assert!(!response
+        .enriched_packages
+        .iter()
+        .any(|p| p.package.name() == "sample-project"));
+
+    // Dependency graph should be present
+    assert!(response.dependency_graph.is_some());
+    let graph = response.dependency_graph.unwrap();
+
+    // Direct dependencies should be preserved (requests is the only direct dependency)
+    assert_eq!(graph.direct_dependency_count(), 1);
+    assert_eq!(graph.direct_dependencies()[0].as_str(), "requests");
+
+    // Transitive dependencies should be preserved
+    // requests depends on: charset-normalizer, idna, urllib3, certifi
+    assert_eq!(graph.transitive_dependency_count(), 4);
+}
+
+/// Test that excluding root project still produces valid Markdown output
+#[tokio::test]
+async fn test_e2e_exclude_root_project_markdown_output() {
+    let project_path = PathBuf::from("tests/fixtures/sample-project");
+
+    let lockfile_reader = FileSystemReader::new();
+    let project_config_reader = FileSystemReader::new();
+    let license_repository = create_test_license_repository();
+    let progress_reporter = StderrProgressReporter::new();
+
+    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+        lockfile_reader,
+        project_config_reader,
+        license_repository,
+        progress_reporter,
+        None,
+    );
+
+    // Exclude the root project and request dependency info
+    let request = SbomRequest::builder()
+        .project_path(project_path)
+        .include_dependency_info(true)
+        .add_exclude_pattern("sample-project")
+        .build()
+        .unwrap();
+    let result = use_case.execute(request).await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+
+    // Build read model and format as Markdown
+    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
+        response.enriched_packages,
+        &response.metadata,
+        response.dependency_graph.as_ref(),
+        response.vulnerability_check_result.as_ref(),
+    );
+    let formatter = MarkdownFormatter::new();
+    let markdown_output = formatter.format(&read_model);
+
+    assert!(markdown_output.is_ok());
+    let markdown = markdown_output.unwrap();
+
+    // Verify Markdown structure with dependency sections
+    assert!(markdown.contains("# Software Bill of Materials (SBOM)"));
+    assert!(markdown.contains("## Direct Dependencies"));
+    assert!(markdown.contains("## Transitive Dependencies"));
+
+    // Verify direct dependency is listed
+    assert!(markdown.contains("requests"));
+
+    // Verify transitive dependencies are listed
+    assert!(markdown.contains("urllib3"));
+    assert!(markdown.contains("certifi"));
+
+    // Root project should NOT be in the output
+    assert!(!markdown.contains("sample-project"));
 }
 
 // Helper function to create a test license repository

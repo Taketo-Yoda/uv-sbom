@@ -184,3 +184,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/4b/a5/781dbff5062f31e84
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ba/a5/d6f8a6e71f15364d35678a4ec8a0186f980b3bd2545f40ad51dd26a87fb1/Werkzeug-1.0.0-py2.py3-none-any.whl", hash = "sha256:6dc65cf9091cf750012f56f2cad759fa9e879f511b5ff8685e456b4e3bf90d16", size = 298559, upload-time = "2020-02-06T20:25:34.075Z" },
 ]
+
+[[package]]
+name = "fake-nonexistent-pkg-demo"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/00/00/fake-nonexistent-pkg-demo-0.0.1.tar.gz", hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000", size = 1024, upload-time = "2025-01-01T00:00:00.000Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/00/fake_nonexistent_pkg_demo-0.0.1-py3-none-any.whl", hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000", size = 512, upload-time = "2025-01-01T00:00:00.000Z" },
+]

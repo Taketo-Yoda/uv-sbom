@@ -1,0 +1,35 @@
+# Sample configuration file for uv-sbom
+# Demonstrates ignore_cves feature with real vulnerability IDs
+# from sample-project dependencies (detected by OSV API)
+#
+# Usage:
+#   cargo run -- -p examples/sample-project --check-cve -f markdown \
+#     -c examples/sample-project/config/uv-sbom.config.yml
+
+check_cve: true
+severity_threshold: medium
+
+ignore_cves:
+  # pillow 8.3.2 - CRITICAL: buffer overflow in TiffDecode.c
+  - id: GHSA-8vj2-vxx3-667w
+    reason: "Pillow buffer overflow - accepted risk for demo project"
+
+  # urllib3 1.26.5 - HIGH: SSRFable redirect handling
+  - id: GHSA-2xpw-w6gg-jr37
+    reason: "urllib3 SSRF via redirect - mitigated by network policy"
+
+  # jinja2 2.11.3 - HIGH: XSS in xmlattr filter
+  - id: GHSA-q2x7-8rv6-6q7h
+    reason: "Jinja2 XSS in xmlattr - xmlattr filter not used in templates"
+
+  # werkzeug 1.0.0 - HIGH: debugger RCE
+  - id: GHSA-2g68-c3qc-8985
+    reason: "Werkzeug debugger RCE - debugger disabled in production"
+
+  # requests 2.25.0 - MEDIUM: unintended leak of Proxy-Authorization header
+  - id: GHSA-9wx4-h78v-vm56
+    reason: "Requests proxy auth leak - no proxy used in this project"
+
+  # idna 2.10 - MEDIUM: resource consumption via inputs to idna.encode()
+  - id: GHSA-jjg7-2v4v-x38h
+    reason: "IDNA DoS - input length validated at application layer"
