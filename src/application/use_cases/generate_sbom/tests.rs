@@ -519,7 +519,7 @@ fn test_build_response() {
         Some("Test description".to_string()),
     )];
 
-    let response = use_case.build_response(enriched_packages.clone(), None, None, None);
+    let response = use_case.build_response(enriched_packages.clone(), None, None, None, None);
 
     assert_eq!(response.enriched_packages.len(), 1);
     assert!(response.dependency_graph.is_none());
@@ -721,7 +721,7 @@ fn test_build_response_with_threshold_exceeded() {
         threshold_exceeded: true,
     };
 
-    let response = use_case.build_response(enriched_packages, None, None, Some(check_result));
+    let response = use_case.build_response(enriched_packages, None, None, Some(check_result), None);
 
     assert!(response.has_vulnerabilities_above_threshold);
     assert!(response.vulnerability_check_result.is_some());
@@ -777,7 +777,7 @@ fn test_build_response_with_threshold_not_exceeded() {
         threshold_exceeded: false,
     };
 
-    let response = use_case.build_response(enriched_packages, None, None, Some(check_result));
+    let response = use_case.build_response(enriched_packages, None, None, Some(check_result), None);
 
     assert!(!response.has_vulnerabilities_above_threshold);
     assert!(response.vulnerability_check_result.is_some());

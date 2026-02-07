@@ -1,4 +1,5 @@
 use crate::ports::outbound::EnrichedPackage;
+use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata};
@@ -25,9 +26,14 @@ pub struct SbomResponse {
     /// Optional vulnerability check result with threshold evaluation
     /// Contains above/below threshold separation for formatting
     pub vulnerability_check_result: Option<VulnerabilityCheckResult>,
+    /// Optional license compliance result (only present when license check is enabled)
+    pub license_compliance_result: Option<LicenseComplianceResult>,
+    /// Whether license violations were detected
+    pub has_license_violations: bool,
 }
 
 impl SbomResponse {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         enriched_packages: Vec<EnrichedPackage>,
         dependency_graph: Option<DependencyGraph>,
@@ -35,6 +41,8 @@ impl SbomResponse {
         vulnerability_report: Option<Vec<PackageVulnerabilities>>,
         has_vulnerabilities_above_threshold: bool,
         vulnerability_check_result: Option<VulnerabilityCheckResult>,
+        license_compliance_result: Option<LicenseComplianceResult>,
+        has_license_violations: bool,
     ) -> Self {
         Self {
             enriched_packages,
@@ -43,6 +51,8 @@ impl SbomResponse {
             vulnerability_report,
             has_vulnerabilities_above_threshold,
             vulnerability_check_result,
+            license_compliance_result,
+            has_license_violations,
         }
     }
 }

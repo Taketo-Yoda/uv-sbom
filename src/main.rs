@@ -15,6 +15,7 @@ use application::use_cases::GenerateSbomUseCase;
 use clap::Parser;
 use cli::Args;
 use owo_colors::OwoColorize;
+use sbom_generation::domain::license_policy::{LicensePolicy, UnknownLicenseHandling};
 use sbom_generation::domain::vulnerability::Severity;
 use shared::error::ExitCode;
 use shared::security::validate_directory_path;
@@ -105,6 +106,14 @@ async fn run(args: Args) -> Result<bool> {
         eprintln!();
     }
 
+    // Warn if check_license is used with JSON format
+    if args.check_license && args.format == OutputFormat::Json {
+        eprintln!("⚠️  Warning: --check-license has no effect with JSON format.");
+        eprintln!("   License compliance data is not included in JSON output.");
+        eprintln!("   Use --format markdown to see license compliance report.");
+        eprintln!();
+    }
+
     // Warn if verify_links is used with JSON format
     if args.verify_links && args.format == OutputFormat::Json {
         eprintln!("⚠️  Warning: --verify-links has no effect with JSON format.");
@@ -159,6 +168,8 @@ async fn run(args: Args) -> Result<bool> {
         .severity_threshold_opt(merged.severity_threshold)
         .cvss_threshold_opt(merged.cvss_threshold)
         .ignore_cves(merged.ignore_cves)
+        .check_license(merged.check_license)
+        .license_policy(merged.license_policy)
         .build()?;
 
     // Execute use case
@@ -178,6 +189,7 @@ async fn run(args: Args) -> Result<bool> {
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
+        response.license_compliance_result.as_ref(),
     );
 
     // Verify PyPI links if requested
@@ -208,10 +220,11 @@ async fn run(args: Args) -> Result<bool> {
     let presenter = PresenterFactory::create(presenter_type);
     presenter.present(&formatted_output)?;
 
-    // Determine if vulnerabilities were detected above threshold
-    let has_vulnerabilities = response.has_vulnerabilities_above_threshold;
+    // Determine if vulnerabilities or license violations were detected
+    let has_issues =
+        response.has_vulnerabilities_above_threshold || response.has_license_violations;
 
-    Ok(has_vulnerabilities)
+    Ok(has_issues)
 }
 
 fn display_banner() {
@@ -233,6 +246,8 @@ struct MergedConfig {
     severity_threshold: Option<Severity>,
     cvss_threshold: Option<f32>,
     ignore_cves: Vec<IgnoreCve>,
+    check_license: bool,
+    license_policy: Option<LicensePolicy>,
 }
 
 /// Load a config file from an explicit path or via auto-discovery.
@@ -261,6 +276,24 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         Some(c) => c,
         None => {
             // No config file — use CLI values directly
+            let license_policy = if args.check_license
+                && (!args.license_allow.is_empty() || !args.license_deny.is_empty())
+            {
+                Some(LicensePolicy::new(
+                    &args.license_allow,
+                    &args.license_deny,
+                    UnknownLicenseHandling::default(),
+                ))
+            } else if args.check_license {
+                Some(LicensePolicy::new(
+                    &[],
+                    &[],
+                    UnknownLicenseHandling::default(),
+                ))
+            } else {
+                None
+            };
+
             return MergedConfig {
                 format: args.format,
                 exclude_patterns: args.exclude.clone(),
@@ -275,6 +308,8 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
                         reason: None,
                     })
                     .collect(),
+                check_license: args.check_license,
+                license_policy,
             };
         }
     };
@@ -334,6 +369,44 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         .cvss_threshold
         .or(config.cvss_threshold.map(|v| v as f32));
 
+    // check_license: CLI flag || config value
+    let check_license = args.check_license || config.check_license.unwrap_or(false);
+
+    // license_policy: CLI args override config entirely if any CLI args provided
+    let license_policy = if check_license {
+        if !args.license_allow.is_empty() || !args.license_deny.is_empty() {
+            // CLI provides policy — override config entirely
+            Some(LicensePolicy::new(
+                &args.license_allow,
+                &args.license_deny,
+                UnknownLicenseHandling::default(),
+            ))
+        } else if let Some(ref lp_config) = config.license_policy {
+            // Use config policy
+            let unknown = lp_config
+                .unknown
+                .as_ref()
+                .map(|s| match s.to_lowercase().as_str() {
+                    "deny" => UnknownLicenseHandling::Deny,
+                    "allow" => UnknownLicenseHandling::Allow,
+                    _ => UnknownLicenseHandling::Warn,
+                })
+                .unwrap_or_default();
+            let allow = lp_config.allow.clone().unwrap_or_default();
+            let deny = lp_config.deny.clone().unwrap_or_default();
+            Some(LicensePolicy::new(&allow, &deny, unknown))
+        } else {
+            // check_license enabled but no policy specified
+            Some(LicensePolicy::new(
+                &[],
+                &[],
+                UnknownLicenseHandling::default(),
+            ))
+        }
+    } else {
+        None
+    };
+
     MergedConfig {
         format,
         exclude_patterns,
@@ -341,6 +414,8 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         severity_threshold,
         cvss_threshold,
         ignore_cves,
+        check_license,
+        license_policy,
     }
 }
 
@@ -556,7 +631,7 @@ mod tests {
                 id: "CVE-2024-1".to_string(),
                 reason: Some("not applicable".to_string()),
             }]),
-            unknown_fields: Default::default(),
+            ..Default::default()
         });
         let result = merge_config(&args, &config);
         assert_eq!(result.format, OutputFormat::Markdown);

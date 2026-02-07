@@ -1,6 +1,6 @@
 use crate::application::read_models::{
-    ComponentView, DependencyView, SbomReadModel, VulnerabilityReportView, VulnerabilitySummary,
-    VulnerabilityView,
+    ComponentView, DependencyView, LicenseComplianceView, SbomReadModel, VulnerabilityReportView,
+    VulnerabilitySummary, VulnerabilityView,
 };
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
@@ -347,6 +347,69 @@ impl MarkdownFormatter {
         unique.len().max(1)
     }
 
+    /// Renders the license compliance section
+    fn render_license_compliance(&self, output: &mut String, compliance: &LicenseComplianceView) {
+        output.push_str("\n## License Compliance Report\n\n");
+
+        // Summary
+        if compliance.has_violations {
+            output.push_str(&format!(
+                "**{} license {} found.**\n\n",
+                compliance.summary.violation_count,
+                if compliance.summary.violation_count == 1 {
+                    "violation"
+                } else {
+                    "violations"
+                }
+            ));
+        } else {
+            output.push_str("**No license violations found.**\n\n");
+        }
+
+        // Violations table
+        if !compliance.violations.is_empty() {
+            output.push_str("### Violations\n\n");
+            output.push_str("| Package | Version | License | Reason | Matched Pattern |\n");
+            output.push_str("|---------|---------|---------|--------|----------------|\n");
+
+            for v in &compliance.violations {
+                output.push_str(&format!(
+                    "| {} | {} | {} | {} | {} |\n",
+                    Self::escape_markdown_table_cell(&v.package_name),
+                    Self::escape_markdown_table_cell(&v.package_version),
+                    Self::escape_markdown_table_cell(&v.license),
+                    Self::escape_markdown_table_cell(&v.reason),
+                    v.matched_pattern.as_deref().unwrap_or("-"),
+                ));
+            }
+            output.push('\n');
+        }
+
+        // Warnings table
+        if !compliance.warnings.is_empty() {
+            output.push_str(&format!(
+                "### Warnings\n\n**{} {} with unknown license.**\n\n",
+                compliance.summary.warning_count,
+                if compliance.summary.warning_count == 1 {
+                    "package"
+                } else {
+                    "packages"
+                }
+            ));
+            output.push_str("| Package | Version |\n");
+            output.push_str("|---------|--------|\n");
+
+            for w in &compliance.warnings {
+                output.push_str(&format!(
+                    "| {} | {} |\n",
+                    Self::escape_markdown_table_cell(&w.package_name),
+                    Self::escape_markdown_table_cell(&w.package_version),
+                ));
+            }
+            output.push('\n');
+        }
+    }
+
     /// Renders a single vulnerability row
     fn render_vulnerability_row(&self, output: &mut String, vuln: &VulnerabilityView) {
         let cvss_display = vuln
@@ -398,6 +461,11 @@ impl SbomFormatter for MarkdownFormatter {
         // Vulnerabilities section (if present)
         if let Some(vulns) = &model.vulnerabilities {
             self.render_vulnerabilities(&mut output, vulns);
+        }
+
+        // License compliance section (if present)
+        if let Some(compliance) = &model.license_compliance {
+            self.render_license_compliance(&mut output, compliance);
         }
 
         Ok(output)
@@ -452,6 +520,7 @@ mod tests {
             ],
             dependencies: None,
             vulnerabilities: None,
+            license_compliance: None,
         }
     }
 
