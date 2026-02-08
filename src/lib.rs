@@ -48,6 +48,7 @@
 //!     &response.metadata,
 //!     None,
 //!     None,
+//!     None,
 //! );
 //! let formatter = CycloneDxFormatter::new();
 //! let output = formatter.format(&read_model)?;

@@ -1,6 +1,6 @@
 use crate::application::read_models::{
-    ComponentView, DependencyView, LicenseView, SbomMetadataView, SbomReadModel,
-    VulnerabilityReportView, VulnerabilityView,
+    ComponentView, DependencyView, LicenseComplianceView, LicenseView, SbomMetadataView,
+    SbomReadModel, VulnerabilityReportView, VulnerabilityView,
 };
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
@@ -21,6 +21,14 @@ struct Bom {
     dependencies: Option<Vec<Dependency>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     vulnerabilities: Option<Vec<Vulnerability>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    properties: Option<Vec<Property>>,
+}
+
+#[derive(Debug, Serialize)]
+struct Property {
+    name: String,
+    value: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -122,6 +130,11 @@ impl Default for CycloneDxFormatter {
 
 impl SbomFormatter for CycloneDxFormatter {
     fn format(&self, model: &SbomReadModel) -> Result<String> {
+        let properties = model
+            .license_compliance
+            .as_ref()
+            .map(|lc| self.build_license_compliance_properties(lc));
+
         let bom = Bom {
             bom_format: "CycloneDX".to_string(),
             spec_version: "1.6".to_string(),
@@ -137,6 +150,7 @@ impl SbomFormatter for CycloneDxFormatter {
                 .vulnerabilities
                 .as_ref()
                 .map(|v| self.build_vulnerabilities(v)),
+            properties,
         };
 
         serde_json::to_string_pretty(&bom).map_err(Into::into)
@@ -254,6 +268,47 @@ impl CycloneDxFormatter {
             }],
         }
     }
+
+    /// Build BOM-level properties for license compliance info
+    fn build_license_compliance_properties(
+        &self,
+        compliance: &LicenseComplianceView,
+    ) -> Vec<Property> {
+        let mut props = Vec::new();
+
+        let status = if compliance.has_violations {
+            "FAIL"
+        } else {
+            "PASS"
+        };
+        props.push(Property {
+            name: "uv-sbom:license-compliance:status".to_string(),
+            value: status.to_string(),
+        });
+
+        props.push(Property {
+            name: "uv-sbom:license-compliance:violation-count".to_string(),
+            value: compliance.summary.violation_count.to_string(),
+        });
+
+        props.push(Property {
+            name: "uv-sbom:license-compliance:warning-count".to_string(),
+            value: compliance.summary.warning_count.to_string(),
+        });
+
+        for v in &compliance.violations {
+            let detail = format!(
+                "{}@{}: {} ({})",
+                v.package_name, v.package_version, v.license, v.reason,
+            );
+            props.push(Property {
+                name: "uv-sbom:license-compliance:violation".to_string(),
+                value: detail,
+            });
+        }
+
+        props
+    }
 }
 
 #[cfg(test)]
@@ -298,6 +353,7 @@ mod tests {
             ],
             dependencies: None,
             vulnerabilities: None,
+            license_compliance: None,
         }
     }
 

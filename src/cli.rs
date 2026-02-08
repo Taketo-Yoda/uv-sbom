@@ -57,6 +57,20 @@ pub struct Args {
     #[arg(short = 'i', long = "ignore-cve", value_name = "CVE_ID")]
     pub ignore_cve: Vec<String>,
 
+    /// Check license compliance against a policy (Markdown format only)
+    #[arg(long)]
+    pub check_license: bool,
+
+    /// Allowed license patterns (comma-separated, requires --check-license)
+    /// Supports wildcards: "MIT,Apache-2.0,BSD-*"
+    #[arg(long, value_delimiter = ',', requires = "check_license")]
+    pub license_allow: Vec<String>,
+
+    /// Denied license patterns (comma-separated, requires --check-license)
+    /// Supports wildcards: "GPL-*,AGPL-*"
+    #[arg(long, value_delimiter = ',', requires = "check_license")]
+    pub license_deny: Vec<String>,
+
     /// Generate a uv-sbom.config.yml template file
     #[arg(long)]
     pub init: bool,

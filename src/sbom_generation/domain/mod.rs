@@ -1,5 +1,6 @@
 pub mod dependency_graph;
 pub mod license_info;
+pub mod license_policy;
 pub mod package;
 pub mod sbom_metadata;
 pub mod services;
@@ -7,6 +8,12 @@ pub mod vulnerability;
 
 pub use dependency_graph::DependencyGraph;
 pub use license_info::LicenseInfo;
+// Note: These types are used within the application layer via full paths
+#[allow(unused_imports)]
+pub use license_policy::{
+    LicenseComplianceResult, LicensePolicy, LicenseViolation, LicenseWarning,
+    UnknownLicenseHandling, ViolationReason,
+};
 pub use package::{Package, PackageName};
 pub use sbom_metadata::SbomMetadata;
 // Note: These will be used in subsequent subtasks (Issue #94, #95)

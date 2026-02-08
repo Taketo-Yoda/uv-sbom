@@ -1,4 +1,5 @@
 use crate::config::IgnoreCve;
+use crate::sbom_generation::domain::license_policy::LicensePolicy;
 use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
@@ -26,6 +27,10 @@ pub struct SbomRequest {
     pub cvss_threshold: Option<f32>,
     /// CVE IDs to ignore during vulnerability checks
     pub ignore_cves: Vec<IgnoreCve>,
+    /// Whether to check license compliance
+    pub check_license: bool,
+    /// License compliance policy (only used when check_license is true)
+    pub license_policy: Option<LicensePolicy>,
 }
 
 impl SbomRequest {
@@ -83,6 +88,8 @@ pub struct SbomRequestBuilder {
     severity_threshold: Option<Severity>,
     cvss_threshold: Option<f32>,
     ignore_cves: Vec<IgnoreCve>,
+    check_license: bool,
+    license_policy: Option<LicensePolicy>,
 }
 
 impl SbomRequestBuilder {
@@ -106,6 +113,8 @@ impl SbomRequestBuilder {
             severity_threshold: None,
             cvss_threshold: None,
             ignore_cves: Vec::new(),
+            check_license: false,
+            license_policy: None,
         }
     }
 
@@ -186,6 +195,18 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets whether to check license compliance.
+    pub fn check_license(mut self, check: bool) -> Self {
+        self.check_license = check;
+        self
+    }
+
+    /// Sets the license compliance policy.
+    pub fn license_policy(mut self, policy: Option<LicensePolicy>) -> Self {
+        self.license_policy = policy;
+        self
+    }
+
     /// Builds the SbomRequest, validating that all required fields are set.
     ///
     /// # Errors
@@ -205,6 +226,8 @@ impl SbomRequestBuilder {
             severity_threshold: self.severity_threshold,
             cvss_threshold: self.cvss_threshold,
             ignore_cves: self.ignore_cves,
+            check_license: self.check_license,
+            license_policy: self.license_policy,
         })
     }
 }

@@ -5,11 +5,15 @@
 
 use super::component_view::{ComponentView, LicenseView};
 use super::dependency_view::DependencyView;
+use super::license_compliance_view::{
+    LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView, LicenseWarningView,
+};
 use super::sbom_read_model::{SbomMetadataView, SbomReadModel};
 use super::vulnerability_view::{
     SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
 };
 use crate::ports::outbound::EnrichedPackage;
+use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
 use crate::sbom_generation::domain::vulnerability::{
     PackageVulnerabilities, Severity, Vulnerability,
@@ -40,6 +44,7 @@ impl SbomReadModelBuilder {
         metadata: &SbomMetadata,
         dependency_graph: Option<&DependencyGraph>,
         vulnerability_result: Option<&VulnerabilityCheckResult>,
+        license_compliance_result: Option<&LicenseComplianceResult>,
     ) -> SbomReadModel {
         let metadata_view = Self::build_metadata(metadata);
         let components = Self::build_components(&packages, dependency_graph);
@@ -48,12 +53,14 @@ impl SbomReadModelBuilder {
             dependency_graph.map(|graph| Self::build_dependencies(graph, &components));
         let vulnerabilities =
             vulnerability_result.map(|result| Self::build_vulnerabilities(result, &components));
+        let license_compliance = license_compliance_result.map(Self::build_license_compliance);
 
         SbomReadModel {
             metadata: metadata_view,
             components,
             dependencies,
             vulnerabilities,
+            license_compliance,
         }
     }
 
@@ -250,6 +257,42 @@ impl SbomReadModelBuilder {
             Severity::None => SeverityView::None,
         }
     }
+
+    /// Builds license compliance view from domain result
+    fn build_license_compliance(result: &LicenseComplianceResult) -> LicenseComplianceView {
+        let violations: Vec<LicenseViolationView> = result
+            .violations
+            .iter()
+            .map(|v| LicenseViolationView {
+                package_name: v.package_name.clone(),
+                package_version: v.package_version.clone(),
+                license: v.license.clone().unwrap_or_else(|| "N/A".to_string()),
+                reason: v.reason.as_str().to_string(),
+                matched_pattern: v.matched_pattern.clone(),
+            })
+            .collect();
+
+        let warnings: Vec<LicenseWarningView> = result
+            .warnings
+            .iter()
+            .map(|w| LicenseWarningView {
+                package_name: w.package_name.clone(),
+                package_version: w.package_version.clone(),
+            })
+            .collect();
+
+        let summary = LicenseComplianceSummary {
+            violation_count: violations.len(),
+            warning_count: warnings.len(),
+        };
+
+        LicenseComplianceView {
+            has_violations: result.has_violations(),
+            violations,
+            warnings,
+            summary,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -369,7 +412,7 @@ mod tests {
         let metadata = create_test_metadata();
         let graph = create_test_graph();
 
-        let read_model = SbomReadModelBuilder::build(packages, &metadata, Some(&graph), None);
+        let read_model = SbomReadModelBuilder::build(packages, &metadata, Some(&graph), None, None);
 
         // Check metadata
         assert_eq!(read_model.metadata.tool_name, "uv-sbom");
@@ -392,7 +435,7 @@ mod tests {
         let packages: Vec<EnrichedPackage> = vec![];
         let metadata = create_test_metadata();
 
-        let read_model = SbomReadModelBuilder::build(packages, &metadata, None, None);
+        let read_model = SbomReadModelBuilder::build(packages, &metadata, None, None, None);
 
         assert!(read_model.components.is_empty());
     }
@@ -726,7 +769,8 @@ mod tests {
             threshold_exceeded: true,
         };
 
-        let read_model = SbomReadModelBuilder::build(packages, &metadata, None, Some(&vuln_result));
+        let read_model =
+            SbomReadModelBuilder::build(packages, &metadata, None, Some(&vuln_result), None);
 
         assert!(read_model.vulnerabilities.is_some());
         let vulns = read_model.vulnerabilities.unwrap();

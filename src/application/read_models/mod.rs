@@ -5,6 +5,7 @@
 
 pub mod component_view;
 pub mod dependency_view;
+pub mod license_compliance_view;
 pub mod sbom_read_model;
 pub mod sbom_read_model_builder;
 pub mod vulnerability_view;
@@ -13,6 +14,10 @@ pub mod vulnerability_view;
 pub use component_view::{ComponentView, LicenseView};
 #[allow(unused_imports)]
 pub use dependency_view::DependencyView;
+#[allow(unused_imports)]
+pub use license_compliance_view::{
+    LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView, LicenseWarningView,
+};
 #[allow(unused_imports)]
 pub use sbom_read_model::{SbomMetadataView, SbomReadModel};
 #[allow(unused_imports)]
