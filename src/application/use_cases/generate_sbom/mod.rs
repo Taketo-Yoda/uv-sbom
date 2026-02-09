@@ -210,16 +210,10 @@ where
         self.progress_reporter
             .report_completion("Success: Configuration validated. No issues found.");
         let metadata = SbomGenerator::generate_default_metadata();
-        Ok(SbomResponse::new(
-            vec![],
-            None,
-            metadata,
-            None,
-            false,
-            None,
-            None,
-            false,
-        ))
+        Ok(SbomResponse::builder()
+            .metadata(metadata)
+            .build()
+            .expect("dry-run response build should not fail"))
     }
 
     /// Analyzes dependencies if requested in the SBOM request
@@ -411,16 +405,26 @@ where
             .map(|result| result.has_violations())
             .unwrap_or(false);
 
-        SbomResponse::new(
-            enriched_packages,
-            dependency_graph,
-            metadata,
-            vulnerability_report,
-            has_vulnerabilities_above_threshold,
-            vulnerability_check_result,
-            license_compliance_result,
-            has_license_violations,
-        )
+        let mut builder = SbomResponse::builder()
+            .enriched_packages(enriched_packages)
+            .metadata(metadata)
+            .has_vulnerabilities_above_threshold(has_vulnerabilities_above_threshold)
+            .has_license_violations(has_license_violations);
+
+        if let Some(graph) = dependency_graph {
+            builder = builder.dependency_graph(graph);
+        }
+        if let Some(report) = vulnerability_report {
+            builder = builder.vulnerability_report(report);
+        }
+        if let Some(result) = vulnerability_check_result {
+            builder = builder.vulnerability_check_result(result);
+        }
+        if let Some(result) = license_compliance_result {
+            builder = builder.license_compliance_result(result);
+        }
+
+        builder.build().expect("response build should not fail")
     }
 
     /// Enriches packages with license information from the repository
