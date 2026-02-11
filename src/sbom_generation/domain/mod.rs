@@ -2,6 +2,7 @@ pub mod dependency_graph;
 pub mod license_info;
 pub mod license_policy;
 pub mod package;
+pub mod resolution_guide;
 pub mod sbom_metadata;
 pub mod services;
 pub mod vulnerability;
@@ -15,6 +16,9 @@ pub use license_policy::{
     UnknownLicenseHandling, ViolationReason,
 };
 pub use package::{Package, PackageName};
+// Note: These will be used in subsequent subtasks (Issue #221 sub-tasks 2-4)
+#[allow(unused_imports)]
+pub use resolution_guide::{IntroducedBy, ResolutionEntry};
 pub use sbom_metadata::SbomMetadata;
 // Note: These will be used in subsequent subtasks (Issue #94, #95)
 #[allow(unused_imports)]
