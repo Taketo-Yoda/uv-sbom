@@ -8,13 +8,15 @@ use super::dependency_view::DependencyView;
 use super::license_compliance_view::{
     LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView, LicenseWarningView,
 };
+use super::resolution_guide_view::{IntroducedByView, ResolutionEntryView, ResolutionGuideView};
 use super::sbom_read_model::{SbomMetadataView, SbomReadModel};
 use super::vulnerability_view::{
     SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
 };
 use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
-use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
+use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
+use crate::sbom_generation::domain::services::{ResolutionAnalyzer, VulnerabilityCheckResult};
 use crate::sbom_generation::domain::vulnerability::{
     PackageVulnerabilities, Severity, Vulnerability,
 };
@@ -55,12 +57,32 @@ impl SbomReadModelBuilder {
             vulnerability_result.map(|result| Self::build_vulnerabilities(result, &components));
         let license_compliance = license_compliance_result.map(Self::build_license_compliance);
 
+        // Build resolution guide only when BOTH dependency graph and vulnerability data exist
+        let resolution_guide = match (dependency_graph, vulnerability_result) {
+            (Some(graph), Some(vuln_result)) => {
+                let all_vulns: Vec<PackageVulnerabilities> = vuln_result
+                    .above_threshold
+                    .iter()
+                    .chain(vuln_result.below_threshold.iter())
+                    .cloned()
+                    .collect();
+                let entries = ResolutionAnalyzer::analyze(graph, &all_vulns, &packages);
+                if entries.is_empty() {
+                    None
+                } else {
+                    Some(Self::build_resolution_guide(&entries))
+                }
+            }
+            _ => None,
+        };
+
         SbomReadModel {
             metadata: metadata_view,
             components,
             dependencies,
             vulnerabilities,
             license_compliance,
+            resolution_guide,
         }
     }
 
@@ -291,6 +313,42 @@ impl SbomReadModelBuilder {
             violations,
             warnings,
             summary,
+        }
+    }
+
+    /// Builds resolution guide view from domain resolution entries
+    ///
+    /// Converts domain `ResolutionEntry` values into view-optimized
+    /// `ResolutionEntryView` structs.
+    fn build_resolution_guide(entries: &[ResolutionEntry]) -> ResolutionGuideView {
+        let entry_views: Vec<ResolutionEntryView> = entries
+            .iter()
+            .map(Self::build_resolution_entry_view)
+            .collect();
+
+        ResolutionGuideView {
+            entries: entry_views,
+        }
+    }
+
+    /// Converts a single domain ResolutionEntry to a view
+    fn build_resolution_entry_view(entry: &ResolutionEntry) -> ResolutionEntryView {
+        let introduced_by: Vec<IntroducedByView> = entry
+            .introduced_by()
+            .iter()
+            .map(|ib| IntroducedByView {
+                package_name: ib.package_name().to_string(),
+                version: ib.version().to_string(),
+            })
+            .collect();
+
+        ResolutionEntryView {
+            vulnerable_package: entry.vulnerable_package().to_string(),
+            current_version: entry.current_version().to_string(),
+            fixed_version: entry.fixed_version().map(|v| v.to_string()),
+            severity: Self::map_severity(&entry.severity()),
+            vulnerability_id: entry.vulnerability_id().to_string(),
+            introduced_by,
         }
     }
 }
@@ -777,5 +835,184 @@ mod tests {
         assert_eq!(vulns.actionable.len(), 1);
         assert_eq!(vulns.actionable[0].id, "CVE-2024-1234");
         assert!(vulns.threshold_exceeded);
+    }
+
+    // Tests for resolution guide builder
+
+    #[test]
+    fn test_build_resolution_guide_converts_entries() {
+        let entries = vec![ResolutionEntry::new(
+            "urllib3".to_string(),
+            "1.26.5".to_string(),
+            Some("1.26.18".to_string()),
+            Severity::High,
+            "CVE-2023-43804".to_string(),
+            vec![
+                crate::sbom_generation::domain::resolution_guide::IntroducedBy::new(
+                    "requests".to_string(),
+                    "2.28.0".to_string(),
+                ),
+            ],
+        )];
+
+        let guide = SbomReadModelBuilder::build_resolution_guide(&entries);
+
+        assert_eq!(guide.entries.len(), 1);
+        assert_eq!(guide.entries[0].vulnerable_package, "urllib3");
+        assert_eq!(guide.entries[0].current_version, "1.26.5");
+        assert_eq!(guide.entries[0].fixed_version, Some("1.26.18".to_string()));
+        assert_eq!(guide.entries[0].severity, SeverityView::High);
+        assert_eq!(guide.entries[0].vulnerability_id, "CVE-2023-43804");
+        assert_eq!(guide.entries[0].introduced_by.len(), 1);
+        assert_eq!(guide.entries[0].introduced_by[0].package_name, "requests");
+        assert_eq!(guide.entries[0].introduced_by[0].version, "2.28.0");
+    }
+
+    #[test]
+    fn test_build_resolution_guide_without_fixed_version() {
+        let entries = vec![ResolutionEntry::new(
+            "vulnerable-pkg".to_string(),
+            "0.1.0".to_string(),
+            None,
+            Severity::Critical,
+            "CVE-2024-0001".to_string(),
+            vec![
+                crate::sbom_generation::domain::resolution_guide::IntroducedBy::new(
+                    "parent-pkg".to_string(),
+                    "1.0.0".to_string(),
+                ),
+            ],
+        )];
+
+        let guide = SbomReadModelBuilder::build_resolution_guide(&entries);
+
+        assert_eq!(guide.entries.len(), 1);
+        assert_eq!(guide.entries[0].fixed_version, None);
+        assert_eq!(guide.entries[0].severity, SeverityView::Critical);
+    }
+
+    #[test]
+    fn test_build_resolution_guide_multiple_introduced_by() {
+        let entries = vec![ResolutionEntry::new(
+            "urllib3".to_string(),
+            "1.26.5".to_string(),
+            Some("1.26.18".to_string()),
+            Severity::High,
+            "CVE-2023-43804".to_string(),
+            vec![
+                crate::sbom_generation::domain::resolution_guide::IntroducedBy::new(
+                    "httpx".to_string(),
+                    "0.23.0".to_string(),
+                ),
+                crate::sbom_generation::domain::resolution_guide::IntroducedBy::new(
+                    "requests".to_string(),
+                    "2.28.0".to_string(),
+                ),
+            ],
+        )];
+
+        let guide = SbomReadModelBuilder::build_resolution_guide(&entries);
+
+        assert_eq!(guide.entries[0].introduced_by.len(), 2);
+        assert_eq!(guide.entries[0].introduced_by[0].package_name, "httpx");
+        assert_eq!(guide.entries[0].introduced_by[1].package_name, "requests");
+    }
+
+    #[test]
+    fn test_build_full_model_resolution_guide_when_both_graph_and_vulns() {
+        let packages = vec![
+            create_test_package("requests", "2.28.0"),
+            create_test_package("urllib3", "1.26.5"),
+        ];
+        let metadata = create_test_metadata();
+
+        let mut transitive = HashMap::new();
+        transitive.insert(
+            PackageName::new("requests".to_string()).unwrap(),
+            vec![PackageName::new("urllib3".to_string()).unwrap()],
+        );
+        let graph = DependencyGraph::new(
+            vec![PackageName::new("requests".to_string()).unwrap()],
+            transitive,
+        );
+
+        let vuln = create_vulnerability("CVE-2023-43804", Some(7.5), Severity::High);
+        let pkg_vuln = create_package_vulnerabilities("urllib3", "1.26.5", vec![vuln]);
+        let vuln_result = VulnerabilityCheckResult {
+            above_threshold: vec![pkg_vuln],
+            below_threshold: vec![],
+            threshold_exceeded: true,
+        };
+
+        let read_model = SbomReadModelBuilder::build(
+            packages,
+            &metadata,
+            Some(&graph),
+            Some(&vuln_result),
+            None,
+        );
+
+        assert!(read_model.resolution_guide.is_some());
+        let guide = read_model.resolution_guide.unwrap();
+        assert_eq!(guide.entries.len(), 1);
+        assert_eq!(guide.entries[0].vulnerable_package, "urllib3");
+        assert_eq!(guide.entries[0].introduced_by[0].package_name, "requests");
+    }
+
+    #[test]
+    fn test_build_full_model_resolution_guide_none_without_graph() {
+        let packages = vec![create_test_package("requests", "2.31.0")];
+        let metadata = create_test_metadata();
+
+        let vuln = create_vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
+        let pkg_vuln = create_package_vulnerabilities("requests", "2.31.0", vec![vuln]);
+        let vuln_result = VulnerabilityCheckResult {
+            above_threshold: vec![pkg_vuln],
+            below_threshold: vec![],
+            threshold_exceeded: true,
+        };
+
+        let read_model =
+            SbomReadModelBuilder::build(packages, &metadata, None, Some(&vuln_result), None);
+
+        assert!(read_model.resolution_guide.is_none());
+    }
+
+    #[test]
+    fn test_build_full_model_resolution_guide_none_without_vulns() {
+        let packages = vec![create_test_package("requests", "2.31.0")];
+        let metadata = create_test_metadata();
+        let graph = create_test_graph();
+
+        let read_model = SbomReadModelBuilder::build(packages, &metadata, Some(&graph), None, None);
+
+        assert!(read_model.resolution_guide.is_none());
+    }
+
+    #[test]
+    fn test_build_full_model_resolution_guide_none_when_no_transitive_vulns() {
+        // Only direct dependency has vulnerabilities — resolution guide should be None
+        let packages = vec![create_test_package("requests", "2.31.0")];
+        let metadata = create_test_metadata();
+        let graph = create_test_graph(); // requests is direct
+
+        let vuln = create_vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
+        let pkg_vuln = create_package_vulnerabilities("requests", "2.31.0", vec![vuln]);
+        let vuln_result = VulnerabilityCheckResult {
+            above_threshold: vec![pkg_vuln],
+            below_threshold: vec![],
+            threshold_exceeded: true,
+        };
+
+        let read_model = SbomReadModelBuilder::build(
+            packages,
+            &metadata,
+            Some(&graph),
+            Some(&vuln_result),
+            None,
+        );
+
+        // requests is a direct dep, so ResolutionAnalyzer skips it → empty → None
+        assert!(read_model.resolution_guide.is_none());
     }
 }

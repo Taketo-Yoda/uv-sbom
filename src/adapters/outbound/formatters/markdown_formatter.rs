@@ -521,6 +521,7 @@ mod tests {
             dependencies: None,
             vulnerabilities: None,
             license_compliance: None,
+            resolution_guide: None,
         }
     }
 
