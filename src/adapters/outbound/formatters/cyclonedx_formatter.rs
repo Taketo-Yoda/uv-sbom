@@ -1,6 +1,6 @@
 use crate::application::read_models::{
-    ComponentView, DependencyView, LicenseComplianceView, LicenseView, SbomMetadataView,
-    SbomReadModel, VulnerabilityReportView, VulnerabilityView,
+    ComponentView, DependencyView, LicenseComplianceView, LicenseView, ResolutionGuideView,
+    SbomMetadataView, SbomReadModel, VulnerabilityReportView, VulnerabilityView,
 };
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
@@ -51,6 +51,8 @@ struct Vulnerability {
     #[serde(skip_serializing_if = "Option::is_none")]
     ratings: Option<Vec<Rating>>,
     affects: Vec<Affect>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    properties: Option<Vec<Property>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -149,7 +151,7 @@ impl SbomFormatter for CycloneDxFormatter {
             vulnerabilities: model
                 .vulnerabilities
                 .as_ref()
-                .map(|v| self.build_vulnerabilities(v)),
+                .map(|v| self.build_vulnerabilities(v, model.resolution_guide.as_ref())),
             properties,
         };
 
@@ -228,24 +230,32 @@ impl CycloneDxFormatter {
     }
 
     /// Build vulnerabilities from VulnerabilityReportView
-    fn build_vulnerabilities(&self, report: &VulnerabilityReportView) -> Vec<Vulnerability> {
+    fn build_vulnerabilities(
+        &self,
+        report: &VulnerabilityReportView,
+        resolution_guide: Option<&ResolutionGuideView>,
+    ) -> Vec<Vulnerability> {
         let mut vulnerabilities = Vec::new();
 
         // Process actionable vulnerabilities
         for vuln in &report.actionable {
-            vulnerabilities.push(self.build_vulnerability(vuln));
+            vulnerabilities.push(self.build_vulnerability(vuln, resolution_guide));
         }
 
         // Process informational vulnerabilities
         for vuln in &report.informational {
-            vulnerabilities.push(self.build_vulnerability(vuln));
+            vulnerabilities.push(self.build_vulnerability(vuln, resolution_guide));
         }
 
         vulnerabilities
     }
 
     /// Build a single vulnerability from VulnerabilityView
-    fn build_vulnerability(&self, vuln: &VulnerabilityView) -> Vulnerability {
+    fn build_vulnerability(
+        &self,
+        vuln: &VulnerabilityView,
+        resolution_guide: Option<&ResolutionGuideView>,
+    ) -> Vulnerability {
         let source = vuln
             .source_url
             .as_ref()
@@ -257,6 +267,22 @@ impl CycloneDxFormatter {
             vector: vuln.cvss_vector.clone(),
         }]);
 
+        let properties = resolution_guide.and_then(|guide| {
+            let entry = guide.entries.iter().find(|e| {
+                e.vulnerability_id == vuln.id
+                    && e.vulnerable_package == vuln.affected_component_name
+            });
+            entry.map(|e| {
+                e.introduced_by
+                    .iter()
+                    .map(|ib| Property {
+                        name: "uv-sbom:introduced-by".to_string(),
+                        value: format!("{}@{}", ib.package_name, ib.version),
+                    })
+                    .collect::<Vec<_>>()
+            })
+        });
+
         Vulnerability {
             bom_ref: vuln.bom_ref.clone(),
             id: vuln.id.clone(),
@@ -266,6 +292,7 @@ impl CycloneDxFormatter {
             affects: vec![Affect {
                 bom_ref: vuln.affected_component.clone(),
             }],
+            properties,
         }
     }
 
@@ -449,5 +476,153 @@ mod tests {
         assert!(json.contains("\"licenses\""));
         assert!(json.contains("Apache-2.0"));
         assert!(json.contains("Apache License 2.0"));
+    }
+
+    // ============================================================
+    // Resolution guide property tests
+    // ============================================================
+
+    #[test]
+    fn test_format_with_resolution_guide_properties() {
+        use crate::application::read_models::{
+            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
+        };
+
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(7.5),
+                cvss_vector: None,
+                severity: SeverityView::High,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: false,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "requests".to_string(),
+                current_version: "2.31.0".to_string(),
+                fixed_version: Some("2.32.0".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-1234".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "my-app".to_string(),
+                    version: "1.0.0".to_string(),
+                }],
+            }],
+        });
+
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        assert!(json.contains("\"uv-sbom:introduced-by\""));
+        assert!(json.contains("my-app@1.0.0"));
+    }
+
+    #[test]
+    fn test_format_with_resolution_guide_multiple_introduced_by() {
+        use crate::application::read_models::{
+            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
+        };
+
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(7.5),
+                cvss_vector: None,
+                severity: SeverityView::High,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: false,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "requests".to_string(),
+                current_version: "2.31.0".to_string(),
+                fixed_version: Some("2.32.0".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-1234".to_string(),
+                introduced_by: vec![
+                    IntroducedByView {
+                        package_name: "my-app".to_string(),
+                        version: "1.0.0".to_string(),
+                    },
+                    IntroducedByView {
+                        package_name: "other-app".to_string(),
+                        version: "2.0.0".to_string(),
+                    },
+                ],
+            }],
+        });
+
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        assert!(json.contains("my-app@1.0.0"));
+        assert!(json.contains("other-app@2.0.0"));
+    }
+
+    #[test]
+    fn test_format_vulnerability_no_resolution_guide() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(7.5),
+                cvss_vector: None,
+                severity: SeverityView::High,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: false,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        // No properties field when no resolution guide
+        assert!(!json.contains("\"uv-sbom:introduced-by\""));
     }
 }
