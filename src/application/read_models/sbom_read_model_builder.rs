@@ -21,6 +21,7 @@ use crate::sbom_generation::domain::vulnerability::{
     PackageVulnerabilities, Severity, Vulnerability,
 };
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata};
+use crate::sbom_generation::policies::spdx_license_map;
 use std::collections::{HashMap, HashSet};
 
 /// Builder for constructing SbomReadModel from domain objects
@@ -121,10 +122,13 @@ impl SbomReadModelBuilder {
                     })
                     .unwrap_or(false);
 
-                let license = enriched.license.as_ref().map(|license_str| LicenseView {
-                    spdx_id: Some(license_str.clone()),
-                    name: license_str.clone(),
-                    url: None,
+                let license = enriched.license.as_ref().map(|license_str| {
+                    let spdx_id = spdx_license_map::get_spdx_id(license_str);
+                    LicenseView {
+                        spdx_id,
+                        name: license_str.clone(),
+                        url: None,
+                    }
                 });
 
                 ComponentView {
