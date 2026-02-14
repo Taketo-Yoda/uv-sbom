@@ -91,6 +91,9 @@ struct Tool {
 struct Component {
     #[serde(rename = "type")]
     component_type: String,
+    #[serde(rename = "bom-ref")]
+    bom_ref: String,
+    group: String,
     name: String,
     version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -179,6 +182,8 @@ impl CycloneDxFormatter {
                 let licenses = c.license.as_ref().map(|l| self.build_license(l));
                 Component {
                     component_type: "library".to_string(),
+                    bom_ref: c.bom_ref.clone(),
+                    group: "pypi".to_string(),
                     name: c.name.clone(),
                     version: c.version.clone(),
                     description: c.description.clone(),
@@ -190,11 +195,21 @@ impl CycloneDxFormatter {
     }
 
     /// Build license from LicenseView
+    ///
+    /// When a SPDX license ID is available, outputs `id` only (CycloneDX spec preference).
+    /// Falls back to `name` when no SPDX mapping exists.
     fn build_license(&self, license: &LicenseView) -> Vec<License> {
         vec![License {
-            license: LicenseContent {
-                id: license.spdx_id.clone(),
-                name: Some(license.name.clone()),
+            license: if license.spdx_id.is_some() {
+                LicenseContent {
+                    id: license.spdx_id.clone(),
+                    name: None,
+                }
+            } else {
+                LicenseContent {
+                    id: None,
+                    name: Some(license.name.clone()),
+                }
             },
         }]
     }
@@ -465,7 +480,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_with_license() {
+    fn test_format_with_license_spdx_id() {
         let model = create_test_read_model();
         let formatter = CycloneDxFormatter::new();
 
@@ -474,8 +489,51 @@ mod tests {
         assert!(result.is_ok());
         let json = result.unwrap();
         assert!(json.contains("\"licenses\""));
-        assert!(json.contains("Apache-2.0"));
-        assert!(json.contains("Apache License 2.0"));
+        // When SPDX ID is present, only id is output (no name)
+        assert!(json.contains("\"id\": \"Apache-2.0\""));
+        assert!(!json.contains("\"name\": \"Apache License 2.0\""));
+    }
+
+    #[test]
+    fn test_format_with_license_fallback_to_name() {
+        let mut model = create_test_read_model();
+        model.components[0].license = Some(LicenseView {
+            spdx_id: None,
+            name: "Some Proprietary License".to_string(),
+            url: None,
+        });
+        let formatter = CycloneDxFormatter::new();
+
+        let result = formatter.format(&model);
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"name\": \"Some Proprietary License\""));
+        assert!(!json.contains("\"id\""));
+    }
+
+    #[test]
+    fn test_format_with_group_field() {
+        let model = create_test_read_model();
+        let formatter = CycloneDxFormatter::new();
+
+        let result = formatter.format(&model);
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"group\": \"pypi\""));
+    }
+
+    #[test]
+    fn test_format_with_bom_ref_field() {
+        let model = create_test_read_model();
+        let formatter = CycloneDxFormatter::new();
+
+        let result = formatter.format(&model);
+
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.contains("\"bom-ref\": \"pkg:pypi/requests@2.31.0\""));
     }
 
     // ============================================================
