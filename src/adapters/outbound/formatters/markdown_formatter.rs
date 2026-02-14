@@ -1,6 +1,6 @@
 use crate::application::read_models::{
-    ComponentView, DependencyView, LicenseComplianceView, SbomReadModel, VulnerabilityReportView,
-    VulnerabilitySummary, VulnerabilityView,
+    ComponentView, DependencyView, LicenseComplianceView, ResolutionGuideView, SbomReadModel,
+    VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
 };
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
@@ -410,6 +410,48 @@ impl MarkdownFormatter {
         }
     }
 
+    /// Renders the resolution guide section
+    fn render_resolution_guide(&self, output: &mut String, guide: &ResolutionGuideView) {
+        output.push_str("\n## Vulnerability Resolution Guide\n\n");
+        output.push_str("The following transitive dependencies have known vulnerabilities. ");
+        output.push_str(
+            "The table shows which direct dependency introduces each vulnerable package.\n\n",
+        );
+
+        output.push_str("| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID |\n");
+        output.push_str("|--------------------|---------|--------------|---------|--------------------------|-----------------|\n");
+
+        for entry in &guide.entries {
+            let fixed = entry.fixed_version.as_deref().unwrap_or("N/A");
+            let severity_emoji = match entry.severity {
+                crate::application::read_models::SeverityView::Critical => "🔴",
+                crate::application::read_models::SeverityView::High => "🟠",
+                crate::application::read_models::SeverityView::Medium => "🟡",
+                crate::application::read_models::SeverityView::Low => "🟢",
+                crate::application::read_models::SeverityView::None => "⚪",
+            };
+
+            let introduced_by = entry
+                .introduced_by
+                .iter()
+                .map(|ib| format!("{} ({})", ib.package_name, ib.version))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            output.push_str(&format!(
+                "| {} | {} | {} | {} {} | {} | {} |\n",
+                Self::escape_markdown_table_cell(&entry.vulnerable_package),
+                Self::escape_markdown_table_cell(&entry.current_version),
+                Self::escape_markdown_table_cell(fixed),
+                severity_emoji,
+                entry.severity.as_str(),
+                Self::escape_markdown_table_cell(&introduced_by),
+                Self::vulnerability_id_to_link(&entry.vulnerability_id),
+            ));
+        }
+        output.push('\n');
+    }
+
     /// Renders a single vulnerability row
     fn render_vulnerability_row(&self, output: &mut String, vuln: &VulnerabilityView) {
         let cvss_display = vuln
@@ -461,6 +503,13 @@ impl SbomFormatter for MarkdownFormatter {
         // Vulnerabilities section (if present)
         if let Some(vulns) = &model.vulnerabilities {
             self.render_vulnerabilities(&mut output, vulns);
+        }
+
+        // Resolution guide section (if present)
+        if let Some(guide) = &model.resolution_guide {
+            if !guide.entries.is_empty() {
+                self.render_resolution_guide(&mut output, guide);
+            }
         }
 
         // License compliance section (if present)
@@ -1200,5 +1249,128 @@ mod tests {
         let formatter = MarkdownFormatter::with_verified_packages(verified);
         let result = formatter.format_package_name("nonexistent-pkg");
         assert_eq!(result, "nonexistent-pkg");
+    }
+
+    // ============================================================
+    // Resolution guide tests
+    // ============================================================
+
+    #[test]
+    fn test_render_resolution_guide_with_entries() {
+        use crate::application::read_models::{
+            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
+        };
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: Some(">= 2.0.7".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+            }],
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("## Vulnerability Resolution Guide"));
+        assert!(markdown.contains("urllib3"));
+        assert!(markdown.contains("1.26.15"));
+        assert!(markdown.contains(">= 2.0.7"));
+        assert!(markdown.contains("🟠 HIGH"));
+        assert!(markdown.contains("requests (2.31.0)"));
+        assert!(
+            markdown.contains("[CVE-2024-XXXXX](https://nvd.nist.gov/vuln/detail/CVE-2024-XXXXX)")
+        );
+    }
+
+    #[test]
+    fn test_render_resolution_guide_multiple_introduced_by() {
+        use crate::application::read_models::{
+            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
+        };
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "certifi".to_string(),
+                current_version: "2023.7.22".to_string(),
+                fixed_version: Some(">= 2024.2.2".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-YYYYY".to_string(),
+                introduced_by: vec![
+                    IntroducedByView {
+                        package_name: "requests".to_string(),
+                        version: "2.31.0".to_string(),
+                    },
+                    IntroducedByView {
+                        package_name: "httpx".to_string(),
+                        version: "0.25.0".to_string(),
+                    },
+                ],
+            }],
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("requests (2.31.0), httpx (0.25.0)"));
+    }
+
+    #[test]
+    fn test_resolution_guide_omitted_when_empty() {
+        use crate::application::read_models::ResolutionGuideView;
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView { entries: vec![] });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(!markdown.contains("## Vulnerability Resolution Guide"));
+    }
+
+    #[test]
+    fn test_resolution_guide_omitted_when_none() {
+        let model = create_test_read_model();
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(!markdown.contains("## Vulnerability Resolution Guide"));
+    }
+
+    #[test]
+    fn test_resolution_guide_ghsa_link() {
+        use crate::application::read_models::{
+            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
+        };
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: None,
+                severity: SeverityView::Medium,
+                vulnerability_id: "GHSA-abcd-efgh-ijkl".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+            }],
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown
+            .contains("[GHSA-abcd-efgh-ijkl](https://github.com/advisories/GHSA-abcd-efgh-ijkl)"));
+        assert!(markdown.contains("N/A")); // fixed_version is None
     }
 }
