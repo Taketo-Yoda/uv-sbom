@@ -41,4 +41,15 @@ pub struct SbomMetadataView {
     pub tool_version: String,
     /// Serial number of the SBOM
     pub serial_number: String,
+    /// The main project component being analyzed
+    pub component: Option<MetadataComponentView>,
+}
+
+/// View representation of the main project component in metadata
+#[derive(Debug, Clone)]
+pub struct MetadataComponentView {
+    /// Component name (project name)
+    pub name: String,
+    /// Component version
+    pub version: String,
 }

@@ -484,11 +484,14 @@ where
                 .await
             {
                 Ok(license_info) => {
-                    enriched.push(EnrichedPackage::new(
-                        package,
-                        license_info.license_text().map(String::from),
-                        license_info.description().map(String::from),
-                    ));
+                    enriched.push(
+                        EnrichedPackage::new(
+                            package,
+                            license_info.license_text().map(String::from),
+                            license_info.description().map(String::from),
+                        )
+                        .with_sha256_hash(license_info.sha256_hash().map(String::from)),
+                    );
                     successful += 1;
                 }
                 Err(e) => {

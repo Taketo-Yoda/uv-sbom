@@ -79,6 +79,18 @@ struct Affect {
 struct Metadata {
     timestamp: String,
     tools: Vec<Tool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    component: Option<MetadataComponent>,
+}
+
+#[derive(Debug, Serialize)]
+struct MetadataComponent {
+    #[serde(rename = "type")]
+    component_type: String,
+    #[serde(rename = "bom-ref")]
+    bom_ref: String,
+    name: String,
+    version: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -99,8 +111,16 @@ struct Component {
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    hashes: Option<Vec<Hash>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     licenses: Option<Vec<License>>,
     purl: String,
+}
+
+#[derive(Debug, Serialize)]
+struct Hash {
+    alg: String,
+    content: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -165,12 +185,20 @@ impl SbomFormatter for CycloneDxFormatter {
 impl CycloneDxFormatter {
     /// Build metadata from SbomMetadataView
     fn build_metadata(&self, metadata: &SbomMetadataView) -> Metadata {
+        let component = metadata.component.as_ref().map(|c| MetadataComponent {
+            component_type: "application".to_string(),
+            bom_ref: format!("{}-{}", c.name, c.version),
+            name: c.name.clone(),
+            version: c.version.clone(),
+        });
+
         Metadata {
             timestamp: metadata.timestamp.clone(),
             tools: vec![Tool {
                 name: metadata.tool_name.clone(),
                 version: metadata.tool_version.clone(),
             }],
+            component,
         }
     }
 
@@ -180,6 +208,12 @@ impl CycloneDxFormatter {
             .iter()
             .map(|c| {
                 let licenses = c.license.as_ref().map(|l| self.build_license(l));
+                let hashes = c.sha256_hash.as_ref().map(|hash| {
+                    vec![Hash {
+                        alg: "SHA-256".to_string(),
+                        content: hash.clone(),
+                    }]
+                });
                 Component {
                     component_type: "library".to_string(),
                     bom_ref: c.bom_ref.clone(),
@@ -187,6 +221,7 @@ impl CycloneDxFormatter {
                     name: c.name.clone(),
                     version: c.version.clone(),
                     description: c.description.clone(),
+                    hashes,
                     licenses,
                     purl: c.purl.clone(),
                 }
@@ -366,6 +401,7 @@ mod tests {
                 tool_name: "uv-sbom".to_string(),
                 tool_version: "1.0.0".to_string(),
                 serial_number: "urn:uuid:test-123".to_string(),
+                component: None,
             },
             components: vec![
                 ComponentView {
@@ -648,6 +684,70 @@ mod tests {
 
         assert!(json.contains("my-app@1.0.0"));
         assert!(json.contains("other-app@2.0.0"));
+    }
+
+    // ============================================================
+    // Hash tests
+    // ============================================================
+
+    #[test]
+    fn test_format_with_hashes() {
+        let mut model = create_test_read_model();
+        model.components[0].sha256_hash =
+            Some("942c5a758f98d790eaed1a29cb6eefc7ffb0d1cf7af05c3d2791656dbd6ad1e1".to_string());
+
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        assert!(json.contains("\"hashes\""));
+        assert!(json.contains("\"alg\": \"SHA-256\""));
+        assert!(json.contains(
+            "\"content\": \"942c5a758f98d790eaed1a29cb6eefc7ffb0d1cf7af05c3d2791656dbd6ad1e1\""
+        ));
+    }
+
+    #[test]
+    fn test_format_without_hashes_omits_field() {
+        let model = create_test_read_model();
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        // Components without sha256_hash should not have hashes field
+        assert!(!json.contains("\"hashes\""));
+    }
+
+    // ============================================================
+    // Metadata component tests
+    // ============================================================
+
+    #[test]
+    fn test_format_with_metadata_component() {
+        use crate::application::read_models::MetadataComponentView;
+
+        let mut model = create_test_read_model();
+        model.metadata.component = Some(MetadataComponentView {
+            name: "my-project".to_string(),
+            version: "1.0.0".to_string(),
+        });
+
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        assert!(json.contains("\"type\": \"application\""));
+        assert!(json.contains("\"bom-ref\": \"my-project-1.0.0\""));
+        assert!(json.contains("\"name\": \"my-project\""));
+        assert!(json.contains("\"version\": \"1.0.0\""));
+    }
+
+    #[test]
+    fn test_format_without_metadata_component() {
+        let model = create_test_read_model();
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        // metadata should not contain component field when None
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed["metadata"]["component"].is_null());
     }
 
     #[test]

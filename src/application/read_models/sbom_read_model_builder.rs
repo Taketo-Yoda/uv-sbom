@@ -9,7 +9,7 @@ use super::license_compliance_view::{
     LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView, LicenseWarningView,
 };
 use super::resolution_guide_view::{IntroducedByView, ResolutionEntryView, ResolutionGuideView};
-use super::sbom_read_model::{SbomMetadataView, SbomReadModel};
+use super::sbom_read_model::{MetadataComponentView, SbomMetadataView, SbomReadModel};
 use super::vulnerability_view::{
     SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
 };
@@ -42,6 +42,8 @@ impl SbomReadModelBuilder {
     ///
     /// # Returns
     /// A fully constructed SbomReadModel
+    /// Builds a SbomReadModel without project metadata component (backwards compatible)
+    #[allow(dead_code)]
     pub fn build(
         packages: Vec<EnrichedPackage>,
         metadata: &SbomMetadata,
@@ -49,7 +51,26 @@ impl SbomReadModelBuilder {
         vulnerability_result: Option<&VulnerabilityCheckResult>,
         license_compliance_result: Option<&LicenseComplianceResult>,
     ) -> SbomReadModel {
-        let metadata_view = Self::build_metadata(metadata);
+        Self::build_with_project(
+            packages,
+            metadata,
+            dependency_graph,
+            vulnerability_result,
+            license_compliance_result,
+            None,
+        )
+    }
+
+    /// Builds a SbomReadModel from domain objects with optional project metadata component
+    pub fn build_with_project(
+        packages: Vec<EnrichedPackage>,
+        metadata: &SbomMetadata,
+        dependency_graph: Option<&DependencyGraph>,
+        vulnerability_result: Option<&VulnerabilityCheckResult>,
+        license_compliance_result: Option<&LicenseComplianceResult>,
+        project_component: Option<(&str, &str)>,
+    ) -> SbomReadModel {
+        let metadata_view = Self::build_metadata(metadata, project_component);
         let components = Self::build_components(&packages, dependency_graph);
 
         let dependencies =
@@ -88,12 +109,19 @@ impl SbomReadModelBuilder {
     }
 
     /// Converts domain metadata to view representation
-    fn build_metadata(metadata: &SbomMetadata) -> SbomMetadataView {
+    fn build_metadata(
+        metadata: &SbomMetadata,
+        project_component: Option<(&str, &str)>,
+    ) -> SbomMetadataView {
         SbomMetadataView {
             timestamp: metadata.timestamp().to_string(),
             tool_name: metadata.tool_name().to_string(),
             tool_version: metadata.tool_version().to_string(),
             serial_number: metadata.serial_number().to_string(),
+            component: project_component.map(|(name, version)| MetadataComponentView {
+                name: name.to_string(),
+                version: version.to_string(),
+            }),
         }
     }
 
@@ -138,7 +166,7 @@ impl SbomReadModelBuilder {
                     purl,
                     license,
                     description: enriched.description.clone(),
-                    sha256_hash: None,
+                    sha256_hash: enriched.sha256_hash.clone(),
                     is_direct_dependency: is_direct,
                 }
             })
@@ -389,7 +417,7 @@ mod tests {
     #[test]
     fn test_build_metadata() {
         let metadata = create_test_metadata();
-        let view = SbomReadModelBuilder::build_metadata(&metadata);
+        let view = SbomReadModelBuilder::build_metadata(&metadata, None);
 
         assert_eq!(view.timestamp, "2024-01-15T10:30:00Z");
         assert_eq!(view.tool_name, "uv-sbom");
@@ -398,6 +426,7 @@ mod tests {
             view.serial_number,
             "urn:uuid:12345678-1234-1234-1234-123456789012"
         );
+        assert!(view.component.is_none());
     }
 
     #[test]
@@ -1018,5 +1047,69 @@ mod tests {
 
         // requests is a direct dep, so ResolutionAnalyzer skips it → empty → None
         assert!(read_model.resolution_guide.is_none());
+    }
+
+    // ============================================================
+    // SHA-256 hash wiring tests
+    // ============================================================
+
+    #[test]
+    fn test_build_components_with_sha256_hash() {
+        let mut package = create_test_package("requests", "2.31.0");
+        package.sha256_hash = Some("abc123def456".to_string());
+        let components = SbomReadModelBuilder::build_components(&[package], None);
+
+        assert_eq!(components[0].sha256_hash, Some("abc123def456".to_string()));
+    }
+
+    #[test]
+    fn test_build_components_without_sha256_hash() {
+        let package = create_test_package("requests", "2.31.0");
+        let components = SbomReadModelBuilder::build_components(&[package], None);
+
+        assert!(components[0].sha256_hash.is_none());
+    }
+
+    // ============================================================
+    // Metadata component tests
+    // ============================================================
+
+    #[test]
+    fn test_build_metadata_with_project_component() {
+        let metadata = create_test_metadata();
+        let view = SbomReadModelBuilder::build_metadata(&metadata, Some(("my-project", "1.0.0")));
+
+        assert!(view.component.is_some());
+        let component = view.component.unwrap();
+        assert_eq!(component.name, "my-project");
+        assert_eq!(component.version, "1.0.0");
+    }
+
+    #[test]
+    fn test_build_metadata_without_project_component() {
+        let metadata = create_test_metadata();
+        let view = SbomReadModelBuilder::build_metadata(&metadata, None);
+
+        assert!(view.component.is_none());
+    }
+
+    #[test]
+    fn test_build_with_project_includes_metadata_component() {
+        let packages = vec![create_test_package("requests", "2.31.0")];
+        let metadata = create_test_metadata();
+
+        let read_model = SbomReadModelBuilder::build_with_project(
+            packages,
+            &metadata,
+            None,
+            None,
+            None,
+            Some(("my-project", "1.0.0")),
+        );
+
+        assert!(read_model.metadata.component.is_some());
+        let component = read_model.metadata.component.unwrap();
+        assert_eq!(component.name, "my-project");
+        assert_eq!(component.version, "1.0.0");
     }
 }

@@ -2,8 +2,14 @@ use crate::sbom_generation::domain::LicenseInfo;
 use crate::shared::Result;
 use async_trait::async_trait;
 
-/// Type alias for PyPI metadata: (license, license_expression, classifiers, description)
-pub type PyPiMetadata = (Option<String>, Option<String>, Vec<String>, Option<String>);
+/// Type alias for PyPI metadata: (license, license_expression, classifiers, description, sha256_hash)
+pub type PyPiMetadata = (
+    Option<String>,
+    Option<String>,
+    Vec<String>,
+    Option<String>,
+    Option<String>,
+);
 
 /// LicenseRepository port for fetching license information
 ///
@@ -47,7 +53,7 @@ pub trait LicenseRepository: Send + Sync {
     /// # Returns
     /// A LicenseInfo object with the selected license and description
     async fn enrich_with_license(&self, package_name: &str, version: &str) -> Result<LicenseInfo> {
-        let (license, license_expression, classifiers, description) =
+        let (license, license_expression, classifiers, description, sha256_hash) =
             self.fetch_license_info(package_name, version).await?;
 
         use crate::sbom_generation::policies::LicensePriority;
@@ -56,6 +62,7 @@ pub trait LicenseRepository: Send + Sync {
             license_expression,
             &classifiers,
             description,
-        ))
+        )
+        .with_sha256_hash(sha256_hash))
     }
 }

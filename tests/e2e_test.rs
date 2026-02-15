@@ -570,13 +570,20 @@ fn create_test_license_repository() -> impl LicenseRepository {
             &self,
             package_name: &str,
             version: &str,
-        ) -> Result<(Option<String>, Option<String>, Vec<String>, Option<String>)> {
+        ) -> Result<(
+            Option<String>,
+            Option<String>,
+            Vec<String>,
+            Option<String>,
+            Option<String>,
+        )> {
             let key = format!("{}@{}", package_name, version);
-            Ok(self
+            let base = self
                 .licenses
                 .get(&key)
                 .cloned()
-                .unwrap_or((None, None, vec![], None)))
+                .unwrap_or((None, None, vec![], None));
+            Ok((base.0, base.1, base.2, base.3, None))
         }
     }
 
