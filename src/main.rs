@@ -15,6 +15,7 @@ use application::use_cases::GenerateSbomUseCase;
 use clap::Parser;
 use cli::Args;
 use owo_colors::OwoColorize;
+use ports::outbound::ProjectConfigReader;
 use sbom_generation::domain::license_policy::{LicensePolicy, UnknownLicenseHandling};
 use sbom_generation::domain::vulnerability::Severity;
 use shared::error::ExitCode;
@@ -160,7 +161,7 @@ async fn run(args: Args) -> Result<bool> {
     // Create request using builder pattern
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
     let request = SbomRequest::builder()
-        .project_path(project_path)
+        .project_path(project_path.clone())
         .include_dependency_info(include_dependency_info)
         .exclude_patterns(merged.exclude_patterns)
         .dry_run(args.dry_run)
@@ -183,13 +184,30 @@ async fn run(args: Args) -> Result<bool> {
     // Display progress message
     eprintln!("{}", FormatterFactory::progress_message(merged.format));
 
+    // Determine project component for CycloneDX metadata
+    let project_reader = FileSystemReader::new();
+    let project_component_info = project_reader
+        .read_project_name(&project_path)
+        .ok()
+        .and_then(|name| {
+            let version = response
+                .enriched_packages
+                .iter()
+                .find(|ep| ep.package.name() == name)
+                .map(|ep| ep.package.version().to_string());
+            version.map(|v| (name, v))
+        });
+
     // Build read model first so we can extract package names for verification
-    let read_model = SbomReadModelBuilder::build(
+    let read_model = SbomReadModelBuilder::build_with_project(
         response.enriched_packages,
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        project_component_info
+            .as_ref()
+            .map(|(n, v)| (n.as_str(), v.as_str())),
     );
 
     // Verify PyPI links if requested

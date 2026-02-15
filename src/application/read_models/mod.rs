@@ -22,7 +22,7 @@ pub use license_compliance_view::{
 #[allow(unused_imports)]
 pub use resolution_guide_view::{IntroducedByView, ResolutionEntryView, ResolutionGuideView};
 #[allow(unused_imports)]
-pub use sbom_read_model::{SbomMetadataView, SbomReadModel};
+pub use sbom_read_model::{MetadataComponentView, SbomMetadataView, SbomReadModel};
 #[allow(unused_imports)]
 pub use sbom_read_model_builder::SbomReadModelBuilder;
 #[allow(unused_imports)]

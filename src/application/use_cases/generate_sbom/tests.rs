@@ -94,6 +94,7 @@ impl LicenseRepository for MockLicenseRepository {
             None,
             vec![],
             Some("A test package".to_string()),
+            None,
         ))
     }
 }

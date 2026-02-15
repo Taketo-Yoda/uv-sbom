@@ -536,6 +536,7 @@ mod tests {
                 tool_name: "uv-sbom".to_string(),
                 tool_version: "1.0.0".to_string(),
                 serial_number: "urn:uuid:test-123".to_string(),
+                component: None,
             },
             components: vec![
                 ComponentView {

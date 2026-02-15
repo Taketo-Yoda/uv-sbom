@@ -8,6 +8,20 @@ use std::time::Duration;
 #[derive(Debug, Deserialize)]
 struct PyPiPackageInfo {
     info: PyPiInfo,
+    #[serde(default)]
+    urls: Vec<PyPiUrl>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PyPiUrl {
+    #[serde(default)]
+    digests: PyPiDigests,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct PyPiDigests {
+    #[serde(default)]
+    sha256: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -177,11 +191,17 @@ impl LicenseRepository for PyPiLicenseRepository {
     async fn fetch_license_info(&self, package_name: &str, version: &str) -> Result<PyPiMetadata> {
         let package_info = self.fetch_with_retry(package_name, version).await?;
 
+        let sha256_hash = package_info
+            .urls
+            .iter()
+            .find_map(|url| url.digests.sha256.clone());
+
         Ok((
             package_info.info.license,
             package_info.info.license_expression,
             package_info.info.classifiers,
             package_info.info.summary,
+            sha256_hash,
         ))
     }
 }
@@ -201,6 +221,61 @@ mod tests {
         let client = PyPiLicenseRepository::new().unwrap();
         let result = client.verify_packages(&[]).await;
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_pypi_url_deserialization_with_digests() {
+        let json = r#"{
+            "info": {
+                "license": "MIT",
+                "summary": "A test package"
+            },
+            "urls": [
+                {
+                    "digests": {
+                        "sha256": "abc123def456"
+                    }
+                }
+            ]
+        }"#;
+
+        let package_info: PyPiPackageInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(package_info.urls.len(), 1);
+        assert_eq!(
+            package_info.urls[0].digests.sha256,
+            Some("abc123def456".to_string())
+        );
+    }
+
+    #[test]
+    fn test_pypi_url_deserialization_without_urls() {
+        let json = r#"{
+            "info": {
+                "license": "MIT",
+                "summary": "A test package"
+            }
+        }"#;
+
+        let package_info: PyPiPackageInfo = serde_json::from_str(json).unwrap();
+        assert!(package_info.urls.is_empty());
+    }
+
+    #[test]
+    fn test_pypi_url_deserialization_empty_digests() {
+        let json = r#"{
+            "info": {
+                "license": "MIT",
+                "summary": "A test package"
+            },
+            "urls": [
+                {
+                    "digests": {}
+                }
+            ]
+        }"#;
+
+        let package_info: PyPiPackageInfo = serde_json::from_str(json).unwrap();
+        assert!(package_info.urls[0].digests.sha256.is_none());
     }
 
     // Integration tests - require network access

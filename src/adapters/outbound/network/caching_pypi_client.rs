@@ -106,6 +106,7 @@ mod tests {
                 Some("MIT".to_string()),
                 vec!["License :: OSI Approved :: MIT License".to_string()],
                 Some(format!("{} description", package_name)),
+                None,
             ))
         }
     }

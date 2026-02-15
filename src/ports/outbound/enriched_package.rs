@@ -9,6 +9,7 @@ pub struct EnrichedPackage {
     pub package: Package,
     pub license: Option<String>,
     pub description: Option<String>,
+    pub sha256_hash: Option<String>,
 }
 
 impl EnrichedPackage {
@@ -17,6 +18,12 @@ impl EnrichedPackage {
             package,
             license,
             description,
+            sha256_hash: None,
         }
+    }
+
+    pub fn with_sha256_hash(mut self, sha256_hash: Option<String>) -> Self {
+        self.sha256_hash = sha256_hash;
+        self
     }
 }
