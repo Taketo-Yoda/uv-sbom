@@ -16,6 +16,7 @@
 - 🔍 PyPIからライセンス情報を自動取得（リトライロジック付き）
 - 🛡️ OSV APIを使用した既知の脆弱性チェック（Markdownフォーマットのみ）
 - 📋 許可/拒否リストとワイルドカード対応のライセンスコンプライアンスポリシーチェック
+- 🔎 **脆弱性解決ガイド** - 脆弱な推移的パッケージを導入している直接依存関係を特定
 - 📊 複数のフォーマットに対応:
   - **CycloneDX 1.6** JSON形式（標準SBOM形式）
   - **Markdown**形式（直接依存と推移的依存を明確に分離）
@@ -474,6 +475,45 @@ The following packages have known security vulnerabilities:
 ```
 
 > **注:** 脆弱性レポート内の脆弱性ID（CVE, GHSA, PYSEC, RUSTSECなど）は、`--verify-links`の設定に関係なく常にハイパーリンクとして表示されます。これらのIDはOSVデータベースから取得され、権威ある脆弱性データベース（NVD、GitHub Advisories、OSV.dev）にリンクするため、リンク検証は不要です。
+
+### 脆弱性解決ガイド
+
+`--check-cve`が推移的依存関係で脆弱性を検出すると、uv-sbomは自動的に**脆弱性解決ガイド**を生成します。このセクションは、各脆弱な推移的パッケージがどの直接依存関係から導入されているかを示し、アップグレードすべきパッケージを正確に把握できます。
+
+#### Markdown出力例
+
+```markdown
+## Vulnerability Resolution Guide
+
+The following transitive dependencies have known vulnerabilities. The table shows which direct dependency introduces each vulnerable package.
+
+| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID |
+|--------------------|---------|---------------|----------|---------------------------|-----------------|
+| urllib3 | 1.26.15 | >= 2.0.7 | 🟠 HIGH | requests (2.31.0) | [CVE-2024-XXXXX](https://nvd.nist.gov/vuln/detail/CVE-2024-XXXXX) |
+| certifi | 2023.7.22 | >= 2024.2.2 | 🟠 HIGH | requests (2.31.0), httpx (0.25.0) | [CVE-2024-YYYYY](https://nvd.nist.gov/vuln/detail/CVE-2024-YYYYY) |
+```
+
+#### CycloneDX JSON出力
+
+CycloneDX形式では、導入元の依存関係が`properties`エントリとして含まれます:
+
+```json
+{
+  "vulnerabilities": [
+    {
+      "id": "CVE-2024-XXXXX",
+      "properties": [
+        {
+          "name": "uv-sbom:introduced-by",
+          "value": "requests@2.31.0"
+        }
+      ]
+    }
+  ]
+}
+```
+
+> **注:** 解決ガイドは**推移的**依存関係の脆弱性についてのみ表示されます。直接依存関係の脆弱性は標準の脆弱性テーブルに表示されます（ユーザーが直接アップグレードできるため）。
 
 **ライセンスコンプライアンスチェックの出力例:**
 

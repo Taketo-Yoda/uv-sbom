@@ -16,6 +16,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 🔍 Automatically fetches license information from PyPI with retry logic
 - 🛡️ Checks for known vulnerabilities using OSV API (Markdown format only)
 - 📋 License compliance policy check with configurable allow/deny lists and wildcard support
+- 🔎 **Vulnerability Resolution Guide** - Identifies which direct dependency introduces each vulnerable transitive package
 - 📊 Outputs in multiple formats:
   - **CycloneDX 1.6** JSON format (standard SBOM format)
   - **Markdown** format with direct and transitive dependencies clearly separated
@@ -475,6 +476,45 @@ The following packages have known security vulnerabilities:
 ```
 
 > **Note:** Vulnerability IDs (CVE, GHSA, PYSEC, RUSTSEC, etc.) in the vulnerability report are always rendered as hyperlinks, regardless of `--verify-links`. These IDs are sourced from the OSV database and link to authoritative vulnerability databases (NVD, GitHub Advisories, OSV.dev), so link verification is unnecessary.
+
+### Vulnerability Resolution Guide
+
+When `--check-cve` detects vulnerabilities in transitive dependencies, uv-sbom automatically generates a **Vulnerability Resolution Guide**. This section shows which direct dependency introduces each vulnerable transitive package, so you know exactly what to upgrade.
+
+#### Markdown output example
+
+```markdown
+## Vulnerability Resolution Guide
+
+The following transitive dependencies have known vulnerabilities. The table shows which direct dependency introduces each vulnerable package.
+
+| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID |
+|--------------------|---------|---------------|----------|---------------------------|-----------------|
+| urllib3 | 1.26.15 | >= 2.0.7 | 🟠 HIGH | requests (2.31.0) | [CVE-2024-XXXXX](https://nvd.nist.gov/vuln/detail/CVE-2024-XXXXX) |
+| certifi | 2023.7.22 | >= 2024.2.2 | 🟠 HIGH | requests (2.31.0), httpx (0.25.0) | [CVE-2024-YYYYY](https://nvd.nist.gov/vuln/detail/CVE-2024-YYYYY) |
+```
+
+#### CycloneDX JSON output
+
+In CycloneDX format, the introducing dependency is included as a `properties` entry:
+
+```json
+{
+  "vulnerabilities": [
+    {
+      "id": "CVE-2024-XXXXX",
+      "properties": [
+        {
+          "name": "uv-sbom:introduced-by",
+          "value": "requests@2.31.0"
+        }
+      ]
+    }
+  ]
+}
+```
+
+> **Note:** The resolution guide only appears for **transitive** dependency vulnerabilities. Direct dependency vulnerabilities are shown in the standard vulnerability table, as users can upgrade them directly.
 
 **License Compliance Check output example:**
 
