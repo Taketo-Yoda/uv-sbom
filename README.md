@@ -15,6 +15,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 📦 Parses `uv.lock` files to extract dependency information
 - 🔍 Automatically fetches license information from PyPI with retry logic
 - 🛡️ Checks for known vulnerabilities using OSV API (Markdown format only)
+- 📋 License compliance policy check with configurable allow/deny lists and wildcard support
 - 📊 Outputs in multiple formats:
   - **CycloneDX 1.6** JSON format (standard SBOM format)
   - **Markdown** format with direct and transitive dependencies clearly separated
@@ -276,6 +277,12 @@ ignore_cves:
     reason: "False positive for our use case"
   - id: CVE-2024-5678
     reason: "Mitigated by network configuration"
+
+# License compliance policy
+license_policy:
+  allow: ["MIT", "Apache-2.0", "BSD-*", "ISC", "PSF-2.0"]
+  deny: ["GPL-3.0-only", "GPL-3.0-or-later", "AGPL-*"]
+  unknown: "warn"  # "warn" | "deny" | "allow"
 ```
 
 #### Config File Schema Reference
@@ -290,6 +297,10 @@ ignore_cves:
 | `ignore_cves` | object[] | No | List of CVEs to ignore |
 | `ignore_cves[].id` | string | Yes | CVE ID (e.g., `CVE-2024-1234`) |
 | `ignore_cves[].reason` | string | No | Reason for ignoring |
+| `license_policy` | object | No | License compliance policy configuration |
+| `license_policy.allow` | string[] | No | Allowed license patterns (supports wildcards) |
+| `license_policy.deny` | string[] | No | Denied license patterns (supports wildcards) |
+| `license_policy.unknown` | string | No | Unknown license handling (`warn` / `deny` / `allow`) |
 
 #### Priority and Merge Rules
 
@@ -297,6 +308,8 @@ ignore_cves:
 - **`check_cve`** is enabled if set via CLI flag OR config file (logical OR)
 - **`exclude_packages`** are **merged** from both CLI and config file, then deduplicated
 - **`ignore_cves`** are **merged** from both CLI (`--ignore-cve`) and config file, deduplicated by ID (CLI entry takes precedence for duplicates)
+- **`check_license`** is enabled if set via CLI flag OR config file (logical OR, same as `check_cve`)
+- **`--license-allow`** and **`--license-deny`** CLI options **override** config file `license_policy.allow` / `license_policy.deny` entirely (not merged)
 
 ### Ignoring specific CVEs
 
@@ -327,6 +340,30 @@ uv-sbom --format markdown --check-cve --output SBOM.md
 # Combine with exclude patterns
 uv-sbom --format markdown --check-cve -e "pytest" -e "*-dev"
 ```
+
+### License Compliance Check
+
+Use the `--check-license` option to check packages against a configurable license policy:
+
+```bash
+# Enable license compliance check (using config file policy)
+uv-sbom --check-license --format markdown
+
+# With inline policy (overrides config file)
+uv-sbom --check-license --license-allow "MIT,Apache-2.0,BSD-*" --license-deny "GPL-3.0,AGPL-*"
+
+# Combined with vulnerability check
+uv-sbom --check-license --check-cve --severity-threshold high
+```
+
+**How it works:**
+- **Deny takes precedence over allow**: If a license matches both lists, it is denied
+- **Wildcard patterns**: Use `BSD-*`, `AGPL-*` etc. for pattern matching (case-insensitive)
+- **Unknown license handling**: Configure how licenses not in either list are treated:
+  - `warn` (default): Report as warning but don't fail
+  - `deny`: Treat unknown licenses as violations
+  - `allow`: Silently allow unknown licenses
+- **Exit code**: Returns exit code 1 when policy violations are detected
 
 ### Vulnerability Threshold Options
 
@@ -394,6 +431,15 @@ Use vulnerability thresholds for CI/CD pipeline integration:
 ```
 
 ```yaml
+# GitHub Actions - License Compliance Check
+- name: License Compliance Check
+  run: uv-sbom --check-license --format markdown
+
+- name: Combined Security and License Check
+  run: uv-sbom --check-license --check-cve --severity-threshold high
+```
+
+```yaml
 # GitLab CI example
 security_scan:
   script:
@@ -429,6 +475,21 @@ The following packages have known security vulnerabilities:
 ```
 
 > **Note:** Vulnerability IDs (CVE, GHSA, PYSEC, RUSTSEC, etc.) in the vulnerability report are always rendered as hyperlinks, regardless of `--verify-links`. These IDs are sourced from the OSV database and link to authoritative vulnerability databases (NVD, GitHub Advisories, OSV.dev), so link verification is unnecessary.
+
+**License Compliance Check output example:**
+
+```markdown
+## License Compliance Check
+
+Policy: 3 allowed patterns, 1 denied pattern | Unknown: warn
+
+### Violations (2 found)
+
+| Package | Version | License | Reason |
+|---------|---------|---------|--------|
+| some-gpl-lib | 1.0.0 | GPL-3.0 | Denied by policy |
+| mystery-pkg | 2.1.0 | Unknown | Not in allow list |
+```
 
 When no vulnerabilities are found:
 
@@ -537,6 +598,9 @@ Options:
                                      Requires --check-cve to be enabled
       --cvss-threshold <SCORE>       CVSS threshold for vulnerability check (0.0-10.0)
                                      Requires --check-cve to be enabled
+      --check-license                Check license compliance against policy
+      --license-allow <LIST>         Comma-separated list of allowed license patterns (overrides config)
+      --license-deny <LIST>          Comma-separated list of denied license patterns (overrides config)
   -h, --help                         Print help
   -V, --version                      Print version
 ```
@@ -548,13 +612,13 @@ uv-sbom returns the following exit codes:
 | Exit Code | Description | Examples |
 |-----------|-------------|----------|
 | 0 | Success | SBOM generated successfully, no vulnerabilities above threshold, `--help` or `--version` displayed |
-| 1 | Vulnerabilities detected (with `--check-cve`) | Vulnerabilities above threshold detected |
+| 1 | Vulnerabilities or license violations detected | Vulnerabilities above threshold detected, license policy violations found |
 | 2 | Invalid command-line arguments | Unknown option, invalid argument type |
 | 3 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error |
 
-### Exit Codes with Vulnerability Checking
+### Exit Codes with Vulnerability and License Checking
 
-When using `--check-cve`, the exit code behavior changes based on threshold settings:
+When using `--check-cve` or `--check-license`, the exit code behavior changes based on threshold settings:
 
 | Scenario | Exit Code |
 |----------|-----------|
@@ -562,6 +626,9 @@ When using `--check-cve`, the exit code behavior changes based on threshold sett
 | Vulnerabilities found (no threshold specified) | 1 |
 | Vulnerabilities found, all below threshold | 0 |
 | Vulnerabilities found, some above threshold | 1 |
+| License policy violations detected | 1 |
+| Combined: either check fails | 1 |
+| Combined: both checks pass | 0 |
 
 **Examples:**
 ```bash
