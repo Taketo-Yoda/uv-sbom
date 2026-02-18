@@ -17,6 +17,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - **Configurable thresholds** - Filter vulnerabilities by severity or CVSS score
 - **Package exclusion** - Exclude internal packages with `--exclude` patterns
 - **Configuration file support** - Define defaults in `uv-sbom.config.yml`
+- **License compliance** - Enforce license policies with allow/deny lists via `--check-license`
 - **CI/CD ready** - Exit codes for easy integration into pipelines
 - **License detection** - Automatically fetches license info from PyPI
 
@@ -82,6 +83,16 @@ uv-sbom --format markdown --check-cve --cvss-threshold 7.0
 uv-sbom --format markdown --check-cve --ignore-cve CVE-2024-1234
 ```
 
+### License Compliance Check
+
+```bash
+# License compliance check
+uv-sbom --check-license --license-allow "MIT,Apache-2.0,BSD-*"
+
+# Combined with vulnerability check
+uv-sbom --check-license --check-cve --severity-threshold high
+```
+
 ### Excluding Packages
 
 ```bash
@@ -106,6 +117,10 @@ exclude_packages:
 ignore_cves:
   - id: CVE-2024-1234
     reason: "False positive for our use case"
+license_policy:
+  allow: ["MIT", "Apache-2.0", "BSD-*"]
+  deny: ["GPL-3.0-only", "AGPL-*"]
+  unknown: "warn"
 ```
 
 Generate a template:
