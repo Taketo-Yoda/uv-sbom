@@ -1,6 +1,6 @@
 use crate::application::read_models::{
-    ComponentView, DependencyView, SbomReadModel, VulnerabilityReportView, VulnerabilitySummary,
-    VulnerabilityView,
+    ComponentView, DependencyView, LicenseComplianceView, ResolutionGuideView, SbomReadModel,
+    VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
 };
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
@@ -347,6 +347,111 @@ impl MarkdownFormatter {
         unique.len().max(1)
     }
 
+    /// Renders the license compliance section
+    fn render_license_compliance(&self, output: &mut String, compliance: &LicenseComplianceView) {
+        output.push_str("\n## License Compliance Report\n\n");
+
+        // Summary
+        if compliance.has_violations {
+            output.push_str(&format!(
+                "**{} license {} found.**\n\n",
+                compliance.summary.violation_count,
+                if compliance.summary.violation_count == 1 {
+                    "violation"
+                } else {
+                    "violations"
+                }
+            ));
+        } else {
+            output.push_str("**No license violations found.**\n\n");
+        }
+
+        // Violations table
+        if !compliance.violations.is_empty() {
+            output.push_str("### Violations\n\n");
+            output.push_str("| Package | Version | License | Reason | Matched Pattern |\n");
+            output.push_str("|---------|---------|---------|--------|----------------|\n");
+
+            for v in &compliance.violations {
+                output.push_str(&format!(
+                    "| {} | {} | {} | {} | {} |\n",
+                    Self::escape_markdown_table_cell(&v.package_name),
+                    Self::escape_markdown_table_cell(&v.package_version),
+                    Self::escape_markdown_table_cell(&v.license),
+                    Self::escape_markdown_table_cell(&v.reason),
+                    v.matched_pattern.as_deref().unwrap_or("-"),
+                ));
+            }
+            output.push('\n');
+        }
+
+        // Warnings table
+        if !compliance.warnings.is_empty() {
+            output.push_str(&format!(
+                "### Warnings\n\n**{} {} with unknown license.**\n\n",
+                compliance.summary.warning_count,
+                if compliance.summary.warning_count == 1 {
+                    "package"
+                } else {
+                    "packages"
+                }
+            ));
+            output.push_str("| Package | Version |\n");
+            output.push_str("|---------|--------|\n");
+
+            for w in &compliance.warnings {
+                output.push_str(&format!(
+                    "| {} | {} |\n",
+                    Self::escape_markdown_table_cell(&w.package_name),
+                    Self::escape_markdown_table_cell(&w.package_version),
+                ));
+            }
+            output.push('\n');
+        }
+    }
+
+    /// Renders the resolution guide section
+    fn render_resolution_guide(&self, output: &mut String, guide: &ResolutionGuideView) {
+        output.push_str("\n## Vulnerability Resolution Guide\n\n");
+        output.push_str("The following transitive dependencies have known vulnerabilities. ");
+        output.push_str(
+            "The table shows which direct dependency introduces each vulnerable package.\n\n",
+        );
+
+        output.push_str("| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID |\n");
+        output.push_str("|--------------------|---------|--------------|---------|--------------------------|-----------------|\n");
+
+        for entry in &guide.entries {
+            let fixed = entry.fixed_version.as_deref().unwrap_or("N/A");
+            let severity_emoji = match entry.severity {
+                crate::application::read_models::SeverityView::Critical => "🔴",
+                crate::application::read_models::SeverityView::High => "🟠",
+                crate::application::read_models::SeverityView::Medium => "🟡",
+                crate::application::read_models::SeverityView::Low => "🟢",
+                crate::application::read_models::SeverityView::None => "⚪",
+            };
+
+            let introduced_by = entry
+                .introduced_by
+                .iter()
+                .map(|ib| format!("{} ({})", ib.package_name, ib.version))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            output.push_str(&format!(
+                "| {} | {} | {} | {} {} | {} | {} |\n",
+                Self::escape_markdown_table_cell(&entry.vulnerable_package),
+                Self::escape_markdown_table_cell(&entry.current_version),
+                Self::escape_markdown_table_cell(fixed),
+                severity_emoji,
+                entry.severity.as_str(),
+                Self::escape_markdown_table_cell(&introduced_by),
+                Self::vulnerability_id_to_link(&entry.vulnerability_id),
+            ));
+        }
+        output.push('\n');
+    }
+
     /// Renders a single vulnerability row
     fn render_vulnerability_row(&self, output: &mut String, vuln: &VulnerabilityView) {
         let cvss_display = vuln
@@ -400,6 +505,18 @@ impl SbomFormatter for MarkdownFormatter {
             self.render_vulnerabilities(&mut output, vulns);
         }
 
+        // Resolution guide section (if present)
+        if let Some(guide) = &model.resolution_guide {
+            if !guide.entries.is_empty() {
+                self.render_resolution_guide(&mut output, guide);
+            }
+        }
+
+        // License compliance section (if present)
+        if let Some(compliance) = &model.license_compliance {
+            self.render_license_compliance(&mut output, compliance);
+        }
+
         Ok(output)
     }
 }
@@ -419,6 +536,7 @@ mod tests {
                 tool_name: "uv-sbom".to_string(),
                 tool_version: "1.0.0".to_string(),
                 serial_number: "urn:uuid:test-123".to_string(),
+                component: None,
             },
             components: vec![
                 ComponentView {
@@ -452,6 +570,8 @@ mod tests {
             ],
             dependencies: None,
             vulnerabilities: None,
+            license_compliance: None,
+            resolution_guide: None,
         }
     }
 
@@ -1130,5 +1250,128 @@ mod tests {
         let formatter = MarkdownFormatter::with_verified_packages(verified);
         let result = formatter.format_package_name("nonexistent-pkg");
         assert_eq!(result, "nonexistent-pkg");
+    }
+
+    // ============================================================
+    // Resolution guide tests
+    // ============================================================
+
+    #[test]
+    fn test_render_resolution_guide_with_entries() {
+        use crate::application::read_models::{
+            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
+        };
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: Some(">= 2.0.7".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+            }],
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("## Vulnerability Resolution Guide"));
+        assert!(markdown.contains("urllib3"));
+        assert!(markdown.contains("1.26.15"));
+        assert!(markdown.contains(">= 2.0.7"));
+        assert!(markdown.contains("🟠 HIGH"));
+        assert!(markdown.contains("requests (2.31.0)"));
+        assert!(
+            markdown.contains("[CVE-2024-XXXXX](https://nvd.nist.gov/vuln/detail/CVE-2024-XXXXX)")
+        );
+    }
+
+    #[test]
+    fn test_render_resolution_guide_multiple_introduced_by() {
+        use crate::application::read_models::{
+            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
+        };
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "certifi".to_string(),
+                current_version: "2023.7.22".to_string(),
+                fixed_version: Some(">= 2024.2.2".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-YYYYY".to_string(),
+                introduced_by: vec![
+                    IntroducedByView {
+                        package_name: "requests".to_string(),
+                        version: "2.31.0".to_string(),
+                    },
+                    IntroducedByView {
+                        package_name: "httpx".to_string(),
+                        version: "0.25.0".to_string(),
+                    },
+                ],
+            }],
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("requests (2.31.0), httpx (0.25.0)"));
+    }
+
+    #[test]
+    fn test_resolution_guide_omitted_when_empty() {
+        use crate::application::read_models::ResolutionGuideView;
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView { entries: vec![] });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(!markdown.contains("## Vulnerability Resolution Guide"));
+    }
+
+    #[test]
+    fn test_resolution_guide_omitted_when_none() {
+        let model = create_test_read_model();
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(!markdown.contains("## Vulnerability Resolution Guide"));
+    }
+
+    #[test]
+    fn test_resolution_guide_ghsa_link() {
+        use crate::application::read_models::{
+            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
+        };
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: None,
+                severity: SeverityView::Medium,
+                vulnerability_id: "GHSA-abcd-efgh-ijkl".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+            }],
+        });
+
+        let formatter = MarkdownFormatter::new();
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown
+            .contains("[GHSA-abcd-efgh-ijkl](https://github.com/advisories/GHSA-abcd-efgh-ijkl)"));
+        assert!(markdown.contains("N/A")); // fixed_version is None
     }
 }

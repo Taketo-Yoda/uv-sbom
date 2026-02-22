@@ -5,6 +5,8 @@
 
 use super::component_view::ComponentView;
 use super::dependency_view::DependencyView;
+use super::license_compliance_view::LicenseComplianceView;
+use super::resolution_guide_view::ResolutionGuideView;
 use super::vulnerability_view::VulnerabilityReportView;
 
 /// Main read model for SBOM data
@@ -21,6 +23,11 @@ pub struct SbomReadModel {
     pub dependencies: Option<DependencyView>,
     /// Vulnerability report
     pub vulnerabilities: Option<VulnerabilityReportView>,
+    /// License compliance report
+    pub license_compliance: Option<LicenseComplianceView>,
+    /// Resolution guide for vulnerable transitive dependencies
+    #[allow(dead_code)]
+    pub resolution_guide: Option<ResolutionGuideView>,
 }
 
 /// View representation of SBOM metadata
@@ -34,4 +41,15 @@ pub struct SbomMetadataView {
     pub tool_version: String,
     /// Serial number of the SBOM
     pub serial_number: String,
+    /// The main project component being analyzed
+    pub component: Option<MetadataComponentView>,
+}
+
+/// View representation of the main project component in metadata
+#[derive(Debug, Clone)]
+pub struct MetadataComponentView {
+    /// Component name (project name)
+    pub name: String,
+    /// Component version
+    pub version: String,
 }

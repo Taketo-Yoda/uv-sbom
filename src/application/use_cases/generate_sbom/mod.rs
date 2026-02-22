@@ -4,8 +4,9 @@ use crate::ports::outbound::{
     EnrichedPackage, LicenseRepository, LockfileReader, ProgressReporter, ProjectConfigReader,
     VulnerabilityRepository,
 };
+use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::{
-    ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker,
+    LicenseComplianceChecker, ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker,
 };
 use crate::sbom_generation::domain::{Package, PackageName};
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
@@ -109,12 +110,17 @@ where
             VulnerabilityChecker::check(report.clone(), threshold_config, &request.ignore_cves)
         });
 
-        // Step 7: Build and return response
+        // Step 7: License compliance check if requested
+        let license_compliance_result =
+            self.check_license_compliance_if_requested(&request, &enriched_packages);
+
+        // Step 8: Build and return response
         Ok(self.build_response(
             enriched_packages,
             dependency_graph,
             vulnerability_report,
             vulnerability_check_result,
+            license_compliance_result,
         ))
     }
 
@@ -204,7 +210,10 @@ where
         self.progress_reporter
             .report_completion("Success: Configuration validated. No issues found.");
         let metadata = SbomGenerator::generate_default_metadata();
-        Ok(SbomResponse::new(vec![], None, metadata, None, false, None))
+        Ok(SbomResponse::builder()
+            .metadata(metadata)
+            .build()
+            .expect("dry-run response build should not fail"))
     }
 
     /// Analyzes dependencies if requested in the SBOM request
@@ -329,22 +338,59 @@ where
         }
     }
 
+    /// Checks license compliance if requested
+    fn check_license_compliance_if_requested(
+        &self,
+        request: &SbomRequest,
+        enriched_packages: &[EnrichedPackage],
+    ) -> Option<LicenseComplianceResult> {
+        if !request.check_license {
+            return None;
+        }
+        let policy = request.license_policy.as_ref()?;
+
+        let packages: Vec<(String, String, Option<String>)> = enriched_packages
+            .iter()
+            .map(|ep| {
+                (
+                    ep.package.name().to_string(),
+                    ep.package.version().to_string(),
+                    ep.license.clone(),
+                )
+            })
+            .collect();
+
+        let result = LicenseComplianceChecker::check(&packages, policy);
+
+        // Report results
+        if result.has_violations() {
+            self.progress_reporter.report(&format!(
+                "⚠️  License compliance: {} violation(s) found",
+                result.violations.len()
+            ));
+        } else {
+            self.progress_reporter
+                .report("✅ License compliance: No violations found");
+        }
+
+        if !result.warnings.is_empty() {
+            self.progress_reporter.report(&format!(
+                "⚠️  License compliance: {} package(s) with unknown license",
+                result.warnings.len()
+            ));
+        }
+
+        Some(result)
+    }
+
     /// Builds the final SBOM response
-    ///
-    /// # Arguments
-    /// * `enriched_packages` - Packages with license information
-    /// * `dependency_graph` - Optional dependency graph
-    /// * `vulnerability_report` - Optional vulnerability report
-    /// * `vulnerability_check_result` - Optional threshold evaluation result
-    ///
-    /// # Returns
-    /// Complete SbomResponse
     fn build_response(
         &self,
         enriched_packages: Vec<EnrichedPackage>,
         dependency_graph: Option<crate::sbom_generation::domain::DependencyGraph>,
         vulnerability_report: Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>,
         vulnerability_check_result: Option<VulnerabilityCheckResult>,
+        license_compliance_result: Option<LicenseComplianceResult>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata();
 
@@ -354,14 +400,31 @@ where
             .map(|result| result.threshold_exceeded)
             .unwrap_or(false);
 
-        SbomResponse::new(
-            enriched_packages,
-            dependency_graph,
-            metadata,
-            vulnerability_report,
-            has_vulnerabilities_above_threshold,
-            vulnerability_check_result,
-        )
+        let has_license_violations = license_compliance_result
+            .as_ref()
+            .map(|result| result.has_violations())
+            .unwrap_or(false);
+
+        let mut builder = SbomResponse::builder()
+            .enriched_packages(enriched_packages)
+            .metadata(metadata)
+            .has_vulnerabilities_above_threshold(has_vulnerabilities_above_threshold)
+            .has_license_violations(has_license_violations);
+
+        if let Some(graph) = dependency_graph {
+            builder = builder.dependency_graph(graph);
+        }
+        if let Some(report) = vulnerability_report {
+            builder = builder.vulnerability_report(report);
+        }
+        if let Some(result) = vulnerability_check_result {
+            builder = builder.vulnerability_check_result(result);
+        }
+        if let Some(result) = license_compliance_result {
+            builder = builder.license_compliance_result(result);
+        }
+
+        builder.build().expect("response build should not fail")
     }
 
     /// Enriches packages with license information from the repository
@@ -421,11 +484,14 @@ where
                 .await
             {
                 Ok(license_info) => {
-                    enriched.push(EnrichedPackage::new(
-                        package,
-                        license_info.license_text().map(String::from),
-                        license_info.description().map(String::from),
-                    ));
+                    enriched.push(
+                        EnrichedPackage::new(
+                            package,
+                            license_info.license_text().map(String::from),
+                            license_info.description().map(String::from),
+                        )
+                        .with_sha256_hash(license_info.sha256_hash().map(String::from)),
+                    );
                     successful += 1;
                 }
                 Err(e) => {

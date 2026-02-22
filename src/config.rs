@@ -38,6 +38,20 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 #   - id: CVE-2024-1234
 #     reason: "False positive: code path not reachable"
 #   - id: CVE-2024-5678
+
+# Enable license compliance checking
+# check_license: false
+
+# License compliance policy
+# license_policy:
+#   allow:
+#     - "MIT"
+#     - "Apache-2.0"
+#     - "BSD-*"
+#   deny:
+#     - "AGPL-*"
+#     - "GPL-*"
+#   unknown: warn
 "#;
 
 /// Generate a config template file in the specified directory.
@@ -78,9 +92,19 @@ pub struct ConfigFile {
     pub severity_threshold: Option<String>,
     pub cvss_threshold: Option<f64>,
     pub ignore_cves: Option<Vec<IgnoreCve>>,
+    pub check_license: Option<bool>,
+    pub license_policy: Option<LicensePolicyConfig>,
     /// Captures unknown fields for warnings.
     #[serde(flatten)]
     pub unknown_fields: HashMap<String, serde_yaml_ng::Value>,
+}
+
+/// License policy configuration from config file.
+#[derive(Debug, Clone, PartialEq, Deserialize, Default)]
+pub struct LicensePolicyConfig {
+    pub allow: Option<Vec<String>>,
+    pub deny: Option<Vec<String>>,
+    pub unknown: Option<String>,
 }
 
 /// A CVE entry to ignore during vulnerability checks.
@@ -144,6 +168,19 @@ fn validate_config(config: &ConfigFile) -> Result<()> {
             }
         }
     }
+
+    if let Some(ref lp) = config.license_policy {
+        if let Some(ref unknown) = lp.unknown {
+            let valid = ["warn", "deny", "allow"];
+            if !valid.contains(&unknown.to_lowercase().as_str()) {
+                bail!(
+                    "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"{}\"",
+                    unknown
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 

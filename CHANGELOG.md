@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-02-19
+
+### Added
+
+#### License Compliance
+- **`--check-license` option**: License compliance policy check to detect restricted licenses (#227)
+
+#### Vulnerability Resolution Guide
+- **Resolution Guide domain models**: `ResolutionEntry` and `IntroducedBy` domain models (#229)
+- **`ResolutionAnalyzer` domain service**: Analyze dependency trees to generate resolution guidance (#230)
+- **Resolution Guide application layer**: View model and builder logic for resolution guides (#231)
+- **Resolution Guide formatters**: Render resolution guide in Markdown and CycloneDX output (#232)
+
+#### CycloneDX Enhancements
+- **Component group field**: Add group field to CycloneDX components (#241)
+- **SPDX license ID mapping**: Map license strings to standard SPDX license identifiers (#241)
+- **Package hashes**: Include package hashes from PyPI in CycloneDX output (#242)
+- **`metadata.component`**: Add metadata component section to CycloneDX BOM (#242)
+
+### Changed
+
+#### Architecture Improvements
+- **`SbomResponseBuilder` pattern**: Cleaner response construction replacing direct assembly (#68, #233)
+
+#### Documentation
+- Add `--check-license` feature documentation to README files
+- Add Vulnerability Resolution Guide documentation to README files
+
+### Dependencies
+- `toml`: 0.9.11+spec-1.1.0 → 1.0.1+spec-1.1.0
+- Dependencies group updates (4 packages)
+
 ## [1.1.0] - 2026-02-06
 
 ### Added

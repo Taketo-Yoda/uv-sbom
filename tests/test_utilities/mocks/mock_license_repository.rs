@@ -31,6 +31,7 @@ impl MockLicenseRepository {
                 None,
                 vec![],
                 Some(description.to_string()),
+                None,
             ),
         );
         self
@@ -62,6 +63,6 @@ impl LicenseRepository for MockLicenseRepository {
             .licenses
             .get(&key)
             .cloned()
-            .unwrap_or((None, None, vec![], None)))
+            .unwrap_or((None, None, vec![], None, None)))
     }
 }

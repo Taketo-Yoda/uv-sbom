@@ -15,6 +15,8 @@
 - 📦 `uv.lock`ファイルを解析して依存関係情報を抽出
 - 🔍 PyPIからライセンス情報を自動取得（リトライロジック付き）
 - 🛡️ OSV APIを使用した既知の脆弱性チェック（Markdownフォーマットのみ）
+- 📋 許可/拒否リストとワイルドカード対応のライセンスコンプライアンスポリシーチェック
+- 🔎 **脆弱性解決ガイド** - 脆弱な推移的パッケージを導入している直接依存関係を特定
 - 📊 複数のフォーマットに対応:
   - **CycloneDX 1.6** JSON形式（標準SBOM形式）
   - **Markdown**形式（直接依存と推移的依存を明確に分離）
@@ -275,6 +277,12 @@ ignore_cves:
     reason: "このユースケースでは誤検出"
   - id: CVE-2024-5678
     reason: "ネットワーク設定で緩和済み"
+
+# ライセンスコンプライアンスポリシー
+license_policy:
+  allow: ["MIT", "Apache-2.0", "BSD-*", "ISC", "PSF-2.0"]
+  deny: ["GPL-3.0-only", "GPL-3.0-or-later", "AGPL-*"]
+  unknown: "warn"  # "warn" | "deny" | "allow"
 ```
 
 #### 設定ファイルスキーマリファレンス
@@ -289,6 +297,10 @@ ignore_cves:
 | `ignore_cves` | object[] | No | 無視するCVEのリスト |
 | `ignore_cves[].id` | string | Yes | CVE ID（例: `CVE-2024-1234`） |
 | `ignore_cves[].reason` | string | No | 無視する理由 |
+| `license_policy` | object | No | ライセンスコンプライアンスポリシー設定 |
+| `license_policy.allow` | string[] | No | 許可するライセンスパターン（ワイルドカード対応） |
+| `license_policy.deny` | string[] | No | 拒否するライセンスパターン（ワイルドカード対応） |
+| `license_policy.unknown` | string | No | 不明ライセンスの処理（`warn` / `deny` / `allow`） |
 
 #### 優先度とマージルール
 
@@ -296,6 +308,8 @@ ignore_cves:
 - **`check_cve`** はCLIフラグまたは設定ファイルのいずれかで設定されていれば有効化（論理OR）
 - **`exclude_packages`** はCLIと設定ファイルの両方から**マージ**され、重複が除去されます
 - **`ignore_cves`** はCLI（`--ignore-cve`）と設定ファイルの両方から**マージ**され、IDで重複が除去されます（重複時はCLIの指定が優先）
+- **`check_license`** はCLIフラグまたは設定ファイルのいずれかで設定されていれば有効化（論理OR、`check_cve`と同様）
+- **`--license-allow`** と **`--license-deny`** CLIオプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を**完全に上書き**します（マージされません）
 
 ### 特定のCVEを無視する
 
@@ -326,6 +340,30 @@ uv-sbom --format markdown --check-cve --output SBOM.md
 # 除外パターンと組み合わせて使用
 uv-sbom --format markdown --check-cve -e "pytest" -e "*-dev"
 ```
+
+### ライセンスコンプライアンスチェック
+
+`--check-license`オプションを使用して、設定可能なライセンスポリシーに対してパッケージをチェックできます：
+
+```bash
+# ライセンスコンプライアンスチェックを有効化（設定ファイルのポリシーを使用）
+uv-sbom --check-license --format markdown
+
+# インラインポリシーを指定（設定ファイルを上書き）
+uv-sbom --check-license --license-allow "MIT,Apache-2.0,BSD-*" --license-deny "GPL-3.0,AGPL-*"
+
+# 脆弱性チェックと組み合わせ
+uv-sbom --check-license --check-cve --severity-threshold high
+```
+
+**動作の仕組み:**
+- **拒否リストが許可リストより優先**: ライセンスが両方のリストにマッチする場合、拒否されます
+- **ワイルドカードパターン**: `BSD-*`、`AGPL-*`等のパターンマッチングに対応（大文字小文字を区別しない）
+- **不明ライセンスの処理**: どちらのリストにもないライセンスの処理方法を設定:
+  - `warn`（デフォルト）: 警告として報告するが失敗しない
+  - `deny`: 不明ライセンスをポリシー違反として扱う
+  - `allow`: 不明ライセンスを黙って許可
+- **終了コード**: ポリシー違反が検出された場合、終了コード1を返す
 
 ### 脆弱性しきい値オプション
 
@@ -393,6 +431,15 @@ CI/CDパイプライン統合には脆弱性しきい値を使用します：
 ```
 
 ```yaml
+# GitHub Actions - ライセンスコンプライアンスチェック
+- name: License Compliance Check
+  run: uv-sbom --check-license --format markdown
+
+- name: Combined Security and License Check
+  run: uv-sbom --check-license --check-cve --severity-threshold high
+```
+
+```yaml
 # GitLab CIの例
 security_scan:
   script:
@@ -428,6 +475,60 @@ The following packages have known security vulnerabilities:
 ```
 
 > **注:** 脆弱性レポート内の脆弱性ID（CVE, GHSA, PYSEC, RUSTSECなど）は、`--verify-links`の設定に関係なく常にハイパーリンクとして表示されます。これらのIDはOSVデータベースから取得され、権威ある脆弱性データベース（NVD、GitHub Advisories、OSV.dev）にリンクするため、リンク検証は不要です。
+
+### 脆弱性解決ガイド
+
+`--check-cve`が推移的依存関係で脆弱性を検出すると、uv-sbomは自動的に**脆弱性解決ガイド**を生成します。このセクションは、各脆弱な推移的パッケージがどの直接依存関係から導入されているかを示し、アップグレードすべきパッケージを正確に把握できます。
+
+#### Markdown出力例
+
+```markdown
+## Vulnerability Resolution Guide
+
+The following transitive dependencies have known vulnerabilities. The table shows which direct dependency introduces each vulnerable package.
+
+| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID |
+|--------------------|---------|---------------|----------|---------------------------|-----------------|
+| urllib3 | 1.26.15 | >= 2.0.7 | 🟠 HIGH | requests (2.31.0) | [CVE-2024-XXXXX](https://nvd.nist.gov/vuln/detail/CVE-2024-XXXXX) |
+| certifi | 2023.7.22 | >= 2024.2.2 | 🟠 HIGH | requests (2.31.0), httpx (0.25.0) | [CVE-2024-YYYYY](https://nvd.nist.gov/vuln/detail/CVE-2024-YYYYY) |
+```
+
+#### CycloneDX JSON出力
+
+CycloneDX形式では、導入元の依存関係が`properties`エントリとして含まれます:
+
+```json
+{
+  "vulnerabilities": [
+    {
+      "id": "CVE-2024-XXXXX",
+      "properties": [
+        {
+          "name": "uv-sbom:introduced-by",
+          "value": "requests@2.31.0"
+        }
+      ]
+    }
+  ]
+}
+```
+
+> **注:** 解決ガイドは**推移的**依存関係の脆弱性についてのみ表示されます。直接依存関係の脆弱性は標準の脆弱性テーブルに表示されます（ユーザーが直接アップグレードできるため）。
+
+**ライセンスコンプライアンスチェックの出力例:**
+
+```markdown
+## License Compliance Check
+
+Policy: 3 allowed patterns, 1 denied pattern | Unknown: warn
+
+### Violations (2 found)
+
+| Package | Version | License | Reason |
+|---------|---------|---------|--------|
+| some-gpl-lib | 1.0.0 | GPL-3.0 | Denied by policy |
+| mystery-pkg | 2.1.0 | Unknown | Not in allow list |
+```
 
 脆弱性が見つからなかった場合:
 
@@ -536,6 +637,9 @@ Options:
                                      --check-cveの有効化が必要
       --cvss-threshold <SCORE>       脆弱性チェックのCVSSしきい値（0.0-10.0）
                                      --check-cveの有効化が必要
+      --check-license                ライセンスコンプライアンスをポリシーに対してチェック
+      --license-allow <LIST>         許可するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
+      --license-deny <LIST>          拒否するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
   -h, --help                         ヘルプを表示
   -V, --version                      バージョンを表示
 ```
@@ -547,13 +651,13 @@ uv-sbomは以下の終了コードを返します：
 | 終了コード | 説明 | 例 |
 |-----------|-------------|----------|
 | 0 | 成功 | SBOMの生成成功、しきい値を超える脆弱性なし、`--help`や`--version`の表示 |
-| 1 | 脆弱性検出（`--check-cve`使用時） | しきい値を超える脆弱性検出 |
+| 1 | 脆弱性またはライセンス違反検出 | しきい値を超える脆弱性検出、ライセンスポリシー違反検出 |
 | 2 | 無効なコマンドライン引数 | 不明なオプション、無効な引数の型 |
 | 3 | アプリケーションエラー | uv.lockファイルの欠損、無効なプロジェクトパス、無効な除外パターン、ネットワークエラー、ファイル書き込みエラー |
 
-### 脆弱性チェック時の終了コード
+### 脆弱性・ライセンスチェック時の終了コード
 
-`--check-cve`使用時、終了コードの動作はしきい値設定によって変わります：
+`--check-cve`または`--check-license`使用時、終了コードの動作はしきい値設定によって変わります：
 
 | シナリオ | 終了コード |
 |----------|-----------|
@@ -561,6 +665,9 @@ uv-sbomは以下の終了コードを返します：
 | 脆弱性が見つかった（しきい値指定なし） | 1 |
 | 脆弱性が見つかった、すべてがしきい値以下 | 0 |
 | 脆弱性が見つかった、一部がしきい値を超過 | 1 |
+| ライセンスポリシー違反が検出された | 1 |
+| 併用時: いずれかのチェックが失敗 | 1 |
+| 併用時: 両方のチェックが成功 | 0 |
 
 **例：**
 ```bash

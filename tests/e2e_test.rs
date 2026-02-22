@@ -99,6 +99,7 @@ async fn test_e2e_json_format() {
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
+        response.license_compliance_result.as_ref(),
     );
     let formatter = CycloneDxFormatter::new();
     let json_output = formatter.format(&read_model);
@@ -146,6 +147,7 @@ async fn test_e2e_markdown_format() {
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
+        response.license_compliance_result.as_ref(),
     );
     let formatter = MarkdownFormatter::new();
     let markdown_output = formatter.format(&read_model);
@@ -474,6 +476,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
+        response.license_compliance_result.as_ref(),
     );
     let formatter = MarkdownFormatter::new();
     let markdown_output = formatter.format(&read_model);
@@ -567,13 +570,20 @@ fn create_test_license_repository() -> impl LicenseRepository {
             &self,
             package_name: &str,
             version: &str,
-        ) -> Result<(Option<String>, Option<String>, Vec<String>, Option<String>)> {
+        ) -> Result<(
+            Option<String>,
+            Option<String>,
+            Vec<String>,
+            Option<String>,
+            Option<String>,
+        )> {
             let key = format!("{}@{}", package_name, version);
-            Ok(self
+            let base = self
                 .licenses
                 .get(&key)
                 .cloned()
-                .unwrap_or((None, None, vec![], None)))
+                .unwrap_or((None, None, vec![], None));
+            Ok((base.0, base.1, base.2, base.3, None))
         }
     }
 

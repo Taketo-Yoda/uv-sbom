@@ -18,7 +18,6 @@ pub struct ComponentView {
     /// Component description
     pub description: Option<String>,
     /// SHA256 hash of the component
-    #[allow(dead_code)]
     pub sha256_hash: Option<String>,
     /// Whether this is a direct dependency
     #[allow(dead_code)]
