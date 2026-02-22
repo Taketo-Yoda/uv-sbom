@@ -10,7 +10,7 @@ dependencies = [
     "urllib3==1.26.5",     # HIGH severity vulnerabilities
     "requests==2.25.0",    # HIGH severity vulnerabilities
     "jinja2==2.11.3",      # HIGH/MEDIUM severity vulnerabilities
-    "werkzeug==1.0.0",     # MEDIUM/LOW severity vulnerabilities
+    "werkzeug==3.1.6",     # MEDIUM/LOW severity vulnerabilities
     "pyyaml==5.4",         # MEDIUM severity vulnerabilities
     "certifi>=2024.0.0",   # Current version (no known vulnerabilities)
 ]
