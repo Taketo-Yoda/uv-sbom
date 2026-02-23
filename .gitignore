@@ -49,3 +49,6 @@ Temporary Items
 
 # Claude Code context saves (As it may contain sensitive information)
 .claude/saved-contexts/
+
+# Takt settings
+.takt
