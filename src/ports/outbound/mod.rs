@@ -9,6 +9,7 @@ pub mod lockfile_reader;
 pub mod output_presenter;
 pub mod progress_reporter;
 pub mod project_config_reader;
+pub mod uv_lock_simulator;
 pub mod vulnerability_repository;
 
 pub use enriched_package::EnrichedPackage;
@@ -18,6 +19,9 @@ pub use lockfile_reader::{LockfileParseResult, LockfileReader};
 pub use output_presenter::OutputPresenter;
 pub use progress_reporter::{ProgressCallback, ProgressReporter};
 pub use project_config_reader::ProjectConfigReader;
+// Note: This will be used in a subsequent subtask for uv lock simulation
+#[allow(unused_imports)]
+pub use uv_lock_simulator::{SimulationResult, UvLockSimulator};
 // Note: This will be used in subsequent subtasks (Subtask 3-8)
 #[allow(unused_imports)]
 pub use vulnerability_repository::VulnerabilityRepository;
