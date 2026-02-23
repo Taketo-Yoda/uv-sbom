@@ -5,6 +5,7 @@ pub mod package;
 pub mod resolution_guide;
 pub mod sbom_metadata;
 pub mod services;
+pub mod upgrade_recommendation;
 pub mod vulnerability;
 
 pub use dependency_graph::DependencyGraph;
@@ -26,6 +27,9 @@ pub use services::ResolutionAnalyzer;
 // Note: These will be used in subsequent subtasks (Issue #94, #95)
 #[allow(unused_imports)]
 pub use services::{ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker};
+// Note: These will be used in subsequent subtasks (Subtask 2-8)
+#[allow(unused_imports)]
+pub use upgrade_recommendation::UpgradeRecommendation;
 // Note: These will be used in subsequent subtasks (Subtask 2-8)
 #[allow(unused_imports)]
 pub use vulnerability::{CvssScore, PackageVulnerabilities, Severity, Vulnerability};
