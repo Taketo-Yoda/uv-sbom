@@ -131,8 +131,15 @@ fn strip_operator_prefix(version: &str) -> String {
 /// Compare two PEP 440 version strings.
 /// Returns true if `actual` satisfies `required_min` (i.e., actual >= required_min).
 /// Uses simple dot-separated numeric comparison for common cases.
-/// Pre-release markers in `actual` cause a conservative false return.
+///
+/// Pre-release markers (`a`, `b`, `rc`, `dev`, `post`) in `actual` are treated
+/// conservatively: a pre-release version is considered *not* to satisfy the minimum.
+/// For example, `"2.0.0rc1" >= "2.0.0"` returns false because rc1 < final release.
 fn version_satisfies_min(actual: &str, required_min: &str) -> bool {
+    if has_prerelease_marker(actual) {
+        return false;
+    }
+
     let actual_parts = parse_version_parts(actual);
     let min_parts = parse_version_parts(required_min);
 
@@ -153,20 +160,34 @@ fn version_satisfies_min(actual: &str, required_min: &str) -> bool {
     true // versions are equal → satisfies minimum
 }
 
+/// Returns true if `version` contains a PEP 440 pre-release marker
+/// (`a`, `b`, `rc`, `dev`, `post`).
+///
+/// For example: `"2.0.0a1"`, `"2.0.0b2"`, `"2.0.0rc1"`, `"2.0.0.dev1"`.
+fn has_prerelease_marker(version: &str) -> bool {
+    // Normalise separators: PEP 440 allows "2.0.0rc1" and "2.0.0.rc1"
+    let v = version.to_ascii_lowercase();
+    // dev / post releases are also treated as not-yet-stable
+    v.contains("dev") || v.contains("post") || {
+        // Look for alpha/beta/rc markers: must be preceded by a digit
+        // to avoid false positives (e.g. package names with 'a' in them)
+        let bytes = v.as_bytes();
+        bytes
+            .windows(2)
+            .any(|w| w[0].is_ascii_digit() && matches!(w[1], b'a' | b'b'))
+            || bytes
+                .windows(3)
+                .any(|w| w[0].is_ascii_digit() && w[1] == b'r' && w[2] == b'c')
+    }
+}
+
 /// Parse a version string into its numeric components.
-/// Stops at the first non-numeric character within each dot-separated segment.
-/// For example, `"1.0.0rc1"` → `[1, 0, 0]`.
+/// Only pure-numeric dot-separated segments are included.
+/// For example, `"2.0.7"` → `[2, 0, 7]`.
 fn parse_version_parts(version: &str) -> Vec<u64> {
     version
         .split('.')
-        .filter_map(|segment| {
-            let numeric: String = segment.chars().take_while(|c| c.is_ascii_digit()).collect();
-            if numeric.is_empty() {
-                None
-            } else {
-                numeric.parse().ok()
-            }
-        })
+        .filter_map(|segment| segment.parse::<u64>().ok())
         .collect()
 }
 
@@ -543,5 +564,62 @@ mod tests {
     #[test]
     fn test_strip_prefix_no_operator() {
         assert_eq!(strip_operator_prefix("2.0.7"), "2.0.7");
+    }
+
+    // ---------------------------------------------------------------------------
+    // has_prerelease_marker unit tests
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_prerelease_alpha_is_not_satisfied() {
+        // "2.0.0a1" < "2.0.0" in PEP 440 → must not satisfy min
+        assert!(!version_satisfies_min("2.0.0a1", "2.0.0"));
+    }
+
+    #[test]
+    fn test_prerelease_beta_is_not_satisfied() {
+        assert!(!version_satisfies_min("2.0.0b2", "2.0.0"));
+    }
+
+    #[test]
+    fn test_prerelease_rc_is_not_satisfied() {
+        // "2.0.0rc1" < "2.0.0" in PEP 440
+        assert!(!version_satisfies_min("2.0.0rc1", "2.0.0"));
+    }
+
+    #[test]
+    fn test_prerelease_dev_is_not_satisfied() {
+        assert!(!version_satisfies_min("2.0.0.dev1", "2.0.0"));
+    }
+
+    #[test]
+    fn test_stable_version_satisfies_equal_min() {
+        // Stable "2.0.0" still satisfies ">= 2.0.0"
+        assert!(version_satisfies_min("2.0.0", "2.0.0"));
+    }
+
+    #[test]
+    fn test_has_prerelease_marker_alpha() {
+        assert!(has_prerelease_marker("2.0.0a1"));
+    }
+
+    #[test]
+    fn test_has_prerelease_marker_beta() {
+        assert!(has_prerelease_marker("2.0.0b3"));
+    }
+
+    #[test]
+    fn test_has_prerelease_marker_rc() {
+        assert!(has_prerelease_marker("2.0.0rc1"));
+    }
+
+    #[test]
+    fn test_has_prerelease_marker_dev() {
+        assert!(has_prerelease_marker("2.0.0.dev1"));
+    }
+
+    #[test]
+    fn test_has_no_prerelease_marker_stable() {
+        assert!(!has_prerelease_marker("2.0.7"));
     }
 }
