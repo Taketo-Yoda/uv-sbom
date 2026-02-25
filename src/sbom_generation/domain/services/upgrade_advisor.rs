@@ -182,8 +182,38 @@ fn has_prerelease_marker(version: &str) -> bool {
 }
 
 /// Parse a version string into its numeric components.
-/// Only pure-numeric dot-separated segments are included.
-/// For example, `"2.0.7"` → `[2, 0, 7]`.
+///
+/// Only dot-separated **purely numeric** segments are accepted.
+/// Any segment that contains non-digit characters is silently dropped.
+///
+/// # Accepted formats
+///
+/// | Input | Output | Note |
+/// |---|---|---|
+/// | `"2.0.7"` | `[2, 0, 7]` | Standard SemVer / PEP 440 release |
+/// | `"2026.1"` | `[2026, 1]` | CalVer (calendar versioning) |
+/// | `"1.26.15"` | `[1, 26, 15]` | Multi-component numeric version |
+///
+/// # Unsupported formats — and how they behave
+///
+/// | Input | Output | Why unsupported |
+/// |---|---|---|
+/// | `"2.0.0rc1"` | `[]` | Pre-release suffix `rc1` is not purely numeric. **These versions must be caught by `has_prerelease_marker()` before this function is called.** |
+/// | `"2.0.0a1"`, `"2.0.0b2"` | `[]` | Same as above. |
+/// | `"2.0.0.dev1"` | `[2, 0, 0]` | `dev1` is dropped; the remaining `[2, 0, 0]` would compare equal to the final `"2.0.0"` and incorrectly satisfy the minimum. Rely on `has_prerelease_marker()` to reject dev builds first. |
+/// | `"2026.v1"` | `[2026]` | `v1` is not numeric; only the leading `2026` is kept. Comparison is incomplete. In practice, Python packages use PEP 440 and this format does not appear in `uv.lock` or OSV data. |
+/// | `"v1.2.3"` | `[2, 3]` | The leading `v1` segment is dropped entirely (not numeric). Comparison is likely wrong. Same justification: PEP 440 does not allow a `v` prefix in release segments. |
+///
+/// # Design rationale
+///
+/// This tool processes versions that come from two sources, both guaranteed
+/// to be PEP 440 compliant:
+/// - Resolved versions in `uv.lock` (output of `uv lock --upgrade-package`)
+/// - Fixed versions in OSV vulnerability data for Python packages
+///
+/// For pre-release versions specifically, `has_prerelease_marker()` is
+/// called **before** this function in `version_satisfies_min()`, so
+/// `"2.0.0rc1"` is rejected early and never reaches the numeric comparison.
 fn parse_version_parts(version: &str) -> Vec<u64> {
     version
         .split('.')
