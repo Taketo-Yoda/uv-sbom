@@ -2,7 +2,7 @@ use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
-use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata};
+use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecommendation};
 use crate::shared::error::SbomError;
 
 /// SbomResponse - Internal response DTO from SBOM generation use case
@@ -31,6 +31,10 @@ pub struct SbomResponse {
     pub license_compliance_result: Option<LicenseComplianceResult>,
     /// Whether license violations were detected
     pub has_license_violations: bool,
+    /// Upgrade recommendations for vulnerable transitive dependencies.
+    /// Populated only when `suggest_fix` was true in the request.
+    #[allow(dead_code)] // Will be populated by upgrade advisor use case
+    pub upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
 }
 
 impl SbomResponse {
@@ -48,6 +52,7 @@ pub struct SbomResponseBuilder {
     vulnerability_check_result: Option<VulnerabilityCheckResult>,
     license_compliance_result: Option<LicenseComplianceResult>,
     has_license_violations: bool,
+    upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
 }
 
 impl SbomResponseBuilder {
@@ -61,6 +66,7 @@ impl SbomResponseBuilder {
             vulnerability_check_result: None,
             license_compliance_result: None,
             has_license_violations: false,
+            upgrade_recommendations: None,
         }
     }
 
@@ -110,6 +116,12 @@ impl SbomResponseBuilder {
         self
     }
 
+    #[allow(dead_code)] // Will be used by upgrade advisor use case
+    pub fn upgrade_recommendations(mut self, recommendations: Vec<UpgradeRecommendation>) -> Self {
+        self.upgrade_recommendations = Some(recommendations);
+        self
+    }
+
     pub fn build(self) -> Result<SbomResponse, SbomError> {
         let metadata = self.metadata.ok_or_else(|| SbomError::Validation {
             message: "metadata is required".into(),
@@ -124,6 +136,7 @@ impl SbomResponseBuilder {
             vulnerability_check_result: self.vulnerability_check_result,
             license_compliance_result: self.license_compliance_result,
             has_license_violations: self.has_license_violations,
+            upgrade_recommendations: self.upgrade_recommendations,
         })
     }
 }

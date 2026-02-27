@@ -171,6 +171,7 @@ async fn run(args: Args) -> Result<bool> {
         .ignore_cves(merged.ignore_cves)
         .check_license(merged.check_license)
         .license_policy(merged.license_policy)
+        .suggest_fix(args.suggest_fix)
         .build()?;
 
     // Execute use case

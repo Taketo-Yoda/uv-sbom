@@ -31,6 +31,10 @@ pub struct SbomRequest {
     pub check_license: bool,
     /// License compliance policy (only used when check_license is true)
     pub license_policy: Option<LicensePolicy>,
+    /// Whether to suggest direct dependency upgrade versions to fix transitive vulnerabilities.
+    /// Only meaningful when `check_cve` is true.
+    #[allow(dead_code)] // Will be used by upgrade advisor use case
+    pub suggest_fix: bool,
 }
 
 impl SbomRequest {
@@ -90,6 +94,7 @@ pub struct SbomRequestBuilder {
     ignore_cves: Vec<IgnoreCve>,
     check_license: bool,
     license_policy: Option<LicensePolicy>,
+    suggest_fix: bool,
 }
 
 impl SbomRequestBuilder {
@@ -115,6 +120,7 @@ impl SbomRequestBuilder {
             ignore_cves: Vec::new(),
             check_license: false,
             license_policy: None,
+            suggest_fix: false,
         }
     }
 
@@ -207,6 +213,12 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets whether to suggest upgrade paths for vulnerable transitive dependencies.
+    pub fn suggest_fix(mut self, suggest: bool) -> Self {
+        self.suggest_fix = suggest;
+        self
+    }
+
     /// Builds the SbomRequest, validating that all required fields are set.
     ///
     /// # Errors
@@ -228,6 +240,7 @@ impl SbomRequestBuilder {
             ignore_cves: self.ignore_cves,
             check_license: self.check_license,
             license_policy: self.license_policy,
+            suggest_fix: self.suggest_fix,
         })
     }
 }
