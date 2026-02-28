@@ -28,14 +28,14 @@ thiserror = "2.0"
 reqwest = { version = "0.13", features = ["json", "blocking"] }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "macros", "process"] }
-tempfile = "3.25"
+tempfile = "3.26"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.21", features = ["v4", "serde"] }
 urlencoding = "2.1"
 serde_yaml_ng = "0.10"
 indicatif = "0.18"
 dashmap = "6"
-owo-colors = "4.1"
+owo-colors = "4.3"
 futures = "0.3"
 
 [dev-dependencies]
