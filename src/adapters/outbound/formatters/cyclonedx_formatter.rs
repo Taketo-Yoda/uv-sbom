@@ -1,6 +1,7 @@
 use crate::application::read_models::{
     ComponentView, DependencyView, LicenseComplianceView, LicenseView, ResolutionGuideView,
-    SbomMetadataView, SbomReadModel, VulnerabilityReportView, VulnerabilityView,
+    SbomMetadataView, SbomReadModel, UpgradeEntryView, UpgradeRecommendationView,
+    VulnerabilityReportView, VulnerabilityView,
 };
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
@@ -171,10 +172,13 @@ impl SbomFormatter for CycloneDxFormatter {
                 .dependencies
                 .as_ref()
                 .map(|d| self.build_dependencies(d)),
-            vulnerabilities: model
-                .vulnerabilities
-                .as_ref()
-                .map(|v| self.build_vulnerabilities(v, model.resolution_guide.as_ref())),
+            vulnerabilities: model.vulnerabilities.as_ref().map(|v| {
+                self.build_vulnerabilities(
+                    v,
+                    model.resolution_guide.as_ref(),
+                    model.upgrade_recommendations.as_ref(),
+                )
+            }),
             properties,
         };
 
@@ -284,17 +288,26 @@ impl CycloneDxFormatter {
         &self,
         report: &VulnerabilityReportView,
         resolution_guide: Option<&ResolutionGuideView>,
+        upgrade_recommendations: Option<&UpgradeRecommendationView>,
     ) -> Vec<Vulnerability> {
         let mut vulnerabilities = Vec::new();
 
         // Process actionable vulnerabilities
         for vuln in &report.actionable {
-            vulnerabilities.push(self.build_vulnerability(vuln, resolution_guide));
+            vulnerabilities.push(self.build_vulnerability(
+                vuln,
+                resolution_guide,
+                upgrade_recommendations,
+            ));
         }
 
         // Process informational vulnerabilities
         for vuln in &report.informational {
-            vulnerabilities.push(self.build_vulnerability(vuln, resolution_guide));
+            vulnerabilities.push(self.build_vulnerability(
+                vuln,
+                resolution_guide,
+                upgrade_recommendations,
+            ));
         }
 
         vulnerabilities
@@ -305,6 +318,7 @@ impl CycloneDxFormatter {
         &self,
         vuln: &VulnerabilityView,
         resolution_guide: Option<&ResolutionGuideView>,
+        upgrade_recommendations: Option<&UpgradeRecommendationView>,
     ) -> Vulnerability {
         let source = vuln
             .source_url
@@ -317,21 +331,68 @@ impl CycloneDxFormatter {
             vector: vuln.cvss_vector.clone(),
         }]);
 
-        let properties = resolution_guide.and_then(|guide| {
-            let entry = guide.entries.iter().find(|e| {
-                e.vulnerability_id == vuln.id
-                    && e.vulnerable_package == vuln.affected_component_name
-            });
-            entry.map(|e| {
-                e.introduced_by
-                    .iter()
-                    .map(|ib| Property {
-                        name: "uv-sbom:introduced-by".to_string(),
-                        value: format!("{}@{}", ib.package_name, ib.version),
-                    })
-                    .collect::<Vec<_>>()
+        // Build introduced-by properties from resolution guide
+        let mut properties: Vec<Property> = resolution_guide
+            .and_then(|guide| {
+                let entry = guide.entries.iter().find(|e| {
+                    e.vulnerability_id == vuln.id
+                        && e.vulnerable_package == vuln.affected_component_name
+                });
+                entry.map(|e| {
+                    e.introduced_by
+                        .iter()
+                        .map(|ib| Property {
+                            name: "uv-sbom:introduced-by".to_string(),
+                            value: format!("{}@{}", ib.package_name, ib.version),
+                        })
+                        .collect::<Vec<_>>()
+                })
             })
-        });
+            .unwrap_or_default();
+
+        // Append upgrade recommendation properties
+        if let Some(recommendations) = upgrade_recommendations {
+            for rec in &recommendations.entries {
+                match rec {
+                    UpgradeEntryView::Upgradable {
+                        direct_dep,
+                        target_version,
+                        transitive_dep,
+                        resolved_version,
+                        vulnerability_id,
+                        ..
+                    } if vulnerability_id == &vuln.id => {
+                        properties.push(Property {
+                            name: "uv-sbom:recommended-action".to_string(),
+                            value: format!("upgrade {} to {}", direct_dep, target_version),
+                        });
+                        properties.push(Property {
+                            name: "uv-sbom:resolved-version".to_string(),
+                            value: format!("{}@{}", transitive_dep, resolved_version),
+                        });
+                        break;
+                    }
+                    UpgradeEntryView::Unresolvable {
+                        reason,
+                        vulnerability_id,
+                        ..
+                    } if vulnerability_id == &vuln.id => {
+                        properties.push(Property {
+                            name: "uv-sbom:recommended-action".to_string(),
+                            value: format!("cannot resolve: {}", reason),
+                        });
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let properties = if properties.is_empty() {
+            None
+        } else {
+            Some(properties)
+        };
 
         Vulnerability {
             bom_ref: vuln.bom_ref.clone(),
@@ -783,5 +844,136 @@ mod tests {
 
         // No properties field when no resolution guide
         assert!(!json.contains("\"uv-sbom:introduced-by\""));
+    }
+
+    // ============================================================
+    // Upgrade recommendation property tests
+    // ============================================================
+
+    #[test]
+    fn test_format_with_upgrade_recommendation_upgradable() {
+        use crate::application::read_models::{UpgradeEntryView, UpgradeRecommendationView};
+
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(7.5),
+                cvss_vector: None,
+                severity: SeverityView::High,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: false,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+        model.upgrade_recommendations = Some(UpgradeRecommendationView {
+            entries: vec![UpgradeEntryView::Upgradable {
+                direct_dep: "requests".to_string(),
+                current_version: "2.31.0".to_string(),
+                target_version: "2.32.3".to_string(),
+                transitive_dep: "urllib3".to_string(),
+                resolved_version: "2.2.1".to_string(),
+                vulnerability_id: "CVE-2024-1234".to_string(),
+            }],
+        });
+
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        assert!(json.contains("\"uv-sbom:recommended-action\""));
+        assert!(json.contains("\"upgrade requests to 2.32.3\""));
+        assert!(json.contains("\"uv-sbom:resolved-version\""));
+        assert!(json.contains("\"urllib3@2.2.1\""));
+    }
+
+    #[test]
+    fn test_format_with_upgrade_recommendation_unresolvable() {
+        use crate::application::read_models::{UpgradeEntryView, UpgradeRecommendationView};
+
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(7.5),
+                cvss_vector: None,
+                severity: SeverityView::High,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: false,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+        model.upgrade_recommendations = Some(UpgradeRecommendationView {
+            entries: vec![UpgradeEntryView::Unresolvable {
+                direct_dep: "requests".to_string(),
+                reason: "no compatible version available".to_string(),
+                vulnerability_id: "CVE-2024-1234".to_string(),
+            }],
+        });
+
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        assert!(json.contains("\"uv-sbom:recommended-action\""));
+        assert!(json.contains("\"cannot resolve: no compatible version available\""));
+        assert!(!json.contains("\"uv-sbom:resolved-version\""));
+    }
+
+    #[test]
+    fn test_format_without_upgrade_recommendations_no_extra_properties() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(7.5),
+                cvss_vector: None,
+                severity: SeverityView::High,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: false,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+        // upgrade_recommendations is None
+
+        let formatter = CycloneDxFormatter::new();
+        let json = formatter.format(&model).unwrap();
+
+        assert!(!json.contains("\"uv-sbom:recommended-action\""));
+        assert!(!json.contains("\"uv-sbom:resolved-version\""));
     }
 }
