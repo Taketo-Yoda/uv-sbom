@@ -433,6 +433,7 @@ mod tests {
             vulnerabilities: None,
             license_compliance: None,
             resolution_guide: None,
+            upgrade_recommendations: None,
         }
     }
 

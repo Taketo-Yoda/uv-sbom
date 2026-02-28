@@ -7,6 +7,7 @@ use super::component_view::ComponentView;
 use super::dependency_view::DependencyView;
 use super::license_compliance_view::LicenseComplianceView;
 use super::resolution_guide_view::ResolutionGuideView;
+use super::upgrade_recommendation_view::UpgradeRecommendationView;
 use super::vulnerability_view::VulnerabilityReportView;
 
 /// Main read model for SBOM data
@@ -28,6 +29,10 @@ pub struct SbomReadModel {
     /// Resolution guide for vulnerable transitive dependencies
     #[allow(dead_code)]
     pub resolution_guide: Option<ResolutionGuideView>,
+    /// Upgrade recommendations for vulnerable transitive dependencies.
+    /// Populated only when `suggest_fix` was true in the request.
+    #[allow(dead_code)]
+    pub upgrade_recommendations: Option<UpgradeRecommendationView>,
 }
 
 /// View representation of SBOM metadata
