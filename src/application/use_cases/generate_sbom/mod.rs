@@ -1,3 +1,4 @@
+use crate::adapters::outbound::uv::UvLockAdapter;
 use crate::application::dto::{SbomRequest, SbomResponse};
 use crate::application::use_cases::CheckVulnerabilitiesUseCase;
 use crate::ports::outbound::{
@@ -6,9 +7,10 @@ use crate::ports::outbound::{
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::{
-    LicenseComplianceChecker, ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker,
+    LicenseComplianceChecker, ResolutionAnalyzer, ThresholdConfig, UpgradeAdvisor,
+    VulnerabilityCheckResult, VulnerabilityChecker,
 };
-use crate::sbom_generation::domain::{Package, PackageName};
+use crate::sbom_generation::domain::{Package, PackageName, UpgradeRecommendation};
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
 use crate::shared::Result;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -114,13 +116,24 @@ where
         let license_compliance_result =
             self.check_license_compliance_if_requested(&request, &enriched_packages);
 
-        // Step 8: Build and return response
+        // Step 8: Upgrade advisor if requested
+        let upgrade_recommendations = self
+            .advise_upgrades_if_requested(
+                &request,
+                dependency_graph.as_ref(),
+                vulnerability_report.as_deref(),
+                &enriched_packages,
+            )
+            .await;
+
+        // Step 9: Build and return response
         Ok(self.build_response(
             enriched_packages,
             dependency_graph,
             vulnerability_report,
             vulnerability_check_result,
             license_compliance_result,
+            upgrade_recommendations,
         ))
     }
 
@@ -338,6 +351,37 @@ where
         }
     }
 
+    /// Runs the UpgradeAdvisor when `suggest_fix` is true and the required context is available
+    ///
+    /// Returns `None` when `suggest_fix` is false (no overhead).
+    /// Returns `Some(vec)` when the advisor runs, even if the vector is empty.
+    async fn advise_upgrades_if_requested(
+        &self,
+        request: &SbomRequest,
+        dependency_graph: Option<&crate::sbom_generation::domain::DependencyGraph>,
+        vulnerability_report: Option<&[crate::sbom_generation::domain::PackageVulnerabilities]>,
+        enriched_packages: &[EnrichedPackage],
+    ) -> Option<Vec<UpgradeRecommendation>> {
+        if !request.suggest_fix {
+            return None;
+        }
+
+        let (Some(graph), Some(vuln_report)) = (dependency_graph, vulnerability_report) else {
+            return Some(vec![]);
+        };
+
+        let entries = ResolutionAnalyzer::analyze(graph, vuln_report, enriched_packages);
+        if entries.is_empty() {
+            return Some(vec![]);
+        }
+
+        let simulator = UvLockAdapter::new();
+        let recommendations =
+            UpgradeAdvisor::advise(&simulator, &entries, &request.project_path).await;
+
+        Some(recommendations)
+    }
+
     /// Checks license compliance if requested
     fn check_license_compliance_if_requested(
         &self,
@@ -391,6 +435,7 @@ where
         vulnerability_report: Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>,
         vulnerability_check_result: Option<VulnerabilityCheckResult>,
         license_compliance_result: Option<LicenseComplianceResult>,
+        upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata();
 
@@ -422,6 +467,9 @@ where
         }
         if let Some(result) = license_compliance_result {
             builder = builder.license_compliance_result(result);
+        }
+        if let Some(recommendations) = upgrade_recommendations {
+            builder = builder.upgrade_recommendations(recommendations);
         }
 
         builder.build().expect("response build should not fail")

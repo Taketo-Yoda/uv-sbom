@@ -209,6 +209,7 @@ async fn run(args: Args) -> Result<bool> {
         project_component_info
             .as_ref()
             .map(|(n, v)| (n.as_str(), v.as_str())),
+        response.upgrade_recommendations.as_deref(),
     );
 
     // Verify PyPI links if requested
