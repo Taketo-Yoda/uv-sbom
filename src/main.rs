@@ -158,6 +158,9 @@ async fn run(args: Args) -> Result<bool> {
         vulnerability_repository,
     );
 
+    // Pre-flight check for --suggest-fix
+    let suggest_fix = resolve_suggest_fix(args.suggest_fix, &project_path);
+
     // Create request using builder pattern
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
     let request = SbomRequest::builder()
@@ -171,7 +174,7 @@ async fn run(args: Args) -> Result<bool> {
         .ignore_cves(merged.ignore_cves)
         .check_license(merged.check_license)
         .license_policy(merged.license_policy)
-        .suggest_fix(args.suggest_fix)
+        .suggest_fix(suggest_fix)
         .build()?;
 
     // Execute use case
@@ -487,6 +490,37 @@ fn merge_ignore_cves(cli: &[IgnoreCve], config: &Option<Vec<IgnoreCve>>) -> Vec<
     result
 }
 
+/// Resolves the effective value of `suggest_fix` after pre-flight validation.
+///
+/// Returns `false` immediately when `suggest_fix` is `false`.
+/// When `suggest_fix` is `true`, verifies that:
+/// - the `uv` CLI is available in PATH
+/// - `pyproject.toml` exists in the given project directory
+///
+/// Prints a warning and returns `false` on the first failing condition.
+fn resolve_suggest_fix(suggest_fix: bool, project_path: &std::path::Path) -> bool {
+    if !suggest_fix {
+        return false;
+    }
+    let uv_available = std::process::Command::new("uv")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !uv_available {
+        eprintln!(
+            "⚠ --suggest-fix requires `uv` CLI. \
+             Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        );
+        return false;
+    }
+    if !project_path.join("pyproject.toml").exists() {
+        eprintln!("⚠ --suggest-fix requires pyproject.toml in the project directory.");
+        return false;
+    }
+    true
+}
+
 /// Validates that the project path is a valid directory.
 ///
 /// This delegates to `validate_directory_path` in `shared::security`,
@@ -773,5 +807,45 @@ mod tests {
         });
         let result = merge_config(&args, &config);
         assert_eq!(result.cvss_threshold, Some(6.0));
+    }
+
+    // --- resolve_suggest_fix tests ---
+
+    #[test]
+    fn test_resolve_suggest_fix_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        // When suggest_fix is false, always returns false without checking anything
+        assert!(!resolve_suggest_fix(false, temp_dir.path()));
+    }
+
+    #[test]
+    fn test_resolve_suggest_fix_missing_pyproject_toml() {
+        let temp_dir = TempDir::new().unwrap();
+        // No pyproject.toml in temp dir; only meaningful when uv is available
+        let uv_available = std::process::Command::new("uv")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if uv_available {
+            assert!(!resolve_suggest_fix(true, temp_dir.path()));
+        }
+    }
+
+    #[test]
+    fn test_resolve_suggest_fix_with_pyproject_toml() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            "[project]\nname = \"test\"\n",
+        )
+        .unwrap();
+        let uv_available = std::process::Command::new("uv")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        // Result should match uv availability
+        assert_eq!(resolve_suggest_fix(true, temp_dir.path()), uv_available);
     }
 }
