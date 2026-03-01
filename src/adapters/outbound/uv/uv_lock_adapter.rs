@@ -183,4 +183,53 @@ version = "0.1.0"
         assert_eq!(versions.len(), 1);
         assert_eq!(versions.get("mypackage").map(|s| s.as_str()), Some("0.1.0"));
     }
+
+    #[test]
+    fn test_parse_versions_from_before_fixture() {
+        let content = include_str!("../../../../tests/fixtures/sample_uv_lock_before.lock");
+        let versions = UvLockAdapter::parse_versions(content).unwrap();
+        assert_eq!(versions.len(), 3);
+        assert_eq!(versions.get("requests").map(|s| s.as_str()), Some("2.31.0"));
+        assert_eq!(versions.get("urllib3").map(|s| s.as_str()), Some("1.26.5"));
+        assert_eq!(
+            versions.get("certifi").map(|s| s.as_str()),
+            Some("2022.12.7")
+        );
+    }
+
+    #[test]
+    fn test_parse_versions_from_after_fixture_builds_simulation_result() {
+        let content = include_str!("../../../../tests/fixtures/sample_uv_lock_after.lock");
+        let resolved_versions = UvLockAdapter::parse_versions(content).unwrap();
+
+        // Reconstruct what simulate_upgrade() would return after upgrading "requests"
+        let package_name = "requests";
+        let upgraded_to_version = resolved_versions
+            .iter()
+            .find(|(k, _)| k.to_lowercase() == package_name)
+            .map(|(_, v)| v.clone())
+            .expect("requests must appear in after fixture");
+
+        let sim_result = SimulationResult {
+            upgraded_package: package_name.to_string(),
+            upgraded_to_version,
+            resolved_versions,
+        };
+
+        assert_eq!(sim_result.upgraded_to_version, "2.32.3");
+        assert_eq!(
+            sim_result
+                .resolved_versions
+                .get("urllib3")
+                .map(|s| s.as_str()),
+            Some("2.2.1")
+        );
+        assert_eq!(
+            sim_result
+                .resolved_versions
+                .get("certifi")
+                .map(|s| s.as_str()),
+            Some("2024.2.2")
+        );
+    }
 }

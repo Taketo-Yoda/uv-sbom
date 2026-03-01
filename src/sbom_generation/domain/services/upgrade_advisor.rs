@@ -521,6 +521,14 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_empty_resolution_entries_returns_empty_vec() {
+        // Simulator would fail if called — verify it is never invoked for empty input
+        let simulator = MockSimulator::with_error("any-package", "should not be called");
+        let recommendations = UpgradeAdvisor::advise(&simulator, &[], Path::new("/project")).await;
+        assert!(recommendations.is_empty());
+    }
+
+    #[tokio::test]
     async fn test_operator_prefixed_fixed_version_is_stripped() {
         let sim_result = make_sim_result("requests", "2.32.3", vec![("urllib3", "2.2.1")]);
         let simulator = MockSimulator::with_result("requests", sim_result);
