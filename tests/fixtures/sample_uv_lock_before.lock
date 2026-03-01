@@ -1,3 +1,12 @@
+# Minimal reproducible example for upgrade simulation tests (before state):
+#
+# - requests 2.31.0 is the direct dependency that introduces the vulnerability.
+# - urllib3 1.26.5 is the vulnerable transitive dependency
+#   (fixed in urllib3 >= 2.0.7, see GHSA-v845-jxx5-vc9f).
+# - certifi 2022.12.7 is included to verify that unrelated packages are also
+#   captured correctly by parse_versions().
+#
+# Scenario: "upgrading requests should pull urllib3 to a safe version"
 version = 1
 revision = 2
 
