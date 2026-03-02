@@ -516,6 +516,25 @@ In CycloneDX format, the introducing dependency is included as a `properties` en
 
 > **Note:** The resolution guide only appears for **transitive** dependency vulnerabilities. Direct dependency vulnerabilities are shown in the standard vulnerability table, as users can upgrade them directly.
 
+### Upgrade Advisor (`--suggest-fix`)
+
+Use `--suggest-fix` together with `--check-cve` to automatically suggest which direct dependency version to upgrade to resolve each transitive vulnerability.
+
+**Requires**:
+- `--check-cve` flag enabled
+- `uv` CLI installed
+- `pyproject.toml` in the project directory
+
+**Example**:
+```bash
+uv-sbom generate --check-cve --suggest-fix
+```
+
+**Output**: Adds a "Recommended Action" column to the Vulnerability Resolution Guide showing:
+- `⬆️ Upgrade requests → 2.32.3 (resolves urllib3 to 2.2.1)` — when an upgrade fixes the vulnerability
+- `⚠️ Cannot resolve: latest httpx still pins idna < 3.7` — when no upgrade helps
+- `❓ Could not analyze: <error>` — when simulation failed
+
 **License Compliance Check output example:**
 
 ```markdown
@@ -638,6 +657,8 @@ Options:
                                      Requires --check-cve to be enabled
       --cvss-threshold <SCORE>       CVSS threshold for vulnerability check (0.0-10.0)
                                      Requires --check-cve to be enabled
+      --suggest-fix                  Suggest direct dependency upgrade versions to resolve transitive vulnerabilities
+                                     Requires --check-cve to be enabled, uv CLI installed, and pyproject.toml in project directory
       --check-license                Check license compliance against policy
       --license-allow <LIST>         Comma-separated list of allowed license patterns (overrides config)
       --license-deny <LIST>          Comma-separated list of denied license patterns (overrides config)
