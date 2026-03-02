@@ -1,0 +1,25 @@
+# Minimal reproducible example for upgrade simulation tests (after state):
+#
+# - requests 2.32.3 is the upgraded direct dependency.
+# - urllib3 2.2.1 is the resolved transitive dependency after the upgrade.
+#   2.2.1 >= 2.0.7 (fixed version), so this should produce Upgradable.
+# - certifi 2024.2.2 reflects the incidental version bump that uv would
+#   resolve alongside requests; included to verify all resolved versions
+#   are captured in SimulationResult.resolved_versions.
+#
+# Scenario: after running `uv lock --upgrade-package requests`, the new
+# uv.lock contains these versions, confirming the vulnerability is resolved.
+version = 1
+revision = 2
+
+[[package]]
+name = "certifi"
+version = "2024.2.2"
+
+[[package]]
+name = "requests"
+version = "2.32.3"
+
+[[package]]
+name = "urllib3"
+version = "2.2.1"
