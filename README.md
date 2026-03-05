@@ -535,6 +535,15 @@ uv-sbom generate --check-cve --suggest-fix
 - `⚠️ Cannot resolve: latest httpx still pins idna < 3.7` — when no upgrade helps
 - `❓ Could not analyze: <error>` — when simulation failed
 
+**Try it with the included example**:
+
+```bash
+# This example has transitive CVEs designed to show both Upgradable and Unresolvable outcomes
+uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f markdown
+```
+
+See [`examples/suggest-fix-project/README.md`](examples/suggest-fix-project/README.md) for a full walkthrough.
+
 **License Compliance Check output example:**
 
 ```markdown
