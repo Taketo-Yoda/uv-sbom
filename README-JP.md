@@ -534,6 +534,15 @@ uv-sbom generate --check-cve --suggest-fix
 - `⚠️ Cannot resolve: latest httpx still pins idna < 3.7` — アップグレードでは解決できない場合
 - `❓ Could not analyze: <error>` — シミュレーションに失敗した場合
 
+**付属サンプルで試す**:
+
+```bash
+# Upgradable と Unresolvable の両方のケースを示す推移的CVEを含むサンプルプロジェクト
+uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f markdown
+```
+
+詳しい手順は [`examples/suggest-fix-project/README.md`](examples/suggest-fix-project/README.md) を参照してください。
+
 **ライセンスコンプライアンスチェックの出力例:**
 
 ```markdown

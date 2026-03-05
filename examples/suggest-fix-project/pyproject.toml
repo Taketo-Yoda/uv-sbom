@@ -1,0 +1,18 @@
+[project]
+name = "suggest-fix-project"
+version = "0.1.0"
+description = "Example project demonstrating --suggest-fix for transitive vulnerability resolution"
+requires-python = ">=3.11"
+dependencies = [
+    # requests introduces urllib3 as a transitive dependency.
+    # Old requests (<2.32) constrained urllib3<1.27, so urllib3 1.x was locked in.
+    # urllib3 1.x has HIGH severity CVEs. Upgrading requests to 2.32+ lifts the
+    # <1.27 cap, allowing uv to resolve urllib3 to 2.x (fixed).
+    "requests>=2.28.2",
+
+    # httpx 0.23.x uses httpcore<0.17, which pins h11 to 0.14.x.
+    # h11 0.14.x has a CRITICAL CVE (GHSA-vqfr-h8mv-ghfj, fixed in 0.16.0).
+    # Upgrading httpx to 0.27+ uses httpcore==1.*, and httpcore 1.0.9+ requires
+    # h11>=0.16, so uv resolves h11 to 0.16.x (fixed).
+    "httpx>=0.23.3",
+]
