@@ -541,7 +541,7 @@ uv-sbom generate --check-cve --suggest-fix
 uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f markdown
 ```
 
-詳しい手順は [`examples/suggest-fix-project/README.md`](examples/suggest-fix-project/README.md) を参照してください。
+詳しい手順は [`examples/suggest-fix-project/README-JP.md`](examples/suggest-fix-project/README-JP.md) を参照してください。
 
 **ライセンスコンプライアンスチェックの出力例:**
 
