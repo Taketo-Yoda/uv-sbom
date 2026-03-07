@@ -17,7 +17,16 @@ Automates the pre-release preparation workflow, ensuring consistent version upda
 - Update version numbers in all required files
 - Update CHANGELOG.md format
 - Run pre-flight checks (fmt, clippy, test)
-- Create release branch and PR to main
+- Create release branch and PR to `develop`
+
+### Merge Flow
+
+```
+release/vX.Y.Z → develop → main
+```
+
+- **Step 8** creates a PR: `release/vX.Y.Z` → `develop`
+- After merge, the user opens a second PR: `develop` → `main` (with tag creation)
 
 ### What this skill does NOT do (manual steps):
 - **Tag creation** - User must manually create and push the tag after PR merge
@@ -172,10 +181,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ### Step 8: Create Pull Request
 
-Create PR to `main` using `/pr` skill:
+Create PR to `develop` (NOT `main`):
 
 ```bash
-gh pr create --base main --title "chore(release): prepare v{version}" --body "$(cat <<'EOF'
+gh pr create --base develop --title "chore(release): prepare v{version}" --body "$(cat <<'EOF'
 ## Summary
 - Prepare release v{version}
 - Update version numbers in all required files
@@ -197,10 +206,12 @@ gh pr create --base main --title "chore(release): prepare v{version}" --body "$(
 - [x] All version strings are consistent
 
 ## Post-Merge Manual Steps
-After merging this PR:
-1. Create tag: `git tag v{version}`
-2. Push tag: `git push origin v{version}`
-3. Verify CI release workflow completes successfully
+After merging this PR into `develop`:
+1. Open a PR: `develop` → `main`
+2. Merge the PR to main
+3. Create tag: `git tag v{version}`
+4. Push tag: `git push origin v{version}`
+5. Verify CI release workflow completes successfully
 
 ---
 Generated with [Claude Code](https://claude.com/claude-code)
@@ -208,7 +219,7 @@ EOF
 )"
 ```
 
-**IMPORTANT**: PR base branch is `main`, not `develop`.
+**IMPORTANT**: PR base branch is `develop`, NOT `main`. The `develop` → `main` PR is a separate manual step after this PR is merged.
 
 ### Step 9: Output Manual Next Steps
 
@@ -220,25 +231,26 @@ After PR creation, display the following instructions:
 📋 Manual steps after PR is merged:
 
 1. Wait for CI to pass and get approval
-2. Merge the PR to main
-3. Switch to main and pull:
+2. Merge the PR into `develop`
+
+3. Open a second PR: develop → main
+   gh pr create --base main --head develop \
+     --title "chore(release): v{version}" \
+     --body "Merge release v{version} from develop into main."
+
+4. Merge the develop → main PR
+
+5. Create and push the tag:
    git checkout main
    git pull origin main
-
-4. Create and push the tag:
    git tag v{version}
    git push origin v{version}
 
-5. Verify the release:
+6. Verify the release:
    - Check GitHub Actions release workflow
    - Verify GitHub Release was created
    - Check crates.io publication
    - Check PyPI publication
-
-6. Merge main back to develop:
-   git checkout develop
-   git merge main
-   git push origin develop
 ```
 
 ## Error Handling
@@ -296,8 +308,8 @@ Claude executes /release skill:
 8. Verifies all versions match ✓
 9. Creates branch `release/v1.1.0`
 10. Commits: "chore(release): prepare v1.1.0"
-11. Creates PR to main
-12. Outputs manual next steps
+11. Creates PR to `develop` (NOT main)
+12. Outputs manual next steps (including develop → main PR)
 
 Final output:
 ```
