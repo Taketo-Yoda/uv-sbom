@@ -165,6 +165,8 @@ The tool supports configurable vulnerability thresholds for CI/CD integration:
 - `README.md`: User guide
 - `.claude/instructions.md`: Instructions for Claude Code
 - `.claude/skills/`: Agent Skills for Git workflows (`/issue`, `/pr`, `/commit`, `/pre-push`)
+- `.claude/product-vision.md`: Product vision and competitive positioning
+- `.claude/output-design.md`: Output structure rules, anti-patterns, and formatting standards
 
 ### External References
 - [CycloneDX 1.6 Specification](https://cyclonedx.org/docs/1.6/)

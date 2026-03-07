@@ -561,6 +561,35 @@ The hook handles formatting only. Clippy and tests require `/pre-push` skill.
 - Step 10 quality checks are **mandatory upon coding completion**
 - Code is not considered complete unless all these checks pass
 
+## Output Quality Review
+
+When implementing any feature that affects SBOM output (Markdown or JSON), you MUST
+review the change against `.claude/output-design.md` before committing.
+
+### Checklist
+
+- [ ] No section duplicates information already shown in another section
+- [ ] Summary block is present and accurate
+- [ ] Emoji in headings have a space between emoji and text
+- [ ] Table columns follow the canonical order defined in `output-design.md`
+- [ ] New licenses are normalized through `spdx_license_map.rs` before display
+- [ ] The change does not re-introduce any anti-pattern listed in `output-design.md`
+
+### When to consult `product-vision.md`
+
+Read `.claude/product-vision.md` before implementing any of these:
+
+- A new output section or format
+- A new CLI flag that changes what is displayed
+- A change to how dependencies are grouped or labeled
+- Any feature that adds, removes, or reorders information in the output
+
+When in doubt, ask: "Does this help the reader understand their dependency situation
+faster, reduce the steps needed to act, or reduce noise?" If the answer to all three
+is "no", reconsider whether the change belongs in uv-sbom.
+
+---
+
 ## PR Creation and Review Response Checklist
 
 ### Before Creating a Pull Request
