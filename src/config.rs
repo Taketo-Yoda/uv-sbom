@@ -52,6 +52,9 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 #     - "AGPL-*"
 #     - "GPL-*"
 #   unknown: warn
+
+# Suggest upgrade paths to fix vulnerable transitive dependencies (requires check_cve: true)
+# suggest_fix: false
 "#;
 
 /// Generate a config template file in the specified directory.
@@ -94,6 +97,7 @@ pub struct ConfigFile {
     pub ignore_cves: Option<Vec<IgnoreCve>>,
     pub check_license: Option<bool>,
     pub license_policy: Option<LicensePolicyConfig>,
+    pub suggest_fix: Option<bool>,
     /// Captures unknown fields for warnings.
     #[serde(flatten)]
     pub unknown_fields: HashMap<String, serde_yaml_ng::Value>,

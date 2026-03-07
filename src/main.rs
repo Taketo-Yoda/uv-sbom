@@ -159,7 +159,7 @@ async fn run(args: Args) -> Result<bool> {
     );
 
     // Pre-flight check for --suggest-fix
-    let suggest_fix = resolve_suggest_fix(args.suggest_fix, &project_path);
+    let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path);
 
     // Create request using builder pattern
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
@@ -271,6 +271,7 @@ struct MergedConfig {
     ignore_cves: Vec<IgnoreCve>,
     check_license: bool,
     license_policy: Option<LicensePolicy>,
+    suggest_fix: bool,
 }
 
 /// Load a config file from an explicit path or via auto-discovery.
@@ -333,6 +334,7 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
                     .collect(),
                 check_license: args.check_license,
                 license_policy,
+                suggest_fix: args.suggest_fix,
             };
         }
     };
@@ -430,6 +432,9 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         None
     };
 
+    // suggest_fix: CLI flag takes priority over config value
+    let suggest_fix = args.suggest_fix || config.suggest_fix.unwrap_or(false);
+
     MergedConfig {
         format,
         exclude_patterns,
@@ -439,6 +444,7 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         ignore_cves,
         check_license,
         license_policy,
+        suggest_fix,
     }
 }
 
@@ -807,6 +813,55 @@ mod tests {
         });
         let result = merge_config(&args, &config);
         assert_eq!(result.cvss_threshold, Some(6.0));
+    }
+
+    // --- suggest_fix merge tests ---
+
+    #[test]
+    fn test_merge_config_suggest_fix_from_config() {
+        // suggest_fix: true in config, no CLI flag → merged value is true
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            suggest_fix: Some(true),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.suggest_fix);
+    }
+
+    #[test]
+    fn test_merge_config_suggest_fix_cli_flag() {
+        // suggest_fix: true via CLI flag (requires --check-cve) → merged value is true
+        let args = Args::parse_from(["uv-sbom", "--check-cve", "--suggest-fix"]);
+        let config = Some(ConfigFile {
+            suggest_fix: Some(true),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.suggest_fix);
+    }
+
+    #[test]
+    fn test_merge_config_suggest_fix_cli_wins_over_config_false() {
+        // suggest_fix: false in config, --suggest-fix CLI flag → CLI wins, merged value is true
+        let args = Args::parse_from(["uv-sbom", "--check-cve", "--suggest-fix"]);
+        let config = Some(ConfigFile {
+            suggest_fix: Some(false),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.suggest_fix);
+    }
+
+    #[test]
+    fn test_merge_config_suggest_fix_default_false() {
+        // No CLI flag, no config → default false
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(!result.suggest_fix);
     }
 
     // --- resolve_suggest_fix tests ---
