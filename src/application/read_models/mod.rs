@@ -9,6 +9,7 @@ pub mod license_compliance_view;
 pub mod resolution_guide_view;
 pub mod sbom_read_model;
 pub mod sbom_read_model_builder;
+pub mod upgrade_recommendation_view;
 pub mod vulnerability_view;
 
 #[allow(unused_imports)]
@@ -25,6 +26,8 @@ pub use resolution_guide_view::{IntroducedByView, ResolutionEntryView, Resolutio
 pub use sbom_read_model::{MetadataComponentView, SbomMetadataView, SbomReadModel};
 #[allow(unused_imports)]
 pub use sbom_read_model_builder::SbomReadModelBuilder;
+#[allow(unused_imports)]
+pub use upgrade_recommendation_view::{UpgradeEntryView, UpgradeRecommendationView};
 #[allow(unused_imports)]
 pub use vulnerability_view::{
     SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,

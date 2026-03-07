@@ -158,6 +158,9 @@ async fn run(args: Args) -> Result<bool> {
         vulnerability_repository,
     );
 
+    // Pre-flight check for --suggest-fix
+    let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path);
+
     // Create request using builder pattern
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
     let request = SbomRequest::builder()
@@ -171,6 +174,7 @@ async fn run(args: Args) -> Result<bool> {
         .ignore_cves(merged.ignore_cves)
         .check_license(merged.check_license)
         .license_policy(merged.license_policy)
+        .suggest_fix(suggest_fix)
         .build()?;
 
     // Execute use case
@@ -208,6 +212,7 @@ async fn run(args: Args) -> Result<bool> {
         project_component_info
             .as_ref()
             .map(|(n, v)| (n.as_str(), v.as_str())),
+        response.upgrade_recommendations.as_deref(),
     );
 
     // Verify PyPI links if requested
@@ -266,6 +271,7 @@ struct MergedConfig {
     ignore_cves: Vec<IgnoreCve>,
     check_license: bool,
     license_policy: Option<LicensePolicy>,
+    suggest_fix: bool,
 }
 
 /// Load a config file from an explicit path or via auto-discovery.
@@ -328,6 +334,7 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
                     .collect(),
                 check_license: args.check_license,
                 license_policy,
+                suggest_fix: args.suggest_fix,
             };
         }
     };
@@ -425,6 +432,9 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         None
     };
 
+    // suggest_fix: CLI flag takes priority over config value
+    let suggest_fix = args.suggest_fix || config.suggest_fix.unwrap_or(false);
+
     MergedConfig {
         format,
         exclude_patterns,
@@ -434,6 +444,7 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         ignore_cves,
         check_license,
         license_policy,
+        suggest_fix,
     }
 }
 
@@ -483,6 +494,37 @@ fn merge_ignore_cves(cli: &[IgnoreCve], config: &Option<Vec<IgnoreCve>>) -> Vec<
     }
 
     result
+}
+
+/// Resolves the effective value of `suggest_fix` after pre-flight validation.
+///
+/// Returns `false` immediately when `suggest_fix` is `false`.
+/// When `suggest_fix` is `true`, verifies that:
+/// - the `uv` CLI is available in PATH
+/// - `pyproject.toml` exists in the given project directory
+///
+/// Prints a warning and returns `false` on the first failing condition.
+fn resolve_suggest_fix(suggest_fix: bool, project_path: &std::path::Path) -> bool {
+    if !suggest_fix {
+        return false;
+    }
+    let uv_available = std::process::Command::new("uv")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !uv_available {
+        eprintln!(
+            "⚠ --suggest-fix requires `uv` CLI. \
+             Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        );
+        return false;
+    }
+    if !project_path.join("pyproject.toml").exists() {
+        eprintln!("⚠ --suggest-fix requires pyproject.toml in the project directory.");
+        return false;
+    }
+    true
 }
 
 /// Validates that the project path is a valid directory.
@@ -771,5 +813,94 @@ mod tests {
         });
         let result = merge_config(&args, &config);
         assert_eq!(result.cvss_threshold, Some(6.0));
+    }
+
+    // --- suggest_fix merge tests ---
+
+    #[test]
+    fn test_merge_config_suggest_fix_from_config() {
+        // suggest_fix: true in config, no CLI flag → merged value is true
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            suggest_fix: Some(true),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.suggest_fix);
+    }
+
+    #[test]
+    fn test_merge_config_suggest_fix_cli_flag() {
+        // suggest_fix: true via CLI flag (requires --check-cve) → merged value is true
+        let args = Args::parse_from(["uv-sbom", "--check-cve", "--suggest-fix"]);
+        let config = Some(ConfigFile {
+            suggest_fix: Some(true),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.suggest_fix);
+    }
+
+    #[test]
+    fn test_merge_config_suggest_fix_cli_wins_over_config_false() {
+        // suggest_fix: false in config, --suggest-fix CLI flag → CLI wins, merged value is true
+        let args = Args::parse_from(["uv-sbom", "--check-cve", "--suggest-fix"]);
+        let config = Some(ConfigFile {
+            suggest_fix: Some(false),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.suggest_fix);
+    }
+
+    #[test]
+    fn test_merge_config_suggest_fix_default_false() {
+        // No CLI flag, no config → default false
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(!result.suggest_fix);
+    }
+
+    // --- resolve_suggest_fix tests ---
+
+    #[test]
+    fn test_resolve_suggest_fix_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        // When suggest_fix is false, always returns false without checking anything
+        assert!(!resolve_suggest_fix(false, temp_dir.path()));
+    }
+
+    #[test]
+    fn test_resolve_suggest_fix_missing_pyproject_toml() {
+        let temp_dir = TempDir::new().unwrap();
+        // No pyproject.toml in temp dir; only meaningful when uv is available
+        let uv_available = std::process::Command::new("uv")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if uv_available {
+            assert!(!resolve_suggest_fix(true, temp_dir.path()));
+        }
+    }
+
+    #[test]
+    fn test_resolve_suggest_fix_with_pyproject_toml() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            "[project]\nname = \"test\"\n",
+        )
+        .unwrap();
+        let uv_available = std::process::Command::new("uv")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        // Result should match uv availability
+        assert_eq!(resolve_suggest_fix(true, temp_dir.path()), uv_available);
     }
 }

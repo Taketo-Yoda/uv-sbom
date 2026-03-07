@@ -10,6 +10,7 @@ use super::license_compliance_view::{
 };
 use super::resolution_guide_view::{IntroducedByView, ResolutionEntryView, ResolutionGuideView};
 use super::sbom_read_model::{MetadataComponentView, SbomMetadataView, SbomReadModel};
+use super::upgrade_recommendation_view::{UpgradeEntryView, UpgradeRecommendationView};
 use super::vulnerability_view::{
     SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
 };
@@ -20,7 +21,7 @@ use crate::sbom_generation::domain::services::{ResolutionAnalyzer, Vulnerability
 use crate::sbom_generation::domain::vulnerability::{
     PackageVulnerabilities, Severity, Vulnerability,
 };
-use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata};
+use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecommendation};
 use crate::sbom_generation::policies::spdx_license_map;
 use std::collections::{HashMap, HashSet};
 
@@ -58,6 +59,7 @@ impl SbomReadModelBuilder {
             vulnerability_result,
             license_compliance_result,
             None,
+            None,
         )
     }
 
@@ -69,6 +71,7 @@ impl SbomReadModelBuilder {
         vulnerability_result: Option<&VulnerabilityCheckResult>,
         license_compliance_result: Option<&LicenseComplianceResult>,
         project_component: Option<(&str, &str)>,
+        upgrade_recommendations: Option<&[UpgradeRecommendation]>,
     ) -> SbomReadModel {
         let metadata_view = Self::build_metadata(metadata, project_component);
         let components = Self::build_components(&packages, dependency_graph);
@@ -98,6 +101,9 @@ impl SbomReadModelBuilder {
             _ => None,
         };
 
+        let upgrade_recommendations =
+            upgrade_recommendations.map(Self::build_upgrade_recommendations);
+
         SbomReadModel {
             metadata: metadata_view,
             components,
@@ -105,6 +111,7 @@ impl SbomReadModelBuilder {
             vulnerabilities,
             license_compliance,
             resolution_guide,
+            upgrade_recommendations,
         }
     }
 
@@ -361,6 +368,50 @@ impl SbomReadModelBuilder {
         ResolutionGuideView {
             entries: entry_views,
         }
+    }
+
+    /// Maps a slice of domain UpgradeRecommendation to an UpgradeRecommendationView
+    fn build_upgrade_recommendations(
+        recommendations: &[UpgradeRecommendation],
+    ) -> UpgradeRecommendationView {
+        let entries = recommendations
+            .iter()
+            .map(|rec| match rec {
+                UpgradeRecommendation::Upgradable {
+                    direct_dep_name,
+                    direct_dep_current_version,
+                    direct_dep_target_version,
+                    transitive_dep_name,
+                    transitive_resolved_version,
+                    vulnerability_id,
+                } => UpgradeEntryView::Upgradable {
+                    direct_dep: direct_dep_name.clone(),
+                    current_version: direct_dep_current_version.clone(),
+                    target_version: direct_dep_target_version.clone(),
+                    transitive_dep: transitive_dep_name.clone(),
+                    resolved_version: transitive_resolved_version.clone(),
+                    vulnerability_id: vulnerability_id.clone(),
+                },
+                UpgradeRecommendation::Unresolvable {
+                    direct_dep_name,
+                    reason,
+                    vulnerability_id,
+                } => UpgradeEntryView::Unresolvable {
+                    direct_dep: direct_dep_name.clone(),
+                    reason: reason.clone(),
+                    vulnerability_id: vulnerability_id.clone(),
+                },
+                UpgradeRecommendation::SimulationFailed {
+                    direct_dep_name,
+                    error,
+                } => UpgradeEntryView::SimulationFailed {
+                    direct_dep: direct_dep_name.clone(),
+                    error: error.clone(),
+                },
+            })
+            .collect();
+
+        UpgradeRecommendationView { entries }
     }
 
     /// Converts a single domain ResolutionEntry to a view
@@ -1105,6 +1156,7 @@ mod tests {
             None,
             None,
             Some(("my-project", "1.0.0")),
+            None,
         );
 
         assert!(read_model.metadata.component.is_some());

@@ -45,6 +45,10 @@ pub struct Args {
     #[arg(long, value_parser = parse_cvss_threshold, group = "threshold", requires = "check_cve")]
     pub cvss_threshold: Option<f32>,
 
+    /// Suggest upgrade paths for vulnerable transitive dependencies (requires --check-cve)
+    #[arg(long, requires = "check_cve")]
+    pub suggest_fix: bool,
+
     /// Verify PyPI links exist before generating hyperlinks (requires network access, Markdown format only)
     #[arg(long)]
     pub verify_links: bool,
