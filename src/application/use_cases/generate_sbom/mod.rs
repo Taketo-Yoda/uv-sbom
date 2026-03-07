@@ -375,9 +375,62 @@ where
             return Some(vec![]);
         }
 
+        let unique_dep_count = entries
+            .iter()
+            .flat_map(|e| e.introduced_by())
+            .map(|i| i.package_name())
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        self.progress_reporter.report(&format!(
+            "🔍 Analyzing upgrade paths for {} direct dependenc{}...",
+            unique_dep_count,
+            if unique_dep_count == 1 { "y" } else { "ies" },
+        ));
+
         let simulator = UvLockAdapter::new();
         let recommendations =
             UpgradeAdvisor::advise(&simulator, &entries, &request.project_path).await;
+
+        for rec in &recommendations {
+            match rec {
+                UpgradeRecommendation::Upgradable {
+                    direct_dep_name,
+                    direct_dep_target_version,
+                    transitive_dep_name,
+                    transitive_resolved_version,
+                    vulnerability_id,
+                    ..
+                } => {
+                    self.progress_reporter.report(&format!(
+                        "  ✓ Upgrade {} → {} resolves {} to {} ({})",
+                        direct_dep_name,
+                        direct_dep_target_version,
+                        transitive_dep_name,
+                        transitive_resolved_version,
+                        vulnerability_id,
+                    ));
+                }
+                UpgradeRecommendation::Unresolvable {
+                    direct_dep_name,
+                    reason,
+                    vulnerability_id,
+                } => {
+                    self.progress_reporter.report(&format!(
+                        "  ✗ Cannot resolve via {}: {} ({})",
+                        direct_dep_name, reason, vulnerability_id,
+                    ));
+                }
+                UpgradeRecommendation::SimulationFailed {
+                    direct_dep_name,
+                    error,
+                } => {
+                    self.progress_reporter.report(&format!(
+                        "  ❓ Simulation failed for {}: {}",
+                        direct_dep_name, error,
+                    ));
+                }
+            }
+        }
 
         Some(recommendations)
     }
