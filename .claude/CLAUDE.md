@@ -13,6 +13,7 @@ When the user requests any of the following operations, ALWAYS invoke the corres
 | Implement Issue | /implement | Full workflow from branch to PR |
 | Dependabot Alert | /dependabot | Use CVE/GHSA ID (never alert number), `security` label |
 | Prepare Release | /release | Version bump, CHANGELOG update, PR to main |
+| Sync CLI options to config | /sync-config | Audit `ConfigFile`, `MergedConfig`, `CONFIG_TEMPLATE` for gaps |
 
 ### Why This Rule Exists
 
