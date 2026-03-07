@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-03-07
+
+### Added
+
+#### Upgrade Advisor (--suggest-fix)
+- **`--suggest-fix` CLI flag**: New flag to suggest package upgrades that resolve known vulnerabilities (#265, #271)
+- **`UvLockSimulator` outbound port**: Defines the port interface for uv lock simulation (#249)
+- **`UvLockAdapter`**: Implements uv lock simulation by invoking `uv lock` with version constraints (#250)
+- **`UpgradeRecommendation` domain model**: Enum representing upgrade simulation outcomes (#251)
+- **`UpgradeAdvisor` domain service**: Simulates per-package version upgrades to find vulnerability-resolving versions (#252)
+- **`GenerateSbomUseCase` integration**: Wires UpgradeAdvisor into the main use case pipeline (#254)
+- **Formatter extensions**: Markdown and CycloneDX formatters now render upgrade recommendations (#255)
+- **Progress reporting**: Report progress during `--suggest-fix` upgrade simulations (#284)
+
+### Changed
+- Pre-flight validation enforces `--suggest-fix` requires `--check-cve` (#256)
+- `--suggest-fix` is now configurable via config file (#282)
+
+### Testing
+- Fixture-based and empty-input tests for UpgradeAdvisor and formatters (#257)
+
+### Documentation
+- README and README-JP updated to document `--suggest-fix` flag (#258, #273)
+
+### Dependencies
+- Bumped 3 Cargo dependencies
+- `actions/upload-artifact`: 6 → 7
+- `actions/download-artifact`: 7 → 8
+
 ## [1.2.0] - 2026-02-19
 
 ### Added
