@@ -1,6 +1,7 @@
 use clap::Parser;
 
 use crate::application::dto::OutputFormat;
+use crate::i18n::Locale;
 use crate::sbom_generation::domain::vulnerability::Severity;
 
 /// Generate SBOMs for Python projects managed by uv
@@ -78,6 +79,15 @@ pub struct Args {
     /// Generate a uv-sbom.config.yml template file
     #[arg(long)]
     pub init: bool,
+
+    /// Output language for human-readable formats: en (default) or ja
+    #[arg(long, default_value = "en", value_parser = parse_lang)]
+    pub lang: Locale,
+}
+
+fn parse_lang(s: &str) -> Result<Locale, String> {
+    Locale::from_str(s)
+        .ok_or_else(|| format!("Invalid language: '{}'. Supported languages: en, ja", s))
 }
 
 fn parse_severity_threshold(s: &str) -> Result<Severity, String> {
@@ -107,6 +117,27 @@ fn parse_cvss_threshold(s: &str) -> Result<f32, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_lang_valid() {
+        assert_eq!(parse_lang("en").unwrap(), Locale::En);
+        assert_eq!(parse_lang("ja").unwrap(), Locale::Ja);
+    }
+
+    #[test]
+    fn test_parse_lang_invalid() {
+        let result = parse_lang("fr");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("Invalid language: 'fr'. Supported languages: en, ja"));
+
+        let result = parse_lang("EN");
+        assert!(result.is_err());
+
+        let result = parse_lang("");
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_parse_severity_threshold_valid() {

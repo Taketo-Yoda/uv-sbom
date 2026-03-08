@@ -30,6 +30,7 @@ impl Locale {
 }
 
 /// All translatable strings used in formatted output.
+#[allow(dead_code)] // Fields will be used by formatter implementations in subsequent PRs
 pub struct Messages {
     // Section headers
     pub section_sbom_report: &'static str,

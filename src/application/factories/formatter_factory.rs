@@ -1,5 +1,6 @@
 use crate::adapters::outbound::formatters::{CycloneDxFormatter, MarkdownFormatter};
 use crate::application::dto::OutputFormat;
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::SbomFormatter;
 use std::collections::HashSet;
 
@@ -18,6 +19,7 @@ impl FormatterFactory {
     pub fn create(
         format: OutputFormat,
         verified_packages: Option<HashSet<String>>,
+        _locale: Locale,
     ) -> Box<dyn SbomFormatter> {
         match format {
             OutputFormat::Json => Box::new(CycloneDxFormatter::new()),
@@ -28,11 +30,12 @@ impl FormatterFactory {
         }
     }
 
-    /// Returns the progress message for the specified output format
-    pub fn progress_message(format: OutputFormat) -> &'static str {
+    /// Returns the locale-aware progress message for the specified output format
+    pub fn progress_message(format: OutputFormat, locale: Locale) -> &'static str {
+        let msgs = Messages::for_locale(locale);
         match format {
-            OutputFormat::Json => "📝 Generating CycloneDX JSON format output...",
-            OutputFormat::Markdown => "📝 Generating Markdown format output...",
+            OutputFormat::Json => msgs.progress_generating_json,
+            OutputFormat::Markdown => msgs.progress_generating_markdown,
         }
     }
 }
@@ -43,33 +46,46 @@ mod tests {
 
     #[test]
     fn test_create_json_formatter() {
-        let formatter = FormatterFactory::create(OutputFormat::Json, None);
+        let formatter = FormatterFactory::create(OutputFormat::Json, None, Locale::En);
         assert!(std::mem::size_of_val(&formatter) > 0);
     }
 
     #[test]
     fn test_create_markdown_formatter() {
-        let formatter = FormatterFactory::create(OutputFormat::Markdown, None);
+        let formatter = FormatterFactory::create(OutputFormat::Markdown, None, Locale::En);
         assert!(std::mem::size_of_val(&formatter) > 0);
     }
 
     #[test]
-    fn test_progress_message_json() {
-        let message = FormatterFactory::progress_message(OutputFormat::Json);
+    fn test_progress_message_json_en() {
+        let message = FormatterFactory::progress_message(OutputFormat::Json, Locale::En);
         assert_eq!(message, "📝 Generating CycloneDX JSON format output...");
     }
 
     #[test]
-    fn test_progress_message_markdown() {
-        let message = FormatterFactory::progress_message(OutputFormat::Markdown);
+    fn test_progress_message_markdown_en() {
+        let message = FormatterFactory::progress_message(OutputFormat::Markdown, Locale::En);
         assert_eq!(message, "📝 Generating Markdown format output...");
+    }
+
+    #[test]
+    fn test_progress_message_json_ja() {
+        let message = FormatterFactory::progress_message(OutputFormat::Json, Locale::Ja);
+        assert_eq!(message, "📝 CycloneDX JSON形式で出力を生成中...");
+    }
+
+    #[test]
+    fn test_progress_message_markdown_ja() {
+        let message = FormatterFactory::progress_message(OutputFormat::Markdown, Locale::Ja);
+        assert_eq!(message, "📝 Markdown形式で出力を生成中...");
     }
 
     #[test]
     fn test_create_with_verified_packages() {
         let mut verified = HashSet::new();
         verified.insert("requests".to_string());
-        let formatter = FormatterFactory::create(OutputFormat::Markdown, Some(verified));
+        let formatter =
+            FormatterFactory::create(OutputFormat::Markdown, Some(verified), Locale::En);
         assert!(std::mem::size_of_val(&formatter) > 0);
     }
 
@@ -77,7 +93,7 @@ mod tests {
     fn test_create_json_ignores_verified_packages() {
         let mut verified = HashSet::new();
         verified.insert("requests".to_string());
-        let formatter = FormatterFactory::create(OutputFormat::Json, Some(verified));
+        let formatter = FormatterFactory::create(OutputFormat::Json, Some(verified), Locale::En);
         assert!(std::mem::size_of_val(&formatter) > 0);
     }
 }

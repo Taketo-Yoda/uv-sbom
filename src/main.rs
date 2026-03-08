@@ -1,6 +1,7 @@
 mod adapters;
 mod application;
 mod cli;
+mod i18n;
 mod ports;
 mod sbom_generation;
 mod shared;
@@ -175,7 +176,10 @@ async fn run(args: Args) -> Result<bool> {
         .check_license(merged.check_license)
         .license_policy(merged.license_policy)
         .suggest_fix(suggest_fix)
+        .locale(args.lang)
         .build()?;
+
+    let locale = request.locale;
 
     // Execute use case
     let response = use_case.execute(request).await?;
@@ -186,7 +190,10 @@ async fn run(args: Args) -> Result<bool> {
     }
 
     // Display progress message
-    eprintln!("{}", FormatterFactory::progress_message(merged.format));
+    eprintln!(
+        "{}",
+        FormatterFactory::progress_message(merged.format, locale)
+    );
 
     // Determine project component for CycloneDX metadata
     let project_reader = FileSystemReader::new();
@@ -230,7 +237,7 @@ async fn run(args: Args) -> Result<bool> {
     };
 
     // Create formatter using factory with optional verified packages
-    let formatter = FormatterFactory::create(merged.format, verified_packages);
+    let formatter = FormatterFactory::create(merged.format, verified_packages, locale);
     let formatted_output = formatter.format(&read_model)?;
 
     // Create presenter using factory
