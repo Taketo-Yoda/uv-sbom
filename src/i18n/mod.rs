@@ -4,6 +4,10 @@
 //! for English and Japanese. No external i18n crates are used.
 
 /// Supported output locales.
+///
+/// Marked `#[non_exhaustive]` so that adding new variants in future releases
+/// does not constitute a breaking change for downstream consumers.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Locale {
     #[default]
