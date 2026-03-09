@@ -1,4 +1,5 @@
 use crate::config::IgnoreCve;
+use crate::i18n::Locale;
 use crate::sbom_generation::domain::license_policy::LicensePolicy;
 use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::error::SbomError;
@@ -35,6 +36,8 @@ pub struct SbomRequest {
     /// Only meaningful when `check_cve` is true.
     #[allow(dead_code)] // Will be used by upgrade advisor use case
     pub suggest_fix: bool,
+    /// Output locale for human-readable formats
+    pub locale: Locale,
 }
 
 impl SbomRequest {
@@ -95,6 +98,7 @@ pub struct SbomRequestBuilder {
     check_license: bool,
     license_policy: Option<LicensePolicy>,
     suggest_fix: bool,
+    locale: Locale,
 }
 
 impl SbomRequestBuilder {
@@ -121,6 +125,7 @@ impl SbomRequestBuilder {
             check_license: false,
             license_policy: None,
             suggest_fix: false,
+            locale: Locale::default(),
         }
     }
 
@@ -219,6 +224,12 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets the output locale for human-readable formats.
+    pub fn locale(mut self, locale: Locale) -> Self {
+        self.locale = locale;
+        self
+    }
+
     /// Builds the SbomRequest, validating that all required fields are set.
     ///
     /// # Errors
@@ -241,6 +252,7 @@ impl SbomRequestBuilder {
             check_license: self.check_license,
             license_policy: self.license_policy,
             suggest_fix: self.suggest_fix,
+            locale: self.locale,
         })
     }
 }
