@@ -30,10 +30,11 @@ impl Locale {
 }
 
 /// All translatable strings used in formatted output.
-#[allow(dead_code)] // Fields will be used by formatter implementations in subsequent PRs
+#[allow(dead_code)] // Some status fields reserved for future formatter sections
 pub struct Messages {
     // Section headers
-    pub section_sbom_report: &'static str,
+    pub section_sbom_title: &'static str,
+    pub section_component_inventory: &'static str,
     pub section_direct_deps: &'static str,
     pub section_transitive_deps: &'static str,
     pub section_vuln_report: &'static str,
@@ -83,11 +84,12 @@ impl Messages {
 
 static EN_MESSAGES: Messages = Messages {
     // Section headers
-    section_sbom_report: "## SBOM Report",
-    section_direct_deps: "### Direct Dependencies",
-    section_transitive_deps: "### Transitive Dependencies",
+    section_sbom_title: "# Software Bill of Materials (SBOM)",
+    section_component_inventory: "## Component Inventory",
+    section_direct_deps: "## Direct Dependencies",
+    section_transitive_deps: "## Transitive Dependencies",
     section_vuln_report: "## Vulnerability Report",
-    section_license_compliance: "## License Compliance",
+    section_license_compliance: "## License Compliance Report",
     section_resolution_guide: "## Vulnerability Resolution Guide",
 
     // Table column headers
@@ -123,11 +125,12 @@ static EN_MESSAGES: Messages = Messages {
 
 static JA_MESSAGES: Messages = Messages {
     // Section headers
-    section_sbom_report: "## SBOMレポート",
-    section_direct_deps: "### 直接依存パッケージ",
-    section_transitive_deps: "### 間接依存パッケージ",
+    section_sbom_title: "# ソフトウェア部品表 (SBOM)",
+    section_component_inventory: "## コンポーネント一覧",
+    section_direct_deps: "## 直接依存パッケージ",
+    section_transitive_deps: "## 間接依存パッケージ",
     section_vuln_report: "## 脆弱性レポート",
-    section_license_compliance: "## ライセンスコンプライアンス",
+    section_license_compliance: "## ライセンスコンプライアンスレポート",
     section_resolution_guide: "## 脆弱性解決ガイド",
 
     // Table column headers
@@ -190,8 +193,11 @@ mod tests {
     #[test]
     fn test_messages_for_locale_en() {
         let msgs = Messages::for_locale(Locale::En);
-        assert_eq!(msgs.section_sbom_report, "## SBOM Report");
-        assert_eq!(msgs.section_direct_deps, "### Direct Dependencies");
+        assert_eq!(
+            msgs.section_sbom_title,
+            "# Software Bill of Materials (SBOM)"
+        );
+        assert_eq!(msgs.section_direct_deps, "## Direct Dependencies");
         assert_eq!(msgs.col_package, "Package");
         assert_eq!(msgs.status_compliant, "Compliant");
         assert_eq!(
@@ -203,8 +209,8 @@ mod tests {
     #[test]
     fn test_messages_for_locale_ja() {
         let msgs = Messages::for_locale(Locale::Ja);
-        assert_eq!(msgs.section_sbom_report, "## SBOMレポート");
-        assert_eq!(msgs.section_direct_deps, "### 直接依存パッケージ");
+        assert_eq!(msgs.section_sbom_title, "# ソフトウェア部品表 (SBOM)");
+        assert_eq!(msgs.section_direct_deps, "## 直接依存パッケージ");
         assert_eq!(msgs.col_package, "パッケージ");
         assert_eq!(msgs.status_compliant, "準拠");
         assert_eq!(

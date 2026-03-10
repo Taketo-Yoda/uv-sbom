@@ -3,23 +3,10 @@ use crate::application::read_models::{
     SbomReadModel, UpgradeEntryView, UpgradeRecommendationView, VulnerabilityReportView,
     VulnerabilitySummary, VulnerabilityView,
 };
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
 use std::collections::{HashMap, HashSet};
-
-/// Markdown table header for package information
-const TABLE_HEADER: &str = "| Package | Version | License | Description |\n";
-
-/// Markdown table separator line
-const TABLE_SEPARATOR: &str = "|---------|---------|---------|-------------|\n";
-
-/// Markdown table header for vulnerability information
-const VULN_TABLE_HEADER: &str =
-    "| Package | Current Version | Fixed Version | CVSS | Severity | Vulnerability ID |\n";
-
-/// Markdown table separator line for vulnerability table
-const VULN_TABLE_SEPARATOR: &str =
-    "|---------|-----------------|---------------|------|----------|------------------|\n";
 
 /// MarkdownFormatter adapter for generating detailed Markdown SBOM with dependency information
 ///
@@ -29,20 +16,23 @@ pub struct MarkdownFormatter {
     /// When Some, only packages in this set get PyPI hyperlinks.
     /// When None, all packages get PyPI hyperlinks (default behavior).
     verified_packages: Option<HashSet<String>>,
+    messages: &'static Messages,
 }
 
 impl MarkdownFormatter {
-    pub fn new() -> Self {
+    pub fn new(locale: Locale) -> Self {
         Self {
             verified_packages: None,
+            messages: Messages::for_locale(locale),
         }
     }
 
     /// Creates a new MarkdownFormatter with a set of verified PyPI packages.
     /// Only packages in the set will get hyperlinks; others render as plain text.
-    pub fn with_verified_packages(verified_packages: HashSet<String>) -> Self {
+    pub fn with_verified_packages(verified_packages: HashSet<String>, locale: Locale) -> Self {
         Self {
             verified_packages: Some(verified_packages),
+            messages: Messages::for_locale(locale),
         }
     }
 
@@ -97,23 +87,84 @@ impl MarkdownFormatter {
             }
         }
     }
+
+    /// Generates a Markdown table separator row from column header strings.
+    /// Each separator cell width matches the header's char count plus two spaces.
+    fn make_separator(cols: &[&str]) -> String {
+        let mut sep = String::from("|");
+        for col in cols {
+            let dashes = "-".repeat(col.chars().count() + 2);
+            sep.push_str(&dashes);
+            sep.push('|');
+        }
+        sep.push('\n');
+        sep
+    }
+
+    /// Locale-aware package table header line
+    fn table_header(&self) -> String {
+        format!(
+            "| {} | {} | {} | {} |\n",
+            self.messages.col_package,
+            self.messages.col_version,
+            self.messages.col_license,
+            self.messages.col_description,
+        )
+    }
+
+    /// Locale-aware package table separator line
+    fn table_separator(&self) -> String {
+        Self::make_separator(&[
+            self.messages.col_package,
+            self.messages.col_version,
+            self.messages.col_license,
+            self.messages.col_description,
+        ])
+    }
+
+    /// Locale-aware vulnerability table header line
+    fn vuln_table_header(&self) -> String {
+        format!(
+            "| {} | {} | {} | {} | {} | {} |\n",
+            self.messages.col_package,
+            self.messages.col_current_version,
+            self.messages.col_fixed_version,
+            self.messages.col_cvss,
+            self.messages.col_severity,
+            self.messages.col_vuln_id,
+        )
+    }
+
+    /// Locale-aware vulnerability table separator line
+    fn vuln_table_separator(&self) -> String {
+        Self::make_separator(&[
+            self.messages.col_package,
+            self.messages.col_current_version,
+            self.messages.col_fixed_version,
+            self.messages.col_cvss,
+            self.messages.col_severity,
+            self.messages.col_vuln_id,
+        ])
+    }
 }
 
 /// Helper methods for rendering sections
 impl MarkdownFormatter {
     /// Renders the header section
     fn render_header(&self, output: &mut String) {
-        output.push_str("# Software Bill of Materials (SBOM)\n\n");
+        output.push_str(self.messages.section_sbom_title);
+        output.push_str("\n\n");
     }
 
     /// Renders the components section
     fn render_components(&self, output: &mut String, components: &[ComponentView]) {
-        output.push_str("## Component Inventory\n\n");
+        output.push_str(self.messages.section_component_inventory);
+        output.push_str("\n\n");
         output.push_str(
             "A comprehensive list of all software components and libraries included in this project.\n\n",
         );
-        output.push_str(TABLE_HEADER);
-        output.push_str(TABLE_SEPARATOR);
+        output.push_str(&self.table_header());
+        output.push_str(&self.table_separator());
 
         for component in components {
             let license = component
@@ -146,14 +197,15 @@ impl MarkdownFormatter {
             components.iter().map(|c| (c.bom_ref.as_str(), c)).collect();
 
         // Direct Dependencies section
-        output.push_str("## Direct Dependencies\n\n");
+        output.push_str(self.messages.section_direct_deps);
+        output.push_str("\n\n");
         output.push_str(
             "Primary packages explicitly defined in the project configuration(e.g., pyproject.toml).\n\n",
         );
 
         if !deps.direct.is_empty() {
-            output.push_str(TABLE_HEADER);
-            output.push_str(TABLE_SEPARATOR);
+            output.push_str(&self.table_header());
+            output.push_str(&self.table_separator());
 
             for bom_ref in &deps.direct {
                 if let Some(component) = component_map.get(bom_ref.as_str()) {
@@ -179,7 +231,8 @@ impl MarkdownFormatter {
         }
 
         // Transitive Dependencies section
-        output.push_str("## Transitive Dependencies\n\n");
+        output.push_str(self.messages.section_transitive_deps);
+        output.push_str("\n\n");
         output.push_str("Secondary dependencies introduced by the primary packages.\n\n");
 
         if !deps.transitive.is_empty() {
@@ -196,8 +249,8 @@ impl MarkdownFormatter {
                         .unwrap_or(direct_ref);
 
                     output.push_str(&format!("### Dependencies for {}\n\n", parent_name));
-                    output.push_str(TABLE_HEADER);
-                    output.push_str(TABLE_SEPARATOR);
+                    output.push_str(&self.table_header());
+                    output.push_str(&self.table_separator());
 
                     for trans_ref in trans_deps {
                         if let Some(component) = component_map.get(trans_ref.as_str()) {
@@ -227,7 +280,9 @@ impl MarkdownFormatter {
 
     /// Renders the vulnerabilities section
     fn render_vulnerabilities(&self, output: &mut String, vulns: &VulnerabilityReportView) {
-        output.push_str("\n## Vulnerability Report\n\n");
+        output.push('\n');
+        output.push_str(self.messages.section_vuln_report);
+        output.push_str("\n\n");
 
         // Summary section
         self.render_vulnerability_summary(output, &vulns.summary);
@@ -290,8 +345,8 @@ impl MarkdownFormatter {
             }
         ));
 
-        output.push_str(VULN_TABLE_HEADER);
-        output.push_str(VULN_TABLE_SEPARATOR);
+        output.push_str(&self.vuln_table_header());
+        output.push_str(&self.vuln_table_separator());
 
         // Sort by severity (Critical first)
         let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
@@ -328,8 +383,8 @@ impl MarkdownFormatter {
             }
         ));
 
-        output.push_str(VULN_TABLE_HEADER);
-        output.push_str(VULN_TABLE_SEPARATOR);
+        output.push_str(&self.vuln_table_header());
+        output.push_str(&self.vuln_table_separator());
 
         let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
         sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
@@ -350,7 +405,9 @@ impl MarkdownFormatter {
 
     /// Renders the license compliance section
     fn render_license_compliance(&self, output: &mut String, compliance: &LicenseComplianceView) {
-        output.push_str("\n## License Compliance Report\n\n");
+        output.push('\n');
+        output.push_str(self.messages.section_license_compliance);
+        output.push_str("\n\n");
 
         // Summary
         if compliance.has_violations {
@@ -370,8 +427,17 @@ impl MarkdownFormatter {
         // Violations table
         if !compliance.violations.is_empty() {
             output.push_str("### Violations\n\n");
-            output.push_str("| Package | Version | License | Reason | Matched Pattern |\n");
-            output.push_str("|---------|---------|---------|--------|----------------|\n");
+            output.push_str(&format!(
+                "| {} | {} | {} | Reason | Matched Pattern |\n",
+                self.messages.col_package, self.messages.col_version, self.messages.col_license,
+            ));
+            output.push_str(&Self::make_separator(&[
+                self.messages.col_package,
+                self.messages.col_version,
+                self.messages.col_license,
+                "Reason",
+                "Matched Pattern",
+            ]));
 
             for v in &compliance.violations {
                 output.push_str(&format!(
@@ -397,8 +463,14 @@ impl MarkdownFormatter {
                     "packages"
                 }
             ));
-            output.push_str("| Package | Version |\n");
-            output.push_str("|---------|--------|\n");
+            output.push_str(&format!(
+                "| {} | {} |\n",
+                self.messages.col_package, self.messages.col_version,
+            ));
+            output.push_str(&Self::make_separator(&[
+                self.messages.col_package,
+                self.messages.col_version,
+            ]));
 
             for w in &compliance.warnings {
                 output.push_str(&format!(
@@ -418,7 +490,9 @@ impl MarkdownFormatter {
         guide: &ResolutionGuideView,
         upgrade_recommendations: Option<&UpgradeRecommendationView>,
     ) {
-        output.push_str("\n## Vulnerability Resolution Guide\n\n");
+        output.push('\n');
+        output.push_str(self.messages.section_resolution_guide);
+        output.push_str("\n\n");
         output.push_str("The following transitive dependencies have known vulnerabilities. ");
         output.push_str(
             "The table shows which direct dependency introduces each vulnerable package.\n\n",
@@ -561,7 +635,7 @@ impl MarkdownFormatter {
 
 impl Default for MarkdownFormatter {
     fn default() -> Self {
-        Self::new()
+        Self::new(Locale::En)
     }
 }
 
@@ -611,6 +685,7 @@ mod tests {
     use crate::application::read_models::{
         LicenseView, SbomMetadataView, SeverityView, VulnerabilitySummary,
     };
+    use crate::i18n::Locale;
     use std::collections::HashMap;
 
     fn create_test_read_model() -> SbomReadModel {
@@ -670,7 +745,7 @@ mod tests {
     #[test]
     fn test_format_basic() {
         let model = create_test_read_model();
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
 
         let result = formatter.format(&model);
 
@@ -698,7 +773,7 @@ mod tests {
             transitive,
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let result = formatter.format(&model);
 
         assert!(result.is_ok());
@@ -736,7 +811,7 @@ mod tests {
             },
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let result = formatter.format(&model);
 
         assert!(result.is_ok());
@@ -779,7 +854,7 @@ mod tests {
             },
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let result = formatter.format(&model);
 
         assert!(result.is_ok());
@@ -806,7 +881,7 @@ mod tests {
             transitive,
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let result = formatter.format(&model);
 
         assert!(result.is_ok());
@@ -835,7 +910,7 @@ mod tests {
 
     #[test]
     fn test_render_vulnerability_summary() {
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let summary = VulnerabilitySummary {
             total_count: 3,
             actionable_count: 2,
@@ -851,7 +926,7 @@ mod tests {
 
     #[test]
     fn test_render_vulnerability_summary_singular() {
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let summary = VulnerabilitySummary {
             total_count: 1,
             actionable_count: 1,
@@ -867,7 +942,7 @@ mod tests {
 
     #[test]
     fn test_render_actionable_vulnerabilities() {
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let vulns = vec![
             VulnerabilityView {
                 bom_ref: "vuln-001".to_string(),
@@ -911,7 +986,7 @@ mod tests {
 
     #[test]
     fn test_render_informational_vulnerabilities() {
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let vulns = vec![VulnerabilityView {
             bom_ref: "vuln-003".to_string(),
             id: "CVE-2024-3333".to_string(),
@@ -938,7 +1013,7 @@ mod tests {
 
     #[test]
     fn test_render_actionable_vulnerabilities_multiple_packages() {
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let vulns = vec![
             VulnerabilityView {
                 bom_ref: "vuln-001".to_string(),
@@ -1060,7 +1135,7 @@ mod tests {
             },
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         // Verify sections appear in correct order
@@ -1131,7 +1206,7 @@ mod tests {
     #[test]
     fn test_format_basic_contains_pypi_links() {
         let model = create_test_read_model();
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
 
         let markdown = formatter.format(&model).unwrap();
         assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
@@ -1152,7 +1227,7 @@ mod tests {
             transitive,
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         // Direct dependencies section should have PyPI link
@@ -1188,7 +1263,7 @@ mod tests {
             },
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
         assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
     }
@@ -1204,7 +1279,7 @@ mod tests {
         verified.insert("requests".to_string());
         // "urllib3" is NOT in verified set
 
-        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         // "requests" is verified → gets a hyperlink
@@ -1217,7 +1292,7 @@ mod tests {
     #[test]
     fn test_format_without_verified_packages_all_get_links() {
         let model = create_test_read_model();
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         // Without verification, all packages get hyperlinks
@@ -1230,7 +1305,7 @@ mod tests {
         let model = create_test_read_model();
         let verified = HashSet::new();
 
-        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         // Empty verified set → no packages get hyperlinks
@@ -1269,7 +1344,7 @@ mod tests {
 
         // "requests" is NOT in verified set
         let verified = HashSet::new();
-        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         // Vulnerability table should show plain text for unverified package
@@ -1279,7 +1354,7 @@ mod tests {
 
     #[test]
     fn test_format_package_name_with_none_verified() {
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let result = formatter.format_package_name("requests");
         assert_eq!(result, "[requests](https://pypi.org/project/requests/)");
     }
@@ -1288,7 +1363,7 @@ mod tests {
     fn test_format_package_name_with_verified_present() {
         let mut verified = HashSet::new();
         verified.insert("requests".to_string());
-        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
         let result = formatter.format_package_name("requests");
         assert_eq!(result, "[requests](https://pypi.org/project/requests/)");
     }
@@ -1332,7 +1407,7 @@ mod tests {
     #[test]
     fn test_format_package_name_with_verified_absent() {
         let verified = HashSet::new();
-        let formatter = MarkdownFormatter::with_verified_packages(verified);
+        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
         let result = formatter.format_package_name("nonexistent-pkg");
         assert_eq!(result, "nonexistent-pkg");
     }
@@ -1362,7 +1437,7 @@ mod tests {
             }],
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("## Vulnerability Resolution Guide"));
@@ -1403,7 +1478,7 @@ mod tests {
             }],
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("requests (2.31.0), httpx (0.25.0)"));
@@ -1416,7 +1491,7 @@ mod tests {
         let mut model = create_test_read_model();
         model.resolution_guide = Some(ResolutionGuideView { entries: vec![] });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(!markdown.contains("## Vulnerability Resolution Guide"));
@@ -1425,7 +1500,7 @@ mod tests {
     #[test]
     fn test_resolution_guide_omitted_when_none() {
         let model = create_test_read_model();
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(!markdown.contains("## Vulnerability Resolution Guide"));
@@ -1452,7 +1527,7 @@ mod tests {
             }],
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown
@@ -1496,7 +1571,7 @@ mod tests {
             }],
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("Recommended Action"));
@@ -1532,7 +1607,7 @@ mod tests {
             }],
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("Recommended Action"));
@@ -1567,7 +1642,7 @@ mod tests {
             }],
         });
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("Recommended Action"));
@@ -1596,7 +1671,7 @@ mod tests {
         });
         // upgrade_recommendations is None (default in test model)
 
-        let formatter = MarkdownFormatter::new();
+        let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(!markdown.contains("Recommended Action"));

@@ -19,13 +19,15 @@ impl FormatterFactory {
     pub fn create(
         format: OutputFormat,
         verified_packages: Option<HashSet<String>>,
-        _locale: Locale,
+        locale: Locale,
     ) -> Box<dyn SbomFormatter> {
         match format {
             OutputFormat::Json => Box::new(CycloneDxFormatter::new()),
             OutputFormat::Markdown => match verified_packages {
-                Some(packages) => Box::new(MarkdownFormatter::with_verified_packages(packages)),
-                None => Box::new(MarkdownFormatter::new()),
+                Some(packages) => {
+                    Box::new(MarkdownFormatter::with_verified_packages(packages, locale))
+                }
+                None => Box::new(MarkdownFormatter::new(locale)),
             },
         }
     }
