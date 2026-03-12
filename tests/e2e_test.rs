@@ -74,7 +74,7 @@ async fn test_e2e_json_format() {
     // Note: This test uses MockLicenseRepository to avoid network calls in tests
     // In real usage, PyPiLicenseRepository would be used
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -121,7 +121,7 @@ async fn test_e2e_markdown_format() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -170,7 +170,7 @@ async fn test_e2e_nonexistent_project() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -196,7 +196,7 @@ async fn test_e2e_package_count() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -234,7 +234,7 @@ async fn test_e2e_exclude_single_package() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -272,7 +272,7 @@ async fn test_e2e_exclude_multiple_packages() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -314,7 +314,7 @@ async fn test_e2e_exclude_with_wildcard() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -352,7 +352,7 @@ async fn test_e2e_exclude_all_packages_error() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -396,7 +396,7 @@ async fn test_e2e_exclude_root_project_preserves_dependency_classification() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -448,7 +448,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,

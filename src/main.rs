@@ -15,6 +15,7 @@ use application::read_models::SbomReadModelBuilder;
 use application::use_cases::GenerateSbomUseCase;
 use clap::Parser;
 use cli::Args;
+use i18n::Messages;
 use owo_colors::OwoColorize;
 use ports::outbound::ProjectConfigReader;
 use sbom_generation::domain::license_policy::{LicensePolicy, UnknownLicenseHandling};
@@ -100,9 +101,12 @@ async fn run(args: Args) -> Result<bool> {
     // Display startup banner
     display_banner();
 
+    let locale = args.lang;
+    let msgs = Messages::for_locale(locale);
+
     // Warn if check_cve is used with JSON format
     if args.check_cve && args.format == OutputFormat::Json {
-        eprintln!("⚠️  Warning: --check-cve has no effect with JSON format.");
+        eprintln!("{}", msgs.warn_check_cve_no_effect);
         eprintln!("   Vulnerability data is not included in JSON output.");
         eprintln!("   Use --format markdown to see vulnerability report.");
         eprintln!();
@@ -110,7 +114,7 @@ async fn run(args: Args) -> Result<bool> {
 
     // Warn if check_license is used with JSON format
     if args.check_license && args.format == OutputFormat::Json {
-        eprintln!("⚠️  Warning: --check-license has no effect with JSON format.");
+        eprintln!("{}", msgs.warn_check_license_no_effect);
         eprintln!("   License compliance data is not included in JSON output.");
         eprintln!("   Use --format markdown to see license compliance report.");
         eprintln!();
@@ -118,7 +122,7 @@ async fn run(args: Args) -> Result<bool> {
 
     // Warn if verify_links is used with JSON format
     if args.verify_links && args.format == OutputFormat::Json {
-        eprintln!("⚠️  Warning: --verify-links has no effect with JSON format.");
+        eprintln!("{}", msgs.warn_verify_links_no_effect);
         eprintln!("   PyPI link verification only applies to Markdown output.");
         eprintln!("   Use --format markdown to use link verification.");
         eprintln!();
@@ -141,7 +145,7 @@ async fn run(args: Args) -> Result<bool> {
     let project_config_reader = FileSystemReader::new();
     let pypi_repository = PyPiLicenseRepository::new()?;
     let license_repository = CachingPyPiLicenseRepository::new(pypi_repository);
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(locale);
 
     // Create vulnerability repository if CVE check is requested
     let vulnerability_repository = if merged.check_cve {
@@ -176,9 +180,10 @@ async fn run(args: Args) -> Result<bool> {
         .check_license(merged.check_license)
         .license_policy(merged.license_policy)
         .suggest_fix(suggest_fix)
-        .locale(args.lang)
+        .locale(locale)
         .build()?;
 
+    // Re-bind locale from the validated request to ensure consistency
     let locale = request.locale;
 
     // Execute use case
@@ -224,7 +229,7 @@ async fn run(args: Args) -> Result<bool> {
 
     // Verify PyPI links if requested
     let verified_packages = if args.verify_links && merged.format == OutputFormat::Markdown {
-        eprintln!("🔗 Verifying PyPI links...");
+        eprintln!("{}", msgs.progress_verifying_links);
         let pypi_verifier = PyPiLicenseRepository::new()?;
         let package_names: Vec<String> = read_model
             .components
