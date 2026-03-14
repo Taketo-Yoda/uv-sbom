@@ -170,6 +170,22 @@ Generate a CycloneDX JSON (default):
 uv-sbom --format json
 ```
 
+### Output language
+
+Use the `--lang` option to switch the output language for human-readable formats (Markdown). The default is English (`en`).
+
+```bash
+# Generate a Japanese Markdown SBOM report
+uv-sbom --format markdown --lang ja
+
+# Generate an English Markdown SBOM report (default)
+uv-sbom --format markdown --lang en
+```
+
+**Supported values:** `en` (English, default), `ja` (Japanese)
+
+**Note:** The `--lang` option affects section headers, table column names, and status labels in Markdown output. Package names, CVE IDs, and SPDX license identifiers always remain in their original form regardless of `--lang`.
+
 ### Specify project path
 
 Analyze a project in a different directory:
@@ -658,6 +674,7 @@ Options:
   -e, --exclude <PATTERN>            Exclude packages matching patterns (supports wildcards: *)
   -c, --config <PATH>               Path to config file (auto-discovers uv-sbom.config.yml if not specified)
   -i, --ignore-cve <CVE_ID>         CVE IDs to ignore (can be specified multiple times)
+      --lang <LANG>                  Output language for human-readable formats: en or ja [default: en]
       --init                         Generate a uv-sbom.config.yml template file
       --dry-run                      Validate configuration without network communication or output generation
       --verify-links                 Verify PyPI links exist before generating hyperlinks (Markdown format only)
