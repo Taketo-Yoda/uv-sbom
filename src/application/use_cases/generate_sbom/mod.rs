@@ -1,6 +1,7 @@
 use crate::adapters::outbound::uv::UvLockAdapter;
 use crate::application::dto::{SbomRequest, SbomResponse};
 use crate::application::use_cases::CheckVulnerabilitiesUseCase;
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
     EnrichedPackage, LicenseRepository, LockfileReader, ProgressReporter, ProjectConfigReader,
     VulnerabilityRepository,
@@ -44,6 +45,7 @@ pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO> {
     license_repository: LREPO,
     progress_reporter: PR,
     vulnerability_repository: Option<VREPO>,
+    locale: Locale,
 }
 
 impl<LR, PCR, LREPO, PR, VREPO> GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO>
@@ -61,6 +63,7 @@ where
         license_repository: LREPO,
         progress_reporter: PR,
         vulnerability_repository: Option<VREPO>,
+        locale: Locale,
     ) -> Self {
         Self {
             lockfile_reader,
@@ -68,6 +71,7 @@ where
             license_repository,
             progress_reporter,
             vulnerability_repository,
+            locale,
         }
     }
 
@@ -145,17 +149,24 @@ where
     /// # Returns
     /// Tuple of (packages, dependency_map)
     fn read_and_report_lockfile(&self, request: &SbomRequest) -> Result<PackagesWithDependencyMap> {
-        self.progress_reporter.report(&format!(
-            "📖 Loading uv.lock file from: {}",
-            request.project_path.display()
-        ));
+        let msgs = Messages::for_locale(self.locale);
+        self.progress_reporter
+            .report(&msgs.progress_loading_lockfile.replacen(
+                "{}",
+                &request.project_path.display().to_string(),
+                1,
+            ));
 
         let (packages, dependency_map) = self
             .lockfile_reader
             .read_and_parse_lockfile(&request.project_path)?;
 
         self.progress_reporter
-            .report(&format!("✅ Detected {} package(s)", packages.len()));
+            .report(&msgs.progress_detected_packages.replacen(
+                "{}",
+                &packages.len().to_string(),
+                1,
+            ));
 
         Ok((packages, dependency_map))
     }
@@ -246,8 +257,8 @@ where
             return Ok(None);
         }
 
-        self.progress_reporter
-            .report("📊 Parsing dependency information...");
+        let msgs = Messages::for_locale(self.locale);
+        self.progress_reporter.report(msgs.progress_parsing_deps);
 
         let project_name = self
             .project_config_reader
@@ -256,14 +267,18 @@ where
 
         let graph = DependencyAnalyzer::analyze(&project_package_name, dependency_map)?;
 
-        self.progress_reporter.report(&format!(
-            "   - Direct dependencies: {}",
-            graph.direct_dependency_count()
-        ));
-        self.progress_reporter.report(&format!(
-            "   - Transitive dependencies: {}",
-            graph.transitive_dependency_count()
-        ));
+        self.progress_reporter
+            .report(&msgs.progress_direct_deps.replacen(
+                "{}",
+                &graph.direct_dependency_count().to_string(),
+                1,
+            ));
+        self.progress_reporter
+            .report(&msgs.progress_transitive_deps.replacen(
+                "{}",
+                &graph.transitive_dependency_count().to_string(),
+                1,
+            ));
 
         Ok(Some(graph))
     }
@@ -277,7 +292,7 @@ where
     /// Vector of EnrichedPackage with license information
     async fn fetch_license_info(&self, packages: Vec<Package>) -> Result<Vec<EnrichedPackage>> {
         self.progress_reporter
-            .report("🔍 Fetching license information...");
+            .report(Messages::for_locale(self.locale).progress_fetching_license);
 
         self.enrich_packages_with_licenses(packages).await
     }
@@ -309,8 +324,8 @@ where
         };
 
         // Report start of vulnerability check
-        self.progress_reporter
-            .report("🔐 Checking for vulnerabilities...");
+        let msgs = Messages::for_locale(self.locale);
+        self.progress_reporter.report(msgs.progress_fetching_vulns);
 
         // Delegate to CheckVulnerabilitiesUseCase for vulnerability fetching
         let vuln_use_case = CheckVulnerabilitiesUseCase::new(repo.clone());
@@ -321,14 +336,15 @@ where
             CheckVulnerabilitiesUseCase::<VREPO>::summarize(&vulnerabilities);
         eprintln!(); // Add newline after progress bar
         if total_vulns > 0 {
-            self.progress_reporter.report_completion(&format!(
-                "✅ Vulnerability check complete: {} vulnerabilities found in {} packages",
-                total_vulns, affected_packages
-            ));
-        } else {
             self.progress_reporter.report_completion(
-                "✅ Vulnerability check complete: No known vulnerabilities found",
+                &msgs
+                    .progress_vuln_found
+                    .replacen("{}", &total_vulns.to_string(), 1)
+                    .replacen("{}", &affected_packages.to_string(), 1),
             );
+        } else {
+            self.progress_reporter
+                .report_completion(msgs.progress_vuln_none);
         }
 
         // Return Some even if empty (indicates check was performed)
@@ -621,17 +637,23 @@ where
         eprintln!(); // Add newline after progress bar
 
         // Report errors collected during async execution
+        let msgs = Messages::for_locale(self.locale);
         for (package_name, error_msg) in errors {
-            self.progress_reporter.report_error(&format!(
-                "⚠️  Warning: Error: Failed to fetch license information for {}: {}",
-                package_name, error_msg
-            ));
+            self.progress_reporter.report_error(
+                &msgs
+                    .warn_license_fetch_failed
+                    .replacen("{}", &package_name, 1)
+                    .replacen("{}", &error_msg, 1),
+            );
         }
 
-        self.progress_reporter.report_completion(&format!(
-            "✅ License information retrieval complete: {} succeeded out of {}, {} failed",
-            successful, total, failed
-        ));
+        self.progress_reporter.report_completion(
+            &msgs
+                .progress_license_complete
+                .replacen("{}", &successful.to_string(), 1)
+                .replacen("{}", &total.to_string(), 1)
+                .replacen("{}", &failed.to_string(), 1),
+        );
 
         Ok(enriched)
     }

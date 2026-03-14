@@ -34,6 +34,7 @@
 //!     license_repository,
 //!     progress_reporter,
 //!     None, // No vulnerability checking in this example
+//!     uv_sbom::i18n::Locale::default(),
 //! );
 //!
 //! // Execute
