@@ -146,6 +146,7 @@ fn test_check_license_with_json_format_warns() {
         "--check-license",
         "--format",
         "json",
+        "--no-check-cve",
     ]);
     // Should warn about JSON format
     assert!(

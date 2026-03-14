@@ -6,11 +6,11 @@ use uv_sbom::prelude::*;
 mod exit_code_tests {
     use assert_cmd::cargo::cargo_bin_cmd;
 
-    /// Exit code 0: Success - normal execution
+    /// Exit code 0: Success - normal execution (disable CVE check to avoid network calls)
     #[test]
     fn test_exit_code_success() {
         cargo_bin_cmd!("uv-sbom")
-            .args(["-p", "tests/fixtures/sample-project"])
+            .args(["-p", "tests/fixtures/sample-project", "--no-check-cve"])
             .assert()
             .code(0);
     }
