@@ -93,6 +93,27 @@ impl Messages {
     }
 }
 
+/// Substitute positional `{}` placeholders in a message template with the given arguments.
+///
+/// Replaces each `{}` in order with the corresponding element of `args`.
+/// Extra args are ignored; unmatched `{}` remain as-is.
+///
+/// # Example
+/// ```
+/// use uv_sbom::i18n::fmt_msg;
+/// assert_eq!(fmt_msg("Found {} of {} packages", &["3", "10"]), "Found 3 of 10 packages");
+/// ```
+pub fn fmt_msg(template: &str, args: &[&str]) -> String {
+    let mut result = template.to_string();
+    for arg in args {
+        match result.find("{}") {
+            Some(pos) => result.replace_range(pos..pos + 2, arg),
+            None => break,
+        }
+    }
+    result
+}
+
 static EN_MESSAGES: Messages = Messages {
     // Section headers
     section_sbom_title: "# Software Bill of Materials (SBOM)",
@@ -303,5 +324,33 @@ mod tests {
             msgs.progress_vuln_none,
             "✅ 脆弱性チェック完了: 既知の脆弱性は検出されませんでした"
         );
+    }
+
+    #[test]
+    fn test_fmt_msg_no_placeholders() {
+        assert_eq!(fmt_msg("No placeholders here", &[]), "No placeholders here");
+    }
+
+    #[test]
+    fn test_fmt_msg_single_placeholder() {
+        assert_eq!(fmt_msg("Found {} packages", &["5"]), "Found 5 packages");
+    }
+
+    #[test]
+    fn test_fmt_msg_multiple_placeholders() {
+        assert_eq!(
+            fmt_msg("{} succeeded out of {}, {} failed", &["8", "10", "2"]),
+            "8 succeeded out of 10, 2 failed"
+        );
+    }
+
+    #[test]
+    fn test_fmt_msg_extra_args_ignored() {
+        assert_eq!(fmt_msg("Hello {}", &["world", "extra"]), "Hello world");
+    }
+
+    #[test]
+    fn test_fmt_msg_fewer_args_than_placeholders() {
+        assert_eq!(fmt_msg("{} of {} done", &["3"]), "3 of {} done");
     }
 }
