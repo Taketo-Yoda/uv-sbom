@@ -166,6 +166,7 @@ async fn run(args: Args) -> Result<bool> {
         license_repository,
         progress_reporter,
         vulnerability_repository,
+        locale,
     );
 
     // Pre-flight check for --suggest-fix

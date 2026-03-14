@@ -59,12 +59,23 @@ pub struct Messages {
     pub status_direct_dep: &'static str,
     pub status_introduced_by: &'static str,
 
-    // Progress messages
+    // Progress messages (formatter/main layer)
     pub progress_generating_json: &'static str,
     pub progress_generating_markdown: &'static str,
     pub progress_verifying_links: &'static str,
     pub progress_fetching_license: &'static str,
     pub progress_fetching_vulns: &'static str,
+
+    // Progress messages (use case layer)
+    pub progress_loading_lockfile: &'static str,
+    pub progress_detected_packages: &'static str,
+    pub progress_parsing_deps: &'static str,
+    pub progress_direct_deps: &'static str,
+    pub progress_transitive_deps: &'static str,
+    pub warn_license_fetch_failed: &'static str,
+    pub progress_license_complete: &'static str,
+    pub progress_vuln_found: &'static str,
+    pub progress_vuln_none: &'static str,
 
     // Warning messages
     pub warn_check_cve_no_effect: &'static str,
@@ -79,6 +90,27 @@ impl Messages {
             Locale::En => &EN_MESSAGES,
             Locale::Ja => &JA_MESSAGES,
         }
+    }
+
+    /// Substitute positional `{}` placeholders in a message template with the given arguments.
+    ///
+    /// Replaces each `{}` in order with the corresponding element of `args`.
+    /// Extra args are ignored; unmatched `{}` remain as-is.
+    ///
+    /// # Example
+    /// ```
+    /// use uv_sbom::i18n::Messages;
+    /// assert_eq!(Messages::format("Found {} of {} packages", &["3", "10"]), "Found 3 of 10 packages");
+    /// ```
+    pub fn format(template: &str, args: &[&str]) -> String {
+        let mut result = template.to_string();
+        for arg in args {
+            match result.find("{}") {
+                Some(pos) => result.replace_range(pos..pos + 2, arg),
+                None => break,
+            }
+        }
+        result
     }
 }
 
@@ -116,6 +148,18 @@ static EN_MESSAGES: Messages = Messages {
     progress_verifying_links: "🔗 Verifying PyPI links...",
     progress_fetching_license: "🔍 Fetching license information...",
     progress_fetching_vulns: "🔍 Fetching vulnerability information...",
+
+    // Progress messages (use case layer)
+    progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
+    progress_detected_packages: "✅ Detected {} package(s)",
+    progress_parsing_deps: "📊 Parsing dependency information...",
+    progress_direct_deps: "   - Direct dependencies: {}",
+    progress_transitive_deps: "   - Transitive dependencies: {}",
+    warn_license_fetch_failed: "⚠️  Warning: Error: Failed to fetch license information for {}: {}",
+    progress_license_complete:
+        "✅ License information retrieval complete: {} succeeded out of {}, {} failed",
+    progress_vuln_found: "✅ Vulnerability check complete: {} vulnerabilities found in {} packages",
+    progress_vuln_none: "✅ Vulnerability check complete: No known vulnerabilities found",
 
     // Warning messages
     warn_check_cve_no_effect: "⚠️  Warning: --check-cve has no effect with JSON format.",
@@ -157,6 +201,17 @@ static JA_MESSAGES: Messages = Messages {
     progress_verifying_links: "🔗 PyPIリンクを検証中...",
     progress_fetching_license: "🔍 ライセンス情報を取得中...",
     progress_fetching_vulns: "🔍 脆弱性情報を取得中...",
+
+    // Progress messages (use case layer)
+    progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
+    progress_detected_packages: "✅ {}個のパッケージを検出",
+    progress_parsing_deps: "📊 依存関係情報を解析中...",
+    progress_direct_deps: "   - 直接依存: {}",
+    progress_transitive_deps: "   - 間接依存: {}",
+    warn_license_fetch_failed: "⚠️  警告: {}のライセンス情報の取得に失敗: {}",
+    progress_license_complete: "✅ ライセンス情報取得完了: {}件成功 / {}件中、{}件失敗",
+    progress_vuln_found: "✅ 脆弱性チェック完了: {}個のパッケージで{}件の脆弱性を検出",
+    progress_vuln_none: "✅ 脆弱性チェック完了: 既知の脆弱性は検出されませんでした",
 
     // Warning messages
     warn_check_cve_no_effect: "⚠️  警告: JSON形式では --check-cve は効果がありません。",
@@ -217,5 +272,94 @@ mod tests {
             msgs.progress_generating_json,
             "📝 CycloneDX JSON形式で出力を生成中..."
         );
+    }
+
+    #[test]
+    fn test_messages_use_case_progress_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.progress_loading_lockfile,
+            "📖 Loading uv.lock file from: {}"
+        );
+        assert_eq!(msgs.progress_detected_packages, "✅ Detected {} package(s)");
+        assert_eq!(
+            msgs.progress_parsing_deps,
+            "📊 Parsing dependency information..."
+        );
+        assert_eq!(msgs.progress_direct_deps, "   - Direct dependencies: {}");
+        assert_eq!(
+            msgs.progress_transitive_deps,
+            "   - Transitive dependencies: {}"
+        );
+        assert_eq!(
+            msgs.progress_vuln_none,
+            "✅ Vulnerability check complete: No known vulnerabilities found"
+        );
+    }
+
+    #[test]
+    fn test_messages_use_case_progress_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.progress_loading_lockfile,
+            "📖 uv.lockファイルを読み込み中: {}"
+        );
+        assert_eq!(msgs.progress_detected_packages, "✅ {}個のパッケージを検出");
+        assert_eq!(msgs.progress_parsing_deps, "📊 依存関係情報を解析中...");
+        assert_eq!(msgs.progress_direct_deps, "   - 直接依存: {}");
+        assert_eq!(msgs.progress_transitive_deps, "   - 間接依存: {}");
+        assert_eq!(
+            msgs.warn_license_fetch_failed,
+            "⚠️  警告: {}のライセンス情報の取得に失敗: {}"
+        );
+        assert_eq!(
+            msgs.progress_license_complete,
+            "✅ ライセンス情報取得完了: {}件成功 / {}件中、{}件失敗"
+        );
+        assert_eq!(
+            msgs.progress_vuln_found,
+            "✅ 脆弱性チェック完了: {}個のパッケージで{}件の脆弱性を検出"
+        );
+        assert_eq!(
+            msgs.progress_vuln_none,
+            "✅ 脆弱性チェック完了: 既知の脆弱性は検出されませんでした"
+        );
+    }
+
+    #[test]
+    fn test_messages_format_no_placeholders() {
+        assert_eq!(
+            Messages::format("No placeholders here", &[]),
+            "No placeholders here"
+        );
+    }
+
+    #[test]
+    fn test_messages_format_single_placeholder() {
+        assert_eq!(
+            Messages::format("Found {} packages", &["5"]),
+            "Found 5 packages"
+        );
+    }
+
+    #[test]
+    fn test_messages_format_multiple_placeholders() {
+        assert_eq!(
+            Messages::format("{} succeeded out of {}, {} failed", &["8", "10", "2"]),
+            "8 succeeded out of 10, 2 failed"
+        );
+    }
+
+    #[test]
+    fn test_messages_format_extra_args_ignored() {
+        assert_eq!(
+            Messages::format("Hello {}", &["world", "extra"]),
+            "Hello world"
+        );
+    }
+
+    #[test]
+    fn test_messages_format_fewer_args_than_placeholders() {
+        assert_eq!(Messages::format("{} of {} done", &["3"]), "3 of {} done");
     }
 }

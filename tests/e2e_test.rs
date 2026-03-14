@@ -82,6 +82,7 @@ async fn test_e2e_json_format() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -129,6 +130,7 @@ async fn test_e2e_markdown_format() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -178,6 +180,7 @@ async fn test_e2e_nonexistent_project() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -204,6 +207,7 @@ async fn test_e2e_package_count() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -242,6 +246,7 @@ async fn test_e2e_exclude_single_package() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude urllib3
@@ -280,6 +285,7 @@ async fn test_e2e_exclude_multiple_packages() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude urllib3 and certifi
@@ -322,6 +328,7 @@ async fn test_e2e_exclude_with_wildcard() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude packages starting with "char"
@@ -360,6 +367,7 @@ async fn test_e2e_exclude_all_packages_error() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude all packages with a pattern that matches everything
@@ -404,6 +412,7 @@ async fn test_e2e_exclude_root_project_preserves_dependency_classification() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude the root project (sample-project) and request dependency info
@@ -456,6 +465,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude the root project and request dependency info
