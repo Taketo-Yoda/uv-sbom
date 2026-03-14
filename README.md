@@ -261,10 +261,10 @@ This creates a `uv-sbom.config.yml` file with inline documentation for every opt
 
 ```bash
 # Auto-discovered config file (place in project directory)
-uv-sbom --check-cve
+uv-sbom
 
 # Explicit config file path
-uv-sbom --config ./custom-config.yml --check-cve
+uv-sbom --config ./custom-config.yml
 ```
 
 **Example configuration file** (`uv-sbom.config.yml`):
@@ -308,7 +308,7 @@ license_policy:
 |-------|------|----------|-------------|
 | `format` | string | No | Output format (`json` / `markdown`) |
 | `exclude_packages` | string[] | No | Package exclusion patterns (supports wildcards) |
-| `check_cve` | bool | No | Enable CVE checking |
+| `check_cve` | bool | No | Override CVE checking behavior. Defaults to true when unset |
 | `severity_threshold` | string | No | Severity threshold (`low` / `medium` / `high` / `critical`) |
 | `cvss_threshold` | number | No | CVSS threshold (0.0 - 10.0) |
 | `ignore_cves` | object[] | No | List of CVEs to ignore |
@@ -322,7 +322,7 @@ license_policy:
 #### Priority and Merge Rules
 
 - **CLI arguments override config file values** for scalar fields (`format`, `severity_threshold`, `cvss_threshold`)
-- **`check_cve`** is enabled if set via CLI flag OR config file (logical OR)
+- **`check_cve`** defaults to true when unset. Set to false in config to disable. Use --no-check-cve CLI flag to opt out
 - **`exclude_packages`** are **merged** from both CLI and config file, then deduplicated
 - **`ignore_cves`** are **merged** from both CLI (`--ignore-cve`) and config file, deduplicated by ID (CLI entry takes precedence for duplicates)
 - **`check_license`** is enabled if set via CLI flag OR config file (logical OR, same as `check_cve`)
@@ -334,29 +334,46 @@ You can ignore specific CVEs from the command line using `--ignore-cve` / `-i`:
 
 ```bash
 # Ignore specific CVEs from CLI
-uv-sbom --check-cve --ignore-cve CVE-2024-1234 --ignore-cve CVE-2024-5678
+uv-sbom --ignore-cve CVE-2024-1234 --ignore-cve CVE-2024-5678
 
 # Short form
-uv-sbom --check-cve -i CVE-2024-1234 -i CVE-2024-5678
+uv-sbom -i CVE-2024-1234 -i CVE-2024-5678
 
 # Combine config file and CLI ignores (both sources are merged)
-uv-sbom --config ./config.yml --check-cve -i CVE-2024-9999
+uv-sbom --config ./config.yml -i CVE-2024-9999
 ```
 
 ### Checking for vulnerabilities
 
-Use the `--check-cve` option to check packages for known security vulnerabilities using the [OSV (Open Source Vulnerability) database](https://osv.dev):
+CVE vulnerability checking is **enabled by default** using the [OSV (Open Source Vulnerability) database](https://osv.dev). No flag is required:
 
 ```bash
-# Check for vulnerabilities in Markdown output
-uv-sbom --format markdown --check-cve
+# Check for vulnerabilities in Markdown output (CVE check runs automatically)
+uv-sbom --format markdown
 
 # Save vulnerability report to file
-uv-sbom --format markdown --check-cve --output SBOM.md
+uv-sbom --format markdown --output SBOM.md
 
 # Combine with exclude patterns
-uv-sbom --format markdown --check-cve -e "pytest" -e "*-dev"
+uv-sbom --format markdown -e "pytest" -e "*-dev"
+
+# Opt out of CVE checking
+uv-sbom --format markdown --no-check-cve
 ```
+
+### Disabling CVE Checking
+
+CVE vulnerability checking is enabled by default. To opt out, use the `--no-check-cve` flag:
+
+```bash
+# Generate SBOM without CVE checking
+uv-sbom --format markdown --no-check-cve
+
+# Disable via config file
+# check_cve: false  (in uv-sbom.config.yml)
+```
+
+> **Note:** `--no-check-cve` conflicts with `--severity-threshold`, `--cvss-threshold`, and `--suggest-fix`.
 
 ### License Compliance Check
 
@@ -370,7 +387,7 @@ uv-sbom --check-license --format markdown
 uv-sbom --check-license --license-allow "MIT,Apache-2.0,BSD-*" --license-deny "GPL-3.0,AGPL-*"
 
 # Combined with vulnerability check
-uv-sbom --check-license --check-cve --severity-threshold high
+uv-sbom --check-license --severity-threshold high
 ```
 
 **How it works:**
@@ -388,19 +405,19 @@ You can control which vulnerabilities trigger a non-zero exit code using thresho
 
 ```bash
 # Check for any vulnerabilities (exits with 1 if found)
-uv-sbom --format markdown --check-cve
+uv-sbom --format markdown
 
 # Check for High or Critical severity only
-uv-sbom --format markdown --check-cve --severity-threshold high
+uv-sbom --format markdown --severity-threshold high
 
 # Check for Critical severity only
-uv-sbom --format markdown --check-cve --severity-threshold critical
+uv-sbom --format markdown --severity-threshold critical
 
 # Check for CVSS >= 7.0 only
-uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+uv-sbom --format markdown --cvss-threshold 7.0
 
 # Check for CVSS >= 9.0 (Critical) only
-uv-sbom --format markdown --check-cve --cvss-threshold 9.0
+uv-sbom --format markdown --cvss-threshold 9.0
 ```
 
 **Threshold Options:**
@@ -409,7 +426,7 @@ uv-sbom --format markdown --check-cve --cvss-threshold 9.0
 
 **Notes:**
 - Only one threshold option can be used at a time
-- Requires `--check-cve` to be enabled
+- Cannot be used with `--no-check-cve`
 - Vulnerabilities below the threshold are still shown in the report but don't trigger exit code 1
 - When using `--cvss-threshold`, vulnerabilities without CVSS scores (N/A) are excluded from threshold evaluation
 
@@ -422,7 +439,7 @@ Use the `--verify-links` option to validate that packages exist on PyPI before g
 uv-sbom --format markdown --verify-links
 
 # Combine with other options
-uv-sbom --format markdown --verify-links --check-cve --output SBOM.md
+uv-sbom --format markdown --verify-links --output SBOM.md
 ```
 
 **Behavior:**
@@ -441,10 +458,10 @@ Use vulnerability thresholds for CI/CD pipeline integration:
   run: uv-sbom --format markdown --output sbom.md
 
 - name: Security Check (High and Critical only)
-  run: uv-sbom --format markdown --check-cve --severity-threshold high
+  run: uv-sbom --format markdown --severity-threshold high
 
 - name: Security Check (CVSS >= 7.0)
-  run: uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+  run: uv-sbom --format markdown --cvss-threshold 7.0
 ```
 
 ```yaml
@@ -453,14 +470,14 @@ Use vulnerability thresholds for CI/CD pipeline integration:
   run: uv-sbom --check-license --format markdown
 
 - name: Combined Security and License Check
-  run: uv-sbom --check-license --check-cve --severity-threshold high
+  run: uv-sbom --check-license --severity-threshold high
 ```
 
 ```yaml
 # GitLab CI example
 security_scan:
   script:
-    - uv-sbom --format markdown --check-cve --severity-threshold high
+    - uv-sbom --format markdown --severity-threshold high
   allow_failure: false
 ```
 
@@ -495,7 +512,7 @@ The following packages have known security vulnerabilities:
 
 ### Vulnerability Resolution Guide
 
-When `--check-cve` detects vulnerabilities in transitive dependencies, uv-sbom automatically generates a **Vulnerability Resolution Guide**. This section shows which direct dependency introduces each vulnerable transitive package, so you know exactly what to upgrade.
+When vulnerabilities are detected in transitive dependencies, uv-sbom automatically generates a **Vulnerability Resolution Guide**. This section shows which direct dependency introduces each vulnerable transitive package, so you know exactly what to upgrade.
 
 #### Markdown output example
 
@@ -534,16 +551,15 @@ In CycloneDX format, the introducing dependency is included as a `properties` en
 
 ### Upgrade Advisor (`--suggest-fix`)
 
-Use `--suggest-fix` together with `--check-cve` to automatically suggest which direct dependency version to upgrade to resolve each transitive vulnerability.
+Use `--suggest-fix` to automatically suggest which direct dependency version to upgrade to resolve each transitive vulnerability.
 
 **Requires**:
-- `--check-cve` flag enabled
 - `uv` CLI installed
 - `pyproject.toml` in the project directory
 
 **Example**:
 ```bash
-uv-sbom generate --check-cve --suggest-fix
+uv-sbom generate --suggest-fix
 ```
 
 **Output**: Adds a "Recommended Action" column to the Vulnerability Resolution Guide showing:
@@ -555,7 +571,7 @@ uv-sbom generate --check-cve --suggest-fix
 
 ```bash
 # This example has transitive CVEs designed to show both Upgradable and Unresolvable outcomes
-uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f markdown
+uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 ```
 
 See [`examples/suggest-fix-project/README.md`](examples/suggest-fix-project/README.md) for a full walkthrough.
@@ -678,13 +694,14 @@ Options:
       --init                         Generate a uv-sbom.config.yml template file
       --dry-run                      Validate configuration without network communication or output generation
       --verify-links                 Verify PyPI links exist before generating hyperlinks (Markdown format only)
-      --check-cve                    Check for known vulnerabilities using OSV API (Markdown format only)
+      --check-cve                    [DEPRECATED] CVE checking is now enabled by default. This flag has no effect. Use --no-check-cve to opt out
+      --no-check-cve                 Disable CVE vulnerability checking (enabled by default)
       --severity-threshold <LEVEL>   Severity threshold for vulnerability check (low/medium/high/critical)
-                                     Requires --check-cve to be enabled
+                                     Cannot be used with --no-check-cve
       --cvss-threshold <SCORE>       CVSS threshold for vulnerability check (0.0-10.0)
-                                     Requires --check-cve to be enabled
+                                     Cannot be used with --no-check-cve
       --suggest-fix                  Suggest direct dependency upgrade versions to resolve transitive vulnerabilities
-                                     Requires --check-cve to be enabled, uv CLI installed, and pyproject.toml in project directory
+                                     Requires uv CLI installed and pyproject.toml in project directory
       --check-license                Check license compliance against policy
       --license-allow <LIST>         Comma-separated list of allowed license patterns (overrides config)
       --license-deny <LIST>          Comma-separated list of denied license patterns (overrides config)
@@ -705,7 +722,7 @@ uv-sbom returns the following exit codes:
 
 ### Exit Codes with Vulnerability and License Checking
 
-When using `--check-cve` or `--check-license`, the exit code behavior changes based on threshold settings:
+When using CVE or license checking, the exit code behavior changes based on threshold settings:
 
 | Scenario | Exit Code |
 |----------|-----------|
@@ -720,10 +737,10 @@ When using `--check-cve` or `--check-license`, the exit code behavior changes ba
 **Examples:**
 ```bash
 # Returns 0 if no High/Critical vulnerabilities, even if Low/Medium exist
-uv-sbom --format markdown --check-cve --severity-threshold high
+uv-sbom --format markdown --severity-threshold high
 
 # Returns 0 if no vulnerabilities have CVSS >= 7.0
-uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+uv-sbom --format markdown --cvss-threshold 7.0
 ```
 
 ### Common Error Scenarios
@@ -890,7 +907,7 @@ Secondary dependencies introduced by the primary packages.
    - Rate limit: No official limit, but tool implements retry logic
    - Endpoint: `/pypi/{package_name}/json`
 
-#### Optional (only when using `--check-cve` or `--verify-links`):
+#### Optional (only when using `--no-check-cve` disables CVE, or `--verify-links`):
 
 2. **PyPI Link Verification**
    - Domain: `https://pypi.org`
@@ -902,7 +919,7 @@ Secondary dependencies introduced by the primary packages.
 3. **OSV (Open Source Vulnerability Database)**
    - Domain: `https://api.osv.dev`
    - Purpose: Fetch vulnerability information for security scanning
-   - When: Only when `--check-cve` flag is used
+   - When: By default (unless `--no-check-cve` is used)
    - Rate limit: Tool implements 10 requests/second limit
    - Endpoints:
      - `/v1/querybatch` - Batch query for vulnerability IDs
@@ -916,9 +933,9 @@ If you are behind a corporate firewall or proxy, ensure the following domains ar
 # Required
 pypi.org
 
-# Optional (for --verify-links and --check-cve)
+# Optional (for --verify-links only; OSV is accessed by default unless --no-check-cve)
 pypi.org       # Also used for --verify-links
-api.osv.dev    # Only for --check-cve
+api.osv.dev    # Disabled only with --no-check-cve
 ```
 
 ### Proxy Configuration
@@ -1005,7 +1022,7 @@ These files provide comprehensive context for AI-assisted development with Claud
 
 ### Vulnerability Data
 
-When using the `--check-cve` option, this tool retrieves vulnerability data from [OSV (Open Source Vulnerability)](https://osv.dev), which is provided under the [Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+By default, this tool retrieves vulnerability data from [OSV (Open Source Vulnerability)](https://osv.dev), which is provided under the [Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/). Use `--no-check-cve` to opt out of vulnerability checking.
 
 **Required Attribution:**
 - Vulnerability data provided by OSV

@@ -84,9 +84,9 @@ exclude_packages:
 "#,
         );
 
-        // Run CLI and capture stdout
+        // Run CLI and capture stdout (disable CVE check to avoid network calls)
         let output = cargo_bin_cmd!("uv-sbom")
-            .args(["-p", dir.path().to_str().unwrap()])
+            .args(["-p", dir.path().to_str().unwrap(), "--no-check-cve"])
             .output()
             .unwrap();
 
@@ -112,7 +112,7 @@ format: markdown
         );
 
         let output = cargo_bin_cmd!("uv-sbom")
-            .args(["-p", dir.path().to_str().unwrap()])
+            .args(["-p", dir.path().to_str().unwrap(), "--no-check-cve"])
             .output()
             .unwrap();
 
@@ -129,7 +129,7 @@ format: markdown
         // No config file - should run with defaults
 
         let output = cargo_bin_cmd!("uv-sbom")
-            .args(["-p", dir.path().to_str().unwrap()])
+            .args(["-p", dir.path().to_str().unwrap(), "--no-check-cve"])
             .output()
             .unwrap();
 
@@ -222,9 +222,15 @@ exclude_packages:
 "#,
         );
 
-        // CLI also excludes urllib3 — both should be excluded
+        // CLI also excludes urllib3 — both should be excluded (disable CVE check to avoid network calls)
         let output = cargo_bin_cmd!("uv-sbom")
-            .args(["-p", dir.path().to_str().unwrap(), "-e", "urllib3"])
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "-e",
+                "urllib3",
+                "--no-check-cve",
+            ])
             .output()
             .unwrap();
 
@@ -262,7 +268,13 @@ format: json
         );
 
         let output = cargo_bin_cmd!("uv-sbom")
-            .args(["-p", dir2.path().to_str().unwrap(), "-f", "markdown"])
+            .args([
+                "-p",
+                dir2.path().to_str().unwrap(),
+                "-f",
+                "markdown",
+                "--no-check-cve",
+            ])
             .output()
             .unwrap();
 

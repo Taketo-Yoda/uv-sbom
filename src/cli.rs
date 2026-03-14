@@ -31,23 +31,26 @@ pub struct Args {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Check for known vulnerabilities using OSV API (Markdown format only)
-    /// Vulnerability data provided by OSV (https://osv.dev) under CC-BY 4.0
-    #[arg(long)]
+    /// [DEPRECATED] CVE checking is now enabled by default. This flag has no effect.
+    /// Use --no-check-cve to opt out. This flag will be removed in a future release.
+    #[arg(long, hide = false)]
     pub check_cve: bool,
 
+    /// Disable CVE vulnerability checking (enabled by default)
+    /// Vulnerability data provided by OSV (https://osv.dev) under CC-BY 4.0
+    #[arg(long)]
+    pub no_check_cve: bool,
+
     /// Severity threshold for vulnerability check (low/medium/high/critical)
-    /// Requires --check-cve to be enabled
-    #[arg(long, value_parser = parse_severity_threshold, group = "threshold", requires = "check_cve")]
+    #[arg(long, value_parser = parse_severity_threshold, group = "threshold", conflicts_with = "no_check_cve")]
     pub severity_threshold: Option<Severity>,
 
     /// CVSS threshold for vulnerability check (0.0-10.0)
-    /// Requires --check-cve to be enabled
-    #[arg(long, value_parser = parse_cvss_threshold, group = "threshold", requires = "check_cve")]
+    #[arg(long, value_parser = parse_cvss_threshold, group = "threshold", conflicts_with = "no_check_cve")]
     pub cvss_threshold: Option<f32>,
 
-    /// Suggest upgrade paths for vulnerable transitive dependencies (requires --check-cve)
-    #[arg(long, requires = "check_cve")]
+    /// Suggest upgrade paths for vulnerable transitive dependencies
+    #[arg(long, conflicts_with = "no_check_cve")]
     pub suggest_fix: bool,
 
     /// Verify PyPI links exist before generating hyperlinks (requires network access, Markdown format only)

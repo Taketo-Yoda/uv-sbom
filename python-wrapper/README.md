@@ -13,7 +13,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 
 - **Fast and standalone** - Written in Rust, no Python dependencies required at runtime
 - **Multiple output formats** - CycloneDX 1.6 JSON (standard) and Markdown (human-readable)
-- **Vulnerability scanning** - Check for known CVEs using OSV API with `--check-cve`
+- **Vulnerability scanning** - CVE checking via OSV API is **enabled by default**; use `--no-check-cve` to opt out
 - **Configurable thresholds** - Filter vulnerabilities by severity or CVSS score
 - **Package exclusion** - Exclude internal packages with `--exclude` patterns
 - **Configuration file support** - Define defaults in `uv-sbom.config.yml`
@@ -69,18 +69,23 @@ uv-sbom --format markdown --output SBOM.md
 
 ### Vulnerability Checking
 
+CVE checking is **enabled by default**. Use `--no-check-cve` to opt out.
+
 ```bash
-# Check for all vulnerabilities
-uv-sbom --format markdown --check-cve
+# Check for all vulnerabilities (default — no flag needed)
+uv-sbom --format markdown
 
 # Check for High/Critical severity only
-uv-sbom --format markdown --check-cve --severity-threshold high
+uv-sbom --format markdown --severity-threshold high
 
 # Check for CVSS >= 7.0
-uv-sbom --format markdown --check-cve --cvss-threshold 7.0
+uv-sbom --format markdown --cvss-threshold 7.0
 
 # Ignore specific CVEs
-uv-sbom --format markdown --check-cve --ignore-cve CVE-2024-1234
+uv-sbom --format markdown --ignore-cve CVE-2024-1234
+
+# Disable CVE checking
+uv-sbom --format markdown --no-check-cve
 ```
 
 ### License Compliance Check
@@ -89,8 +94,8 @@ uv-sbom --format markdown --check-cve --ignore-cve CVE-2024-1234
 # License compliance check
 uv-sbom --check-license --license-allow "MIT,Apache-2.0,BSD-*"
 
-# Combined with vulnerability check
-uv-sbom --check-license --check-cve --severity-threshold high
+# Combined with vulnerability check (CVE enabled by default)
+uv-sbom --check-license --severity-threshold high
 ```
 
 ### Excluding Packages
@@ -109,7 +114,7 @@ Create a `uv-sbom.config.yml` file in your project directory:
 
 ```yaml
 format: markdown
-check_cve: true
+# check_cve: true  # CVE checking is enabled by default; set to false to disable
 severity_threshold: high
 exclude_packages:
   - "pytest"
@@ -132,9 +137,9 @@ uv-sbom --init
 ### CI Integration
 
 ```yaml
-# GitHub Actions example
+# GitHub Actions example (CVE checking is enabled by default)
 - name: Security Check
-  run: uv-sbom --format markdown --check-cve --severity-threshold high
+  run: uv-sbom --format markdown --severity-threshold high
 ```
 
 ## Output Example

@@ -24,8 +24,8 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 #   - "debug-*"
 #   - "test-*"
 
-# Enable CVE vulnerability checking
-# check_cve: false
+# Disable CVE vulnerability checking (enabled by default; set to false to opt out)
+# check_cve: true
 
 # Severity threshold: low | medium | high | critical
 # severity_threshold: high
