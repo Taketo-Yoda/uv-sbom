@@ -25,7 +25,7 @@
 //! let lockfile_reader = FileSystemReader::new();
 //! let project_config_reader = FileSystemReader::new();
 //! let license_repository = PyPiLicenseRepository::new()?;
-//! let progress_reporter = StderrProgressReporter::new();
+//! let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::default());
 //!
 //! // Create use case
 //! let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
