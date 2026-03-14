@@ -169,6 +169,22 @@ CycloneDX JSONを生成（デフォルト）:
 uv-sbom --format json
 ```
 
+### 出力言語
+
+`--lang` オプションを使用して、人間が読みやすいフォーマット（Markdown）の出力言語を切り替えます。デフォルトは英語（`en`）です。
+
+```bash
+# 日本語でMarkdown SBOMレポートを生成
+uv-sbom --format markdown --lang ja
+
+# 英語でMarkdown SBOMレポートを生成（デフォルト）
+uv-sbom --format markdown --lang en
+```
+
+**対応値:** `en`（英語、デフォルト）、`ja`（日本語）
+
+**注意:** `--lang` オプションは、Markdown出力のセクションヘッダー、テーブルの列名、ステータスラベルに影響します。パッケージ名・CVE ID・SPDXライセンス識別子は、`--lang` の設定によらず常に元の形式で出力されます。
+
 ### プロジェクトパスの指定
 
 別のディレクトリのプロジェクトを解析:
@@ -657,6 +673,7 @@ Options:
   -e, --exclude <PATTERN>            パッケージ除外パターン（ワイルドカード対応: *）
   -c, --config <PATH>               設定ファイルのパス（指定しない場合はuv-sbom.config.ymlを自動検出）
   -i, --ignore-cve <CVE_ID>         無視するCVE ID（複数回指定可能）
+      --lang <LANG>                  人間が読みやすいフォーマットの出力言語: en または ja [デフォルト: en]
       --init                         uv-sbom.config.ymlテンプレートファイルを生成
       --dry-run                      ネットワーク通信や出力生成を行わずに設定を検証
       --verify-links                 ハイパーリンク生成前にPyPIリンクの存在を検証（Markdownフォーマットのみ）

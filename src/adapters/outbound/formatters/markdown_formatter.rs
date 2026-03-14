@@ -1677,4 +1677,105 @@ mod tests {
         assert!(!markdown.contains("Recommended Action"));
         assert!(markdown.contains("## Vulnerability Resolution Guide"));
     }
+
+    // ===== Tests for --lang option (i18n) =====
+
+    #[test]
+    fn test_lang_ja_markdown_output_contains_japanese_headers() {
+        let model = create_test_read_model();
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("# ソフトウェア部品表 (SBOM)"));
+        assert!(markdown.contains("## コンポーネント一覧"));
+        assert!(!markdown.contains("# Software Bill of Materials (SBOM)"));
+        assert!(!markdown.contains("## Component Inventory"));
+    }
+
+    #[test]
+    fn test_lang_ja_markdown_output_contains_japanese_table_column() {
+        let model = create_test_read_model();
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("パッケージ"));
+        assert!(markdown.contains("バージョン"));
+        assert!(markdown.contains("ライセンス"));
+    }
+
+    #[test]
+    fn test_lang_en_markdown_output_unchanged() {
+        let model = create_test_read_model();
+        let formatter = MarkdownFormatter::new(Locale::En);
+
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("# Software Bill of Materials (SBOM)"));
+        assert!(markdown.contains("## Component Inventory"));
+        assert!(markdown.contains("Package"));
+        assert!(markdown.contains("Version"));
+        assert!(markdown.contains("License"));
+        assert!(!markdown.contains("パッケージ"));
+        assert!(!markdown.contains("ソフトウェア部品表"));
+    }
+
+    #[test]
+    fn test_lang_ja_with_dependencies_contains_japanese_dep_headers() {
+        let mut model = create_test_read_model();
+        let mut transitive = HashMap::new();
+        transitive.insert(
+            "pkg:pypi/requests@2.31.0".to_string(),
+            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
+        );
+        model.dependencies = Some(DependencyView {
+            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
+            transitive,
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("## 直接依存パッケージ"));
+        assert!(markdown.contains("## 間接依存パッケージ"));
+        assert!(!markdown.contains("## Direct Dependencies"));
+        assert!(!markdown.contains("## Transitive Dependencies"));
+    }
+
+    #[test]
+    fn test_lang_ja_with_vulnerabilities_contains_japanese_vuln_headers() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                severity: SeverityView::Critical,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: true,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("## 脆弱性レポート"));
+        assert!(!markdown.contains("## Vulnerability Report"));
+        // CVE ID remains in its original form regardless of locale
+        assert!(markdown.contains("CVE-2024-1234"));
+    }
 }

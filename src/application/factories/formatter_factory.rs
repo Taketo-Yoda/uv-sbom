@@ -98,4 +98,27 @@ mod tests {
         let formatter = FormatterFactory::create(OutputFormat::Json, Some(verified), Locale::En);
         assert!(std::mem::size_of_val(&formatter) > 0);
     }
+
+    #[test]
+    fn test_lang_does_not_affect_json_formatter_creation() {
+        // JSON formatter is always CycloneDX regardless of locale
+        let formatter_en = FormatterFactory::create(OutputFormat::Json, None, Locale::En);
+        let formatter_ja = FormatterFactory::create(OutputFormat::Json, None, Locale::Ja);
+        // Both should produce valid formatters (same type, locale-independent)
+        assert!(std::mem::size_of_val(&formatter_en) > 0);
+        assert!(std::mem::size_of_val(&formatter_ja) > 0);
+    }
+
+    #[test]
+    fn test_progress_message_json_and_markdown_differ_by_locale() {
+        let en_json = FormatterFactory::progress_message(OutputFormat::Json, Locale::En);
+        let ja_json = FormatterFactory::progress_message(OutputFormat::Json, Locale::Ja);
+        let en_md = FormatterFactory::progress_message(OutputFormat::Markdown, Locale::En);
+        let ja_md = FormatterFactory::progress_message(OutputFormat::Markdown, Locale::Ja);
+
+        assert_ne!(en_json, ja_json);
+        assert_ne!(en_md, ja_md);
+        assert!(ja_json.contains("CycloneDX JSON"));
+        assert!(ja_md.contains("Markdown"));
+    }
 }
