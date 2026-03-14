@@ -91,27 +91,27 @@ impl Messages {
             Locale::Ja => &JA_MESSAGES,
         }
     }
-}
 
-/// Substitute positional `{}` placeholders in a message template with the given arguments.
-///
-/// Replaces each `{}` in order with the corresponding element of `args`.
-/// Extra args are ignored; unmatched `{}` remain as-is.
-///
-/// # Example
-/// ```
-/// use uv_sbom::i18n::fmt_msg;
-/// assert_eq!(fmt_msg("Found {} of {} packages", &["3", "10"]), "Found 3 of 10 packages");
-/// ```
-pub fn fmt_msg(template: &str, args: &[&str]) -> String {
-    let mut result = template.to_string();
-    for arg in args {
-        match result.find("{}") {
-            Some(pos) => result.replace_range(pos..pos + 2, arg),
-            None => break,
+    /// Substitute positional `{}` placeholders in a message template with the given arguments.
+    ///
+    /// Replaces each `{}` in order with the corresponding element of `args`.
+    /// Extra args are ignored; unmatched `{}` remain as-is.
+    ///
+    /// # Example
+    /// ```
+    /// use uv_sbom::i18n::Messages;
+    /// assert_eq!(Messages::format("Found {} of {} packages", &["3", "10"]), "Found 3 of 10 packages");
+    /// ```
+    pub fn format(template: &str, args: &[&str]) -> String {
+        let mut result = template.to_string();
+        for arg in args {
+            match result.find("{}") {
+                Some(pos) => result.replace_range(pos..pos + 2, arg),
+                None => break,
+            }
         }
+        result
     }
-    result
 }
 
 static EN_MESSAGES: Messages = Messages {
@@ -327,30 +327,39 @@ mod tests {
     }
 
     #[test]
-    fn test_fmt_msg_no_placeholders() {
-        assert_eq!(fmt_msg("No placeholders here", &[]), "No placeholders here");
-    }
-
-    #[test]
-    fn test_fmt_msg_single_placeholder() {
-        assert_eq!(fmt_msg("Found {} packages", &["5"]), "Found 5 packages");
-    }
-
-    #[test]
-    fn test_fmt_msg_multiple_placeholders() {
+    fn test_messages_format_no_placeholders() {
         assert_eq!(
-            fmt_msg("{} succeeded out of {}, {} failed", &["8", "10", "2"]),
+            Messages::format("No placeholders here", &[]),
+            "No placeholders here"
+        );
+    }
+
+    #[test]
+    fn test_messages_format_single_placeholder() {
+        assert_eq!(
+            Messages::format("Found {} packages", &["5"]),
+            "Found 5 packages"
+        );
+    }
+
+    #[test]
+    fn test_messages_format_multiple_placeholders() {
+        assert_eq!(
+            Messages::format("{} succeeded out of {}, {} failed", &["8", "10", "2"]),
             "8 succeeded out of 10, 2 failed"
         );
     }
 
     #[test]
-    fn test_fmt_msg_extra_args_ignored() {
-        assert_eq!(fmt_msg("Hello {}", &["world", "extra"]), "Hello world");
+    fn test_messages_format_extra_args_ignored() {
+        assert_eq!(
+            Messages::format("Hello {}", &["world", "extra"]),
+            "Hello world"
+        );
     }
 
     #[test]
-    fn test_fmt_msg_fewer_args_than_placeholders() {
-        assert_eq!(fmt_msg("{} of {} done", &["3"]), "3 of {} done");
+    fn test_messages_format_fewer_args_than_placeholders() {
+        assert_eq!(Messages::format("{} of {} done", &["3"]), "3 of {} done");
     }
 }

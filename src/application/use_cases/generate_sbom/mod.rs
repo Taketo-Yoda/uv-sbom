@@ -1,7 +1,7 @@
 use crate::adapters::outbound::uv::UvLockAdapter;
 use crate::application::dto::{SbomRequest, SbomResponse};
 use crate::application::use_cases::CheckVulnerabilitiesUseCase;
-use crate::i18n::{fmt_msg, Locale, Messages};
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
     EnrichedPackage, LicenseRepository, LockfileReader, ProgressReporter, ProjectConfigReader,
     VulnerabilityRepository,
@@ -150,7 +150,7 @@ where
     /// Tuple of (packages, dependency_map)
     fn read_and_report_lockfile(&self, request: &SbomRequest) -> Result<PackagesWithDependencyMap> {
         let msgs = Messages::for_locale(self.locale);
-        self.progress_reporter.report(&fmt_msg(
+        self.progress_reporter.report(&Messages::format(
             msgs.progress_loading_lockfile,
             &[&request.project_path.display().to_string()],
         ));
@@ -159,7 +159,7 @@ where
             .lockfile_reader
             .read_and_parse_lockfile(&request.project_path)?;
 
-        self.progress_reporter.report(&fmt_msg(
+        self.progress_reporter.report(&Messages::format(
             msgs.progress_detected_packages,
             &[&packages.len().to_string()],
         ));
@@ -263,11 +263,11 @@ where
 
         let graph = DependencyAnalyzer::analyze(&project_package_name, dependency_map)?;
 
-        self.progress_reporter.report(&fmt_msg(
+        self.progress_reporter.report(&Messages::format(
             msgs.progress_direct_deps,
             &[&graph.direct_dependency_count().to_string()],
         ));
-        self.progress_reporter.report(&fmt_msg(
+        self.progress_reporter.report(&Messages::format(
             msgs.progress_transitive_deps,
             &[&graph.transitive_dependency_count().to_string()],
         ));
@@ -328,7 +328,7 @@ where
             CheckVulnerabilitiesUseCase::<VREPO>::summarize(&vulnerabilities);
         eprintln!(); // Add newline after progress bar
         if total_vulns > 0 {
-            self.progress_reporter.report_completion(&fmt_msg(
+            self.progress_reporter.report_completion(&Messages::format(
                 msgs.progress_vuln_found,
                 &[&total_vulns.to_string(), &affected_packages.to_string()],
             ));
@@ -629,13 +629,13 @@ where
         // Report errors collected during async execution
         let msgs = Messages::for_locale(self.locale);
         for (package_name, error_msg) in errors {
-            self.progress_reporter.report_error(&fmt_msg(
+            self.progress_reporter.report_error(&Messages::format(
                 msgs.warn_license_fetch_failed,
                 &[&package_name, &error_msg],
             ));
         }
 
-        self.progress_reporter.report_completion(&fmt_msg(
+        self.progress_reporter.report_completion(&Messages::format(
             msgs.progress_license_complete,
             &[
                 &successful.to_string(),
