@@ -118,6 +118,16 @@ Update version in exactly these 3 files:
 | `python-wrapper/pyproject.toml` | `version = "X.Y.Z"` | `version = "1.1.0"` |
 | `python-wrapper/uv_sbom_bin/install.py` | `UV_SBOM_VERSION = "X.Y.Z"` | `UV_SBOM_VERSION = "1.1.0"` |
 
+### Step 3.5: Regenerate Cargo.lock
+
+After updating version files, run `cargo check` to regenerate `Cargo.lock` with the new version:
+
+```bash
+cargo check
+```
+
+This ensures `Cargo.lock` reflects the updated version before committing.
+
 ### Step 4: Update CHANGELOG.md
 
 **Before**:
@@ -166,7 +176,7 @@ Branch naming: `release/v{version}` (e.g., `release/v1.1.0`)
 Stage and commit all version changes using `/commit` skill conventions:
 
 ```bash
-git add Cargo.toml python-wrapper/pyproject.toml python-wrapper/uv_sbom_bin/install.py CHANGELOG.md
+git add Cargo.toml Cargo.lock python-wrapper/pyproject.toml python-wrapper/uv_sbom_bin/install.py CHANGELOG.md
 ```
 
 Commit message format:
@@ -304,12 +314,13 @@ Claude executes /release skill:
 4. Updates Cargo.toml version
 5. Updates pyproject.toml version
 6. Updates install.py UV_SBOM_VERSION
-7. Updates CHANGELOG.md
-8. Verifies all versions match ✓
-9. Creates branch `release/v1.1.0`
-10. Commits: "chore(release): prepare v1.1.0"
-11. Creates PR to `develop` (NOT main)
-12. Outputs manual next steps (including develop → main PR)
+7. Runs `cargo check` to regenerate Cargo.lock ✓
+8. Updates CHANGELOG.md
+9. Verifies all versions match ✓
+10. Creates branch `release/v1.1.0`
+11. Commits: "chore(release): prepare v1.1.0" (includes Cargo.lock)
+12. Creates PR to `develop` (NOT main)
+13. Outputs manual next steps (including develop → main PR)
 
 Final output:
 ```

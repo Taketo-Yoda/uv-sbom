@@ -6,11 +6,11 @@ use uv_sbom::prelude::*;
 mod exit_code_tests {
     use assert_cmd::cargo::cargo_bin_cmd;
 
-    /// Exit code 0: Success - normal execution
+    /// Exit code 0: Success - normal execution (disable CVE check to avoid network calls)
     #[test]
     fn test_exit_code_success() {
         cargo_bin_cmd!("uv-sbom")
-            .args(["-p", "tests/fixtures/sample-project"])
+            .args(["-p", "tests/fixtures/sample-project", "--no-check-cve"])
             .assert()
             .code(0);
     }
@@ -74,7 +74,7 @@ async fn test_e2e_json_format() {
     // Note: This test uses MockLicenseRepository to avoid network calls in tests
     // In real usage, PyPiLicenseRepository would be used
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -82,6 +82,7 @@ async fn test_e2e_json_format() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -121,7 +122,7 @@ async fn test_e2e_markdown_format() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -129,6 +130,7 @@ async fn test_e2e_markdown_format() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -149,7 +151,7 @@ async fn test_e2e_markdown_format() {
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
     );
-    let formatter = MarkdownFormatter::new();
+    let formatter = MarkdownFormatter::new(uv_sbom::i18n::Locale::En);
     let markdown_output = formatter.format(&read_model);
 
     assert!(markdown_output.is_ok());
@@ -170,7 +172,7 @@ async fn test_e2e_nonexistent_project() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -178,6 +180,7 @@ async fn test_e2e_nonexistent_project() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -196,7 +199,7 @@ async fn test_e2e_package_count() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -204,6 +207,7 @@ async fn test_e2e_package_count() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -234,7 +238,7 @@ async fn test_e2e_exclude_single_package() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -242,6 +246,7 @@ async fn test_e2e_exclude_single_package() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude urllib3
@@ -272,7 +277,7 @@ async fn test_e2e_exclude_multiple_packages() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -280,6 +285,7 @@ async fn test_e2e_exclude_multiple_packages() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude urllib3 and certifi
@@ -314,7 +320,7 @@ async fn test_e2e_exclude_with_wildcard() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -322,6 +328,7 @@ async fn test_e2e_exclude_with_wildcard() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude packages starting with "char"
@@ -352,7 +359,7 @@ async fn test_e2e_exclude_all_packages_error() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -360,6 +367,7 @@ async fn test_e2e_exclude_all_packages_error() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude all packages with a pattern that matches everything
@@ -396,7 +404,7 @@ async fn test_e2e_exclude_root_project_preserves_dependency_classification() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -404,6 +412,7 @@ async fn test_e2e_exclude_root_project_preserves_dependency_classification() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude the root project (sample-project) and request dependency info
@@ -448,7 +457,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
     let lockfile_reader = FileSystemReader::new();
     let project_config_reader = FileSystemReader::new();
     let license_repository = create_test_license_repository();
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
     let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -456,6 +465,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude the root project and request dependency info
@@ -478,7 +488,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
     );
-    let formatter = MarkdownFormatter::new();
+    let formatter = MarkdownFormatter::new(uv_sbom::i18n::Locale::En);
     let markdown_output = formatter.format(&read_model);
 
     assert!(markdown_output.is_ok());
@@ -498,6 +508,96 @@ async fn test_e2e_exclude_root_project_markdown_output() {
 
     // Root project should NOT be in the output
     assert!(!markdown.contains("sample-project"));
+}
+
+// CLI `--lang` option tests
+mod lang_option_tests {
+    use assert_cmd::cargo::cargo_bin_cmd;
+    use predicates::prelude::*;
+
+    /// `--lang ja` produces Japanese section headers in stdout
+    #[test]
+    fn test_lang_ja_stdout_contains_japanese_section_headers() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                "tests/fixtures/sample-project",
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("直接依存パッケージ"))
+            .stdout(predicate::str::contains("コンポーネント一覧"));
+    }
+
+    /// `--lang ja` produces Japanese table column headers in stdout
+    #[test]
+    fn test_lang_ja_stdout_contains_japanese_column_headers() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                "tests/fixtures/sample-project",
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("パッケージ"));
+    }
+
+    /// `--lang en` produces English section headers in stdout (regression guard)
+    #[test]
+    fn test_lang_en_stdout_contains_english_section_headers() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                "tests/fixtures/sample-project",
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "en",
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("Direct Dependencies"))
+            .stdout(predicate::str::contains("Component Inventory"));
+    }
+
+    /// `--lang en` produces English table column headers in stdout (regression guard)
+    #[test]
+    fn test_lang_en_stdout_contains_english_column_headers() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                "tests/fixtures/sample-project",
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "en",
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("Package"));
+    }
+
+    /// Invalid `--lang` value returns exit code 2 and mentions supported languages
+    #[test]
+    fn test_lang_invalid_value_returns_error() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["--lang", "fr"])
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("Supported languages"));
+    }
 }
 
 // Helper function to create a test license repository

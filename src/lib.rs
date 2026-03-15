@@ -25,7 +25,7 @@
 //! let lockfile_reader = FileSystemReader::new();
 //! let project_config_reader = FileSystemReader::new();
 //! let license_repository = PyPiLicenseRepository::new()?;
-//! let progress_reporter = StderrProgressReporter::new();
+//! let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::default());
 //!
 //! // Create use case
 //! let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
@@ -34,6 +34,7 @@
 //!     license_repository,
 //!     progress_reporter,
 //!     None, // No vulnerability checking in this example
+//!     uv_sbom::i18n::Locale::default(),
 //! );
 //!
 //! // Execute
@@ -60,6 +61,7 @@
 pub mod adapters;
 pub mod application;
 pub mod config;
+pub mod i18n;
 pub mod ports;
 pub mod sbom_generation;
 pub mod shared;

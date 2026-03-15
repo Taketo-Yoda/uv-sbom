@@ -1,6 +1,7 @@
 mod adapters;
 mod application;
 mod cli;
+mod i18n;
 mod ports;
 mod sbom_generation;
 mod shared;
@@ -14,6 +15,7 @@ use application::read_models::SbomReadModelBuilder;
 use application::use_cases::GenerateSbomUseCase;
 use clap::Parser;
 use cli::Args;
+use i18n::Messages;
 use owo_colors::OwoColorize;
 use ports::outbound::ProjectConfigReader;
 use sbom_generation::domain::license_policy::{LicensePolicy, UnknownLicenseHandling};
@@ -99,9 +101,17 @@ async fn run(args: Args) -> Result<bool> {
     // Display startup banner
     display_banner();
 
-    // Warn if check_cve is used with JSON format
-    if args.check_cve && args.format == OutputFormat::Json {
-        eprintln!("⚠️  Warning: --check-cve has no effect with JSON format.");
+    let locale = args.lang;
+    let msgs = Messages::for_locale(locale);
+
+    // Warn if deprecated --check-cve flag is used
+    if args.check_cve {
+        eprintln!("Warning: --check-cve is deprecated and will be removed in a future release. CVE checking is now enabled by default. Use --no-check-cve to opt out.");
+    }
+
+    // Warn if CVE check is active with JSON format
+    if !args.no_check_cve && args.format == OutputFormat::Json {
+        eprintln!("{}", msgs.warn_check_cve_no_effect);
         eprintln!("   Vulnerability data is not included in JSON output.");
         eprintln!("   Use --format markdown to see vulnerability report.");
         eprintln!();
@@ -109,7 +119,7 @@ async fn run(args: Args) -> Result<bool> {
 
     // Warn if check_license is used with JSON format
     if args.check_license && args.format == OutputFormat::Json {
-        eprintln!("⚠️  Warning: --check-license has no effect with JSON format.");
+        eprintln!("{}", msgs.warn_check_license_no_effect);
         eprintln!("   License compliance data is not included in JSON output.");
         eprintln!("   Use --format markdown to see license compliance report.");
         eprintln!();
@@ -117,7 +127,7 @@ async fn run(args: Args) -> Result<bool> {
 
     // Warn if verify_links is used with JSON format
     if args.verify_links && args.format == OutputFormat::Json {
-        eprintln!("⚠️  Warning: --verify-links has no effect with JSON format.");
+        eprintln!("{}", msgs.warn_verify_links_no_effect);
         eprintln!("   PyPI link verification only applies to Markdown output.");
         eprintln!("   Use --format markdown to use link verification.");
         eprintln!();
@@ -140,7 +150,7 @@ async fn run(args: Args) -> Result<bool> {
     let project_config_reader = FileSystemReader::new();
     let pypi_repository = PyPiLicenseRepository::new()?;
     let license_repository = CachingPyPiLicenseRepository::new(pypi_repository);
-    let progress_reporter = StderrProgressReporter::new();
+    let progress_reporter = StderrProgressReporter::new(locale);
 
     // Create vulnerability repository if CVE check is requested
     let vulnerability_repository = if merged.check_cve {
@@ -156,6 +166,7 @@ async fn run(args: Args) -> Result<bool> {
         license_repository,
         progress_reporter,
         vulnerability_repository,
+        locale,
     );
 
     // Pre-flight check for --suggest-fix
@@ -175,7 +186,11 @@ async fn run(args: Args) -> Result<bool> {
         .check_license(merged.check_license)
         .license_policy(merged.license_policy)
         .suggest_fix(suggest_fix)
+        .locale(locale)
         .build()?;
+
+    // Re-bind locale from the validated request to ensure consistency
+    let locale = request.locale;
 
     // Execute use case
     let response = use_case.execute(request).await?;
@@ -186,7 +201,10 @@ async fn run(args: Args) -> Result<bool> {
     }
 
     // Display progress message
-    eprintln!("{}", FormatterFactory::progress_message(merged.format));
+    eprintln!(
+        "{}",
+        FormatterFactory::progress_message(merged.format, locale)
+    );
 
     // Determine project component for CycloneDX metadata
     let project_reader = FileSystemReader::new();
@@ -217,7 +235,7 @@ async fn run(args: Args) -> Result<bool> {
 
     // Verify PyPI links if requested
     let verified_packages = if args.verify_links && merged.format == OutputFormat::Markdown {
-        eprintln!("🔗 Verifying PyPI links...");
+        eprintln!("{}", msgs.progress_verifying_links);
         let pypi_verifier = PyPiLicenseRepository::new()?;
         let package_names: Vec<String> = read_model
             .components
@@ -230,7 +248,7 @@ async fn run(args: Args) -> Result<bool> {
     };
 
     // Create formatter using factory with optional verified packages
-    let formatter = FormatterFactory::create(merged.format, verified_packages);
+    let formatter = FormatterFactory::create(merged.format, verified_packages, locale);
     let formatted_output = formatter.format(&read_model)?;
 
     // Create presenter using factory
@@ -321,7 +339,7 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
             return MergedConfig {
                 format: args.format,
                 exclude_patterns: args.exclude.clone(),
-                check_cve: args.check_cve,
+                check_cve: !args.no_check_cve,
                 severity_threshold: args.severity_threshold,
                 cvss_threshold: args.cvss_threshold,
                 ignore_cves: args
@@ -372,8 +390,12 @@ fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         args.format
     };
 
-    // check_cve: CLI flag || config value
-    let check_cve = args.check_cve || config.check_cve.unwrap_or(false);
+    // check_cve: CLI opt-out takes highest priority; otherwise use config value (default true)
+    let check_cve = if args.no_check_cve {
+        false
+    } else {
+        config.check_cve.unwrap_or(true)
+    };
 
     // severity_threshold: CLI > config > None
     let severity_threshold = args.severity_threshold.or_else(|| {
@@ -672,7 +694,7 @@ mod tests {
         let result = merge_config(&args, &None);
         assert_eq!(result.format, OutputFormat::Json);
         assert!(result.exclude_patterns.is_empty());
-        assert!(!result.check_cve);
+        assert!(result.check_cve); // CVE check is enabled by default
         assert!(result.severity_threshold.is_none());
         assert!(result.cvss_threshold.is_none());
         assert!(result.ignore_cves.is_empty());
@@ -715,14 +737,26 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_config_check_cve_cli_flag() {
-        let args = Args::parse_from(["uv-sbom", "--check-cve"]);
+    fn test_merge_config_no_check_cve_cli_flag() {
+        let args = Args::parse_from(["uv-sbom", "--no-check-cve"]);
         let config = Some(ConfigFile {
-            check_cve: Some(false),
+            check_cve: Some(true),
             ..Default::default()
         });
         let result = merge_config(&args, &config);
-        assert!(result.check_cve);
+        assert!(!result.check_cve);
+    }
+
+    #[test]
+    fn test_merge_config_no_check_cve_overrides_config() {
+        // CLI opt-out wins over config.check_cve = Some(true)
+        let args = Args::parse_from(["uv-sbom", "--no-check-cve"]);
+        let config = Some(ConfigFile {
+            check_cve: Some(true),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(!result.check_cve);
     }
 
     #[test]
@@ -773,7 +807,7 @@ mod tests {
 
     #[test]
     fn test_merge_config_severity_threshold_cli_wins() {
-        let args = Args::parse_from(["uv-sbom", "--check-cve", "--severity-threshold", "critical"]);
+        let args = Args::parse_from(["uv-sbom", "--severity-threshold", "critical"]);
         let config = Some(ConfigFile {
             severity_threshold: Some("low".to_string()),
             ..Default::default()
@@ -795,7 +829,7 @@ mod tests {
 
     #[test]
     fn test_merge_config_cvss_threshold_cli_wins() {
-        let args = Args::parse_from(["uv-sbom", "--check-cve", "--cvss-threshold", "8.5"]);
+        let args = Args::parse_from(["uv-sbom", "--cvss-threshold", "8.5"]);
         let config = Some(ConfigFile {
             cvss_threshold: Some(5.0),
             ..Default::default()
@@ -831,8 +865,8 @@ mod tests {
 
     #[test]
     fn test_merge_config_suggest_fix_cli_flag() {
-        // suggest_fix: true via CLI flag (requires --check-cve) → merged value is true
-        let args = Args::parse_from(["uv-sbom", "--check-cve", "--suggest-fix"]);
+        // suggest_fix: true via CLI flag (CVE enabled by default) → merged value is true
+        let args = Args::parse_from(["uv-sbom", "--suggest-fix"]);
         let config = Some(ConfigFile {
             suggest_fix: Some(true),
             ..Default::default()
@@ -844,7 +878,7 @@ mod tests {
     #[test]
     fn test_merge_config_suggest_fix_cli_wins_over_config_false() {
         // suggest_fix: false in config, --suggest-fix CLI flag → CLI wins, merged value is true
-        let args = Args::parse_from(["uv-sbom", "--check-cve", "--suggest-fix"]);
+        let args = Args::parse_from(["uv-sbom", "--suggest-fix"]);
         let config = Some(ConfigFile {
             suggest_fix: Some(false),
             ..Default::default()

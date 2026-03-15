@@ -1,6 +1,7 @@
 use clap::Parser;
 
 use crate::application::dto::OutputFormat;
+use crate::i18n::Locale;
 use crate::sbom_generation::domain::vulnerability::Severity;
 
 /// Generate SBOMs for Python projects managed by uv
@@ -30,23 +31,26 @@ pub struct Args {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// Check for known vulnerabilities using OSV API (Markdown format only)
-    /// Vulnerability data provided by OSV (https://osv.dev) under CC-BY 4.0
-    #[arg(long)]
+    /// [DEPRECATED] CVE checking is now enabled by default. This flag has no effect.
+    /// Use --no-check-cve to opt out. This flag will be removed in a future release.
+    #[arg(long, hide = false)]
     pub check_cve: bool,
 
+    /// Disable CVE vulnerability checking (enabled by default)
+    /// Vulnerability data provided by OSV (https://osv.dev) under CC-BY 4.0
+    #[arg(long)]
+    pub no_check_cve: bool,
+
     /// Severity threshold for vulnerability check (low/medium/high/critical)
-    /// Requires --check-cve to be enabled
-    #[arg(long, value_parser = parse_severity_threshold, group = "threshold", requires = "check_cve")]
+    #[arg(long, value_parser = parse_severity_threshold, group = "threshold", conflicts_with = "no_check_cve")]
     pub severity_threshold: Option<Severity>,
 
     /// CVSS threshold for vulnerability check (0.0-10.0)
-    /// Requires --check-cve to be enabled
-    #[arg(long, value_parser = parse_cvss_threshold, group = "threshold", requires = "check_cve")]
+    #[arg(long, value_parser = parse_cvss_threshold, group = "threshold", conflicts_with = "no_check_cve")]
     pub cvss_threshold: Option<f32>,
 
-    /// Suggest upgrade paths for vulnerable transitive dependencies (requires --check-cve)
-    #[arg(long, requires = "check_cve")]
+    /// Suggest upgrade paths for vulnerable transitive dependencies
+    #[arg(long, conflicts_with = "no_check_cve")]
     pub suggest_fix: bool,
 
     /// Verify PyPI links exist before generating hyperlinks (requires network access, Markdown format only)
@@ -78,6 +82,15 @@ pub struct Args {
     /// Generate a uv-sbom.config.yml template file
     #[arg(long)]
     pub init: bool,
+
+    /// Output language for human-readable formats: en (default) or ja
+    #[arg(long, default_value = "en", value_parser = parse_lang)]
+    pub lang: Locale,
+}
+
+fn parse_lang(s: &str) -> Result<Locale, String> {
+    Locale::from_str(s)
+        .ok_or_else(|| format!("Invalid language: '{}'. Supported languages: en, ja", s))
 }
 
 fn parse_severity_threshold(s: &str) -> Result<Severity, String> {
@@ -107,6 +120,27 @@ fn parse_cvss_threshold(s: &str) -> Result<f32, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_lang_valid() {
+        assert_eq!(parse_lang("en").unwrap(), Locale::En);
+        assert_eq!(parse_lang("ja").unwrap(), Locale::Ja);
+    }
+
+    #[test]
+    fn test_parse_lang_invalid() {
+        let result = parse_lang("fr");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("Invalid language: 'fr'. Supported languages: en, ja"));
+
+        let result = parse_lang("EN");
+        assert!(result.is_err());
+
+        let result = parse_lang("");
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_parse_severity_threshold_valid() {

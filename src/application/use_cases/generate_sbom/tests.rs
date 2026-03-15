@@ -1,4 +1,5 @@
 use super::*;
+use crate::i18n::Locale;
 use crate::ports::outbound::LockfileParseResult;
 use crate::sbom_generation::domain::Package;
 use std::collections::HashMap;
@@ -130,6 +131,7 @@ version = "3.4.0"
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let request = SbomRequest::builder()
@@ -177,6 +179,7 @@ version = "1.26.0"
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let request = SbomRequest::builder()
@@ -230,6 +233,7 @@ version = "3.4.0"
         MockLicenseRepository,
         MockProgressReporter,
         Some(MockVulnerabilityRepository),
+        Locale::default(),
     );
 
     let request = SbomRequest::builder()
@@ -263,6 +267,7 @@ version = "2024.8.30"
             MockLicenseRepository,
             MockProgressReporter,
             None, // No vulnerability repository
+            Locale::default(),
         );
 
     let request = SbomRequest::builder()
@@ -295,6 +300,7 @@ version = "2024.8.30"
         MockLicenseRepository,
         MockProgressReporter,
         Some(MockVulnerabilityRepository),
+        Locale::default(),
     );
 
     let request = SbomRequest::builder()
@@ -326,6 +332,7 @@ version = "2024.8.30"
         MockLicenseRepository,
         MockProgressReporter,
         Some(MockVulnerabilityRepository),
+        Locale::default(),
     );
 
     let request = SbomRequest::builder()
@@ -356,6 +363,7 @@ fn test_apply_exclusion_filters_empty_patterns() {
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let packages = vec![
@@ -387,6 +395,7 @@ fn test_apply_exclusion_filters_with_patterns() {
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let packages = vec![
@@ -421,6 +430,7 @@ fn test_apply_exclusion_filters_all_excluded_error() {
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
@@ -450,6 +460,7 @@ fn test_analyze_dependencies_disabled() {
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let request = SbomRequest::builder()
@@ -478,6 +489,7 @@ fn test_analyze_dependencies_enabled() {
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let request = SbomRequest::builder()
@@ -511,6 +523,7 @@ fn test_build_response() {
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let package = Package::new("test-pkg".to_string(), "1.0.0".to_string()).unwrap();
@@ -543,6 +556,7 @@ async fn test_fetch_license_info() {
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let packages = vec![
@@ -570,6 +584,7 @@ async fn test_check_vulnerabilities_if_requested_disabled() {
         MockLicenseRepository,
         MockProgressReporter,
         Some(MockVulnerabilityRepository),
+        Locale::default(),
     );
 
     let request = SbomRequest::builder()
@@ -598,6 +613,7 @@ async fn test_check_vulnerabilities_if_requested_enabled() {
         MockLicenseRepository,
         MockProgressReporter,
         Some(MockVulnerabilityRepository),
+        Locale::default(),
     );
 
     let request = SbomRequest::builder()
@@ -693,6 +709,7 @@ fn test_build_response_with_threshold_exceeded() {
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let package = Package::new("test-pkg".to_string(), "1.0.0".to_string()).unwrap();
@@ -756,6 +773,7 @@ fn test_build_response_with_threshold_not_exceeded() {
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let package = Package::new("test-pkg".to_string(), "1.0.0".to_string()).unwrap();
@@ -852,6 +870,7 @@ version = "1.26.0"
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     // Request with root project excluded but dependency info enabled
@@ -925,6 +944,7 @@ version = "1.26.0"
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     let request = SbomRequest::builder()
@@ -982,6 +1002,7 @@ version = "7.0.0"
             MockLicenseRepository,
             MockProgressReporter,
             None,
+            Locale::default(),
         );
 
     // Exclude pytest (a direct dependency)

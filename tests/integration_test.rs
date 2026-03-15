@@ -38,6 +38,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder().project_path(".").build().unwrap();
@@ -90,6 +91,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -123,6 +125,7 @@ async fn test_generate_sbom_lockfile_read_failure() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder().project_path(".").build().unwrap();
@@ -155,6 +158,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder()
@@ -191,6 +195,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter.clone(),
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder().project_path(".").build().unwrap();
@@ -225,6 +230,7 @@ async fn test_generate_sbom_invalid_toml() {
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder().project_path(".").build().unwrap();
@@ -261,6 +267,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter.clone(),
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     let request = SbomRequest::builder().project_path(".").build().unwrap();
@@ -309,6 +316,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude urllib3
@@ -380,6 +388,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude urllib3 and certifi
@@ -436,6 +445,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude all pytest-related packages
@@ -477,6 +487,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude all packages with a pattern that matches everything
@@ -538,6 +549,7 @@ source = { registry = "https://pypi.org/simple" }
         license_repository,
         progress_reporter,
         None,
+        uv_sbom::i18n::Locale::En,
     );
 
     // Exclude urllib3 and request dependency graph
