@@ -510,6 +510,96 @@ async fn test_e2e_exclude_root_project_markdown_output() {
     assert!(!markdown.contains("sample-project"));
 }
 
+// CLI `--lang` option tests
+mod lang_option_tests {
+    use assert_cmd::cargo::cargo_bin_cmd;
+    use predicates::prelude::*;
+
+    /// `--lang ja` produces Japanese section headers in stdout
+    #[test]
+    fn test_lang_ja_stdout_contains_japanese_section_headers() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                "tests/fixtures/sample-project",
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("直接依存パッケージ"))
+            .stdout(predicate::str::contains("コンポーネント一覧"));
+    }
+
+    /// `--lang ja` produces Japanese table column headers in stdout
+    #[test]
+    fn test_lang_ja_stdout_contains_japanese_column_headers() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                "tests/fixtures/sample-project",
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("パッケージ"));
+    }
+
+    /// `--lang en` produces English section headers in stdout (regression guard)
+    #[test]
+    fn test_lang_en_stdout_contains_english_section_headers() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                "tests/fixtures/sample-project",
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "en",
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("Direct Dependencies"))
+            .stdout(predicate::str::contains("Component Inventory"));
+    }
+
+    /// `--lang en` produces English table column headers in stdout (regression guard)
+    #[test]
+    fn test_lang_en_stdout_contains_english_column_headers() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                "tests/fixtures/sample-project",
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "en",
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("Package"));
+    }
+
+    /// Invalid `--lang` value returns exit code 2 and mentions supported languages
+    #[test]
+    fn test_lang_invalid_value_returns_error() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["--lang", "fr"])
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("Supported languages"));
+    }
+}
+
 // Helper function to create a test license repository
 // In real tests, we would use a mock to avoid network calls
 fn create_test_license_repository() -> impl LicenseRepository {
