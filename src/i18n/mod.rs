@@ -123,6 +123,12 @@ pub struct Messages {
     pub action_upgrade: &'static str,
     pub action_cannot_resolve: &'static str,
     pub action_could_not_analyze: &'static str,
+
+    // Transitive dependency sub-header (1 placeholder: package name)
+    pub deps_for_header: &'static str,
+
+    // Vulnerability summary line (4 placeholders: count, unit, count, unit)
+    pub summary_vuln_found: &'static str,
 }
 
 impl Messages {
@@ -248,6 +254,12 @@ static EN_MESSAGES: Messages = Messages {
     action_upgrade: "⬆️ Upgrade {} → {} (resolves {} to {})",
     action_cannot_resolve: "⚠️ Cannot resolve: {}",
     action_could_not_analyze: "❓ Could not analyze: {}",
+
+    // Transitive dependency sub-header
+    deps_for_header: "### Dependencies for {}",
+
+    // Vulnerability summary line
+    summary_vuln_found: "**Found {} {} in {} {}.**",
 };
 
 static JA_MESSAGES: Messages = Messages {
@@ -343,6 +355,12 @@ static JA_MESSAGES: Messages = Messages {
     action_upgrade: "⬆️ {}を{}にアップグレード（{}が{}に解決）",
     action_cannot_resolve: "⚠️ 解決不可: {}",
     action_could_not_analyze: "❓ 分析不可: {}",
+
+    // Transitive dependency sub-header
+    deps_for_header: "### {}の依存パッケージ",
+
+    // Vulnerability summary line
+    summary_vuln_found: "**{}{}が{}{}で見つかりました。**",
 };
 
 #[cfg(test)]

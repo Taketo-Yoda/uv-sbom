@@ -248,7 +248,11 @@ impl MarkdownFormatter {
                         .map(|c| c.name.as_str())
                         .unwrap_or(direct_ref);
 
-                    output.push_str(&format!("### Dependencies for {}\n\n", parent_name));
+                    output.push_str(&Messages::format(
+                        self.messages.deps_for_header,
+                        &[parent_name],
+                    ));
+                    output.push_str("\n\n");
                     output.push_str(&self.table_header());
                     output.push_str(&self.table_separator());
 
@@ -309,21 +313,26 @@ impl MarkdownFormatter {
 
     /// Renders vulnerability summary statistics
     fn render_vulnerability_summary(&self, output: &mut String, summary: &VulnerabilitySummary) {
-        output.push_str(&format!(
-            "**Found {} {} in {} {}.**\n\n",
-            summary.total_count,
-            if summary.total_count == 1 {
-                "vulnerability"
-            } else {
-                "vulnerabilities"
-            },
-            summary.affected_package_count,
-            if summary.affected_package_count == 1 {
-                "package"
-            } else {
-                "packages"
-            }
+        let vuln_word = if summary.total_count == 1 {
+            self.messages.label_vulnerability_singular
+        } else {
+            self.messages.label_vulnerability_plural
+        };
+        let pkg_word = if summary.affected_package_count == 1 {
+            self.messages.label_package_singular
+        } else {
+            self.messages.label_package_plural
+        };
+        output.push_str(&Messages::format(
+            self.messages.summary_vuln_found,
+            &[
+                &summary.total_count.to_string(),
+                vuln_word,
+                &summary.affected_package_count.to_string(),
+                pkg_word,
+            ],
         ));
+        output.push_str("\n\n");
     }
 
     /// Renders the warning section for actionable vulnerabilities
@@ -1795,6 +1804,8 @@ mod tests {
         assert!(markdown.contains("## 間接依存パッケージ"));
         assert!(!markdown.contains("## Direct Dependencies"));
         assert!(!markdown.contains("## Transitive Dependencies"));
+        assert!(markdown.contains("### requestsの依存パッケージ"));
+        assert!(!markdown.contains("### Dependencies for requests"));
     }
 
     #[test]
@@ -2013,5 +2024,54 @@ mod tests {
         assert!(!markdown.contains("## Vulnerability Report"));
         // CVE ID remains in its original form regardless of locale
         assert!(markdown.contains("CVE-2024-1234"));
+    }
+
+    #[test]
+    fn test_lang_ja_vuln_summary_is_japanese() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![
+                VulnerabilityView {
+                    bom_ref: "vuln-001".to_string(),
+                    id: "CVE-2024-1234".to_string(),
+                    affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                    affected_component_name: "requests".to_string(),
+                    affected_version: "2.31.0".to_string(),
+                    cvss_score: Some(9.8),
+                    cvss_vector: None,
+                    severity: SeverityView::Critical,
+                    fixed_version: Some("2.32.0".to_string()),
+                    description: None,
+                    source_url: None,
+                },
+                VulnerabilityView {
+                    bom_ref: "vuln-002".to_string(),
+                    id: "CVE-2024-5678".to_string(),
+                    affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                    affected_component_name: "requests".to_string(),
+                    affected_version: "2.31.0".to_string(),
+                    cvss_score: Some(7.5),
+                    cvss_vector: None,
+                    severity: SeverityView::High,
+                    fixed_version: None,
+                    description: None,
+                    source_url: None,
+                },
+            ],
+            informational: vec![],
+            threshold_exceeded: true,
+            summary: VulnerabilitySummary {
+                total_count: 2,
+                actionable_count: 2,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("**2件の脆弱性が1個のパッケージで見つかりました。**"));
+        assert!(!markdown.contains("**Found"));
     }
 }
