@@ -81,6 +81,48 @@ pub struct Messages {
     pub warn_check_cve_no_effect: &'static str,
     pub warn_check_license_no_effect: &'static str,
     pub warn_verify_links_no_effect: &'static str,
+
+    // Section description paragraphs
+    pub desc_sbom_report: &'static str,
+    pub desc_direct_deps: &'static str,
+    pub desc_transitive_deps: &'static str,
+    pub desc_transitive_vuln_table: &'static str,
+
+    // Empty-state labels
+    pub label_no_direct_deps: &'static str,
+    pub label_no_transitive_deps: &'static str,
+    pub label_no_license_violations: &'static str,
+    pub label_osv_attribution: &'static str,
+
+    // Vulnerability count templates (4 placeholders: count, unit, count, unit)
+    pub warn_no_vuln_above_threshold: &'static str,
+    pub warn_vuln_found: &'static str,
+    pub info_vuln_found: &'static str,
+
+    // Singular/plural unit labels for vulnerability count templates
+    pub label_vulnerability_singular: &'static str,
+    pub label_vulnerability_plural: &'static str,
+    pub label_package_singular: &'static str,
+    pub label_package_plural: &'static str,
+
+    // License compliance section strings
+    pub section_violations: &'static str,
+    pub section_warnings: &'static str,
+    pub col_reason: &'static str,
+    pub col_matched_pattern: &'static str,
+    // template: count + unit word (EN uses both {}, JA only first {})
+    pub warn_unknown_license_packages: &'static str,
+
+    // Resolution guide column headers
+    pub col_vulnerable_package: &'static str,
+    pub col_current: &'static str,
+    pub col_introduced_by: &'static str,
+    pub col_recommended_action: &'static str,
+
+    // Resolution guide action strings
+    pub action_upgrade: &'static str,
+    pub action_cannot_resolve: &'static str,
+    pub action_could_not_analyze: &'static str,
 }
 
 impl Messages {
@@ -165,6 +207,47 @@ static EN_MESSAGES: Messages = Messages {
     warn_check_cve_no_effect: "⚠️  Warning: --check-cve has no effect with JSON format.",
     warn_check_license_no_effect: "⚠️  Warning: --check-license has no effect with JSON format.",
     warn_verify_links_no_effect: "⚠️  Warning: --verify-links has no effect with JSON format.",
+
+    // Section description paragraphs
+    desc_sbom_report: "A comprehensive list of all software components and libraries included in this project.",
+    desc_direct_deps: "Primary packages explicitly defined in the project configuration(e.g., pyproject.toml).",
+    desc_transitive_deps: "Secondary dependencies introduced by the primary packages.",
+    desc_transitive_vuln_table: "The following transitive dependencies have known vulnerabilities. The table shows which direct dependency introduces each vulnerable package.",
+
+    // Empty-state labels
+    label_no_direct_deps: "*No direct dependencies*",
+    label_no_transitive_deps: "*No transitive dependencies*",
+    label_no_license_violations: "**No license violations found.**",
+    label_osv_attribution: "*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*",
+
+    // Vulnerability count templates (4 placeholders: count, unit, count, unit)
+    warn_no_vuln_above_threshold: "### ⚠️Warning No vulnerabilities found above threshold.",
+    warn_vuln_found: "### ⚠️Warning Found {} {} in {} {}.",
+    info_vuln_found: "### ℹ️Info Found {} {} in {} {}.",
+
+    // Singular/plural unit labels for vulnerability count templates
+    label_vulnerability_singular: "vulnerability",
+    label_vulnerability_plural: "vulnerabilities",
+    label_package_singular: "package",
+    label_package_plural: "packages",
+
+    // License compliance section strings
+    section_violations: "### Violations",
+    section_warnings: "### Warnings",
+    col_reason: "Reason",
+    col_matched_pattern: "Matched Pattern",
+    warn_unknown_license_packages: "**{} {} with unknown license.**",
+
+    // Resolution guide column headers
+    col_vulnerable_package: "Vulnerable Package",
+    col_current: "Current",
+    col_introduced_by: "Introduced By (Direct Dep)",
+    col_recommended_action: "Recommended Action",
+
+    // Resolution guide action strings
+    action_upgrade: "⬆️ Upgrade {} → {} (resolves {} to {})",
+    action_cannot_resolve: "⚠️ Cannot resolve: {}",
+    action_could_not_analyze: "❓ Could not analyze: {}",
 };
 
 static JA_MESSAGES: Messages = Messages {
@@ -217,6 +300,49 @@ static JA_MESSAGES: Messages = Messages {
     warn_check_cve_no_effect: "⚠️  警告: JSON形式では --check-cve は効果がありません。",
     warn_check_license_no_effect: "⚠️  警告: JSON形式では --check-license は効果がありません。",
     warn_verify_links_no_effect: "⚠️  警告: JSON形式では --verify-links は効果がありません。",
+
+    // Section description paragraphs
+    desc_sbom_report: "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。",
+    desc_direct_deps: "プロジェクト設定（例: pyproject.toml）に明示的に定義された主要パッケージです。",
+    desc_transitive_deps: "主要パッケージによって導入される間接的な依存パッケージです。",
+    desc_transitive_vuln_table: "以下の間接依存パッケージに既知の脆弱性があります。テーブルはどの直接依存パッケージが各脆弱性パッケージを導入しているかを示します。",
+
+    // Empty-state labels
+    label_no_direct_deps: "*直接依存パッケージなし*",
+    label_no_transitive_deps: "*間接依存パッケージなし*",
+    label_no_license_violations: "**ライセンス違反は見つかりませんでした。**",
+    label_osv_attribution: "*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*",
+
+    // Vulnerability count templates
+    // JA uses 4 placeholders in order: vuln_count, vuln_unit, pkg_count, pkg_unit
+    warn_no_vuln_above_threshold: "### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。",
+    warn_vuln_found: "### ⚠️警告 {}{}が{}{}で見つかりました。",
+    info_vuln_found: "### ℹ️情報 {}{}が{}{}で見つかりました。",
+
+    // Singular/plural unit labels (no distinction in Japanese)
+    label_vulnerability_singular: "件の脆弱性",
+    label_vulnerability_plural: "件の脆弱性",
+    label_package_singular: "個のパッケージ",
+    label_package_plural: "個のパッケージ",
+
+    // License compliance section strings
+    section_violations: "### 違反",
+    section_warnings: "### 警告",
+    col_reason: "理由",
+    col_matched_pattern: "マッチしたパターン",
+    // JA: only first {} (count) is used; second {} (unit word) is ignored
+    warn_unknown_license_packages: "**{}個のライセンス不明パッケージがあります。**",
+
+    // Resolution guide column headers
+    col_vulnerable_package: "脆弱性のあるパッケージ",
+    col_current: "現在",
+    col_introduced_by: "導入元（直接依存）",
+    col_recommended_action: "推奨アクション",
+
+    // Resolution guide action strings
+    action_upgrade: "⬆️ {}を{}にアップグレード（{}が{}に解決）",
+    action_cannot_resolve: "⚠️ 解決不可: {}",
+    action_could_not_analyze: "❓ 分析不可: {}",
 };
 
 #[cfg(test)]
@@ -361,5 +487,116 @@ mod tests {
     #[test]
     fn test_messages_format_fewer_args_than_placeholders() {
         assert_eq!(Messages::format("{} of {} done", &["3"]), "3 of {} done");
+    }
+
+    #[test]
+    fn test_messages_markdown_new_fields_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.desc_sbom_report,
+            "A comprehensive list of all software components and libraries included in this project."
+        );
+        assert_eq!(msgs.label_no_direct_deps, "*No direct dependencies*");
+        assert_eq!(
+            msgs.label_no_transitive_deps,
+            "*No transitive dependencies*"
+        );
+        assert_eq!(
+            msgs.warn_no_vuln_above_threshold,
+            "### ⚠️Warning No vulnerabilities found above threshold."
+        );
+        assert_eq!(msgs.warn_vuln_found, "### ⚠️Warning Found {} {} in {} {}.");
+        assert_eq!(msgs.info_vuln_found, "### ℹ️Info Found {} {} in {} {}.");
+        assert_eq!(msgs.label_vulnerability_singular, "vulnerability");
+        assert_eq!(msgs.label_vulnerability_plural, "vulnerabilities");
+        assert_eq!(msgs.label_package_singular, "package");
+        assert_eq!(msgs.label_package_plural, "packages");
+        assert_eq!(
+            msgs.label_no_license_violations,
+            "**No license violations found.**"
+        );
+        assert_eq!(msgs.section_violations, "### Violations");
+        assert_eq!(msgs.col_reason, "Reason");
+        assert_eq!(msgs.col_matched_pattern, "Matched Pattern");
+        assert_eq!(msgs.section_warnings, "### Warnings");
+        assert_eq!(msgs.col_vulnerable_package, "Vulnerable Package");
+        assert_eq!(msgs.col_current, "Current");
+        assert_eq!(msgs.col_introduced_by, "Introduced By (Direct Dep)");
+        assert_eq!(msgs.col_recommended_action, "Recommended Action");
+        assert_eq!(
+            msgs.action_upgrade,
+            "⬆️ Upgrade {} → {} (resolves {} to {})"
+        );
+        assert_eq!(msgs.action_cannot_resolve, "⚠️ Cannot resolve: {}");
+        assert_eq!(msgs.action_could_not_analyze, "❓ Could not analyze: {}");
+    }
+
+    #[test]
+    fn test_messages_markdown_new_fields_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.desc_sbom_report,
+            "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。"
+        );
+        assert_eq!(msgs.label_no_direct_deps, "*直接依存パッケージなし*");
+        assert_eq!(msgs.label_no_transitive_deps, "*間接依存パッケージなし*");
+        assert_eq!(
+            msgs.warn_no_vuln_above_threshold,
+            "### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。"
+        );
+        assert_eq!(msgs.label_vulnerability_singular, "件の脆弱性");
+        assert_eq!(msgs.label_vulnerability_plural, "件の脆弱性");
+        assert_eq!(msgs.label_package_singular, "個のパッケージ");
+        assert_eq!(msgs.label_package_plural, "個のパッケージ");
+        assert_eq!(
+            msgs.label_no_license_violations,
+            "**ライセンス違反は見つかりませんでした。**"
+        );
+        assert_eq!(msgs.section_violations, "### 違反");
+        assert_eq!(msgs.col_reason, "理由");
+        assert_eq!(msgs.col_matched_pattern, "マッチしたパターン");
+        assert_eq!(msgs.section_warnings, "### 警告");
+        assert_eq!(msgs.col_vulnerable_package, "脆弱性のあるパッケージ");
+        assert_eq!(msgs.col_current, "現在");
+        assert_eq!(msgs.col_introduced_by, "導入元（直接依存）");
+        assert_eq!(msgs.col_recommended_action, "推奨アクション");
+        assert_eq!(msgs.action_cannot_resolve, "⚠️ 解決不可: {}");
+        assert_eq!(msgs.action_could_not_analyze, "❓ 分析不可: {}");
+    }
+
+    #[test]
+    fn test_warn_vuln_found_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.warn_vuln_found,
+            &[
+                "2",
+                msgs.label_vulnerability_plural,
+                "1",
+                msgs.label_package_singular,
+            ],
+        );
+        assert_eq!(
+            result,
+            "### ⚠️Warning Found 2 vulnerabilities in 1 package."
+        );
+    }
+
+    #[test]
+    fn test_warn_vuln_found_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.warn_vuln_found,
+            &[
+                "2",
+                msgs.label_vulnerability_plural,
+                "1",
+                msgs.label_package_singular,
+            ],
+        );
+        assert_eq!(
+            result,
+            "### ⚠️警告 2件の脆弱性が1個のパッケージで見つかりました。"
+        );
     }
 }

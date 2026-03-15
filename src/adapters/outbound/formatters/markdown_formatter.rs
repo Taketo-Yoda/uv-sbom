@@ -160,9 +160,8 @@ impl MarkdownFormatter {
     fn render_components(&self, output: &mut String, components: &[ComponentView]) {
         output.push_str(self.messages.section_component_inventory);
         output.push_str("\n\n");
-        output.push_str(
-            "A comprehensive list of all software components and libraries included in this project.\n\n",
-        );
+        output.push_str(self.messages.desc_sbom_report);
+        output.push_str("\n\n");
         output.push_str(&self.table_header());
         output.push_str(&self.table_separator());
 
@@ -199,9 +198,8 @@ impl MarkdownFormatter {
         // Direct Dependencies section
         output.push_str(self.messages.section_direct_deps);
         output.push_str("\n\n");
-        output.push_str(
-            "Primary packages explicitly defined in the project configuration(e.g., pyproject.toml).\n\n",
-        );
+        output.push_str(self.messages.desc_direct_deps);
+        output.push_str("\n\n");
 
         if !deps.direct.is_empty() {
             output.push_str(&self.table_header());
@@ -227,13 +225,15 @@ impl MarkdownFormatter {
             }
             output.push('\n');
         } else {
-            output.push_str("*No direct dependencies*\n\n");
+            output.push_str(self.messages.label_no_direct_deps);
+            output.push_str("\n\n");
         }
 
         // Transitive Dependencies section
         output.push_str(self.messages.section_transitive_deps);
         output.push_str("\n\n");
-        output.push_str("Secondary dependencies introduced by the primary packages.\n\n");
+        output.push_str(self.messages.desc_transitive_deps);
+        output.push_str("\n\n");
 
         if !deps.transitive.is_empty() {
             for direct_ref in &deps.direct {
@@ -274,7 +274,8 @@ impl MarkdownFormatter {
                 }
             }
         } else {
-            output.push_str("*No transitive dependencies*\n\n");
+            output.push_str(self.messages.label_no_transitive_deps);
+            output.push_str("\n\n");
         }
     }
 
@@ -289,7 +290,8 @@ impl MarkdownFormatter {
 
         // Actionable vulnerabilities (warning section)
         if vulns.actionable.is_empty() {
-            output.push_str("### ⚠️Warning No vulnerabilities found above threshold.\n\n");
+            output.push_str(self.messages.warn_no_vuln_above_threshold);
+            output.push_str("\n\n");
         } else {
             self.render_actionable_vulnerabilities(output, &vulns.actionable);
         }
@@ -301,8 +303,8 @@ impl MarkdownFormatter {
 
         // Attribution
         output.push_str("\n---\n\n");
-        output
-            .push_str("*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*\n");
+        output.push_str(self.messages.label_osv_attribution);
+        output.push('\n');
     }
 
     /// Renders vulnerability summary statistics
@@ -328,22 +330,27 @@ impl MarkdownFormatter {
     fn render_actionable_vulnerabilities(&self, output: &mut String, vulns: &[VulnerabilityView]) {
         let total_vulns = vulns.len();
         let unique_packages = Self::count_unique_packages(vulns);
+        let vuln_word = if total_vulns == 1 {
+            self.messages.label_vulnerability_singular
+        } else {
+            self.messages.label_vulnerability_plural
+        };
+        let pkg_word = if unique_packages == 1 {
+            self.messages.label_package_singular
+        } else {
+            self.messages.label_package_plural
+        };
 
-        output.push_str(&format!(
-            "### ⚠️Warning Found {} {} in {} {}.\n\n",
-            total_vulns,
-            if total_vulns == 1 {
-                "vulnerability"
-            } else {
-                "vulnerabilities"
-            },
-            unique_packages,
-            if unique_packages == 1 {
-                "package"
-            } else {
-                "packages"
-            }
+        output.push_str(&Messages::format(
+            self.messages.warn_vuln_found,
+            &[
+                &total_vulns.to_string(),
+                vuln_word,
+                &unique_packages.to_string(),
+                pkg_word,
+            ],
         ));
+        output.push_str("\n\n");
 
         output.push_str(&self.vuln_table_header());
         output.push_str(&self.vuln_table_separator());
@@ -366,22 +373,27 @@ impl MarkdownFormatter {
     ) {
         let total_vulns = vulns.len();
         let unique_packages = Self::count_unique_packages(vulns);
+        let vuln_word = if total_vulns == 1 {
+            self.messages.label_vulnerability_singular
+        } else {
+            self.messages.label_vulnerability_plural
+        };
+        let pkg_word = if unique_packages == 1 {
+            self.messages.label_package_singular
+        } else {
+            self.messages.label_package_plural
+        };
 
-        output.push_str(&format!(
-            "### ℹ️Info Found {} {} in {} {}.\n\n",
-            total_vulns,
-            if total_vulns == 1 {
-                "vulnerability"
-            } else {
-                "vulnerabilities"
-            },
-            unique_packages,
-            if unique_packages == 1 {
-                "package"
-            } else {
-                "packages"
-            }
+        output.push_str(&Messages::format(
+            self.messages.info_vuln_found,
+            &[
+                &total_vulns.to_string(),
+                vuln_word,
+                &unique_packages.to_string(),
+                pkg_word,
+            ],
         ));
+        output.push_str("\n\n");
 
         output.push_str(&self.vuln_table_header());
         output.push_str(&self.vuln_table_separator());
@@ -421,22 +433,28 @@ impl MarkdownFormatter {
                 }
             ));
         } else {
-            output.push_str("**No license violations found.**\n\n");
+            output.push_str(self.messages.label_no_license_violations);
+            output.push_str("\n\n");
         }
 
         // Violations table
         if !compliance.violations.is_empty() {
-            output.push_str("### Violations\n\n");
+            output.push_str(self.messages.section_violations);
+            output.push_str("\n\n");
             output.push_str(&format!(
-                "| {} | {} | {} | Reason | Matched Pattern |\n",
-                self.messages.col_package, self.messages.col_version, self.messages.col_license,
+                "| {} | {} | {} | {} | {} |\n",
+                self.messages.col_package,
+                self.messages.col_version,
+                self.messages.col_license,
+                self.messages.col_reason,
+                self.messages.col_matched_pattern,
             ));
             output.push_str(&Self::make_separator(&[
                 self.messages.col_package,
                 self.messages.col_version,
                 self.messages.col_license,
-                "Reason",
-                "Matched Pattern",
+                self.messages.col_reason,
+                self.messages.col_matched_pattern,
             ]));
 
             for v in &compliance.violations {
@@ -454,15 +472,19 @@ impl MarkdownFormatter {
 
         // Warnings table
         if !compliance.warnings.is_empty() {
-            output.push_str(&format!(
-                "### Warnings\n\n**{} {} with unknown license.**\n\n",
-                compliance.summary.warning_count,
-                if compliance.summary.warning_count == 1 {
-                    "package"
-                } else {
-                    "packages"
-                }
+            let warning_count = compliance.summary.warning_count;
+            let pkg_word = if warning_count == 1 {
+                self.messages.label_package_singular
+            } else {
+                self.messages.label_package_plural
+            };
+            output.push_str(self.messages.section_warnings);
+            output.push_str("\n\n");
+            output.push_str(&Messages::format(
+                self.messages.warn_unknown_license_packages,
+                &[&warning_count.to_string(), pkg_word],
             ));
+            output.push_str("\n\n");
             output.push_str(&format!(
                 "| {} | {} |\n",
                 self.messages.col_package, self.messages.col_version,
@@ -493,17 +515,47 @@ impl MarkdownFormatter {
         output.push('\n');
         output.push_str(self.messages.section_resolution_guide);
         output.push_str("\n\n");
-        output.push_str("The following transitive dependencies have known vulnerabilities. ");
-        output.push_str(
-            "The table shows which direct dependency introduces each vulnerable package.\n\n",
-        );
+        output.push_str(self.messages.desc_transitive_vuln_table);
+        output.push_str("\n\n");
 
         if upgrade_recommendations.is_some() {
-            output.push_str("| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Recommended Action | Vulnerability ID |\n");
-            output.push_str("|--------------------|---------|--------------|---------|--------------------------|--------------------|------------------|\n");
+            output.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {} | {} |\n",
+                self.messages.col_vulnerable_package,
+                self.messages.col_current,
+                self.messages.col_fixed_version,
+                self.messages.col_severity,
+                self.messages.col_introduced_by,
+                self.messages.col_recommended_action,
+                self.messages.col_vuln_id,
+            ));
+            output.push_str(&Self::make_separator(&[
+                self.messages.col_vulnerable_package,
+                self.messages.col_current,
+                self.messages.col_fixed_version,
+                self.messages.col_severity,
+                self.messages.col_introduced_by,
+                self.messages.col_recommended_action,
+                self.messages.col_vuln_id,
+            ]));
         } else {
-            output.push_str("| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID |\n");
-            output.push_str("|--------------------|---------|--------------|---------|--------------------------|-----------------|\n");
+            output.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {} |\n",
+                self.messages.col_vulnerable_package,
+                self.messages.col_current,
+                self.messages.col_fixed_version,
+                self.messages.col_severity,
+                self.messages.col_introduced_by,
+                self.messages.col_vuln_id,
+            ));
+            output.push_str(&Self::make_separator(&[
+                self.messages.col_vulnerable_package,
+                self.messages.col_current,
+                self.messages.col_fixed_version,
+                self.messages.col_severity,
+                self.messages.col_introduced_by,
+                self.messages.col_vuln_id,
+            ]));
         }
 
         for entry in &guide.entries {
@@ -525,6 +577,7 @@ impl MarkdownFormatter {
 
             if let Some(recommendations) = upgrade_recommendations {
                 let action = Self::find_upgrade_action(
+                    self.messages,
                     recommendations,
                     &entry.vulnerability_id,
                     &entry.introduced_by,
@@ -561,6 +614,7 @@ impl MarkdownFormatter {
     /// Matches by `vulnerability_id` for `Upgradable`/`Unresolvable` variants, and falls back
     /// to matching by direct dependency name for `SimulationFailed`.
     fn find_upgrade_action(
+        messages: &'static Messages,
         recommendations: &UpgradeRecommendationView,
         vulnerability_id: &str,
         introduced_by: &[IntroducedByView],
@@ -575,9 +629,9 @@ impl MarkdownFormatter {
                     vulnerability_id: vid,
                     ..
                 } if vid == vulnerability_id => {
-                    return format!(
-                        "⬆️ Upgrade {} → {} (resolves {} to {})",
-                        direct_dep, target_version, transitive_dep, resolved_version
+                    return Messages::format(
+                        messages.action_upgrade,
+                        &[direct_dep, target_version, transitive_dep, resolved_version],
                     );
                 }
                 UpgradeEntryView::Unresolvable {
@@ -585,7 +639,7 @@ impl MarkdownFormatter {
                     vulnerability_id: vid,
                     ..
                 } if vid == vulnerability_id => {
-                    return format!("⚠️ Cannot resolve: {}", reason);
+                    return Messages::format(messages.action_cannot_resolve, &[reason]);
                 }
                 _ => {}
             }
@@ -598,7 +652,7 @@ impl MarkdownFormatter {
         for rec in &recommendations.entries {
             if let UpgradeEntryView::SimulationFailed { direct_dep, error } = rec {
                 if introduced_names.contains(&direct_dep.as_str()) {
-                    return format!("❓ Could not analyze: {}", error);
+                    return Messages::format(messages.action_could_not_analyze, &[error]);
                 }
             }
         }
@@ -1741,6 +1795,188 @@ mod tests {
         assert!(markdown.contains("## 間接依存パッケージ"));
         assert!(!markdown.contains("## Direct Dependencies"));
         assert!(!markdown.contains("## Transitive Dependencies"));
+    }
+
+    #[test]
+    fn test_lang_ja_section_descriptions_are_japanese() {
+        let model = create_test_read_model();
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains(
+            "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。"
+        ));
+        assert!(!markdown.contains("A comprehensive list of all software components"));
+    }
+
+    #[test]
+    fn test_lang_ja_no_direct_deps_label_is_japanese() {
+        let mut model = create_test_read_model();
+        model.dependencies = Some(DependencyView {
+            direct: vec![],
+            transitive: HashMap::new(),
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("*直接依存パッケージなし*"));
+        assert!(!markdown.contains("*No direct dependencies*"));
+    }
+
+    #[test]
+    fn test_lang_ja_no_transitive_deps_label_is_japanese() {
+        let mut model = create_test_read_model();
+        model.dependencies = Some(DependencyView {
+            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
+            transitive: HashMap::new(),
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("*間接依存パッケージなし*"));
+        assert!(!markdown.contains("*No transitive dependencies*"));
+    }
+
+    #[test]
+    fn test_lang_ja_vuln_above_threshold_warning_is_japanese() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![],
+            informational: vec![],
+            threshold_exceeded: false,
+            summary: VulnerabilitySummary {
+                total_count: 0,
+                actionable_count: 0,
+                informational_count: 0,
+                affected_package_count: 0,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。"));
+        assert!(!markdown.contains("### ⚠️Warning No vulnerabilities found above threshold."));
+    }
+
+    #[test]
+    fn test_lang_ja_actionable_vuln_count_is_japanese() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-1234".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                severity: SeverityView::Critical,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: true,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("### ⚠️警告 1件の脆弱性が1個のパッケージで見つかりました。"));
+        assert!(!markdown.contains("### ⚠️Warning Found"));
+    }
+
+    #[test]
+    fn test_lang_ja_osv_attribution_is_japanese() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![],
+            informational: vec![],
+            threshold_exceeded: false,
+            summary: VulnerabilitySummary {
+                total_count: 0,
+                actionable_count: 0,
+                informational_count: 0,
+                affected_package_count: 0,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*"));
+        assert!(!markdown.contains("*Vulnerability data provided by"));
+    }
+
+    #[test]
+    fn test_lang_ja_no_license_violations_is_japanese() {
+        use crate::application::read_models::{LicenseComplianceSummary, LicenseComplianceView};
+
+        let mut model = create_test_read_model();
+        model.license_compliance = Some(LicenseComplianceView {
+            has_violations: false,
+            violations: vec![],
+            warnings: vec![],
+            summary: LicenseComplianceSummary {
+                violation_count: 0,
+                warning_count: 0,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("**ライセンス違反は見つかりませんでした。**"));
+        assert!(!markdown.contains("**No license violations found.**"));
+    }
+
+    #[test]
+    fn test_lang_ja_resolution_guide_action_is_japanese() {
+        use crate::application::read_models::{
+            IntroducedByView, ResolutionEntryView, ResolutionGuideView, UpgradeEntryView,
+            UpgradeRecommendationView,
+        };
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: Some(">= 2.0.7".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+            }],
+        });
+        model.upgrade_recommendations = Some(UpgradeRecommendationView {
+            entries: vec![UpgradeEntryView::Upgradable {
+                direct_dep: "requests".to_string(),
+                current_version: "2.31.0".to_string(),
+                target_version: "2.32.3".to_string(),
+                transitive_dep: "urllib3".to_string(),
+                resolved_version: "2.2.1".to_string(),
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+            }],
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("推奨アクション"));
+        assert!(markdown.contains("⬆️ requestsを2.32.3にアップグレード（urllib3が2.2.1に解決）"));
+        assert!(!markdown.contains("⬆️ Upgrade"));
     }
 
     #[test]
