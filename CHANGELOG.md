@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-03-15
+
+### Breaking Changes
+- **CVE check is now enabled by default**: Previously opt-in via `--check-cve`; now opt-out via `--no-check-cve` (#307)
+
+### Added
+
+#### Internationalization (--lang)
+- **`--lang` CLI flag**: Switch output language between English (`en`) and Japanese (`ja`) (#293)
+- **`Locale` enum and `Messages` struct**: Foundation for multilingual support (#292)
+- **Localized `MarkdownFormatter`**: All Markdown output respects the selected locale (#294, #309)
+- **Localized stderr progress and warning messages**: Progress output in `GenerateSbomUseCase` respects locale (#295, #308)
+- **Localized transitive deps sub-header and vulnerability summary line** (#318)
+- **E2E tests for `--lang` option** (#306, #319)
+- **Integration tests and README docs for `--lang` option** (#296, #303)
+
+### Changed
+- **`--no-check-cve` flag**: Added as opt-out replacement; CVE check runs by default (#307)
+
 ## [1.3.0] - 2026-03-07
 
 ### Added
