@@ -1,3 +1,9 @@
+mod helpers;
+mod links;
+mod section;
+mod table;
+mod vuln_render;
+
 use crate::application::read_models::{
     ComponentView, DependencyView, IntroducedByView, LicenseComplianceView, ResolutionGuideView,
     SbomReadModel, UpgradeEntryView, UpgradeRecommendationView, VulnerabilityReportView,
