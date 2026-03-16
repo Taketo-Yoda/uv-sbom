@@ -41,53 +41,6 @@ impl MarkdownFormatter {
             messages: Messages::for_locale(locale),
         }
     }
-
-    /// Normalize package name for PyPI URL (lowercase, replace _ with -)
-    fn normalize_for_pypi(name: &str) -> String {
-        name.to_lowercase().replace('_', "-")
-    }
-
-    /// Generate a Markdown hyperlink to the package's PyPI page
-    fn package_to_pypi_link(name: &str) -> String {
-        let normalized = Self::normalize_for_pypi(name);
-        format!(
-            "[{}](https://pypi.org/project/{}/)",
-            table::escape_markdown_table_cell(name),
-            normalized
-        )
-    }
-
-    /// Generate a Markdown hyperlink for a vulnerability ID based on its prefix.
-    ///
-    /// - `CVE-*` → NVD (NIST)
-    /// - `GHSA-*` → GitHub Advisories
-    /// - All others (PYSEC, RUSTSEC, etc.) → OSV.dev
-    fn vulnerability_id_to_link(id: &str) -> String {
-        let url = if id.starts_with("CVE-") {
-            format!("https://nvd.nist.gov/vuln/detail/{}", id)
-        } else if id.starts_with("GHSA-") {
-            format!("https://github.com/advisories/{}", id)
-        } else {
-            format!("https://osv.dev/vulnerability/{}", id)
-        };
-        format!("[{}]({})", table::escape_markdown_table_cell(id), url)
-    }
-
-    /// Format a package name as a PyPI link or plain text based on verification results.
-    /// - If no verification was performed (verified_packages is None), always generate a link.
-    /// - If verification was performed, only generate a link for verified packages.
-    fn format_package_name(&self, name: &str) -> String {
-        match &self.verified_packages {
-            None => Self::package_to_pypi_link(name),
-            Some(verified) => {
-                if verified.contains(name) {
-                    Self::package_to_pypi_link(name)
-                } else {
-                    table::escape_markdown_table_cell(name)
-                }
-            }
-        }
-    }
 }
 
 /// Helper methods for rendering sections
@@ -117,7 +70,7 @@ impl MarkdownFormatter {
 
             output.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
-                self.format_package_name(&component.name),
+                links::format_package_name(&component.name, self.verified_packages.as_ref()),
                 table::escape_markdown_table_cell(&component.version),
                 table::escape_markdown_table_cell(license),
                 table::escape_markdown_table_cell(description)
@@ -158,7 +111,10 @@ impl MarkdownFormatter {
 
                     output.push_str(&format!(
                         "| {} | {} | {} | {} |\n",
-                        self.format_package_name(&component.name),
+                        links::format_package_name(
+                            &component.name,
+                            self.verified_packages.as_ref()
+                        ),
                         table::escape_markdown_table_cell(&component.version),
                         table::escape_markdown_table_cell(license),
                         table::escape_markdown_table_cell(description)
@@ -209,7 +165,10 @@ impl MarkdownFormatter {
 
                             output.push_str(&format!(
                                 "| {} | {} | {} | {} |\n",
-                                self.format_package_name(&component.name),
+                                links::format_package_name(
+                                    &component.name,
+                                    self.verified_packages.as_ref()
+                                ),
                                 table::escape_markdown_table_cell(&component.version),
                                 table::escape_markdown_table_cell(license),
                                 table::escape_markdown_table_cell(description)
@@ -542,7 +501,7 @@ impl MarkdownFormatter {
                     entry.severity.as_str(),
                     table::escape_markdown_table_cell(&introduced_by),
                     table::escape_markdown_table_cell(&action),
-                    Self::vulnerability_id_to_link(&entry.vulnerability_id),
+                    links::vulnerability_id_to_link(&entry.vulnerability_id),
                 ));
             } else {
                 output.push_str(&format!(
@@ -553,7 +512,7 @@ impl MarkdownFormatter {
                     severity_emoji,
                     entry.severity.as_str(),
                     table::escape_markdown_table_cell(&introduced_by),
-                    Self::vulnerability_id_to_link(&entry.vulnerability_id),
+                    links::vulnerability_id_to_link(&entry.vulnerability_id),
                 ));
             }
         }
@@ -627,13 +586,16 @@ impl MarkdownFormatter {
 
         output.push_str(&format!(
             "| {} | {} | {} | {} | {} {} | {} |\n",
-            self.format_package_name(&vuln.affected_component_name),
+            links::format_package_name(
+                &vuln.affected_component_name,
+                self.verified_packages.as_ref()
+            ),
             table::escape_markdown_table_cell(&vuln.affected_version),
             table::escape_markdown_table_cell(fixed_version),
             cvss_display,
             severity_emoji,
             vuln.severity.as_str(),
-            Self::vulnerability_id_to_link(&vuln.id),
+            links::vulnerability_id_to_link(&vuln.id),
         ));
     }
 }
@@ -1150,264 +1112,6 @@ mod tests {
         assert!(summary_pos.unwrap() < warning_pos.unwrap());
         assert!(warning_pos.unwrap() < info_pos.unwrap());
         assert!(info_pos.unwrap() < attribution_pos.unwrap());
-    }
-
-    // ============================================================
-    // PyPI hyperlink tests
-    // ============================================================
-
-    #[test]
-    fn test_normalize_for_pypi_underscore() {
-        assert_eq!(
-            MarkdownFormatter::normalize_for_pypi("typing_extensions"),
-            "typing-extensions"
-        );
-    }
-
-    #[test]
-    fn test_normalize_for_pypi_uppercase() {
-        assert_eq!(MarkdownFormatter::normalize_for_pypi("Flask"), "flask");
-    }
-
-    #[test]
-    fn test_normalize_for_pypi_already_normalized() {
-        assert_eq!(
-            MarkdownFormatter::normalize_for_pypi("ruamel-yaml"),
-            "ruamel-yaml"
-        );
-    }
-
-    #[test]
-    fn test_package_to_pypi_link_simple() {
-        assert_eq!(
-            MarkdownFormatter::package_to_pypi_link("requests"),
-            "[requests](https://pypi.org/project/requests/)"
-        );
-    }
-
-    #[test]
-    fn test_package_to_pypi_link_with_underscore() {
-        assert_eq!(
-            MarkdownFormatter::package_to_pypi_link("typing_extensions"),
-            "[typing_extensions](https://pypi.org/project/typing-extensions/)"
-        );
-    }
-
-    #[test]
-    fn test_package_to_pypi_link_with_uppercase() {
-        assert_eq!(
-            MarkdownFormatter::package_to_pypi_link("Flask"),
-            "[Flask](https://pypi.org/project/flask/)"
-        );
-    }
-
-    #[test]
-    fn test_format_basic_contains_pypi_links() {
-        let model = create_test_read_model();
-        let formatter = MarkdownFormatter::new(Locale::En);
-
-        let markdown = formatter.format(&model).unwrap();
-        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
-        assert!(markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
-    }
-
-    #[test]
-    fn test_format_with_dependencies_contains_pypi_links() {
-        let mut model = create_test_read_model();
-        let mut transitive = HashMap::new();
-        transitive.insert(
-            "pkg:pypi/requests@2.31.0".to_string(),
-            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
-        );
-
-        model.dependencies = Some(DependencyView {
-            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
-            transitive,
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        // Direct dependencies section should have PyPI link
-        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
-        // Transitive dependencies section should have PyPI link
-        assert!(markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
-    }
-
-    #[test]
-    fn test_vulnerability_table_contains_pypi_links() {
-        let mut model = create_test_read_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![VulnerabilityView {
-                bom_ref: "vuln-001".to_string(),
-                id: "CVE-2024-1234".to_string(),
-                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
-                affected_component_name: "requests".to_string(),
-                affected_version: "2.31.0".to_string(),
-                cvss_score: Some(9.8),
-                cvss_vector: None,
-                severity: SeverityView::Critical,
-                fixed_version: Some("2.32.0".to_string()),
-                description: None,
-                source_url: None,
-            }],
-            informational: vec![],
-            threshold_exceeded: true,
-            summary: VulnerabilitySummary {
-                total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
-                affected_package_count: 1,
-            },
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
-    }
-
-    // ============================================================
-    // Verified packages (--verify-links) tests
-    // ============================================================
-
-    #[test]
-    fn test_format_with_verified_packages_only_verified_get_links() {
-        let model = create_test_read_model();
-        let mut verified = HashSet::new();
-        verified.insert("requests".to_string());
-        // "urllib3" is NOT in verified set
-
-        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        // "requests" is verified → gets a hyperlink
-        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
-        // "urllib3" is NOT verified → plain text, no hyperlink
-        assert!(!markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
-        assert!(markdown.contains("| urllib3 |"));
-    }
-
-    #[test]
-    fn test_format_without_verified_packages_all_get_links() {
-        let model = create_test_read_model();
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        // Without verification, all packages get hyperlinks
-        assert!(markdown.contains("[requests](https://pypi.org/project/requests/)"));
-        assert!(markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
-    }
-
-    #[test]
-    fn test_format_with_empty_verified_set_no_links() {
-        let model = create_test_read_model();
-        let verified = HashSet::new();
-
-        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        // Empty verified set → no packages get hyperlinks
-        assert!(!markdown.contains("[requests](https://pypi.org/project/requests/)"));
-        assert!(!markdown.contains("[urllib3](https://pypi.org/project/urllib3/)"));
-        assert!(markdown.contains("| requests |"));
-        assert!(markdown.contains("| urllib3 |"));
-    }
-
-    #[test]
-    fn test_format_vulnerability_with_verified_packages() {
-        let mut model = create_test_read_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![VulnerabilityView {
-                bom_ref: "vuln-001".to_string(),
-                id: "CVE-2024-1234".to_string(),
-                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
-                affected_component_name: "requests".to_string(),
-                affected_version: "2.31.0".to_string(),
-                cvss_score: Some(9.8),
-                cvss_vector: None,
-                severity: SeverityView::Critical,
-                fixed_version: Some("2.32.0".to_string()),
-                description: None,
-                source_url: None,
-            }],
-            informational: vec![],
-            threshold_exceeded: true,
-            summary: VulnerabilitySummary {
-                total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
-                affected_package_count: 1,
-            },
-        });
-
-        // "requests" is NOT in verified set
-        let verified = HashSet::new();
-        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        // Vulnerability table should show plain text for unverified package
-        assert!(!markdown.contains("[requests](https://pypi.org/project/requests/)"));
-        assert!(markdown.contains("| requests |"));
-    }
-
-    #[test]
-    fn test_format_package_name_with_none_verified() {
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let result = formatter.format_package_name("requests");
-        assert_eq!(result, "[requests](https://pypi.org/project/requests/)");
-    }
-
-    #[test]
-    fn test_format_package_name_with_verified_present() {
-        let mut verified = HashSet::new();
-        verified.insert("requests".to_string());
-        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
-        let result = formatter.format_package_name("requests");
-        assert_eq!(result, "[requests](https://pypi.org/project/requests/)");
-    }
-
-    // ============================================================
-    // Vulnerability ID hyperlink tests
-    // ============================================================
-
-    #[test]
-    fn test_vulnerability_id_to_link_cve() {
-        assert_eq!(
-            MarkdownFormatter::vulnerability_id_to_link("CVE-2024-1234"),
-            "[CVE-2024-1234](https://nvd.nist.gov/vuln/detail/CVE-2024-1234)"
-        );
-    }
-
-    #[test]
-    fn test_vulnerability_id_to_link_ghsa() {
-        assert_eq!(
-            MarkdownFormatter::vulnerability_id_to_link("GHSA-abcd-efgh-ijkl"),
-            "[GHSA-abcd-efgh-ijkl](https://github.com/advisories/GHSA-abcd-efgh-ijkl)"
-        );
-    }
-
-    #[test]
-    fn test_vulnerability_id_to_link_pysec() {
-        assert_eq!(
-            MarkdownFormatter::vulnerability_id_to_link("PYSEC-2021-108"),
-            "[PYSEC-2021-108](https://osv.dev/vulnerability/PYSEC-2021-108)"
-        );
-    }
-
-    #[test]
-    fn test_vulnerability_id_to_link_rustsec() {
-        assert_eq!(
-            MarkdownFormatter::vulnerability_id_to_link("RUSTSEC-2023-0001"),
-            "[RUSTSEC-2023-0001](https://osv.dev/vulnerability/RUSTSEC-2023-0001)"
-        );
-    }
-
-    #[test]
-    fn test_format_package_name_with_verified_absent() {
-        let verified = HashSet::new();
-        let formatter = MarkdownFormatter::with_verified_packages(verified, Locale::En);
-        let result = formatter.format_package_name("nonexistent-pkg");
-        assert_eq!(result, "nonexistent-pkg");
     }
 
     // ============================================================
