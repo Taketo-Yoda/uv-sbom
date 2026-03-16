@@ -42,11 +42,6 @@ impl MarkdownFormatter {
         }
     }
 
-    /// Escapes pipe characters and newlines for safe Markdown table rendering
-    fn escape_markdown_table_cell(text: &str) -> String {
-        text.replace('|', "\\|").replace('\n', " ")
-    }
-
     /// Normalize package name for PyPI URL (lowercase, replace _ with -)
     fn normalize_for_pypi(name: &str) -> String {
         name.to_lowercase().replace('_', "-")
@@ -57,7 +52,7 @@ impl MarkdownFormatter {
         let normalized = Self::normalize_for_pypi(name);
         format!(
             "[{}](https://pypi.org/project/{}/)",
-            Self::escape_markdown_table_cell(name),
+            table::escape_markdown_table_cell(name),
             normalized
         )
     }
@@ -75,7 +70,7 @@ impl MarkdownFormatter {
         } else {
             format!("https://osv.dev/vulnerability/{}", id)
         };
-        format!("[{}]({})", Self::escape_markdown_table_cell(id), url)
+        format!("[{}]({})", table::escape_markdown_table_cell(id), url)
     }
 
     /// Format a package name as a PyPI link or plain text based on verification results.
@@ -88,69 +83,10 @@ impl MarkdownFormatter {
                 if verified.contains(name) {
                     Self::package_to_pypi_link(name)
                 } else {
-                    Self::escape_markdown_table_cell(name)
+                    table::escape_markdown_table_cell(name)
                 }
             }
         }
-    }
-
-    /// Generates a Markdown table separator row from column header strings.
-    /// Each separator cell width matches the header's char count plus two spaces.
-    fn make_separator(cols: &[&str]) -> String {
-        let mut sep = String::from("|");
-        for col in cols {
-            let dashes = "-".repeat(col.chars().count() + 2);
-            sep.push_str(&dashes);
-            sep.push('|');
-        }
-        sep.push('\n');
-        sep
-    }
-
-    /// Locale-aware package table header line
-    fn table_header(&self) -> String {
-        format!(
-            "| {} | {} | {} | {} |\n",
-            self.messages.col_package,
-            self.messages.col_version,
-            self.messages.col_license,
-            self.messages.col_description,
-        )
-    }
-
-    /// Locale-aware package table separator line
-    fn table_separator(&self) -> String {
-        Self::make_separator(&[
-            self.messages.col_package,
-            self.messages.col_version,
-            self.messages.col_license,
-            self.messages.col_description,
-        ])
-    }
-
-    /// Locale-aware vulnerability table header line
-    fn vuln_table_header(&self) -> String {
-        format!(
-            "| {} | {} | {} | {} | {} | {} |\n",
-            self.messages.col_package,
-            self.messages.col_current_version,
-            self.messages.col_fixed_version,
-            self.messages.col_cvss,
-            self.messages.col_severity,
-            self.messages.col_vuln_id,
-        )
-    }
-
-    /// Locale-aware vulnerability table separator line
-    fn vuln_table_separator(&self) -> String {
-        Self::make_separator(&[
-            self.messages.col_package,
-            self.messages.col_current_version,
-            self.messages.col_fixed_version,
-            self.messages.col_cvss,
-            self.messages.col_severity,
-            self.messages.col_vuln_id,
-        ])
     }
 }
 
@@ -168,8 +104,8 @@ impl MarkdownFormatter {
         output.push_str("\n\n");
         output.push_str(self.messages.desc_sbom_report);
         output.push_str("\n\n");
-        output.push_str(&self.table_header());
-        output.push_str(&self.table_separator());
+        output.push_str(&table::table_header(self.messages));
+        output.push_str(&table::table_separator(self.messages));
 
         for component in components {
             let license = component
@@ -182,9 +118,9 @@ impl MarkdownFormatter {
             output.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
                 self.format_package_name(&component.name),
-                Self::escape_markdown_table_cell(&component.version),
-                Self::escape_markdown_table_cell(license),
-                Self::escape_markdown_table_cell(description)
+                table::escape_markdown_table_cell(&component.version),
+                table::escape_markdown_table_cell(license),
+                table::escape_markdown_table_cell(description)
             ));
         }
         output.push('\n');
@@ -208,8 +144,8 @@ impl MarkdownFormatter {
         output.push_str("\n\n");
 
         if !deps.direct.is_empty() {
-            output.push_str(&self.table_header());
-            output.push_str(&self.table_separator());
+            output.push_str(&table::table_header(self.messages));
+            output.push_str(&table::table_separator(self.messages));
 
             for bom_ref in &deps.direct {
                 if let Some(component) = component_map.get(bom_ref.as_str()) {
@@ -223,9 +159,9 @@ impl MarkdownFormatter {
                     output.push_str(&format!(
                         "| {} | {} | {} | {} |\n",
                         self.format_package_name(&component.name),
-                        Self::escape_markdown_table_cell(&component.version),
-                        Self::escape_markdown_table_cell(license),
-                        Self::escape_markdown_table_cell(description)
+                        table::escape_markdown_table_cell(&component.version),
+                        table::escape_markdown_table_cell(license),
+                        table::escape_markdown_table_cell(description)
                     ));
                 }
             }
@@ -259,8 +195,8 @@ impl MarkdownFormatter {
                         &[parent_name],
                     ));
                     output.push_str("\n\n");
-                    output.push_str(&self.table_header());
-                    output.push_str(&self.table_separator());
+                    output.push_str(&table::table_header(self.messages));
+                    output.push_str(&table::table_separator(self.messages));
 
                     for trans_ref in trans_deps {
                         if let Some(component) = component_map.get(trans_ref.as_str()) {
@@ -274,9 +210,9 @@ impl MarkdownFormatter {
                             output.push_str(&format!(
                                 "| {} | {} | {} | {} |\n",
                                 self.format_package_name(&component.name),
-                                Self::escape_markdown_table_cell(&component.version),
-                                Self::escape_markdown_table_cell(license),
-                                Self::escape_markdown_table_cell(description)
+                                table::escape_markdown_table_cell(&component.version),
+                                table::escape_markdown_table_cell(license),
+                                table::escape_markdown_table_cell(description)
                             ));
                         }
                     }
@@ -367,8 +303,8 @@ impl MarkdownFormatter {
         ));
         output.push_str("\n\n");
 
-        output.push_str(&self.vuln_table_header());
-        output.push_str(&self.vuln_table_separator());
+        output.push_str(&table::vuln_table_header(self.messages));
+        output.push_str(&table::vuln_table_separator(self.messages));
 
         // Sort by severity (Critical first)
         let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
@@ -410,8 +346,8 @@ impl MarkdownFormatter {
         ));
         output.push_str("\n\n");
 
-        output.push_str(&self.vuln_table_header());
-        output.push_str(&self.vuln_table_separator());
+        output.push_str(&table::vuln_table_header(self.messages));
+        output.push_str(&table::vuln_table_separator(self.messages));
 
         let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
         sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
@@ -464,7 +400,7 @@ impl MarkdownFormatter {
                 self.messages.col_reason,
                 self.messages.col_matched_pattern,
             ));
-            output.push_str(&Self::make_separator(&[
+            output.push_str(&table::make_separator(&[
                 self.messages.col_package,
                 self.messages.col_version,
                 self.messages.col_license,
@@ -475,10 +411,10 @@ impl MarkdownFormatter {
             for v in &compliance.violations {
                 output.push_str(&format!(
                     "| {} | {} | {} | {} | {} |\n",
-                    Self::escape_markdown_table_cell(&v.package_name),
-                    Self::escape_markdown_table_cell(&v.package_version),
-                    Self::escape_markdown_table_cell(&v.license),
-                    Self::escape_markdown_table_cell(&v.reason),
+                    table::escape_markdown_table_cell(&v.package_name),
+                    table::escape_markdown_table_cell(&v.package_version),
+                    table::escape_markdown_table_cell(&v.license),
+                    table::escape_markdown_table_cell(&v.reason),
                     v.matched_pattern.as_deref().unwrap_or("-"),
                 ));
             }
@@ -504,7 +440,7 @@ impl MarkdownFormatter {
                 "| {} | {} |\n",
                 self.messages.col_package, self.messages.col_version,
             ));
-            output.push_str(&Self::make_separator(&[
+            output.push_str(&table::make_separator(&[
                 self.messages.col_package,
                 self.messages.col_version,
             ]));
@@ -512,8 +448,8 @@ impl MarkdownFormatter {
             for w in &compliance.warnings {
                 output.push_str(&format!(
                     "| {} | {} |\n",
-                    Self::escape_markdown_table_cell(&w.package_name),
-                    Self::escape_markdown_table_cell(&w.package_version),
+                    table::escape_markdown_table_cell(&w.package_name),
+                    table::escape_markdown_table_cell(&w.package_version),
                 ));
             }
             output.push('\n');
@@ -544,7 +480,7 @@ impl MarkdownFormatter {
                 self.messages.col_recommended_action,
                 self.messages.col_vuln_id,
             ));
-            output.push_str(&Self::make_separator(&[
+            output.push_str(&table::make_separator(&[
                 self.messages.col_vulnerable_package,
                 self.messages.col_current,
                 self.messages.col_fixed_version,
@@ -563,7 +499,7 @@ impl MarkdownFormatter {
                 self.messages.col_introduced_by,
                 self.messages.col_vuln_id,
             ));
-            output.push_str(&Self::make_separator(&[
+            output.push_str(&table::make_separator(&[
                 self.messages.col_vulnerable_package,
                 self.messages.col_current,
                 self.messages.col_fixed_version,
@@ -599,24 +535,24 @@ impl MarkdownFormatter {
                 );
                 output.push_str(&format!(
                     "| {} | {} | {} | {} {} | {} | {} | {} |\n",
-                    Self::escape_markdown_table_cell(&entry.vulnerable_package),
-                    Self::escape_markdown_table_cell(&entry.current_version),
-                    Self::escape_markdown_table_cell(fixed),
+                    table::escape_markdown_table_cell(&entry.vulnerable_package),
+                    table::escape_markdown_table_cell(&entry.current_version),
+                    table::escape_markdown_table_cell(fixed),
                     severity_emoji,
                     entry.severity.as_str(),
-                    Self::escape_markdown_table_cell(&introduced_by),
-                    Self::escape_markdown_table_cell(&action),
+                    table::escape_markdown_table_cell(&introduced_by),
+                    table::escape_markdown_table_cell(&action),
                     Self::vulnerability_id_to_link(&entry.vulnerability_id),
                 ));
             } else {
                 output.push_str(&format!(
                     "| {} | {} | {} | {} {} | {} | {} |\n",
-                    Self::escape_markdown_table_cell(&entry.vulnerable_package),
-                    Self::escape_markdown_table_cell(&entry.current_version),
-                    Self::escape_markdown_table_cell(fixed),
+                    table::escape_markdown_table_cell(&entry.vulnerable_package),
+                    table::escape_markdown_table_cell(&entry.current_version),
+                    table::escape_markdown_table_cell(fixed),
                     severity_emoji,
                     entry.severity.as_str(),
-                    Self::escape_markdown_table_cell(&introduced_by),
+                    table::escape_markdown_table_cell(&introduced_by),
                     Self::vulnerability_id_to_link(&entry.vulnerability_id),
                 ));
             }
@@ -692,8 +628,8 @@ impl MarkdownFormatter {
         output.push_str(&format!(
             "| {} | {} | {} | {} | {} {} | {} |\n",
             self.format_package_name(&vuln.affected_component_name),
-            Self::escape_markdown_table_cell(&vuln.affected_version),
-            Self::escape_markdown_table_cell(fixed_version),
+            table::escape_markdown_table_cell(&vuln.affected_version),
+            table::escape_markdown_table_cell(fixed_version),
             cvss_display,
             severity_emoji,
             vuln.severity.as_str(),
@@ -802,13 +738,6 @@ mod tests {
             resolution_guide: None,
             upgrade_recommendations: None,
         }
-    }
-
-    #[test]
-    fn test_escape_markdown_table_cell() {
-        let input = "Text with | pipe and\nnewline";
-        let escaped = MarkdownFormatter::escape_markdown_table_cell(input);
-        assert_eq!(escaped, "Text with \\| pipe and newline");
     }
 
     #[test]
