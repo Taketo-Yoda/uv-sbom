@@ -4,10 +4,7 @@ mod section;
 mod table;
 mod vuln_render;
 
-use crate::application::read_models::{
-    ComponentView, DependencyView, LicenseComplianceView, ResolutionGuideView, SbomReadModel,
-    UpgradeRecommendationView, VulnerabilityReportView,
-};
+use crate::application::read_models::SbomReadModel;
 use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
@@ -42,244 +39,6 @@ impl MarkdownFormatter {
     }
 }
 
-/// Helper methods for rendering sections
-impl MarkdownFormatter {
-    /// Renders the header section
-    fn render_header(&self, output: &mut String) {
-        section::render_header(self.messages, output);
-    }
-
-    /// Renders the components section
-    fn render_components(&self, output: &mut String, components: &[ComponentView]) {
-        section::render_components(
-            self.messages,
-            self.verified_packages.as_ref(),
-            output,
-            components,
-        );
-    }
-
-    /// Renders the dependencies section
-    fn render_dependencies(
-        &self,
-        output: &mut String,
-        deps: &DependencyView,
-        components: &[ComponentView],
-    ) {
-        section::render_dependencies(
-            self.messages,
-            self.verified_packages.as_ref(),
-            output,
-            deps,
-            components,
-        );
-    }
-
-    /// Renders the vulnerabilities section
-    fn render_vulnerabilities(&self, output: &mut String, vulns: &VulnerabilityReportView) {
-        vuln_render::render_vulnerabilities(
-            self.messages,
-            self.verified_packages.as_ref(),
-            output,
-            vulns,
-        );
-    }
-
-    /// Renders the license compliance section
-    fn render_license_compliance(&self, output: &mut String, compliance: &LicenseComplianceView) {
-        output.push('\n');
-        output.push_str(self.messages.section_license_compliance);
-        output.push_str("\n\n");
-
-        // Summary
-        if compliance.has_violations {
-            output.push_str(&format!(
-                "**{} license {} found.**\n\n",
-                compliance.summary.violation_count,
-                if compliance.summary.violation_count == 1 {
-                    "violation"
-                } else {
-                    "violations"
-                }
-            ));
-        } else {
-            output.push_str(self.messages.label_no_license_violations);
-            output.push_str("\n\n");
-        }
-
-        // Violations table
-        if !compliance.violations.is_empty() {
-            output.push_str(self.messages.section_violations);
-            output.push_str("\n\n");
-            output.push_str(&format!(
-                "| {} | {} | {} | {} | {} |\n",
-                self.messages.col_package,
-                self.messages.col_version,
-                self.messages.col_license,
-                self.messages.col_reason,
-                self.messages.col_matched_pattern,
-            ));
-            output.push_str(&table::make_separator(&[
-                self.messages.col_package,
-                self.messages.col_version,
-                self.messages.col_license,
-                self.messages.col_reason,
-                self.messages.col_matched_pattern,
-            ]));
-
-            for v in &compliance.violations {
-                output.push_str(&format!(
-                    "| {} | {} | {} | {} | {} |\n",
-                    table::escape_markdown_table_cell(&v.package_name),
-                    table::escape_markdown_table_cell(&v.package_version),
-                    table::escape_markdown_table_cell(&v.license),
-                    table::escape_markdown_table_cell(&v.reason),
-                    v.matched_pattern.as_deref().unwrap_or("-"),
-                ));
-            }
-            output.push('\n');
-        }
-
-        // Warnings table
-        if !compliance.warnings.is_empty() {
-            let warning_count = compliance.summary.warning_count;
-            let pkg_word = if warning_count == 1 {
-                self.messages.label_package_singular
-            } else {
-                self.messages.label_package_plural
-            };
-            output.push_str(self.messages.section_warnings);
-            output.push_str("\n\n");
-            output.push_str(&Messages::format(
-                self.messages.warn_unknown_license_packages,
-                &[&warning_count.to_string(), pkg_word],
-            ));
-            output.push_str("\n\n");
-            output.push_str(&format!(
-                "| {} | {} |\n",
-                self.messages.col_package, self.messages.col_version,
-            ));
-            output.push_str(&table::make_separator(&[
-                self.messages.col_package,
-                self.messages.col_version,
-            ]));
-
-            for w in &compliance.warnings {
-                output.push_str(&format!(
-                    "| {} | {} |\n",
-                    table::escape_markdown_table_cell(&w.package_name),
-                    table::escape_markdown_table_cell(&w.package_version),
-                ));
-            }
-            output.push('\n');
-        }
-    }
-
-    /// Renders the resolution guide section
-    fn render_resolution_guide(
-        &self,
-        output: &mut String,
-        guide: &ResolutionGuideView,
-        upgrade_recommendations: Option<&UpgradeRecommendationView>,
-    ) {
-        output.push('\n');
-        output.push_str(self.messages.section_resolution_guide);
-        output.push_str("\n\n");
-        output.push_str(self.messages.desc_transitive_vuln_table);
-        output.push_str("\n\n");
-
-        if upgrade_recommendations.is_some() {
-            output.push_str(&format!(
-                "| {} | {} | {} | {} | {} | {} | {} |\n",
-                self.messages.col_vulnerable_package,
-                self.messages.col_current,
-                self.messages.col_fixed_version,
-                self.messages.col_severity,
-                self.messages.col_introduced_by,
-                self.messages.col_recommended_action,
-                self.messages.col_vuln_id,
-            ));
-            output.push_str(&table::make_separator(&[
-                self.messages.col_vulnerable_package,
-                self.messages.col_current,
-                self.messages.col_fixed_version,
-                self.messages.col_severity,
-                self.messages.col_introduced_by,
-                self.messages.col_recommended_action,
-                self.messages.col_vuln_id,
-            ]));
-        } else {
-            output.push_str(&format!(
-                "| {} | {} | {} | {} | {} | {} |\n",
-                self.messages.col_vulnerable_package,
-                self.messages.col_current,
-                self.messages.col_fixed_version,
-                self.messages.col_severity,
-                self.messages.col_introduced_by,
-                self.messages.col_vuln_id,
-            ));
-            output.push_str(&table::make_separator(&[
-                self.messages.col_vulnerable_package,
-                self.messages.col_current,
-                self.messages.col_fixed_version,
-                self.messages.col_severity,
-                self.messages.col_introduced_by,
-                self.messages.col_vuln_id,
-            ]));
-        }
-
-        for entry in &guide.entries {
-            let fixed = entry.fixed_version.as_deref().unwrap_or("N/A");
-            let severity_emoji = match entry.severity {
-                crate::application::read_models::SeverityView::Critical => "🔴",
-                crate::application::read_models::SeverityView::High => "🟠",
-                crate::application::read_models::SeverityView::Medium => "🟡",
-                crate::application::read_models::SeverityView::Low => "🟢",
-                crate::application::read_models::SeverityView::None => "⚪",
-            };
-
-            let introduced_by = entry
-                .introduced_by
-                .iter()
-                .map(|ib| format!("{} ({})", ib.package_name, ib.version))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            if let Some(recommendations) = upgrade_recommendations {
-                let action = helpers::find_upgrade_action(
-                    self.messages,
-                    recommendations,
-                    &entry.vulnerability_id,
-                    &entry.introduced_by,
-                );
-                output.push_str(&format!(
-                    "| {} | {} | {} | {} {} | {} | {} | {} |\n",
-                    table::escape_markdown_table_cell(&entry.vulnerable_package),
-                    table::escape_markdown_table_cell(&entry.current_version),
-                    table::escape_markdown_table_cell(fixed),
-                    severity_emoji,
-                    entry.severity.as_str(),
-                    table::escape_markdown_table_cell(&introduced_by),
-                    table::escape_markdown_table_cell(&action),
-                    links::vulnerability_id_to_link(&entry.vulnerability_id),
-                ));
-            } else {
-                output.push_str(&format!(
-                    "| {} | {} | {} | {} {} | {} | {} |\n",
-                    table::escape_markdown_table_cell(&entry.vulnerable_package),
-                    table::escape_markdown_table_cell(&entry.current_version),
-                    table::escape_markdown_table_cell(fixed),
-                    severity_emoji,
-                    entry.severity.as_str(),
-                    table::escape_markdown_table_cell(&introduced_by),
-                    links::vulnerability_id_to_link(&entry.vulnerability_id),
-                ));
-            }
-        }
-        output.push('\n');
-    }
-}
-
 impl Default for MarkdownFormatter {
     fn default() -> Self {
         Self::new(Locale::En)
@@ -290,36 +49,42 @@ impl SbomFormatter for MarkdownFormatter {
     fn format(&self, model: &SbomReadModel) -> Result<String> {
         let mut output = String::new();
 
-        // Header section
-        self.render_header(&mut output);
-
-        // Components section
-        self.render_components(&mut output, &model.components);
-
-        // Dependencies section (if present)
+        section::render_header(self.messages, &mut output);
+        section::render_components(
+            self.messages,
+            self.verified_packages.as_ref(),
+            &mut output,
+            &model.components,
+        );
         if let Some(deps) = &model.dependencies {
-            self.render_dependencies(&mut output, deps, &model.components);
+            section::render_dependencies(
+                self.messages,
+                self.verified_packages.as_ref(),
+                &mut output,
+                deps,
+                &model.components,
+            );
         }
-
-        // Vulnerabilities section (if present)
         if let Some(vulns) = &model.vulnerabilities {
-            self.render_vulnerabilities(&mut output, vulns);
+            vuln_render::render_vulnerabilities(
+                self.messages,
+                self.verified_packages.as_ref(),
+                &mut output,
+                vulns,
+            );
         }
-
-        // Resolution guide section (if present)
         if let Some(guide) = &model.resolution_guide {
             if !guide.entries.is_empty() {
-                self.render_resolution_guide(
+                section::render_resolution_guide(
+                    self.messages,
                     &mut output,
                     guide,
                     model.upgrade_recommendations.as_ref(),
                 );
             }
         }
-
-        // License compliance section (if present)
         if let Some(compliance) = &model.license_compliance {
-            self.render_license_compliance(&mut output, compliance);
+            section::render_license_compliance(self.messages, &mut output, compliance);
         }
 
         Ok(output)
@@ -330,7 +95,8 @@ impl SbomFormatter for MarkdownFormatter {
 mod tests {
     use super::*;
     use crate::application::read_models::{
-        LicenseView, SbomMetadataView, SeverityView, VulnerabilitySummary, VulnerabilityView,
+        ComponentView, DependencyView, LicenseView, SbomMetadataView, SbomReadModel, SeverityView,
+        VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
     };
     use crate::i18n::Locale;
     use std::collections::HashMap;
@@ -600,272 +366,6 @@ mod tests {
         assert!(summary_pos.unwrap() < warning_pos.unwrap());
         assert!(warning_pos.unwrap() < info_pos.unwrap());
         assert!(info_pos.unwrap() < attribution_pos.unwrap());
-    }
-
-    // ============================================================
-    // Resolution guide tests
-    // ============================================================
-
-    #[test]
-    fn test_render_resolution_guide_with_entries() {
-        use crate::application::read_models::{
-            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
-        };
-
-        let mut model = create_test_read_model();
-        model.resolution_guide = Some(ResolutionGuideView {
-            entries: vec![ResolutionEntryView {
-                vulnerable_package: "urllib3".to_string(),
-                current_version: "1.26.15".to_string(),
-                fixed_version: Some(">= 2.0.7".to_string()),
-                severity: SeverityView::High,
-                vulnerability_id: "CVE-2024-XXXXX".to_string(),
-                introduced_by: vec![IntroducedByView {
-                    package_name: "requests".to_string(),
-                    version: "2.31.0".to_string(),
-                }],
-            }],
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("## Vulnerability Resolution Guide"));
-        assert!(markdown.contains("urllib3"));
-        assert!(markdown.contains("1.26.15"));
-        assert!(markdown.contains(">= 2.0.7"));
-        assert!(markdown.contains("🟠 HIGH"));
-        assert!(markdown.contains("requests (2.31.0)"));
-        assert!(
-            markdown.contains("[CVE-2024-XXXXX](https://nvd.nist.gov/vuln/detail/CVE-2024-XXXXX)")
-        );
-    }
-
-    #[test]
-    fn test_render_resolution_guide_multiple_introduced_by() {
-        use crate::application::read_models::{
-            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
-        };
-
-        let mut model = create_test_read_model();
-        model.resolution_guide = Some(ResolutionGuideView {
-            entries: vec![ResolutionEntryView {
-                vulnerable_package: "certifi".to_string(),
-                current_version: "2023.7.22".to_string(),
-                fixed_version: Some(">= 2024.2.2".to_string()),
-                severity: SeverityView::High,
-                vulnerability_id: "CVE-2024-YYYYY".to_string(),
-                introduced_by: vec![
-                    IntroducedByView {
-                        package_name: "requests".to_string(),
-                        version: "2.31.0".to_string(),
-                    },
-                    IntroducedByView {
-                        package_name: "httpx".to_string(),
-                        version: "0.25.0".to_string(),
-                    },
-                ],
-            }],
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("requests (2.31.0), httpx (0.25.0)"));
-    }
-
-    #[test]
-    fn test_resolution_guide_omitted_when_empty() {
-        use crate::application::read_models::ResolutionGuideView;
-
-        let mut model = create_test_read_model();
-        model.resolution_guide = Some(ResolutionGuideView { entries: vec![] });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(!markdown.contains("## Vulnerability Resolution Guide"));
-    }
-
-    #[test]
-    fn test_resolution_guide_omitted_when_none() {
-        let model = create_test_read_model();
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(!markdown.contains("## Vulnerability Resolution Guide"));
-    }
-
-    #[test]
-    fn test_resolution_guide_ghsa_link() {
-        use crate::application::read_models::{
-            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
-        };
-
-        let mut model = create_test_read_model();
-        model.resolution_guide = Some(ResolutionGuideView {
-            entries: vec![ResolutionEntryView {
-                vulnerable_package: "urllib3".to_string(),
-                current_version: "1.26.15".to_string(),
-                fixed_version: None,
-                severity: SeverityView::Medium,
-                vulnerability_id: "GHSA-abcd-efgh-ijkl".to_string(),
-                introduced_by: vec![IntroducedByView {
-                    package_name: "requests".to_string(),
-                    version: "2.31.0".to_string(),
-                }],
-            }],
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown
-            .contains("[GHSA-abcd-efgh-ijkl](https://github.com/advisories/GHSA-abcd-efgh-ijkl)"));
-        assert!(markdown.contains("N/A")); // fixed_version is None
-    }
-
-    // ============================================================
-    // Upgrade recommendation rendering tests
-    // ============================================================
-
-    #[test]
-    fn test_render_resolution_guide_with_upgradable_recommendation() {
-        use crate::application::read_models::{
-            IntroducedByView, ResolutionEntryView, ResolutionGuideView, UpgradeEntryView,
-            UpgradeRecommendationView,
-        };
-
-        let mut model = create_test_read_model();
-        model.resolution_guide = Some(ResolutionGuideView {
-            entries: vec![ResolutionEntryView {
-                vulnerable_package: "urllib3".to_string(),
-                current_version: "1.26.15".to_string(),
-                fixed_version: Some(">= 2.0.7".to_string()),
-                severity: SeverityView::High,
-                vulnerability_id: "CVE-2024-XXXXX".to_string(),
-                introduced_by: vec![IntroducedByView {
-                    package_name: "requests".to_string(),
-                    version: "2.31.0".to_string(),
-                }],
-            }],
-        });
-        model.upgrade_recommendations = Some(UpgradeRecommendationView {
-            entries: vec![UpgradeEntryView::Upgradable {
-                direct_dep: "requests".to_string(),
-                current_version: "2.31.0".to_string(),
-                target_version: "2.32.3".to_string(),
-                transitive_dep: "urllib3".to_string(),
-                resolved_version: "2.2.1".to_string(),
-                vulnerability_id: "CVE-2024-XXXXX".to_string(),
-            }],
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("Recommended Action"));
-        assert!(markdown.contains("⬆️ Upgrade requests → 2.32.3 (resolves urllib3 to 2.2.1)"));
-    }
-
-    #[test]
-    fn test_render_resolution_guide_with_unresolvable_recommendation() {
-        use crate::application::read_models::{
-            IntroducedByView, ResolutionEntryView, ResolutionGuideView, UpgradeEntryView,
-            UpgradeRecommendationView,
-        };
-
-        let mut model = create_test_read_model();
-        model.resolution_guide = Some(ResolutionGuideView {
-            entries: vec![ResolutionEntryView {
-                vulnerable_package: "idna".to_string(),
-                current_version: "3.6".to_string(),
-                fixed_version: Some(">= 3.7".to_string()),
-                severity: SeverityView::Medium,
-                vulnerability_id: "GHSA-ZZZZZ".to_string(),
-                introduced_by: vec![IntroducedByView {
-                    package_name: "httpx".to_string(),
-                    version: "0.25.0".to_string(),
-                }],
-            }],
-        });
-        model.upgrade_recommendations = Some(UpgradeRecommendationView {
-            entries: vec![UpgradeEntryView::Unresolvable {
-                direct_dep: "httpx".to_string(),
-                reason: "latest httpx still pins idna < 3.7".to_string(),
-                vulnerability_id: "GHSA-ZZZZZ".to_string(),
-            }],
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("Recommended Action"));
-        assert!(markdown.contains("⚠️ Cannot resolve: latest httpx still pins idna < 3.7"));
-    }
-
-    #[test]
-    fn test_render_resolution_guide_with_simulation_failed() {
-        use crate::application::read_models::{
-            IntroducedByView, ResolutionEntryView, ResolutionGuideView, UpgradeEntryView,
-            UpgradeRecommendationView,
-        };
-
-        let mut model = create_test_read_model();
-        model.resolution_guide = Some(ResolutionGuideView {
-            entries: vec![ResolutionEntryView {
-                vulnerable_package: "urllib3".to_string(),
-                current_version: "1.26.15".to_string(),
-                fixed_version: None,
-                severity: SeverityView::High,
-                vulnerability_id: "CVE-2024-XXXXX".to_string(),
-                introduced_by: vec![IntroducedByView {
-                    package_name: "requests".to_string(),
-                    version: "2.31.0".to_string(),
-                }],
-            }],
-        });
-        model.upgrade_recommendations = Some(UpgradeRecommendationView {
-            entries: vec![UpgradeEntryView::SimulationFailed {
-                direct_dep: "requests".to_string(),
-                error: "dependency resolution timed out".to_string(),
-            }],
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("Recommended Action"));
-        assert!(markdown.contains("❓ Could not analyze: dependency resolution timed out"));
-    }
-
-    #[test]
-    fn test_render_resolution_guide_no_recommendations_omits_column() {
-        use crate::application::read_models::{
-            IntroducedByView, ResolutionEntryView, ResolutionGuideView,
-        };
-
-        let mut model = create_test_read_model();
-        model.resolution_guide = Some(ResolutionGuideView {
-            entries: vec![ResolutionEntryView {
-                vulnerable_package: "urllib3".to_string(),
-                current_version: "1.26.15".to_string(),
-                fixed_version: Some(">= 2.0.7".to_string()),
-                severity: SeverityView::High,
-                vulnerability_id: "CVE-2024-XXXXX".to_string(),
-                introduced_by: vec![IntroducedByView {
-                    package_name: "requests".to_string(),
-                    version: "2.31.0".to_string(),
-                }],
-            }],
-        });
-        // upgrade_recommendations is None (default in test model)
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(!markdown.contains("Recommended Action"));
-        assert!(markdown.contains("## Vulnerability Resolution Guide"));
     }
 
     // ===== Tests for --lang option (i18n) =====
