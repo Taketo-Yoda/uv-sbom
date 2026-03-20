@@ -3,13 +3,16 @@
 //! This module provides the builder that transforms domain objects into
 //! the query-optimized read model.
 
-use super::component_view::{ComponentView, LicenseView};
+mod component_builder;
+mod metadata_builder;
+
+use super::component_view::ComponentView;
 use super::dependency_view::DependencyView;
 use super::license_compliance_view::{
     LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView, LicenseWarningView,
 };
 use super::resolution_guide_view::{IntroducedByView, ResolutionEntryView, ResolutionGuideView};
-use super::sbom_read_model::{MetadataComponentView, SbomMetadataView, SbomReadModel};
+use super::sbom_read_model::SbomReadModel;
 use super::upgrade_recommendation_view::{UpgradeEntryView, UpgradeRecommendationView};
 use super::vulnerability_view::{
     SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
@@ -22,7 +25,6 @@ use crate::sbom_generation::domain::vulnerability::{
     PackageVulnerabilities, Severity, Vulnerability,
 };
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecommendation};
-use crate::sbom_generation::policies::spdx_license_map;
 use std::collections::{HashMap, HashSet};
 
 /// Builder for constructing SbomReadModel from domain objects
@@ -73,8 +75,8 @@ impl SbomReadModelBuilder {
         project_component: Option<(&str, &str)>,
         upgrade_recommendations: Option<&[UpgradeRecommendation]>,
     ) -> SbomReadModel {
-        let metadata_view = Self::build_metadata(metadata, project_component);
-        let components = Self::build_components(&packages, dependency_graph);
+        let metadata_view = metadata_builder::build_metadata(metadata, project_component);
+        let components = component_builder::build_components(&packages, dependency_graph);
 
         let dependencies =
             dependency_graph.map(|graph| Self::build_dependencies(graph, &components));
@@ -113,71 +115,6 @@ impl SbomReadModelBuilder {
             resolution_guide,
             upgrade_recommendations,
         }
-    }
-
-    /// Converts domain metadata to view representation
-    fn build_metadata(
-        metadata: &SbomMetadata,
-        project_component: Option<(&str, &str)>,
-    ) -> SbomMetadataView {
-        SbomMetadataView {
-            timestamp: metadata.timestamp().to_string(),
-            tool_name: metadata.tool_name().to_string(),
-            tool_version: metadata.tool_version().to_string(),
-            serial_number: metadata.serial_number().to_string(),
-            component: project_component.map(|(name, version)| MetadataComponentView {
-                name: name.to_string(),
-                version: version.to_string(),
-            }),
-        }
-    }
-
-    /// Converts enriched packages to component views
-    ///
-    /// Generates bom-ref and purl for each package, and determines
-    /// whether it is a direct dependency based on the dependency graph.
-    fn build_components(
-        packages: &[EnrichedPackage],
-        graph: Option<&DependencyGraph>,
-    ) -> Vec<ComponentView> {
-        packages
-            .iter()
-            .map(|enriched| {
-                let name = enriched.package.name();
-                let version = enriched.package.version();
-
-                let bom_ref = format!("{}-{}", name, version);
-                let purl = format!("pkg:pypi/{}@{}", name, version);
-
-                let is_direct = graph
-                    .map(|g| {
-                        g.direct_dependencies()
-                            .iter()
-                            .any(|dep| dep.as_str() == name)
-                    })
-                    .unwrap_or(false);
-
-                let license = enriched.license.as_ref().map(|license_str| {
-                    let spdx_id = spdx_license_map::get_spdx_id(license_str);
-                    LicenseView {
-                        spdx_id,
-                        name: license_str.clone(),
-                        url: None,
-                    }
-                });
-
-                ComponentView {
-                    bom_ref,
-                    name: name.to_string(),
-                    version: version.to_string(),
-                    purl,
-                    license,
-                    description: enriched.description.clone(),
-                    sha256_hash: enriched.sha256_hash.clone(),
-                    is_direct_dependency: is_direct,
-                }
-            })
-            .collect()
     }
 
     /// Builds dependency view from dependency graph
@@ -468,7 +405,7 @@ mod tests {
     #[test]
     fn test_build_metadata() {
         let metadata = create_test_metadata();
-        let view = SbomReadModelBuilder::build_metadata(&metadata, None);
+        let view = metadata_builder::build_metadata(&metadata, None);
 
         assert_eq!(view.timestamp, "2024-01-15T10:30:00Z");
         assert_eq!(view.tool_name, "uv-sbom");
@@ -483,7 +420,7 @@ mod tests {
     #[test]
     fn test_build_components_generates_bom_ref() {
         let packages = vec![create_test_package("requests", "2.31.0")];
-        let components = SbomReadModelBuilder::build_components(&packages, None);
+        let components = component_builder::build_components(&packages, None);
 
         assert_eq!(components.len(), 1);
         assert_eq!(components[0].bom_ref, "requests-2.31.0");
@@ -492,7 +429,7 @@ mod tests {
     #[test]
     fn test_build_components_generates_purl() {
         let packages = vec![create_test_package("requests", "2.31.0")];
-        let components = SbomReadModelBuilder::build_components(&packages, None);
+        let components = component_builder::build_components(&packages, None);
 
         assert_eq!(components[0].purl, "pkg:pypi/requests@2.31.0");
     }
@@ -500,7 +437,7 @@ mod tests {
     #[test]
     fn test_build_components_with_license() {
         let packages = vec![create_test_package("requests", "2.31.0")];
-        let components = SbomReadModelBuilder::build_components(&packages, None);
+        let components = component_builder::build_components(&packages, None);
 
         let license = components[0].license.as_ref().unwrap();
         assert_eq!(license.name, "MIT");
@@ -510,7 +447,7 @@ mod tests {
     #[test]
     fn test_build_components_with_description() {
         let packages = vec![create_test_package("requests", "2.31.0")];
-        let components = SbomReadModelBuilder::build_components(&packages, None);
+        let components = component_builder::build_components(&packages, None);
 
         assert_eq!(
             components[0].description,
@@ -525,7 +462,7 @@ mod tests {
             create_test_package("urllib3", "2.0.0"),
         ];
         let graph = create_test_graph();
-        let components = SbomReadModelBuilder::build_components(&packages, Some(&graph));
+        let components = component_builder::build_components(&packages, Some(&graph));
 
         // requests is in direct_dependencies
         let requests = components.iter().find(|c| c.name == "requests").unwrap();
@@ -539,7 +476,7 @@ mod tests {
     #[test]
     fn test_build_components_is_direct_dependency_without_graph() {
         let packages = vec![create_test_package("requests", "2.31.0")];
-        let components = SbomReadModelBuilder::build_components(&packages, None);
+        let components = component_builder::build_components(&packages, None);
 
         // Without graph, all packages default to not direct
         assert!(!components[0].is_direct_dependency);
@@ -589,7 +526,7 @@ mod tests {
             None,
             None,
         );
-        let components = SbomReadModelBuilder::build_components(&[package], None);
+        let components = component_builder::build_components(&[package], None);
 
         assert!(components[0].license.is_none());
         assert!(components[0].description.is_none());
@@ -603,7 +540,7 @@ mod tests {
             create_test_package("requests", "2.31.0"),
             create_test_package("urllib3", "2.0.0"),
         ];
-        let components = SbomReadModelBuilder::build_components(&packages, None);
+        let components = component_builder::build_components(&packages, None);
 
         let direct_deps = vec![
             PackageName::new("requests".to_string()).unwrap(),
@@ -625,7 +562,7 @@ mod tests {
             create_test_package("urllib3", "2.0.0"),
             create_test_package("certifi", "2023.7.22"),
         ];
-        let components = SbomReadModelBuilder::build_components(&packages, None);
+        let components = component_builder::build_components(&packages, None);
 
         let direct_deps = vec![PackageName::new("requests".to_string()).unwrap()];
         let mut transitive = HashMap::new();
@@ -651,7 +588,7 @@ mod tests {
     #[test]
     fn test_build_dependencies_filters_unknown_packages() {
         let packages = vec![create_test_package("requests", "2.31.0")];
-        let components = SbomReadModelBuilder::build_components(&packages, None);
+        let components = component_builder::build_components(&packages, None);
 
         // unknown-pkg is not in components
         let direct_deps = vec![
@@ -670,7 +607,7 @@ mod tests {
     #[test]
     fn test_build_dependencies_empty_graph() {
         let packages = vec![create_test_package("requests", "2.31.0")];
-        let components = SbomReadModelBuilder::build_components(&packages, None);
+        let components = component_builder::build_components(&packages, None);
         let graph = DependencyGraph::new(vec![], HashMap::new());
 
         let deps = SbomReadModelBuilder::build_dependencies(&graph, &components);
@@ -1108,7 +1045,7 @@ mod tests {
     fn test_build_components_with_sha256_hash() {
         let mut package = create_test_package("requests", "2.31.0");
         package.sha256_hash = Some("abc123def456".to_string());
-        let components = SbomReadModelBuilder::build_components(&[package], None);
+        let components = component_builder::build_components(&[package], None);
 
         assert_eq!(components[0].sha256_hash, Some("abc123def456".to_string()));
     }
@@ -1116,7 +1053,7 @@ mod tests {
     #[test]
     fn test_build_components_without_sha256_hash() {
         let package = create_test_package("requests", "2.31.0");
-        let components = SbomReadModelBuilder::build_components(&[package], None);
+        let components = component_builder::build_components(&[package], None);
 
         assert!(components[0].sha256_hash.is_none());
     }
@@ -1128,7 +1065,7 @@ mod tests {
     #[test]
     fn test_build_metadata_with_project_component() {
         let metadata = create_test_metadata();
-        let view = SbomReadModelBuilder::build_metadata(&metadata, Some(("my-project", "1.0.0")));
+        let view = metadata_builder::build_metadata(&metadata, Some(("my-project", "1.0.0")));
 
         assert!(view.component.is_some());
         let component = view.component.unwrap();
@@ -1139,7 +1076,7 @@ mod tests {
     #[test]
     fn test_build_metadata_without_project_component() {
         let metadata = create_test_metadata();
-        let view = SbomReadModelBuilder::build_metadata(&metadata, None);
+        let view = metadata_builder::build_metadata(&metadata, None);
 
         assert!(view.component.is_none());
     }
