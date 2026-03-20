@@ -4,13 +4,11 @@
 //! the query-optimized read model.
 
 mod component_builder;
+mod dependency_builder;
+mod license_compliance_builder;
 mod metadata_builder;
 
 use super::component_view::ComponentView;
-use super::dependency_view::DependencyView;
-use super::license_compliance_view::{
-    LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView, LicenseWarningView,
-};
 use super::resolution_guide_view::{IntroducedByView, ResolutionEntryView, ResolutionGuideView};
 use super::sbom_read_model::SbomReadModel;
 use super::upgrade_recommendation_view::{UpgradeEntryView, UpgradeRecommendationView};
@@ -25,7 +23,7 @@ use crate::sbom_generation::domain::vulnerability::{
     PackageVulnerabilities, Severity, Vulnerability,
 };
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecommendation};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Builder for constructing SbomReadModel from domain objects
 ///
@@ -78,11 +76,12 @@ impl SbomReadModelBuilder {
         let metadata_view = metadata_builder::build_metadata(metadata, project_component);
         let components = component_builder::build_components(&packages, dependency_graph);
 
-        let dependencies =
-            dependency_graph.map(|graph| Self::build_dependencies(graph, &components));
+        let dependencies = dependency_graph
+            .map(|graph| dependency_builder::build_dependencies(graph, &components));
         let vulnerabilities =
             vulnerability_result.map(|result| Self::build_vulnerabilities(result, &components));
-        let license_compliance = license_compliance_result.map(Self::build_license_compliance);
+        let license_compliance =
+            license_compliance_result.map(license_compliance_builder::build_license_compliance);
 
         // Build resolution guide only when BOTH dependency graph and vulnerability data exist
         let resolution_guide = match (dependency_graph, vulnerability_result) {
@@ -115,44 +114,6 @@ impl SbomReadModelBuilder {
             resolution_guide,
             upgrade_recommendations,
         }
-    }
-
-    /// Builds dependency view from dependency graph
-    ///
-    /// Maps direct dependencies to bom-refs and builds transitive dependency map.
-    fn build_dependencies(graph: &DependencyGraph, components: &[ComponentView]) -> DependencyView {
-        // Create a lookup map from package name to bom-ref
-        let name_to_bom_ref: HashMap<&str, &str> = components
-            .iter()
-            .map(|c| (c.name.as_str(), c.bom_ref.as_str()))
-            .collect();
-
-        // Map direct dependencies to bom-refs
-        let direct: Vec<String> = graph
-            .direct_dependencies()
-            .iter()
-            .filter_map(|dep| name_to_bom_ref.get(dep.as_str()).map(|s| s.to_string()))
-            .collect();
-
-        // Build transitive dependency map
-        let transitive: HashMap<String, Vec<String>> = graph
-            .transitive_dependencies()
-            .iter()
-            .filter_map(|(parent, children)| {
-                let parent_bom_ref = name_to_bom_ref.get(parent.as_str())?;
-                let child_bom_refs: Vec<String> = children
-                    .iter()
-                    .filter_map(|child| name_to_bom_ref.get(child.as_str()).map(|s| s.to_string()))
-                    .collect();
-                if child_bom_refs.is_empty() {
-                    None
-                } else {
-                    Some((parent_bom_ref.to_string(), child_bom_refs))
-                }
-            })
-            .collect();
-
-        DependencyView { direct, transitive }
     }
 
     /// Builds vulnerability report view from vulnerability check result
@@ -256,42 +217,6 @@ impl SbomReadModelBuilder {
         }
     }
 
-    /// Builds license compliance view from domain result
-    fn build_license_compliance(result: &LicenseComplianceResult) -> LicenseComplianceView {
-        let violations: Vec<LicenseViolationView> = result
-            .violations
-            .iter()
-            .map(|v| LicenseViolationView {
-                package_name: v.package_name.clone(),
-                package_version: v.package_version.clone(),
-                license: v.license.clone().unwrap_or_else(|| "N/A".to_string()),
-                reason: v.reason.as_str().to_string(),
-                matched_pattern: v.matched_pattern.clone(),
-            })
-            .collect();
-
-        let warnings: Vec<LicenseWarningView> = result
-            .warnings
-            .iter()
-            .map(|w| LicenseWarningView {
-                package_name: w.package_name.clone(),
-                package_version: w.package_version.clone(),
-            })
-            .collect();
-
-        let summary = LicenseComplianceSummary {
-            violation_count: violations.len(),
-            warning_count: warnings.len(),
-        };
-
-        LicenseComplianceView {
-            has_violations: result.has_violations(),
-            violations,
-            warnings,
-            summary,
-        }
-    }
-
     /// Builds resolution guide view from domain resolution entries
     ///
     /// Converts domain `ResolutionEntry` values into view-optimized
@@ -378,6 +303,7 @@ mod tests {
     use super::*;
     use crate::sbom_generation::domain::vulnerability::CvssScore;
     use crate::sbom_generation::domain::{Package, PackageName};
+    use std::collections::HashMap;
 
     fn create_test_metadata() -> SbomMetadata {
         SbomMetadata::new(
@@ -548,7 +474,7 @@ mod tests {
         ];
         let graph = DependencyGraph::new(direct_deps, HashMap::new());
 
-        let deps = SbomReadModelBuilder::build_dependencies(&graph, &components);
+        let deps = dependency_builder::build_dependencies(&graph, &components);
 
         assert_eq!(deps.direct.len(), 2);
         assert!(deps.direct.contains(&"requests-2.31.0".to_string()));
@@ -575,7 +501,7 @@ mod tests {
         );
         let graph = DependencyGraph::new(direct_deps, transitive);
 
-        let deps = SbomReadModelBuilder::build_dependencies(&graph, &components);
+        let deps = dependency_builder::build_dependencies(&graph, &components);
 
         assert_eq!(deps.direct.len(), 1);
         assert!(deps.transitive.contains_key("requests-2.31.0"));
@@ -597,7 +523,7 @@ mod tests {
         ];
         let graph = DependencyGraph::new(direct_deps, HashMap::new());
 
-        let deps = SbomReadModelBuilder::build_dependencies(&graph, &components);
+        let deps = dependency_builder::build_dependencies(&graph, &components);
 
         // Only requests should be included
         assert_eq!(deps.direct.len(), 1);
@@ -610,7 +536,7 @@ mod tests {
         let components = component_builder::build_components(&packages, None);
         let graph = DependencyGraph::new(vec![], HashMap::new());
 
-        let deps = SbomReadModelBuilder::build_dependencies(&graph, &components);
+        let deps = dependency_builder::build_dependencies(&graph, &components);
 
         assert!(deps.direct.is_empty());
         assert!(deps.transitive.is_empty());
