@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-03-21
+
+### Security
+- Updated `aws-lc-sys` to 0.39.0 to fix GHSA-394x-vwmw-crm3 and GHSA-9f94-5g5w-gf6r
+
 ## [2.0.0] - 2026-03-15
 
 ### Breaking Changes
