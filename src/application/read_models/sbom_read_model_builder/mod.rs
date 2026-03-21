@@ -7,23 +7,17 @@ mod component_builder;
 mod dependency_builder;
 mod license_compliance_builder;
 mod metadata_builder;
+mod vulnerability_builder;
 
-use super::component_view::ComponentView;
 use super::resolution_guide_view::{IntroducedByView, ResolutionEntryView, ResolutionGuideView};
 use super::sbom_read_model::SbomReadModel;
 use super::upgrade_recommendation_view::{UpgradeEntryView, UpgradeRecommendationView};
-use super::vulnerability_view::{
-    SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
-};
 use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
 use crate::sbom_generation::domain::services::{ResolutionAnalyzer, VulnerabilityCheckResult};
-use crate::sbom_generation::domain::vulnerability::{
-    PackageVulnerabilities, Severity, Vulnerability,
-};
+use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecommendation};
-use std::collections::HashSet;
 
 /// Builder for constructing SbomReadModel from domain objects
 ///
@@ -78,8 +72,8 @@ impl SbomReadModelBuilder {
 
         let dependencies = dependency_graph
             .map(|graph| dependency_builder::build_dependencies(graph, &components));
-        let vulnerabilities =
-            vulnerability_result.map(|result| Self::build_vulnerabilities(result, &components));
+        let vulnerabilities = vulnerability_result
+            .map(|result| vulnerability_builder::build_vulnerabilities(result, &components));
         let license_compliance =
             license_compliance_result.map(license_compliance_builder::build_license_compliance);
 
@@ -113,107 +107,6 @@ impl SbomReadModelBuilder {
             license_compliance,
             resolution_guide,
             upgrade_recommendations,
-        }
-    }
-
-    /// Builds vulnerability report view from vulnerability check result
-    ///
-    /// Converts above_threshold to actionable and below_threshold to informational.
-    /// Uses existing VulnerabilityCheckResult semantic methods.
-    fn build_vulnerabilities(
-        result: &VulnerabilityCheckResult,
-        components: &[ComponentView],
-    ) -> VulnerabilityReportView {
-        // Convert above_threshold to actionable vulnerabilities
-        let actionable: Vec<VulnerabilityView> = result
-            .above_threshold
-            .iter()
-            .flat_map(|pkg| Self::build_vulnerability_views_for_package(pkg, components))
-            .collect();
-
-        // Convert below_threshold to informational vulnerabilities
-        let informational: Vec<VulnerabilityView> = result
-            .below_threshold
-            .iter()
-            .flat_map(|pkg| Self::build_vulnerability_views_for_package(pkg, components))
-            .collect();
-
-        // Calculate unique affected packages
-        let affected_packages: HashSet<&str> = result
-            .above_threshold
-            .iter()
-            .chain(result.below_threshold.iter())
-            .map(|pkg| pkg.package_name())
-            .collect();
-
-        let summary = VulnerabilitySummary {
-            total_count: result.actionable_count() + result.informational_count(),
-            actionable_count: result.actionable_count(),
-            informational_count: result.informational_count(),
-            affected_package_count: affected_packages.len(),
-        };
-
-        VulnerabilityReportView {
-            actionable,
-            informational,
-            threshold_exceeded: result.threshold_exceeded,
-            summary,
-        }
-    }
-
-    /// Builds vulnerability views for all vulnerabilities in a package
-    fn build_vulnerability_views_for_package(
-        package: &PackageVulnerabilities,
-        components: &[ComponentView],
-    ) -> Vec<VulnerabilityView> {
-        package
-            .vulnerabilities()
-            .iter()
-            .map(|vuln| Self::build_vulnerability_view(vuln, package, components))
-            .collect()
-    }
-
-    /// Converts domain vulnerability to view
-    fn build_vulnerability_view(
-        vuln: &Vulnerability,
-        package: &PackageVulnerabilities,
-        components: &[ComponentView],
-    ) -> VulnerabilityView {
-        // Find the component bom-ref for this package
-        let component = components
-            .iter()
-            .find(|c| c.name == package.package_name() && c.version == package.current_version());
-
-        let affected_component = component
-            .map(|c| c.bom_ref.clone())
-            .unwrap_or_else(|| format!("{}-{}", package.package_name(), package.current_version()));
-
-        // Generate vulnerability bom-ref
-        let bom_ref = format!("{}-{}", vuln.id(), affected_component);
-
-        VulnerabilityView {
-            bom_ref,
-            id: vuln.id().to_string(),
-            affected_component,
-            affected_component_name: package.package_name().to_string(),
-            affected_version: package.current_version().to_string(),
-            cvss_score: vuln.cvss_score().map(|s| s.value()),
-            cvss_vector: None, // OSV API doesn't provide vector in our current implementation
-            severity: Self::map_severity(&vuln.severity()),
-            fixed_version: vuln.fixed_version().map(|s| s.to_string()),
-            description: None, // Summary is not exposed in Vulnerability, could be added later
-            source_url: None,  // Not available in current domain model
-        }
-    }
-
-    /// Converts domain Severity to SeverityView
-    fn map_severity(severity: &Severity) -> SeverityView {
-        match severity {
-            Severity::Critical => SeverityView::Critical,
-            Severity::High => SeverityView::High,
-            Severity::Medium => SeverityView::Medium,
-            Severity::Low => SeverityView::Low,
-            Severity::None => SeverityView::None,
         }
     }
 
@@ -291,7 +184,7 @@ impl SbomReadModelBuilder {
             vulnerable_package: entry.vulnerable_package().to_string(),
             current_version: entry.current_version().to_string(),
             fixed_version: entry.fixed_version().map(|v| v.to_string()),
-            severity: Self::map_severity(&entry.severity()),
+            severity: vulnerability_builder::map_severity(&entry.severity()),
             vulnerability_id: entry.vulnerability_id().to_string(),
             introduced_by,
         }
@@ -300,8 +193,10 @@ impl SbomReadModelBuilder {
 
 #[cfg(test)]
 mod tests {
+    use super::super::component_view::ComponentView;
+    use super::super::vulnerability_view::SeverityView;
     use super::*;
-    use crate::sbom_generation::domain::vulnerability::CvssScore;
+    use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
     use crate::sbom_generation::domain::{Package, PackageName};
     use std::collections::HashMap;
 
@@ -547,23 +442,23 @@ mod tests {
     #[test]
     fn test_map_severity_all_levels() {
         assert_eq!(
-            SbomReadModelBuilder::map_severity(&Severity::Critical),
+            vulnerability_builder::map_severity(&Severity::Critical),
             SeverityView::Critical
         );
         assert_eq!(
-            SbomReadModelBuilder::map_severity(&Severity::High),
+            vulnerability_builder::map_severity(&Severity::High),
             SeverityView::High
         );
         assert_eq!(
-            SbomReadModelBuilder::map_severity(&Severity::Medium),
+            vulnerability_builder::map_severity(&Severity::Medium),
             SeverityView::Medium
         );
         assert_eq!(
-            SbomReadModelBuilder::map_severity(&Severity::Low),
+            vulnerability_builder::map_severity(&Severity::Low),
             SeverityView::Low
         );
         assert_eq!(
-            SbomReadModelBuilder::map_severity(&Severity::None),
+            vulnerability_builder::map_severity(&Severity::None),
             SeverityView::None
         );
     }
@@ -617,7 +512,7 @@ mod tests {
             is_direct_dependency: true,
         }];
 
-        let view = SbomReadModelBuilder::build_vulnerability_view(&vuln, &pkg, &components);
+        let view = vulnerability_builder::build_vulnerability_view(&vuln, &pkg, &components);
 
         assert_eq!(view.id, "CVE-2024-1234");
         assert_eq!(view.affected_component, "requests-2.31.0");
@@ -635,7 +530,7 @@ mod tests {
         let pkg = create_package_vulnerabilities("requests", "2.31.0", vec![vuln.clone()]);
         let components = vec![];
 
-        let view = SbomReadModelBuilder::build_vulnerability_view(&vuln, &pkg, &components);
+        let view = vulnerability_builder::build_vulnerability_view(&vuln, &pkg, &components);
 
         assert_eq!(view.fixed_version, Some("3.0.0".to_string()));
     }
@@ -646,7 +541,7 @@ mod tests {
         let pkg = create_package_vulnerabilities("requests", "2.31.0", vec![vuln.clone()]);
         let components = vec![];
 
-        let view = SbomReadModelBuilder::build_vulnerability_view(&vuln, &pkg, &components);
+        let view = vulnerability_builder::build_vulnerability_view(&vuln, &pkg, &components);
 
         assert_eq!(view.cvss_score, None);
         assert_eq!(view.severity, SeverityView::High);
@@ -658,7 +553,7 @@ mod tests {
         let pkg = create_package_vulnerabilities("unknown-pkg", "1.0.0", vec![vuln.clone()]);
         let components = vec![]; // Empty components
 
-        let view = SbomReadModelBuilder::build_vulnerability_view(&vuln, &pkg, &components);
+        let view = vulnerability_builder::build_vulnerability_view(&vuln, &pkg, &components);
 
         // Should generate bom-ref from package name and version
         assert_eq!(view.affected_component, "unknown-pkg-1.0.0");
@@ -683,7 +578,7 @@ mod tests {
         };
 
         let components = vec![];
-        let report = SbomReadModelBuilder::build_vulnerabilities(&result, &components);
+        let report = vulnerability_builder::build_vulnerabilities(&result, &components);
 
         assert_eq!(report.actionable.len(), 1);
         assert_eq!(report.actionable[0].id, "CVE-2024-001");
@@ -708,7 +603,7 @@ mod tests {
         };
 
         let components = vec![];
-        let report = SbomReadModelBuilder::build_vulnerabilities(&result, &components);
+        let report = vulnerability_builder::build_vulnerabilities(&result, &components);
 
         assert_eq!(report.summary.total_count, 3);
         assert_eq!(report.summary.actionable_count, 2);
@@ -725,7 +620,7 @@ mod tests {
         };
 
         let components = vec![];
-        let report = SbomReadModelBuilder::build_vulnerabilities(&result, &components);
+        let report = vulnerability_builder::build_vulnerabilities(&result, &components);
 
         assert!(report.actionable.is_empty());
         assert!(report.informational.is_empty());
@@ -750,7 +645,7 @@ mod tests {
         };
 
         let components = vec![];
-        let report = SbomReadModelBuilder::build_vulnerabilities(&result, &components);
+        let report = vulnerability_builder::build_vulnerabilities(&result, &components);
 
         assert_eq!(report.actionable.len(), 3);
         // All should reference the same package
