@@ -7,14 +7,13 @@ mod component_builder;
 mod dependency_builder;
 mod license_compliance_builder;
 mod metadata_builder;
+mod resolution_guide_builder;
+mod upgrade_recommendation_builder;
 mod vulnerability_builder;
 
-use super::resolution_guide_view::{IntroducedByView, ResolutionEntryView, ResolutionGuideView};
 use super::sbom_read_model::SbomReadModel;
-use super::upgrade_recommendation_view::{UpgradeEntryView, UpgradeRecommendationView};
 use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
-use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
 use crate::sbom_generation::domain::services::{ResolutionAnalyzer, VulnerabilityCheckResult};
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecommendation};
@@ -90,14 +89,14 @@ impl SbomReadModelBuilder {
                 if entries.is_empty() {
                     None
                 } else {
-                    Some(Self::build_resolution_guide(&entries))
+                    Some(resolution_guide_builder::build_resolution_guide(&entries))
                 }
             }
             _ => None,
         };
 
-        let upgrade_recommendations =
-            upgrade_recommendations.map(Self::build_upgrade_recommendations);
+        let upgrade_recommendations = upgrade_recommendations
+            .map(upgrade_recommendation_builder::build_upgrade_recommendations);
 
         SbomReadModel {
             metadata: metadata_view,
@@ -109,86 +108,6 @@ impl SbomReadModelBuilder {
             upgrade_recommendations,
         }
     }
-
-    /// Builds resolution guide view from domain resolution entries
-    ///
-    /// Converts domain `ResolutionEntry` values into view-optimized
-    /// `ResolutionEntryView` structs.
-    fn build_resolution_guide(entries: &[ResolutionEntry]) -> ResolutionGuideView {
-        let entry_views: Vec<ResolutionEntryView> = entries
-            .iter()
-            .map(Self::build_resolution_entry_view)
-            .collect();
-
-        ResolutionGuideView {
-            entries: entry_views,
-        }
-    }
-
-    /// Maps a slice of domain UpgradeRecommendation to an UpgradeRecommendationView
-    fn build_upgrade_recommendations(
-        recommendations: &[UpgradeRecommendation],
-    ) -> UpgradeRecommendationView {
-        let entries = recommendations
-            .iter()
-            .map(|rec| match rec {
-                UpgradeRecommendation::Upgradable {
-                    direct_dep_name,
-                    direct_dep_current_version,
-                    direct_dep_target_version,
-                    transitive_dep_name,
-                    transitive_resolved_version,
-                    vulnerability_id,
-                } => UpgradeEntryView::Upgradable {
-                    direct_dep: direct_dep_name.clone(),
-                    current_version: direct_dep_current_version.clone(),
-                    target_version: direct_dep_target_version.clone(),
-                    transitive_dep: transitive_dep_name.clone(),
-                    resolved_version: transitive_resolved_version.clone(),
-                    vulnerability_id: vulnerability_id.clone(),
-                },
-                UpgradeRecommendation::Unresolvable {
-                    direct_dep_name,
-                    reason,
-                    vulnerability_id,
-                } => UpgradeEntryView::Unresolvable {
-                    direct_dep: direct_dep_name.clone(),
-                    reason: reason.clone(),
-                    vulnerability_id: vulnerability_id.clone(),
-                },
-                UpgradeRecommendation::SimulationFailed {
-                    direct_dep_name,
-                    error,
-                } => UpgradeEntryView::SimulationFailed {
-                    direct_dep: direct_dep_name.clone(),
-                    error: error.clone(),
-                },
-            })
-            .collect();
-
-        UpgradeRecommendationView { entries }
-    }
-
-    /// Converts a single domain ResolutionEntry to a view
-    fn build_resolution_entry_view(entry: &ResolutionEntry) -> ResolutionEntryView {
-        let introduced_by: Vec<IntroducedByView> = entry
-            .introduced_by()
-            .iter()
-            .map(|ib| IntroducedByView {
-                package_name: ib.package_name().to_string(),
-                version: ib.version().to_string(),
-            })
-            .collect();
-
-        ResolutionEntryView {
-            vulnerable_package: entry.vulnerable_package().to_string(),
-            current_version: entry.current_version().to_string(),
-            fixed_version: entry.fixed_version().map(|v| v.to_string()),
-            severity: vulnerability_builder::map_severity(&entry.severity()),
-            vulnerability_id: entry.vulnerability_id().to_string(),
-            introduced_by,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -196,6 +115,7 @@ mod tests {
     use super::super::component_view::ComponentView;
     use super::super::vulnerability_view::SeverityView;
     use super::*;
+    use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
     use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
     use crate::sbom_generation::domain::{Package, PackageName};
     use std::collections::HashMap;
@@ -697,7 +617,7 @@ mod tests {
             ],
         )];
 
-        let guide = SbomReadModelBuilder::build_resolution_guide(&entries);
+        let guide = resolution_guide_builder::build_resolution_guide(&entries);
 
         assert_eq!(guide.entries.len(), 1);
         assert_eq!(guide.entries[0].vulnerable_package, "urllib3");
@@ -726,7 +646,7 @@ mod tests {
             ],
         )];
 
-        let guide = SbomReadModelBuilder::build_resolution_guide(&entries);
+        let guide = resolution_guide_builder::build_resolution_guide(&entries);
 
         assert_eq!(guide.entries.len(), 1);
         assert_eq!(guide.entries[0].fixed_version, None);
@@ -753,7 +673,7 @@ mod tests {
             ],
         )];
 
-        let guide = SbomReadModelBuilder::build_resolution_guide(&entries);
+        let guide = resolution_guide_builder::build_resolution_guide(&entries);
 
         assert_eq!(guide.entries[0].introduced_by.len(), 2);
         assert_eq!(guide.entries[0].introduced_by[0].package_name, "httpx");
