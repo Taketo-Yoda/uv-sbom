@@ -55,3 +55,51 @@ When updating README.md, check if the following files also need updates:
   - Basic usage examples
   - New user-facing features (brief mention)
   - Version/badge updates
+
+## Architecture Overview
+
+### Design Pattern
+Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
+
+### Module Structure
+
+| Path | Responsibility |
+|------|----------------|
+| `src/cli/` | CLI entrypoint, argument parsing, config resolution |
+| `src/cli/config_resolver.rs` | Merges CLI args / env vars / config file into `MergedConfig` |
+| `src/application/` | Use cases, DTOs, factories, read models |
+| `src/sbom_generation/` | Pure domain logic (no I/O dependencies) |
+| `src/ports/` | Trait definitions for infrastructure (inbound/outbound) |
+| `src/ports/inbound/` | Inbound port traits (e.g. use case interfaces) |
+| `src/ports/outbound/` | Outbound port traits (e.g. repository, network interfaces) |
+| `src/adapters/inbound/` | Inbound adapter implementations |
+| `src/adapters/outbound/network/` | PyPI and OSV HTTP clients |
+| `src/adapters/outbound/formatters/` | CycloneDX and Markdown output formatters |
+| `src/adapters/outbound/filesystem/` | File read/write adapters |
+| `src/adapters/outbound/uv/` | uv.lock file parsing |
+| `src/adapters/outbound/console/` | Console/progress reporter adapter |
+| `src/shared/` | Common error types and utilities |
+| `src/config.rs` | `ConfigFile` struct (deserialized from TOML config) |
+| `src/i18n/` | Locale and message catalog |
+
+### Key Types
+
+| Type | Location | Role |
+|------|----------|------|
+| `MergedConfig` | `src/cli/config_resolver.rs` | Final resolved config (CLI > env > file > default) |
+| `ConfigFile` | `src/config.rs` | Raw deserialized config file struct |
+| `SbomRequest` / `SbomResponse` | `src/application/dto/` | Input/output for the main use case |
+| `GenerateSbomUseCase` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation |
+| `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
+
+### Important Invariants
+
+- **Config resolution order**: CLI args > environment variables > config file > defaults.
+  This order is enforced in `config_resolver.rs` and must not be changed without updating tests.
+- **Domain layer has no I/O**: `src/sbom_generation/` must never import from `adapters` or `ports`.
+- **All GitHub artifacts (commits, PRs, Issues) must be in English** — enforced by skills in `.claude/skills/`.
+
+### Files NOT to touch unless their issue explicitly targets them
+
+- `src/adapters/outbound/network/` — HTTP client internals (unrelated to most refactors)
+- `src/i18n/` — Locale catalogs (separate concern)
