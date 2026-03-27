@@ -331,6 +331,29 @@ impl CycloneDxFormatter {
             vector: vuln.cvss_vector.clone(),
         }]);
 
+        let properties =
+            self.build_vulnerability_properties(vuln, resolution_guide, upgrade_recommendations);
+
+        Vulnerability {
+            bom_ref: vuln.bom_ref.clone(),
+            id: vuln.id.clone(),
+            description: vuln.description.clone(),
+            source,
+            ratings,
+            affects: vec![Affect {
+                bom_ref: vuln.affected_component.clone(),
+            }],
+            properties,
+        }
+    }
+
+    /// Build vulnerability properties from resolution guide and upgrade recommendations
+    fn build_vulnerability_properties(
+        &self,
+        vuln: &VulnerabilityView,
+        resolution_guide: Option<&ResolutionGuideView>,
+        upgrade_recommendations: Option<&UpgradeRecommendationView>,
+    ) -> Option<Vec<Property>> {
         // Build introduced-by properties from resolution guide
         let mut properties: Vec<Property> = resolution_guide
             .and_then(|guide| {
@@ -388,22 +411,10 @@ impl CycloneDxFormatter {
             }
         }
 
-        let properties = if properties.is_empty() {
+        if properties.is_empty() {
             None
         } else {
             Some(properties)
-        };
-
-        Vulnerability {
-            bom_ref: vuln.bom_ref.clone(),
-            id: vuln.id.clone(),
-            description: vuln.description.clone(),
-            source,
-            ratings,
-            affects: vec![Affect {
-                bom_ref: vuln.affected_component.clone(),
-            }],
-            properties,
         }
     }
 
