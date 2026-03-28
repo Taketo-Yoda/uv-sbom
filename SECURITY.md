@@ -64,6 +64,21 @@
 - **Scope**: All dependencies in `Cargo.toml` / `Cargo.lock`
 - **Response Policy**: All alerts are reviewed and addressed as a matter of principle
 
+#### Supply Chain Attack Mitigation (Cooldown Policy)
+
+To reduce the risk of supply chain attacks via newly published malicious package versions,
+a cooldown period is configured before Dependabot opens version update PRs:
+
+| Update Type              | Cooldown Period |
+|--------------------------|-----------------|
+| Cargo semver-major       | 30 days         |
+| Cargo semver-minor       | 7 days          |
+| Cargo semver-patch       | 3 days          |
+| GitHub Actions (default) | 7 days          |
+
+**Note**: This cooldown applies only to **version updates**.
+Security updates triggered by CVE/GHSA alerts bypass the cooldown and are created immediately.
+
 ### Static Code Analysis (CodeQL)
 
 - **Trigger**: All pull requests
