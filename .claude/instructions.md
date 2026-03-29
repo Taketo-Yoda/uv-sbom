@@ -446,6 +446,7 @@ git checkout -b bugfix/88-fix-something origin/develop
 
 For detailed Git workflow procedures, use the following Agent Skills:
 
+- **`/ideate`** - Feature ideation (triage → competitive analysis → technical spec → Issue creation)
 - **`/implement`** - End-to-end issue implementation (branch creation → implementation → commit → PR)
 - **`/commit`** - Commit creation (includes branch guard, format/clippy checks)
 - **`/pr`** - PR creation (includes CI pre-validation, base branch: `develop`)
