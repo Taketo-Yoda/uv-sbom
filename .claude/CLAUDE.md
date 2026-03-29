@@ -1,5 +1,35 @@
 # Project Instructions
 
+## Issue-First Rule
+
+**Before making any file change — code, configuration, skill, or documentation —
+always create a GitHub Issue first by invoking the `/issue` skill.**
+
+This rule applies to ALL file changes, including cases not listed in the Skill
+Invocation Rules table below. No file should be created or modified without a
+backing Issue.
+
+### Exemptions (no Issue required)
+
+- Fixing a typo or formatting error explicitly requested inline by the user
+- Updating `## Architecture Overview` in this file after an implementation
+  (covered by the `/implement` skill's Step 7)
+
+### Why This Rule Exists
+
+Without this rule, Claude may treat unlisted operations (e.g., creating a new skill
+file, adding a config entry) as exempt from the issue-first workflow and proceed
+directly to file changes. A backing Issue ensures every change is intentional,
+reviewable, and traceable.
+
+### Recent Incidents
+
+- **2026-03-29**: Claude attempted to create `.claude/skills/split/SKILL.md` directly
+  without creating a GitHub Issue first, because "creating a skill file" was not
+  explicitly listed in the Skill Invocation Rules table. Fixed by Issue #382.
+
+---
+
 ## Skill Invocation Rules
 
 When the user requests any of the following operations, ALWAYS invoke the corresponding skill defined in `.claude/skills/` directory. Never execute these operations directly without following the skill procedures.
