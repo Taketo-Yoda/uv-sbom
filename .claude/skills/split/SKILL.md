@@ -47,6 +47,7 @@ Identify subtask boundaries using these dimensions:
 **Guard rails**:
 - If the issue is already small enough for one PR → report "No split needed. This issue is already scoped for a single PR." Do NOT create any subtask Issues.
 - If decomposition yields more than 7 subtasks → flag over-decomposition and suggest grouping before proceeding.
+- **Line-count target**: Aim for ≤ 200 changed lines per subtask PR. If a subtask is estimated to exceed this, consider splitting it further. This is a guideline, not a hard limit.
 
 Present the proposed subtasks to the user in this format:
 
