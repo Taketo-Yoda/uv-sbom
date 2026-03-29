@@ -50,7 +50,7 @@ pub(super) fn render_summary(
 
     // Vulnerability rows
     let mut has_critical = false;
-    let mut has_high_or_medium = false;
+    let mut has_warning = false;
     if let Some(vuln_report) = vulnerabilities {
         let counts = vuln_report.counts_by_severity();
         let critical_status = if counts.critical > 0 {
@@ -60,18 +60,23 @@ pub(super) fn render_summary(
             "✅"
         };
         let high_status = if counts.high > 0 {
-            has_high_or_medium = true;
+            has_warning = true;
             "⚠️"
         } else {
             "✅"
         };
         let medium_status = if counts.medium > 0 {
-            has_high_or_medium = true;
+            has_warning = true;
             "⚠️"
         } else {
             "✅"
         };
-        let low_status = if counts.low > 0 { "⚠️" } else { "✅" };
+        let low_status = if counts.low > 0 {
+            has_warning = true;
+            "⚠️"
+        } else {
+            "✅"
+        };
         output.push_str(&format!(
             "| {} | {} | {} |\n",
             messages.label_vuln_critical, counts.critical, critical_status
@@ -111,7 +116,7 @@ pub(super) fn render_summary(
     output.push('\n');
     let overall = if has_critical {
         messages.overall_action_required
-    } else if has_high_or_medium {
+    } else if has_warning {
         messages.overall_attention_recommended
     } else {
         messages.overall_no_issues
@@ -884,5 +889,21 @@ mod tests {
 
         assert!(markdown.contains("Direct dependencies | 1 | ✅"));
         assert!(markdown.contains("Transitive dependencies | 1 | ✅"));
+    }
+
+    #[test]
+    fn test_render_summary_low_only_vuln_en() {
+        // Low-only vulnerabilities should show ⚠️ per-row but overall is "Attention recommended"
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(make_vuln_report(0, 0, 0, 2));
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("Vulnerabilities (CRITICAL) | 0 | ✅"));
+        assert!(markdown.contains("Vulnerabilities (HIGH) | 0 | ✅"));
+        assert!(markdown.contains("Vulnerabilities (MEDIUM) | 0 | ✅"));
+        assert!(markdown.contains("Vulnerabilities (LOW) | 2 | ⚠️"));
+        assert!(markdown.contains("**Overall: Attention recommended**"));
+        assert!(!markdown.contains("**Overall: Action required**"));
     }
 }
