@@ -49,7 +49,6 @@ impl SbomFormatter for MarkdownFormatter {
     fn format(&self, model: &SbomReadModel) -> Result<String> {
         let mut output = String::new();
 
-        section::render_header(self.messages, &mut output);
         section::render_summary(
             self.messages,
             &mut output,
@@ -57,6 +56,7 @@ impl SbomFormatter for MarkdownFormatter {
             model.vulnerabilities.as_ref(),
             model.license_compliance.as_ref(),
         );
+        section::render_header(self.messages, &mut output);
         section::render_components(
             self.messages,
             self.verified_packages.as_ref(),
@@ -301,20 +301,106 @@ mod tests {
         let markdown = result.unwrap();
 
         // Check key sections exist in correct order
+        let summary_pos = markdown.find("## Summary");
         let sbom_pos = markdown.find("# Software Bill of Materials (SBOM)");
         let inventory_pos = markdown.find("## Component Inventory");
         let direct_pos = markdown.find("## Direct Dependencies");
         let transitive_pos = markdown.find("## Transitive Dependencies");
 
+        assert!(summary_pos.is_some());
         assert!(sbom_pos.is_some());
         assert!(inventory_pos.is_some());
         assert!(direct_pos.is_some());
         assert!(transitive_pos.is_some());
 
-        // Verify ordering
+        // Verify ordering: summary must come before all other sections
+        assert!(summary_pos.unwrap() < sbom_pos.unwrap());
         assert!(sbom_pos.unwrap() < inventory_pos.unwrap());
         assert!(inventory_pos.unwrap() < direct_pos.unwrap());
         assert!(direct_pos.unwrap() < transitive_pos.unwrap());
+    }
+
+    #[test]
+    fn test_summary_appears_before_all_sections() {
+        let mut model = create_test_read_model();
+        let mut transitive = HashMap::new();
+        transitive.insert(
+            "pkg:pypi/requests@2.31.0".to_string(),
+            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
+        );
+        model.dependencies = Some(DependencyView {
+            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
+            transitive,
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        let summary_pos = markdown.find("## Summary").unwrap();
+        let header_pos = markdown
+            .find("# Software Bill of Materials (SBOM)")
+            .unwrap();
+        let inventory_pos = markdown.find("## Component Inventory").unwrap();
+        let direct_pos = markdown.find("## Direct Dependencies").unwrap();
+        let transitive_pos = markdown.find("## Transitive Dependencies").unwrap();
+
+        assert!(summary_pos < header_pos);
+        assert!(summary_pos < inventory_pos);
+        assert!(summary_pos < direct_pos);
+        assert!(summary_pos < transitive_pos);
+    }
+
+    #[test]
+    fn test_summary_vuln_skipped_note_when_no_network() {
+        let model = create_test_read_model(); // vulnerabilities: None
+
+        let formatter = MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("_Vulnerability check skipped._"));
+    }
+
+    #[test]
+    fn test_summary_overall_action_required_when_critical_vuln() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(VulnerabilityReportView {
+            actionable: vec![VulnerabilityView {
+                bom_ref: "vuln-001".to_string(),
+                id: "CVE-2024-9999".to_string(),
+                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                affected_component_name: "requests".to_string(),
+                affected_version: "2.31.0".to_string(),
+                cvss_score: Some(9.8),
+                cvss_vector: None,
+                severity: SeverityView::Critical,
+                fixed_version: Some("2.32.0".to_string()),
+                description: None,
+                source_url: None,
+            }],
+            informational: vec![],
+            threshold_exceeded: true,
+            summary: VulnerabilitySummary {
+                total_count: 1,
+                actionable_count: 1,
+                informational_count: 0,
+                affected_package_count: 1,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("**Overall: Action required**"));
+    }
+
+    #[test]
+    fn test_summary_overall_no_issues_when_clean() {
+        let model = create_test_read_model(); // no vulns, no license violations
+
+        let formatter = MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("**Overall: No issues found** ✅"));
     }
 
     #[test]

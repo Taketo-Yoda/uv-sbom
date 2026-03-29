@@ -818,6 +818,17 @@ esac
 > **Note**: The Markdown format sample is based on the SBOM format from [ja-complete v0.1.0](https://github.com/Taketo-Yoda/ja-complete/tree/v0.1.0).
 
 ```markdown
+## Summary
+
+| Item | Count | Status |
+|------|-------|--------|
+| Direct dependencies | 2 | ✅ |
+| Transitive dependencies | 3 | ✅ |
+| ...vulnerability rows... | | |
+| License violations | 0 | ✅ |
+
+**Overall: No issues found** ✅
+
 # Software Bill of Materials (SBOM)
 
 ## Component Inventory
