@@ -38,6 +38,55 @@ When a user requests any operation listed above (even in Japanese), Claude MUST:
 3. Follow ALL steps defined in the skill, including pre-flight checks
 4. Ensure all outputs (commits, PRs, Issues) are in English
 
+## Feature Discussions
+
+When the user proposes, discusses, or asks Claude to evaluate a new feature idea,
+Claude MUST follow this process before responding with implementation suggestions.
+
+### Step 1: Read vision and triage files (MANDATORY)
+
+Before responding to any feature proposal, read these two files:
+
+1. `.claude/product-vision.md` — understand the product identity and design philosophy
+2. `.claude/feature-triage.md` — apply the 4-step triage checklist
+
+### Step 2: Run triage
+
+Apply the checklist in `.claude/feature-triage.md` to the proposed feature.
+Produce a triage result in the format defined in that file.
+
+### Step 3: Respond with triage result
+
+Structure your response as:
+
+1. **Triage result** (from Step 2) — clearly state PASS/STOP/priority
+2. **Recommendation** — one of:
+   - "This fits the vision. Recommend creating an Issue." → invoke /ideate or /issue
+   - "This is on the anti-roadmap. Here's why: [reason]."
+   - "This is out of scope. A better tool for this is: [tool]."
+   - "This needs more information: [specific question]."
+3. **If PASS**: suggest next action (run /ideate skill to draft Issue, or /issue directly)
+
+### When this process applies
+
+Trigger this process when the user says anything like:
+- "I want to add [feature]"
+- "What if we supported [X]?"
+- "Can uv-sbom do [Y]?"
+- "Let's implement [Z]"
+- "Feature idea: ..."
+
+### Skill for feature ideation
+
+If a feature passes triage and the user wants to proceed to Issue creation,
+invoke the `/ideate` skill (when available) or `/issue` skill directly.
+
+| Operation | Skill | When |
+|-----------|-------|------|
+| Evaluate feature idea | (manual triage, see above) | Before any Issue |
+| Draft Issue from approved idea | /ideate | Feature passed triage |
+| Create Issue directly | /issue | Feature already approved by user |
+
 ## README Update Checklist
 
 When updating README.md, check if the following files also need updates:
