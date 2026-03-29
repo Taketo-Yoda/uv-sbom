@@ -44,6 +44,7 @@ When the user requests any of the following operations, ALWAYS invoke the corres
 | Dependabot Alert | /dependabot | Use CVE/GHSA ID (never alert number), `security` label |
 | Prepare Release | /release | Version bump, CHANGELOG update, PR to `develop` (then develop→main manually) |
 | Sync CLI options to config | /sync-config | Audit `ConfigFile`, `MergedConfig`, `CONFIG_TEMPLATE` for gaps |
+| Split Issue into subtasks | /split | Confirm decomposition before creating Issues; all Issues in English |
 
 ### Why This Rule Exists
 
