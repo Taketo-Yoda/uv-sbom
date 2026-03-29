@@ -50,6 +50,13 @@ impl SbomFormatter for MarkdownFormatter {
         let mut output = String::new();
 
         section::render_header(self.messages, &mut output);
+        section::render_summary(
+            self.messages,
+            &mut output,
+            &model.components,
+            model.vulnerabilities.as_ref(),
+            model.license_compliance.as_ref(),
+        );
         section::render_components(
             self.messages,
             self.verified_packages.as_ref(),
