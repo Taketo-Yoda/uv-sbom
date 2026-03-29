@@ -18,9 +18,17 @@ Create GitHub Issues with consistent formatting and sufficient technical detail 
 
 ## Steps
 
-### 1. Gather Information
+### 1. Read Issue Guidelines (MANDATORY)
 
-Before creating an Issue, gather the following information from the user:
+Before drafting any Issue content, read:
+
+- **`.claude/issue-guidelines.md`** — full Issue creation guidelines, templates, and quality checklist
+
+This file contains the authoritative structure, Pre-Submission Verification checklist, and examples of good/bad Issues.
+
+### 2. Gather Information
+
+After reading the guidelines, gather the following information from the user:
 
 - **Type**: Feature, Bug, Documentation, Refactor, or other
 - **Summary**: Brief description of the task
