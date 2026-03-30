@@ -143,7 +143,7 @@ pub(super) fn render_components(
         let license = component
             .license
             .as_ref()
-            .map(|l| l.name.as_str())
+            .map(|l| l.spdx_id.as_deref().unwrap_or(l.name.as_str()))
             .unwrap_or("N/A");
         let description = component.description.as_deref().unwrap_or("");
 
@@ -185,7 +185,7 @@ pub(super) fn render_dependencies(
                 let license = component
                     .license
                     .as_ref()
-                    .map(|l| l.name.as_str())
+                    .map(|l| l.spdx_id.as_deref().unwrap_or(l.name.as_str()))
                     .unwrap_or("N/A");
                 let description = component.description.as_deref().unwrap_or("");
 
@@ -233,7 +233,7 @@ pub(super) fn render_dependencies(
                         let license = component
                             .license
                             .as_ref()
-                            .map(|l| l.name.as_str())
+                            .map(|l| l.spdx_id.as_deref().unwrap_or(l.name.as_str()))
                             .unwrap_or("N/A");
                         let description = component.description.as_deref().unwrap_or("");
 
@@ -889,6 +889,46 @@ mod tests {
 
         assert!(markdown.contains("Direct dependencies | 1 | ✅"));
         assert!(markdown.contains("Transitive dependencies | 1 | ✅"));
+    }
+
+    #[test]
+    fn test_license_column_prefers_spdx_id_when_present() {
+        // requests has spdx_id=Some("Apache-2.0"), name="Apache License 2.0"
+        // urllib3 has spdx_id=Some("MIT"), name="MIT License"
+        let model = create_test_read_model();
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(
+            markdown.contains("Apache-2.0"),
+            "should display SPDX ID, not raw name"
+        );
+        assert!(
+            !markdown.contains("Apache License 2.0"),
+            "should not display raw name when spdx_id is present"
+        );
+        assert!(markdown.contains("MIT"), "should display SPDX ID for MIT");
+        assert!(
+            !markdown.contains("MIT License"),
+            "should not display raw name when spdx_id is present"
+        );
+    }
+
+    #[test]
+    fn test_license_column_falls_back_to_name_when_spdx_id_none() {
+        let mut model = create_test_read_model();
+        model.components[0].license = Some(crate::application::read_models::LicenseView {
+            spdx_id: None,
+            name: "Custom License v1".to_string(),
+            url: None,
+        });
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(
+            markdown.contains("Custom License v1"),
+            "should fall back to raw name when spdx_id is None"
+        );
     }
 
     #[test]

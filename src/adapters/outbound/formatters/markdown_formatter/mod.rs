@@ -168,7 +168,7 @@ mod tests {
         assert!(markdown.contains("## Component Inventory"));
         assert!(markdown.contains("requests"));
         assert!(markdown.contains("2.31.0"));
-        assert!(markdown.contains("Apache License 2.0"));
+        assert!(markdown.contains("Apache-2.0"));
         assert!(markdown.contains("urllib3"));
     }
 
