@@ -794,4 +794,28 @@ mod tests {
         assert!(markdown.contains("**2件の脆弱性が1個のパッケージで見つかりました。**"));
         assert!(!markdown.contains("**Found"));
     }
+
+    #[test]
+    fn test_format_license_falls_back_to_name_when_spdx_id_is_none() {
+        let mut model = create_test_read_model();
+        model.components.push(ComponentView {
+            bom_ref: "pkg:pypi/somelib@1.0.0".to_string(),
+            name: "somelib".to_string(),
+            version: "1.0.0".to_string(),
+            purl: "pkg:pypi/somelib@1.0.0".to_string(),
+            license: Some(LicenseView {
+                spdx_id: None,
+                name: "Some Custom License".to_string(),
+                url: None,
+            }),
+            description: None,
+            sha256_hash: None,
+            is_direct_dependency: false,
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("Some Custom License"));
+    }
 }
