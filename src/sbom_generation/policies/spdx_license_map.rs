@@ -22,10 +22,14 @@ static LICENSE_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::ne
         ("apache-2.0", "Apache-2.0"),
         ("apache 2", "Apache-2.0"),
         // BSD variants
-        ("bsd license", "BSD-3-Clause"),
-        ("bsd", "BSD-3-Clause"),
+        // Note: "BSD License" is intentionally omitted — ambiguous between
+        // BSD-2-Clause and BSD-3-Clause.
         ("bsd 3-clause license", "BSD-3-Clause"),
         ("bsd-3-clause", "BSD-3-Clause"),
+        (
+            "bsd 3-clause \"new\" or \"revised\" license",
+            "BSD-3-Clause",
+        ),
         ("new bsd license", "BSD-3-Clause"),
         ("modified bsd license", "BSD-3-Clause"),
         ("3-clause bsd license", "BSD-3-Clause"),
@@ -64,7 +68,7 @@ static LICENSE_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::ne
         ("lgplv3", "LGPL-3.0-only"),
         (
             "gnu lesser general public license v2 (lgplv2)",
-            "LGPL-2.1-only",
+            "LGPL-2.0-only",
         ),
         ("lgpl-2.1", "LGPL-2.1-only"),
         ("lgpl-2.1-only", "LGPL-2.1-only"),
@@ -115,13 +119,28 @@ static LICENSE_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::ne
 
 /// Attempts to resolve a license name to its SPDX identifier.
 ///
-/// Performs case-insensitive matching with leading/trailing whitespace trimmed.
-/// Returns `None` if no mapping is found.
+/// Strategy:
+///   1. Exact match after case-folding and whitespace trim (fast path)
+///   2. Strip common trailing suffixes ("License", "Licence") and retry
+///   3. Return `None` (caller falls back to raw string)
 pub fn get_spdx_id(license_name: &str) -> Option<String> {
     let normalized = license_name.trim().to_lowercase();
-    LICENSE_MAP
-        .get(normalized.as_str())
-        .map(|id| id.to_string())
+
+    if let Some(id) = LICENSE_MAP.get(normalized.as_str()) {
+        return Some(id.to_string());
+    }
+
+    // Fuzzy pass: strip trailing "license" / "licence" and retry
+    let stripped = normalized
+        .trim_end_matches("license")
+        .trim_end_matches("licence")
+        .trim();
+
+    if stripped != normalized {
+        LICENSE_MAP.get(stripped).map(|id| id.to_string())
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -152,13 +171,26 @@ mod tests {
 
     #[test]
     fn test_bsd_license_variants() {
-        assert_eq!(get_spdx_id("BSD License"), Some("BSD-3-Clause".to_string()));
+        // "BSD License" is intentionally unmapped (ambiguous between BSD-2-Clause and BSD-3-Clause)
+        assert_eq!(get_spdx_id("BSD License"), None);
         assert_eq!(
             get_spdx_id("BSD-3-Clause"),
             Some("BSD-3-Clause".to_string())
         );
         assert_eq!(
+            get_spdx_id("BSD 3-Clause License"),
+            Some("BSD-3-Clause".to_string())
+        );
+        assert_eq!(
+            get_spdx_id("BSD 3-Clause \"New\" or \"Revised\" License"),
+            Some("BSD-3-Clause".to_string())
+        );
+        assert_eq!(
             get_spdx_id("BSD 2-Clause License"),
+            Some("BSD-2-Clause".to_string())
+        );
+        assert_eq!(
+            get_spdx_id("BSD 2-Clause \"Simplified\" License"),
             Some("BSD-2-Clause".to_string())
         );
     }
@@ -188,6 +220,32 @@ mod tests {
     fn test_whitespace_trimming() {
         assert_eq!(get_spdx_id("  MIT License  "), Some("MIT".to_string()));
         assert_eq!(get_spdx_id("\tMIT\n"), Some("MIT".to_string()));
+    }
+
+    #[test]
+    fn test_lgpl_v2_maps_to_lgpl_2_0_only() {
+        assert_eq!(
+            get_spdx_id("GNU Lesser General Public License v2 (LGPLv2)"),
+            Some("LGPL-2.0-only".to_string())
+        );
+    }
+
+    #[test]
+    fn test_fuzzy_suffix_strip() {
+        // "Zlib License" → strip "License" → "Zlib" → exact match → "Zlib"
+        assert_eq!(get_spdx_id("Zlib License"), Some("Zlib".to_string()));
+        // "ISC Licence" (alternative spelling) → strip "Licence" → "ISC" → "ISC"
+        assert_eq!(get_spdx_id("ISC Licence"), Some("ISC".to_string()));
+        // "Artistic-2.0 License" → strip "License" → "Artistic-2.0" → exact match
+        assert_eq!(
+            get_spdx_id("Artistic-2.0 License"),
+            Some("Artistic-2.0".to_string())
+        );
+        // Suffix strip should not affect entries that already have an exact match
+        assert_eq!(get_spdx_id("MIT License"), Some("MIT".to_string()));
+        assert_eq!(get_spdx_id("ISC License"), Some("ISC".to_string()));
+        // No suffix to strip → still returns None for unknown strings
+        assert_eq!(get_spdx_id("Proprietary"), None);
     }
 
     #[test]
