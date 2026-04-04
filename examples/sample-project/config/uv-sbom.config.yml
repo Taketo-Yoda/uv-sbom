@@ -1,13 +1,36 @@
 # Sample configuration file for uv-sbom
-# Demonstrates ignore_cves feature with real vulnerability IDs
-# from sample-project dependencies (detected by OSV API)
+# Demonstrates ignore_cves (CVE suppression) and license compliance checking
+# using real vulnerability IDs and license violations from sample-project
+# dependencies (detected by OSV API and PyPI).
 #
-# Usage:
-#   cargo run -- -p examples/sample-project --check-cve -f markdown \
-#     -c examples/sample-project/config/uv-sbom.config.yml
+# License violation demo:
+#   chardet 3.0.4 (transitive dep of requests 2.25.0) uses LGPL-2.1-only,
+#   which is denied by the license_policy below.
+#
+# Usage (CVE + license check):
+#   cargo run -- -p examples/sample-project --check-cve --check-license \
+#     -f markdown -c examples/sample-project/config/uv-sbom.config.yml
 
 check_cve: true
 severity_threshold: medium
+
+check_license: true
+
+license_policy:
+  allow:
+    - "MIT"
+    - "Apache-2.0"
+    - "BSD-2-Clause"
+    - "BSD-3-Clause"
+    - "ISC"
+    - "Python-2.0"
+    - "PSF-2.0"
+    - "MPL-2.0"
+  deny:
+    - "GPL-*"
+    - "LGPL-*"
+    - "AGPL-*"
+  unknown: warn
 
 ignore_cves:
   # pillow 8.3.2 - CRITICAL: buffer overflow in TiffDecode.c
