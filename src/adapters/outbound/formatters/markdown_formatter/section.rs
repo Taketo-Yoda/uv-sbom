@@ -267,14 +267,14 @@ pub(super) fn render_license_compliance(
 
     // Summary
     if compliance.has_violations {
+        let unit = if compliance.summary.violation_count == 1 {
+            messages.label_license_violation_singular
+        } else {
+            messages.label_license_violation_plural
+        };
         output.push_str(&format!(
-            "**{} license {} found.**\n\n",
-            compliance.summary.violation_count,
-            if compliance.summary.violation_count == 1 {
-                "violation"
-            } else {
-                "violations"
-            }
+            "**{} {}**\n\n",
+            compliance.summary.violation_count, unit,
         ));
     } else {
         output.push_str(messages.label_no_license_violations);
