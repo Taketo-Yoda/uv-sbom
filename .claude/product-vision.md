@@ -72,6 +72,9 @@ license policy.
 | uv support | Native | Not supported (as of v7.2.1) | Indirect | Limited |
 | Target audience | Developers & security engineers | Security toolchains | Quick CLI scans | Enterprise SBOM pipelines |
 
+> **Note**: The table above reflects the founding competitive analysis (snapshot from 2026-03-07).
+> For current tool versions and feature status, see `.claude/competitive-landscape.md`.
+
 ### What we intentionally do differently
 
 **vs. cyclonedx-python**: We produce Markdown first, machine-readable JSON second.
