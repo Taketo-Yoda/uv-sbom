@@ -5,12 +5,6 @@ use crate::application::read_models::{
 use crate::i18n::Messages;
 use std::collections::{HashMap, HashSet};
 
-/// Renders the header section
-pub(super) fn render_header(messages: &'static Messages, output: &mut String) {
-    output.push_str(messages.section_sbom_title);
-    output.push_str("\n\n");
-}
-
 /// Renders the executive summary section
 pub(super) fn render_summary(
     messages: &'static Messages,
@@ -123,39 +117,6 @@ pub(super) fn render_summary(
     };
     output.push_str(overall);
     output.push_str("\n\n");
-}
-
-/// Renders the components section
-pub(super) fn render_components(
-    messages: &'static Messages,
-    verified_packages: Option<&HashSet<String>>,
-    output: &mut String,
-    components: &[ComponentView],
-) {
-    output.push_str(messages.section_component_inventory);
-    output.push_str("\n\n");
-    output.push_str(messages.desc_sbom_report);
-    output.push_str("\n\n");
-    output.push_str(&super::table::table_header(messages));
-    output.push_str(&super::table::table_separator(messages));
-
-    for component in components {
-        let license = component
-            .license
-            .as_ref()
-            .map(|l| l.spdx_id.as_deref().unwrap_or(l.name.as_str()))
-            .unwrap_or("N/A");
-        let description = component.description.as_deref().unwrap_or("");
-
-        output.push_str(&format!(
-            "| {} | {} | {} | {} |\n",
-            super::links::format_package_name(&component.name, verified_packages),
-            super::table::escape_markdown_table_cell(&component.version),
-            super::table::escape_markdown_table_cell(license),
-            super::table::escape_markdown_table_cell(description)
-        ));
-    }
-    output.push('\n');
 }
 
 /// Renders the dependencies section

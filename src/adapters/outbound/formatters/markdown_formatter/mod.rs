@@ -1,6 +1,7 @@
 mod helpers;
 mod links;
 mod section;
+mod sections;
 mod table;
 mod vuln_render;
 
@@ -56,8 +57,8 @@ impl SbomFormatter for MarkdownFormatter {
             model.vulnerabilities.as_ref(),
             model.license_compliance.as_ref(),
         );
-        section::render_header(self.messages, &mut output);
-        section::render_components(
+        sections::header::render(self.messages, &mut output);
+        sections::components::render(
             self.messages,
             self.verified_packages.as_ref(),
             &mut output,
