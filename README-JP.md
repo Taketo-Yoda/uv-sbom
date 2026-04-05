@@ -24,8 +24,6 @@
 - 💾 標準出力またはファイルへ出力
 - 🛡️ 堅牢なエラーハンドリングと親切なエラーメッセージ・提案
 - 📈 ライセンス情報取得時の進捗表示
-- 🏗️ **ヘキサゴナルアーキテクチャ**（ポート＆アダプター）+ **ドメイン駆動設計**による保守性とテスタビリティ
-- ✅ 包括的なテストカバレッジ（ユニット、統合、E2E）
 
 ## スコープとCycloneDXとの主な違い
 
@@ -138,16 +136,6 @@ cd uv-sbom
 cargo build --release
 cargo install --path .
 ```
-
-#### 開発環境のセットアップ
-
-クローン後、gitフックを有効化してください：
-
-```bash
-make setup
-```
-
-これにより `.githooks/` の `pre-commit`（自動フォーマット）と `pre-push`（フォーマット確認・clippy・テスト）フックが有効になり、すべてのコントリビュータに対してコード品質チェックが自動的に実行されます。
 
 ### インストールの確認
 
@@ -1022,22 +1010,37 @@ uv.lock file not found: /path/to/project/uv.lock
 ### ネットワークの問題
 プロキシやファイアウォールの内側にいる場合は、`https://pypi.org`にアクセスできることを確認してください。ツールはAPIリクエストに10秒のタイムアウトを使用します。
 
-## ドキュメント
+## 開発者向け
 
-### ユーザー向け
-- [README-JP.md](README-JP.md) - ユーザードキュメント
-- [LICENSE](LICENSE) - MITライセンス
+### アーキテクチャ
 
-### 開発者向け
-- [DEVELOPMENT.md](DEVELOPMENT.md) - 開発ガイド
-- [ARCHITECTURE-JP.md](ARCHITECTURE-JP.md) - **ヘキサゴナルアーキテクチャ + DDD実装**（レイヤー、ポート、アダプター、テスト戦略、ADR）
-- [CHANGELOG.md](CHANGELOG.md) - 変更履歴
+uv-sbomは保守性とテスタビリティのために**ヘキサゴナルアーキテクチャ**（ポート＆アダプター）+ **ドメイン駆動設計（DDD）**で実装されています。
 
-### Claude Codeユーザー向け
-- [.claude/project-context.md](.claude/project-context.md) - Claude Code用の完全なプロジェクトコンテキスト
-- [.claude/instructions.md](.claude/instructions.md) - Claude Code用のコーディングガイドラインと指示
+レイヤー、ポート、アダプター、アーキテクチャ決定記録（ADR）の詳細は[ARCHITECTURE-JP.md](ARCHITECTURE-JP.md)を参照してください。
 
-これらのファイルは、Claude Codeを使用したAI支援開発のための包括的なコンテキストを提供します。
+### テストカバレッジ
+
+テストスイートはユニット、統合、エンドツーエンドの各シナリオをカバーしています。
+
+テストの実行方法やコントリビュート方法については[DEVELOPMENT.md](DEVELOPMENT.md)を参照してください。
+
+### 開発環境のセットアップ
+
+リポジトリをクローンした後、gitフックを有効化してください：
+
+```bash
+make setup
+```
+
+これにより `.githooks/` の `pre-commit`（自動フォーマット）と `pre-push`（フォーマット確認・clippy・テスト）フックが有効になり、すべてのコントリビュータに対してコード品質チェックが自動的に実行されます。
+
+### リファレンス
+
+- [DEVELOPMENT.md](DEVELOPMENT.md) — 開発ガイド
+- [ARCHITECTURE-JP.md](ARCHITECTURE-JP.md) — ヘキサゴナルアーキテクチャ + DDD実装の詳細
+- [CHANGELOG.md](CHANGELOG.md) — 変更履歴
+- [.claude/project-context.md](.claude/project-context.md) — Claude Code用の完全なプロジェクトコンテキスト
+- [.claude/instructions.md](.claude/instructions.md) — Claude Code用のコーディングガイドラインと指示
 
 ## 帰属表示
 

@@ -24,8 +24,6 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 💾 Output to stdout or file
 - 🛡️ Robust error handling with helpful error messages and suggestions
 - 📈 Progress tracking during license information retrieval
-- 🏗️ Built with **Hexagonal Architecture** (Ports and Adapters) + **Domain-Driven Design** for maintainability and testability
-- ✅ Comprehensive test coverage (Unit, Integration, E2E)
 
 ## Scope and Key Differences from CycloneDX
 
@@ -139,17 +137,6 @@ cd uv-sbom
 cargo build --release
 cargo install --path .
 ```
-
-#### Development Setup
-
-After cloning, activate the git hooks:
-
-```bash
-make setup
-```
-
-This enables `pre-commit` (auto-format) and `pre-push` (fmt check, clippy, tests) hooks
-from `.githooks/`, ensuring code quality checks run automatically for all contributors.
 
 ### Verify Installation
 
@@ -1023,22 +1010,37 @@ Some packages may fail to retrieve license information from PyPI. The tool will:
 ### Network issues
 If you're behind a proxy or firewall, ensure that you can access `https://pypi.org`. The tool uses a 10-second timeout for API requests.
 
-## Documentation
+## For Developers
 
-### For Users
-- [README.md](README.md) - User documentation
-- [LICENSE](LICENSE) - MIT License
+### Architecture
 
-### For Developers
-- [DEVELOPMENT.md](DEVELOPMENT.md) - Development guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) - **Hexagonal Architecture + DDD implementation** (layers, ports, adapters, test strategy, ADRs)
-- [CHANGELOG.md](CHANGELOG.md) - Change history
+uv-sbom is built with **Hexagonal Architecture** (Ports and Adapters) + **Domain-Driven Design (DDD)** for maintainability and testability.
 
-### For Claude Code Users
-- [.claude/project-context.md](.claude/project-context.md) - Complete project context for Claude Code
-- [.claude/instructions.md](.claude/instructions.md) - Coding guidelines and instructions for Claude Code
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a full breakdown of layers, ports, adapters, and architectural decision records (ADRs).
 
-These files provide comprehensive context for AI-assisted development with Claude Code.
+### Test Coverage
+
+The test suite covers Unit, Integration, and End-to-End scenarios.
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for how to run tests and contribute.
+
+### Development Setup
+
+After cloning the repository, activate the git hooks:
+
+```bash
+make setup
+```
+
+This enables `pre-commit` (auto-format) and `pre-push` (fmt check, clippy, tests) hooks from `.githooks/`, ensuring code quality checks run automatically for all contributors.
+
+### Reference
+
+- [DEVELOPMENT.md](DEVELOPMENT.md) — Development guide
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal Architecture + DDD implementation details
+- [CHANGELOG.md](CHANGELOG.md) — Change history
+- [.claude/project-context.md](.claude/project-context.md) — Complete project context for Claude Code
+- [.claude/instructions.md](.claude/instructions.md) — Coding guidelines and instructions for Claude Code
 
 ## Attribution
 
