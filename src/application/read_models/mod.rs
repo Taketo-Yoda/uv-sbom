@@ -30,5 +30,6 @@ pub use sbom_read_model_builder::SbomReadModelBuilder;
 pub use upgrade_recommendation_view::{UpgradeEntryView, UpgradeRecommendationView};
 #[allow(unused_imports)]
 pub use vulnerability_view::{
-    SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
+    SeverityView, VulnerabilityCountsBySeverity, VulnerabilityReportView, VulnerabilitySummary,
+    VulnerabilityView,
 };

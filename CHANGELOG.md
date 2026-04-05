@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-04-05
+
+### Added
+- **Markdown executive summary**: A new summary section is rendered at the top of Markdown output before the report header, providing an at-a-glance overview of the SBOM result (#388, #394)
+
+### Fixed
+- **Markdown formatter now prefers SPDX ID**: License names in Markdown output now use the canonical SPDX identifier instead of the raw license string when available (#395)
+- **License violation count summary line translation**: The violation count line in the license compliance section was not translated; now properly localized for both `en` and `ja` (#412)
+
+### Changed
+- **SPDX ID mapping improvements**: Added missing BSD variants (`BSD-2-Clause-Patent`, `BSD-4-Clause`), corrected `LGPLv2`/`LGPLv2.1` mappings, and added fuzzy suffix normalization to handle edge cases in license string matching (#396)
+
 ## [2.0.1] - 2026-03-21
 
 ### Security

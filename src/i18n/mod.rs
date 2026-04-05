@@ -105,6 +105,10 @@ pub struct Messages {
     pub label_package_singular: &'static str,
     pub label_package_plural: &'static str,
 
+    // License violation count summary (singular/plural)
+    pub label_license_violation_singular: &'static str,
+    pub label_license_violation_plural: &'static str,
+
     // License compliance section strings
     pub section_violations: &'static str,
     pub section_warnings: &'static str,
@@ -129,6 +133,23 @@ pub struct Messages {
 
     // Vulnerability summary line (4 placeholders: count, unit, count, unit)
     pub summary_vuln_found: &'static str,
+
+    // Executive summary section
+    pub section_summary: &'static str,
+    pub col_item: &'static str,
+    pub col_count: &'static str,
+    pub col_status: &'static str,
+    pub label_direct_deps: &'static str,
+    pub label_transitive_deps: &'static str,
+    pub label_vuln_critical: &'static str,
+    pub label_vuln_high: &'static str,
+    pub label_vuln_medium: &'static str,
+    pub label_vuln_low: &'static str,
+    pub label_license_violations: &'static str,
+    pub label_vuln_check_skipped: &'static str,
+    pub overall_action_required: &'static str,
+    pub overall_attention_recommended: &'static str,
+    pub overall_no_issues: &'static str,
 }
 
 impl Messages {
@@ -237,6 +258,10 @@ static EN_MESSAGES: Messages = Messages {
     label_package_singular: "package",
     label_package_plural: "packages",
 
+    // License violation count summary (singular/plural)
+    label_license_violation_singular: "license violation found.",
+    label_license_violation_plural: "license violations found.",
+
     // License compliance section strings
     section_violations: "### Violations",
     section_warnings: "### Warnings",
@@ -260,6 +285,23 @@ static EN_MESSAGES: Messages = Messages {
 
     // Vulnerability summary line
     summary_vuln_found: "**Found {} {} in {} {}.**",
+
+    // Executive summary section
+    section_summary: "## Summary",
+    col_item: "Item",
+    col_count: "Count",
+    col_status: "Status",
+    label_direct_deps: "Direct dependencies",
+    label_transitive_deps: "Transitive dependencies",
+    label_vuln_critical: "Vulnerabilities (CRITICAL)",
+    label_vuln_high: "Vulnerabilities (HIGH)",
+    label_vuln_medium: "Vulnerabilities (MEDIUM)",
+    label_vuln_low: "Vulnerabilities (LOW)",
+    label_license_violations: "License violations",
+    label_vuln_check_skipped: "_Vulnerability check skipped._",
+    overall_action_required: "**Overall: Action required**",
+    overall_attention_recommended: "**Overall: Attention recommended**",
+    overall_no_issues: "**Overall: No issues found** ✅",
 };
 
 static JA_MESSAGES: Messages = Messages {
@@ -337,6 +379,10 @@ static JA_MESSAGES: Messages = Messages {
     label_package_singular: "個のパッケージ",
     label_package_plural: "個のパッケージ",
 
+    // License violation count summary (no plural distinction in Japanese)
+    label_license_violation_singular: "件のライセンス違反が見つかりました。",
+    label_license_violation_plural: "件のライセンス違反が見つかりました。",
+
     // License compliance section strings
     section_violations: "### 違反",
     section_warnings: "### 警告",
@@ -361,6 +407,23 @@ static JA_MESSAGES: Messages = Messages {
 
     // Vulnerability summary line
     summary_vuln_found: "**{}{}が{}{}で見つかりました。**",
+
+    // Executive summary section
+    section_summary: "## サマリー",
+    col_item: "項目",
+    col_count: "件数",
+    col_status: "状態",
+    label_direct_deps: "直接依存パッケージ",
+    label_transitive_deps: "間接依存パッケージ",
+    label_vuln_critical: "脆弱性 (CRITICAL)",
+    label_vuln_high: "脆弱性 (HIGH)",
+    label_vuln_medium: "脆弱性 (MEDIUM)",
+    label_vuln_low: "脆弱性 (LOW)",
+    label_license_violations: "ライセンス違反",
+    label_vuln_check_skipped: "_脆弱性チェックはスキップされました。_",
+    overall_action_required: "**総合判定: 対応が必要です**",
+    overall_attention_recommended: "**総合判定: 注意が必要です**",
+    overall_no_issues: "**総合判定: 問題なし** ✅",
 };
 
 #[cfg(test)]

@@ -1,3 +1,6 @@
+mod schema;
+use schema::*;
+
 use crate::application::read_models::{
     ComponentView, DependencyView, LicenseComplianceView, LicenseView, ResolutionGuideView,
     SbomMetadataView, SbomReadModel, UpgradeEntryView, UpgradeRecommendationView,
@@ -5,137 +8,6 @@ use crate::application::read_models::{
 };
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-struct Bom {
-    #[serde(rename = "bomFormat")]
-    bom_format: String,
-    #[serde(rename = "specVersion")]
-    spec_version: String,
-    version: u32,
-    #[serde(rename = "serialNumber")]
-    serial_number: String,
-    metadata: Metadata,
-    components: Vec<Component>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    dependencies: Option<Vec<Dependency>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    vulnerabilities: Option<Vec<Vulnerability>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    properties: Option<Vec<Property>>,
-}
-
-#[derive(Debug, Serialize)]
-struct Property {
-    name: String,
-    value: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Dependency {
-    #[serde(rename = "ref")]
-    bom_ref: String,
-    #[serde(rename = "dependsOn", skip_serializing_if = "Vec::is_empty")]
-    depends_on: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct Vulnerability {
-    #[serde(rename = "bom-ref")]
-    bom_ref: String,
-    id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    source: Option<VulnerabilitySource>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    ratings: Option<Vec<Rating>>,
-    affects: Vec<Affect>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    properties: Option<Vec<Property>>,
-}
-
-#[derive(Debug, Serialize)]
-struct VulnerabilitySource {
-    url: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Rating {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    score: Option<f32>,
-    severity: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    vector: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct Affect {
-    #[serde(rename = "ref")]
-    bom_ref: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Metadata {
-    timestamp: String,
-    tools: Vec<Tool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    component: Option<MetadataComponent>,
-}
-
-#[derive(Debug, Serialize)]
-struct MetadataComponent {
-    #[serde(rename = "type")]
-    component_type: String,
-    #[serde(rename = "bom-ref")]
-    bom_ref: String,
-    name: String,
-    version: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Tool {
-    name: String,
-    version: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Component {
-    #[serde(rename = "type")]
-    component_type: String,
-    #[serde(rename = "bom-ref")]
-    bom_ref: String,
-    group: String,
-    name: String,
-    version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    hashes: Option<Vec<Hash>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    licenses: Option<Vec<License>>,
-    purl: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Hash {
-    alg: String,
-    content: String,
-}
-
-#[derive(Debug, Serialize)]
-struct License {
-    license: LicenseContent,
-}
-
-#[derive(Debug, Serialize)]
-struct LicenseContent {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    name: Option<String>,
-}
 
 /// CycloneDxFormatter adapter for generating CycloneDX 1.6 JSON format
 ///
@@ -331,6 +203,29 @@ impl CycloneDxFormatter {
             vector: vuln.cvss_vector.clone(),
         }]);
 
+        let properties =
+            self.build_vulnerability_properties(vuln, resolution_guide, upgrade_recommendations);
+
+        Vulnerability {
+            bom_ref: vuln.bom_ref.clone(),
+            id: vuln.id.clone(),
+            description: vuln.description.clone(),
+            source,
+            ratings,
+            affects: vec![Affect {
+                bom_ref: vuln.affected_component.clone(),
+            }],
+            properties,
+        }
+    }
+
+    /// Build vulnerability properties from resolution guide and upgrade recommendations
+    fn build_vulnerability_properties(
+        &self,
+        vuln: &VulnerabilityView,
+        resolution_guide: Option<&ResolutionGuideView>,
+        upgrade_recommendations: Option<&UpgradeRecommendationView>,
+    ) -> Option<Vec<Property>> {
         // Build introduced-by properties from resolution guide
         let mut properties: Vec<Property> = resolution_guide
             .and_then(|guide| {
@@ -388,22 +283,10 @@ impl CycloneDxFormatter {
             }
         }
 
-        let properties = if properties.is_empty() {
+        if properties.is_empty() {
             None
         } else {
             Some(properties)
-        };
-
-        Vulnerability {
-            bom_ref: vuln.bom_ref.clone(),
-            id: vuln.id.clone(),
-            description: vuln.description.clone(),
-            source,
-            ratings,
-            affects: vec![Affect {
-                bom_ref: vuln.affected_component.clone(),
-            }],
-            properties,
         }
     }
 

@@ -17,8 +17,14 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    cooldown:
+      semver-major-days: 30   # Wait 30 days for major version bumps
+      semver-minor-days: 7    # Wait 7 days for minor version bumps
+      semver-patch-days: 3    # Wait 3 days for patch version bumps
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7         # Wait 7 days (semver not always applicable)

@@ -77,7 +77,23 @@ Invoke `/pr` skill with:
 - Base branch: `develop`
 - Reference to issue: `Closes #<issue-number>`
 
-### Step 7: Report Completion
+### Step 7: Update Architecture Overview (conditional)
+
+After implementation is complete, evaluate whether the changes affected the project architecture:
+
+**Update `.claude/CLAUDE.md` → `## Architecture Overview` if any of the following changed:**
+- A new module or subdirectory was added/removed under `src/`
+- A key type was renamed, added, or removed
+- A new invariant or constraint was introduced
+- The config resolution order or config struct changed
+
+**Skip this step if:**
+- The change was purely internal (renamed a private function, fixed a bug, adjusted formatting)
+- No module boundaries, public APIs, or key types were affected
+
+When updating, keep descriptions concise. Do **not** include function signatures, argument lists, or file-level details — only module-level roles, key public types, and design constraints.
+
+### Step 8: Report Completion
 
 Output:
 - Branch name created

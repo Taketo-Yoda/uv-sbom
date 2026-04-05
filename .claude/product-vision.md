@@ -72,6 +72,9 @@ license policy.
 | uv support | Native | Not supported (as of v7.2.1) | Indirect | Limited |
 | Target audience | Developers & security engineers | Security toolchains | Quick CLI scans | Enterprise SBOM pipelines |
 
+> **Note**: The table above reflects the founding competitive analysis (snapshot from 2026-03-07).
+> For current tool versions and feature status, see `.claude/competitive-landscape.md`.
+
 ### What we intentionally do differently
 
 **vs. cyclonedx-python**: We produce Markdown first, machine-readable JSON second.
@@ -84,6 +87,59 @@ provide upgrade paths, not just vulnerability lists.
 **vs. Syft**: We are purpose-built for uv. We understand uv's lock file format and
 can accurately distinguish direct from transitive dependencies. Syft treats all
 installed packages as equal.
+
+---
+
+## Structural Barriers
+
+These are not just features we have that others lack — they are architectural constraints
+that prevent competitors from replicating our advantages incrementally.
+
+### Why competitors cannot easily replicate uv-native support
+
+**cyclonedx-python** and **pip-audit** operate on the *installed environment* (`.venv`),
+not on the lock file. Switching to lock-file-based analysis would require a fundamental
+redesign of their data model — it is not an incremental improvement. Their entire analysis
+pipeline assumes "what is installed" as the source of truth.
+
+**Syft** is a general-purpose tool designed to handle any package ecosystem (containers,
+language runtimes, OS packages). Adding deep `uv.lock` understanding would require
+maintaining uv-specific parsing logic that conflicts with their universality goal and
+increases maintenance surface area.
+
+uv-sbom's lock-file-first approach is foundational, not a feature. This means:
+- Accurate direct/transitive distinction (only possible from lock file metadata, not `.venv`)
+- Reports what the project *declares*, not what happens to be installed
+- Immune to environment contamination (extra packages installed manually, virtual env state)
+- Consistent output regardless of whether `uv sync` has been run
+
+### Why human-readable output is structurally different
+
+Competitors produce human-readable output as a secondary goal (a `--format text` flag or
+an export/view command added later). uv-sbom's Markdown formatter is the *primary output
+path*: every design decision — section order, column selection, summary block placement —
+optimizes for readability first.
+
+Adding a Markdown export to cyclonedx-python would produce a mechanical rendering of
+CycloneDX fields. It would not produce the opinionated, reader-first output that uv-sbom
+generates, because the underlying data model was not designed with that goal.
+
+### Why Upgrade Advisor is structurally differentiated
+
+Providing actionable upgrade paths requires combining three independent data sources:
+
+1. Knowledge of which version fixes a CVE (OSV API `affected[].ranges[].fixed`)
+2. The current version in the lock file (uv.lock)
+3. The dependency graph to identify which *direct* dependency is the root cause of a
+   transitive vulnerability
+
+pip-audit and cyclonedx-python do not combine these three. pip-audit reports CVEs but
+not fixed versions derived from OSV ranges. Neither tool distinguishes root-cause
+transitive issues from direct issues in their output.
+
+uv-sbom's Resolution Guide was designed from the ground up to surface root-cause
+transitive issues with their upgrade path — a capability that requires all three
+data sources to be integrated at design time.
 
 ---
 
@@ -115,6 +171,29 @@ If the answer to all three is "no", reconsider whether the feature belongs in uv
 
 ---
 
+## Anti-roadmap: What uv-sbom Will Not Do
+
+These are not gaps — they are deliberate boundaries that preserve the product's focus.
+When a feature request matches one of these entries, it should be declined with a reference
+to this table rather than debated from scratch.
+
+| Feature | Why We Will Not Add It |
+|---------|------------------------|
+| Support for `pip` requirements.txt | We are uv-native by design. Supporting pip would dilute the lock-file-first model and duplicate pip-audit's purpose. Users of pip should use pip-audit. |
+| Support for `poetry.lock` / Pipenv | Same principle: each ecosystem deserves a purpose-built tool. Adding poetry support would make uv-sbom a general-purpose tool, which conflicts with our identity. |
+| GUI or web interface | Our target users are developers and security engineers working in terminals and CI pipelines. A GUI adds complexity without serving the core use case. |
+| SBOM ingestion / merging | We are a generator, not a pipeline orchestrator. Ingesting, merging, or comparing SBOMs belongs in dedicated tools like Dependency-Track or SBOM management platforms. |
+| Custom vulnerability databases | OSV is the authoritative, community-maintained source. Supporting custom databases would require schema translation, maintenance burden, and creates a support surface we cannot own. |
+| Package hash verification | Hashes are a deployment-time integrity concern, not a developer-facing SBOM concern. Including them in Markdown output adds noise without actionability for our target users. |
+| SBOM diff / comparison | Valuable, but belongs in a separate tool. Adding diffing here would expand scope beyond "understand your current state" and introduce a second mental model into the tool. |
+| Real-time monitoring / alerts | uv-sbom is a point-in-time analysis tool designed for human-triggered or CI-triggered runs. Continuous monitoring belongs in CI pipelines or dedicated monitoring services. |
+| Support for non-Python ecosystems | We understand Python and uv deeply. Expanding to Node.js, Rust crates, or Go modules would dilute that depth and replicate what Syft already does generically. |
+
+**Guiding principle**: If a feature is better served by an existing tool in the ecosystem,
+document how to integrate with that tool rather than replicate it inside uv-sbom.
+
+---
+
 ## Design Philosophy: "Actionable over Exhaustive"
 
 uv-sbom prioritizes actionability over exhaustiveness. This means:
@@ -130,4 +209,46 @@ next step obvious.
 
 ---
 
-Last Updated: 2026-03-07 (Issue #283)
+## Feature Decision Flow for AI Agents
+
+When evaluating a proposed feature, answer these questions in order. Stop at the first
+"No" and do not proceed to implementation without discussing with the project owner.
+
+1. **Is it uv.lock-specific?**
+   - Yes → Continue to question 2.
+   - No → Likely out of scope. Ask: does a better-suited tool already handle this?
+     If yes, recommend that tool instead. If no, escalate to project owner.
+
+2. **Does it make output more actionable for the reader?**
+   Specifically: does it help the reader understand their dependency situation faster,
+   reduce the number of steps needed to act on the information, or reduce noise?
+   - Yes to at least one → Continue to question 3.
+   - No to all three → Do not implement. This is "completeness for its own sake."
+     Document the reasoning in the Issue comment.
+
+3. **Is it listed in the Anti-roadmap?**
+   - No → Continue to question 4.
+   - Yes → Do not implement. Reference the Anti-roadmap entry in the Issue comment
+     and close the Issue as "wontfix."
+
+4. **Would a competitor be forced to redesign their core data model to replicate it?**
+   - Yes → High priority. This reinforces our structural barriers.
+   - No → Lower priority. Implement only if questions 1–2 are clearly satisfied.
+
+5. **Does it add noise or duplication to the output?**
+   - No → Approved for implementation planning.
+   - Yes → Reject. Reference the "Actionable over Exhaustive" principle in the Issue.
+
+### Decision Flow Summary Table
+
+| Question | Yes | No |
+|----------|-----|----|
+| 1. uv.lock-specific? | Continue | Likely out of scope |
+| 2. Makes output actionable? | Continue | "Completeness for its own sake" — reject |
+| 3. On the Anti-roadmap? | Reject as wontfix | Continue |
+| 4. Forces competitor data model redesign? | High priority | Lower priority |
+| 5. Adds noise or duplication? | Reject | Approved |
+
+---
+
+Last Updated: 2026-03-28 (Issue #367)

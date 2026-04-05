@@ -20,7 +20,6 @@ pub struct ComponentView {
     /// SHA256 hash of the component
     pub sha256_hash: Option<String>,
     /// Whether this is a direct dependency
-    #[allow(dead_code)]
     pub is_direct_dependency: bool,
 }
 

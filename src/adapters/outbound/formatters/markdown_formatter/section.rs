@@ -1,6 +1,6 @@
 use crate::application::read_models::{
     ComponentView, DependencyView, LicenseComplianceView, ResolutionGuideView,
-    UpgradeRecommendationView,
+    UpgradeRecommendationView, VulnerabilityReportView,
 };
 use crate::i18n::Messages;
 use std::collections::{HashMap, HashSet};
@@ -8,6 +8,120 @@ use std::collections::{HashMap, HashSet};
 /// Renders the header section
 pub(super) fn render_header(messages: &'static Messages, output: &mut String) {
     output.push_str(messages.section_sbom_title);
+    output.push_str("\n\n");
+}
+
+/// Renders the executive summary section
+pub(super) fn render_summary(
+    messages: &'static Messages,
+    output: &mut String,
+    components: &[ComponentView],
+    vulnerabilities: Option<&VulnerabilityReportView>,
+    license_compliance: Option<&LicenseComplianceView>,
+) {
+    output.push_str(messages.section_summary);
+    output.push_str("\n\n");
+
+    // Table header
+    output.push_str(&format!(
+        "| {} | {} | {} |\n",
+        messages.col_item, messages.col_count, messages.col_status
+    ));
+    output.push_str(&super::table::make_separator(&[
+        messages.col_item,
+        messages.col_count,
+        messages.col_status,
+    ]));
+
+    // Package count rows
+    let direct_count = components.iter().filter(|c| c.is_direct_dependency).count();
+    let transitive_count = components
+        .iter()
+        .filter(|c| !c.is_direct_dependency)
+        .count();
+    output.push_str(&format!(
+        "| {} | {} | ✅ |\n",
+        messages.label_direct_deps, direct_count
+    ));
+    output.push_str(&format!(
+        "| {} | {} | ✅ |\n",
+        messages.label_transitive_deps, transitive_count
+    ));
+
+    // Vulnerability rows
+    let mut has_critical = false;
+    let mut has_warning = false;
+    if let Some(vuln_report) = vulnerabilities {
+        let counts = vuln_report.counts_by_severity();
+        let critical_status = if counts.critical > 0 {
+            has_critical = true;
+            "❌"
+        } else {
+            "✅"
+        };
+        let high_status = if counts.high > 0 {
+            has_warning = true;
+            "⚠️"
+        } else {
+            "✅"
+        };
+        let medium_status = if counts.medium > 0 {
+            has_warning = true;
+            "⚠️"
+        } else {
+            "✅"
+        };
+        let low_status = if counts.low > 0 {
+            has_warning = true;
+            "⚠️"
+        } else {
+            "✅"
+        };
+        output.push_str(&format!(
+            "| {} | {} | {} |\n",
+            messages.label_vuln_critical, counts.critical, critical_status
+        ));
+        output.push_str(&format!(
+            "| {} | {} | {} |\n",
+            messages.label_vuln_high, counts.high, high_status
+        ));
+        output.push_str(&format!(
+            "| {} | {} | {} |\n",
+            messages.label_vuln_medium, counts.medium, medium_status
+        ));
+        output.push_str(&format!(
+            "| {} | {} | {} |\n",
+            messages.label_vuln_low, counts.low, low_status
+        ));
+    } else {
+        output.push_str(&format!("\n{}\n", messages.label_vuln_check_skipped));
+    }
+
+    // License violations row
+    let violation_count = license_compliance
+        .map(|lc| lc.summary.violation_count)
+        .unwrap_or(0);
+    let license_status = if violation_count > 0 {
+        has_critical = true;
+        "❌"
+    } else {
+        "✅"
+    };
+    output.push_str(&format!(
+        "| {} | {} | {} |\n",
+        messages.label_license_violations, violation_count, license_status
+    ));
+
+    // Overall line
+    output.push('\n');
+    let overall = if has_critical {
+        messages.overall_action_required
+    } else if has_warning {
+        messages.overall_attention_recommended
+    } else {
+        messages.overall_no_issues
+    };
+    output.push_str(overall);
     output.push_str("\n\n");
 }
 
@@ -29,7 +143,7 @@ pub(super) fn render_components(
         let license = component
             .license
             .as_ref()
-            .map(|l| l.name.as_str())
+            .map(|l| l.spdx_id.as_deref().unwrap_or(l.name.as_str()))
             .unwrap_or("N/A");
         let description = component.description.as_deref().unwrap_or("");
 
@@ -71,7 +185,7 @@ pub(super) fn render_dependencies(
                 let license = component
                     .license
                     .as_ref()
-                    .map(|l| l.name.as_str())
+                    .map(|l| l.spdx_id.as_deref().unwrap_or(l.name.as_str()))
                     .unwrap_or("N/A");
                 let description = component.description.as_deref().unwrap_or("");
 
@@ -119,7 +233,7 @@ pub(super) fn render_dependencies(
                         let license = component
                             .license
                             .as_ref()
-                            .map(|l| l.name.as_str())
+                            .map(|l| l.spdx_id.as_deref().unwrap_or(l.name.as_str()))
                             .unwrap_or("N/A");
                         let description = component.description.as_deref().unwrap_or("");
 
@@ -153,14 +267,14 @@ pub(super) fn render_license_compliance(
 
     // Summary
     if compliance.has_violations {
+        let unit = if compliance.summary.violation_count == 1 {
+            messages.label_license_violation_singular
+        } else {
+            messages.label_license_violation_plural
+        };
         output.push_str(&format!(
-            "**{} license {} found.**\n\n",
-            compliance.summary.violation_count,
-            if compliance.summary.violation_count == 1 {
-                "violation"
-            } else {
-                "violations"
-            }
+            "**{} {}**\n\n",
+            compliance.summary.violation_count, unit,
         ));
     } else {
         output.push_str(messages.label_no_license_violations);
@@ -618,5 +732,218 @@ mod tests {
 
         assert!(!markdown.contains("Recommended Action"));
         assert!(markdown.contains("## Vulnerability Resolution Guide"));
+    }
+
+    // ===== Tests for render_summary() =====
+
+    fn make_vuln_report(
+        critical: usize,
+        high: usize,
+        medium: usize,
+        low: usize,
+    ) -> crate::application::read_models::VulnerabilityReportView {
+        use crate::application::read_models::{
+            SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
+        };
+        let mut actionable = Vec::new();
+        let mut informational = Vec::new();
+        let make = |id: &str, sev: SeverityView| VulnerabilityView {
+            bom_ref: id.to_string(),
+            id: id.to_string(),
+            affected_component: "pkg".to_string(),
+            affected_component_name: "pkg".to_string(),
+            affected_version: "1.0".to_string(),
+            cvss_score: None,
+            cvss_vector: None,
+            severity: sev,
+            fixed_version: None,
+            description: None,
+            source_url: None,
+        };
+        for i in 0..critical {
+            actionable.push(make(&format!("CRIT-{i}"), SeverityView::Critical));
+        }
+        for i in 0..high {
+            actionable.push(make(&format!("HIGH-{i}"), SeverityView::High));
+        }
+        for i in 0..medium {
+            actionable.push(make(&format!("MED-{i}"), SeverityView::Medium));
+        }
+        for i in 0..low {
+            informational.push(make(&format!("LOW-{i}"), SeverityView::Low));
+        }
+        VulnerabilityReportView {
+            actionable,
+            informational,
+            threshold_exceeded: critical > 0 || high > 0 || medium > 0,
+            summary: VulnerabilitySummary {
+                total_count: critical + high + medium + low,
+                actionable_count: critical + high + medium,
+                informational_count: low,
+                affected_package_count: 1,
+            },
+        }
+    }
+
+    #[test]
+    fn test_render_summary_all_clear_en() {
+        let model = create_test_read_model();
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("## Summary"));
+        assert!(markdown.contains("Direct dependencies"));
+        assert!(markdown.contains("Transitive dependencies"));
+        assert!(markdown.contains("**Overall: No issues found** ✅"));
+    }
+
+    #[test]
+    fn test_render_summary_all_clear_ja() {
+        let model = create_test_read_model();
+        let formatter = super::super::MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("## サマリー"));
+        assert!(markdown.contains("直接依存パッケージ"));
+        assert!(markdown.contains("間接依存パッケージ"));
+        assert!(markdown.contains("**総合判定: 問題なし** ✅"));
+    }
+
+    #[test]
+    fn test_render_summary_critical_vuln_en() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(make_vuln_report(1, 0, 0, 0));
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("Vulnerabilities (CRITICAL) | 1 | ❌"));
+        assert!(markdown.contains("**Overall: Action required**"));
+    }
+
+    #[test]
+    fn test_render_summary_high_medium_vuln_en() {
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(make_vuln_report(0, 1, 1, 0));
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("Vulnerabilities (HIGH) | 1 | ⚠️"));
+        assert!(markdown.contains("Vulnerabilities (MEDIUM) | 1 | ⚠️"));
+        assert!(markdown.contains("**Overall: Attention recommended**"));
+    }
+
+    #[test]
+    fn test_render_summary_license_violation_en() {
+        use crate::application::read_models::{
+            LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView,
+        };
+        let mut model = create_test_read_model();
+        model.license_compliance = Some(LicenseComplianceView {
+            has_violations: true,
+            violations: vec![LicenseViolationView {
+                package_name: "badpkg".to_string(),
+                package_version: "1.0".to_string(),
+                license: "GPL-3.0".to_string(),
+                reason: "Copyleft".to_string(),
+                matched_pattern: None,
+            }],
+            warnings: vec![],
+            summary: LicenseComplianceSummary {
+                violation_count: 1,
+                warning_count: 0,
+            },
+        });
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("License violations | 1 | ❌"));
+        assert!(markdown.contains("**Overall: Action required**"));
+    }
+
+    #[test]
+    fn test_render_summary_vuln_skipped_en() {
+        let model = create_test_read_model();
+        // vulnerabilities is None → skipped note shown
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("_Vulnerability check skipped._"));
+        assert!(!markdown.contains("Vulnerabilities (CRITICAL)"));
+    }
+
+    #[test]
+    fn test_render_summary_vuln_skipped_ja() {
+        let model = create_test_read_model();
+        let formatter = super::super::MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("_脆弱性チェックはスキップされました。_"));
+    }
+
+    #[test]
+    fn test_render_summary_package_counts() {
+        // create_test_read_model has 1 direct (requests) and 1 transitive (urllib3)
+        let model = create_test_read_model();
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("Direct dependencies | 1 | ✅"));
+        assert!(markdown.contains("Transitive dependencies | 1 | ✅"));
+    }
+
+    #[test]
+    fn test_license_column_prefers_spdx_id_when_present() {
+        // requests has spdx_id=Some("Apache-2.0"), name="Apache License 2.0"
+        // urllib3 has spdx_id=Some("MIT"), name="MIT License"
+        let model = create_test_read_model();
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(
+            markdown.contains("Apache-2.0"),
+            "should display SPDX ID, not raw name"
+        );
+        assert!(
+            !markdown.contains("Apache License 2.0"),
+            "should not display raw name when spdx_id is present"
+        );
+        assert!(markdown.contains("MIT"), "should display SPDX ID for MIT");
+        assert!(
+            !markdown.contains("MIT License"),
+            "should not display raw name when spdx_id is present"
+        );
+    }
+
+    #[test]
+    fn test_license_column_falls_back_to_name_when_spdx_id_none() {
+        let mut model = create_test_read_model();
+        model.components[0].license = Some(crate::application::read_models::LicenseView {
+            spdx_id: None,
+            name: "Custom License v1".to_string(),
+            url: None,
+        });
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(
+            markdown.contains("Custom License v1"),
+            "should fall back to raw name when spdx_id is None"
+        );
+    }
+
+    #[test]
+    fn test_render_summary_low_only_vuln_en() {
+        // Low-only vulnerabilities should show ⚠️ per-row but overall is "Attention recommended"
+        let mut model = create_test_read_model();
+        model.vulnerabilities = Some(make_vuln_report(0, 0, 0, 2));
+        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("Vulnerabilities (CRITICAL) | 0 | ✅"));
+        assert!(markdown.contains("Vulnerabilities (HIGH) | 0 | ✅"));
+        assert!(markdown.contains("Vulnerabilities (MEDIUM) | 0 | ✅"));
+        assert!(markdown.contains("Vulnerabilities (LOW) | 2 | ⚠️"));
+        assert!(markdown.contains("**Overall: Attention recommended**"));
+        assert!(!markdown.contains("**Overall: Action required**"));
     }
 }

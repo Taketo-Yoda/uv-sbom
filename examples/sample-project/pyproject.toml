@@ -1,7 +1,7 @@
 [project]
 name = "sample-project"
 version = "0.1.0"
-description = "A sample project for testing uv-sbom with various CVE severity levels"
+description = "A sample project for testing uv-sbom with various CVE severity levels and license violations"
 requires-python = ">=3.11"
 dependencies = [
     # Packages with known vulnerabilities at various severity levels

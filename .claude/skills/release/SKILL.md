@@ -128,6 +128,45 @@ cargo check
 
 This ensures `Cargo.lock` reflects the updated version before committing.
 
+### Step 3.6: Clean [Unreleased] Section Before Promoting (MANDATORY)
+
+Review the `[Unreleased]` section and remove any entries that do not reflect
+user-observable changes. This step must be completed **before** promoting to a
+versioned entry in Step 4.
+
+#### Sections to REMOVE
+
+| Section heading | Reason |
+|----------------|--------|
+| `### Refactored` / `### Internal` | No behavior change |
+| `### Testing` | No behavior change |
+| `### Dependencies` (non-security bumps) | No behavior change for users |
+| `### CI` / `### Chore` | No behavior change |
+
+#### Sections to KEEP
+
+| Section heading | Reason |
+|----------------|--------|
+| `### Added` | New user-facing features |
+| `### Changed` | Behavior changes |
+| `### Deprecated` | User must know |
+| `### Removed` | Breaking removal |
+| `### Fixed` | Bug fixes users care about |
+| `### Security` | Always required |
+| `### Breaking Changes` | Critical for users |
+| `### Performance` | Observable improvement |
+
+#### Edge case: [Unreleased] becomes empty after cleaning
+
+If all entries are removed, leave only the empty `## [Unreleased]` placeholder
+and proceed with an empty versioned section:
+
+```markdown
+## [Unreleased]
+
+## [X.Y.Z] - YYYY-MM-DD
+```
+
 ### Step 4: Update CHANGELOG.md
 
 **Before**:
@@ -315,12 +354,13 @@ Claude executes /release skill:
 5. Updates pyproject.toml version
 6. Updates install.py UV_SBOM_VERSION
 7. Runs `cargo check` to regenerate Cargo.lock ✓
-8. Updates CHANGELOG.md
-9. Verifies all versions match ✓
-10. Creates branch `release/v1.1.0`
-11. Commits: "chore(release): prepare v1.1.0" (includes Cargo.lock)
-12. Creates PR to `develop` (NOT main)
-13. Outputs manual next steps (including develop → main PR)
+8. Removes non-user-facing sections from [Unreleased] (Testing, Dependencies, CI, etc.) ✓
+9. Updates CHANGELOG.md (promotes cleaned [Unreleased] to [1.1.0])
+10. Verifies all versions match ✓
+11. Creates branch `release/v1.1.0`
+12. Commits: "chore(release): prepare v1.1.0" (includes Cargo.lock)
+13. Creates PR to `develop` (NOT main)
+14. Outputs manual next steps (including develop → main PR)
 
 Final output:
 ```
