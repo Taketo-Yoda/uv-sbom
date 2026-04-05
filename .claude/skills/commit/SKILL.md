@@ -58,23 +58,11 @@ See .claude/instructions.md for branching guidelines.
 
 ## Pre-flight Checks (MANDATORY)
 
-### 1. Format Code
+> **Note**: `cargo fmt` is handled automatically by the `.githooks/pre-commit` hook.
+> `cargo clippy` and `cargo test` are handled by the `.githooks/pre-push` hook at push time.
+> Run `make setup` once to activate these hooks if you haven't already.
 
-```bash
-cargo fmt --all
-```
-
-This automatically formats all code. Stage any formatting changes.
-
-### 2. Clippy Check
-
-```bash
-cargo clippy --all-targets --all-features -- -D warnings
-```
-
-**CRITICAL**: Zero warnings required. Fix all issues before committing.
-
-### 3. Security Check
+### 1. Security Check
 
 Verify no secrets in staged files:
 
@@ -108,10 +96,7 @@ Identify:
 
 ### Step 2: Run Pre-flight Checks
 
-Execute format and clippy checks. If clippy fails:
-
-1. Fix all warnings
-2. Re-run clippy until clean
+Run the security check. If secrets are found, stop immediately.
 
 ### Step 3: Stage Changes
 

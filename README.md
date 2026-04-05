@@ -140,6 +140,17 @@ cargo build --release
 cargo install --path .
 ```
 
+#### Development Setup
+
+After cloning, activate the git hooks:
+
+```bash
+make setup
+```
+
+This enables `pre-commit` (auto-format) and `pre-push` (fmt check, clippy, tests) hooks
+from `.githooks/`, ensuring code quality checks run automatically for all contributors.
+
 ### Verify Installation
 
 ```bash

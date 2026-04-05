@@ -139,6 +139,16 @@ cargo build --release
 cargo install --path .
 ```
 
+#### 開発環境のセットアップ
+
+クローン後、gitフックを有効化してください：
+
+```bash
+make setup
+```
+
+これにより `.githooks/` の `pre-commit`（自動フォーマット）と `pre-push`（フォーマット確認・clippy・テスト）フックが有効になり、すべてのコントリビュータに対してコード品質チェックが自動的に実行されます。
+
 ### インストールの確認
 
 ```bash
