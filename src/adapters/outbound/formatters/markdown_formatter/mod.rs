@@ -50,7 +50,7 @@ impl SbomFormatter for MarkdownFormatter {
     fn format(&self, model: &SbomReadModel) -> Result<String> {
         let mut output = String::new();
 
-        section::render_summary(
+        sections::summary::render(
             self.messages,
             &mut output,
             &model.components,
@@ -65,7 +65,7 @@ impl SbomFormatter for MarkdownFormatter {
             &model.components,
         );
         if let Some(deps) = &model.dependencies {
-            section::render_dependencies(
+            sections::dependencies::render(
                 self.messages,
                 self.verified_packages.as_ref(),
                 &mut output,
@@ -92,7 +92,7 @@ impl SbomFormatter for MarkdownFormatter {
             }
         }
         if let Some(compliance) = &model.license_compliance {
-            section::render_license_compliance(self.messages, &mut output, compliance);
+            sections::license_compliance::render(self.messages, &mut output, compliance);
         }
 
         Ok(output)
