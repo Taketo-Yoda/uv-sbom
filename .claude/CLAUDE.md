@@ -46,6 +46,7 @@ When the user requests any of the following operations, ALWAYS invoke the corres
 | Sync CLI options to config | /sync-config | Audit `ConfigFile`, `MergedConfig`, `CONFIG_TEMPLATE` for gaps |
 | Split Issue into subtasks | /split | Confirm decomposition before creating Issues; all Issues in English |
 | Propose or evaluate a feature idea | /ideate | Run triage, competitive analysis, draft Issue |
+| Review code quality before commit | /code-review | Spawn Reviewer Agent; do not recheck CI concerns (fmt/clippy) |
 
 ### Why This Rule Exists
 

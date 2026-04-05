@@ -65,6 +65,16 @@ git checkout -b <branch-name> origin/develop
 - Add tests for new functionality
 - Update documentation as needed
 
+### Step 4.5: Code Review (MANDATORY)
+
+Invoke `/code-review` skill.
+
+- The skill runs a Reviewer Agent against the current `git diff HEAD`.
+- If the review **PASSES**, proceed to Step 5.
+- If the review **FAILS** after the maximum iteration limit (3), halt and report
+  remaining issues to the user. Do **NOT** invoke `/commit` until `/code-review`
+  returns PASS.
+
 ### Step 5: Commit Changes
 
 Invoke `/commit` skill with:
