@@ -671,6 +671,67 @@ mod tests {
     }
 
     #[test]
+    fn test_lang_ja_license_violations_count_is_japanese() {
+        use crate::application::read_models::{
+            LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView,
+        };
+
+        let mut model = create_test_read_model();
+        model.license_compliance = Some(LicenseComplianceView {
+            has_violations: true,
+            violations: vec![
+                LicenseViolationView {
+                    package_name: "chardet".to_string(),
+                    package_version: "3.0.4".to_string(),
+                    license: "LGPL-2.1-only".to_string(),
+                    reason: "Denied by policy".to_string(),
+                    matched_pattern: Some("LGPL-*".to_string()),
+                },
+                LicenseViolationView {
+                    package_name: "foo".to_string(),
+                    package_version: "1.0.0".to_string(),
+                    license: "GPL-3.0-only".to_string(),
+                    reason: "Denied by policy".to_string(),
+                    matched_pattern: Some("GPL-*".to_string()),
+                },
+                LicenseViolationView {
+                    package_name: "bar".to_string(),
+                    package_version: "2.0.0".to_string(),
+                    license: "AGPL-3.0-only".to_string(),
+                    reason: "Denied by policy".to_string(),
+                    matched_pattern: Some("AGPL-*".to_string()),
+                },
+                LicenseViolationView {
+                    package_name: "baz".to_string(),
+                    package_version: "0.1.0".to_string(),
+                    license: "GPL-2.0-only".to_string(),
+                    reason: "Denied by policy".to_string(),
+                    matched_pattern: Some("GPL-*".to_string()),
+                },
+            ],
+            warnings: vec![],
+            summary: LicenseComplianceSummary {
+                violation_count: 4,
+                warning_count: 0,
+            },
+        });
+
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        // Japanese summary must appear
+        assert!(
+            markdown.contains("**4 件のライセンス違反が見つかりました。**"),
+            "Expected Japanese violation count summary, got:\n{markdown}"
+        );
+        // English hardcoded string must NOT appear
+        assert!(
+            !markdown.contains("license violations found"),
+            "English violation summary leaked into JA output:\n{markdown}"
+        );
+    }
+
+    #[test]
     fn test_lang_ja_resolution_guide_action_is_japanese() {
         use crate::application::read_models::{
             IntroducedByView, ResolutionEntryView, ResolutionGuideView, UpgradeEntryView,

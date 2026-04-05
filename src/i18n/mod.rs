@@ -105,6 +105,10 @@ pub struct Messages {
     pub label_package_singular: &'static str,
     pub label_package_plural: &'static str,
 
+    // License violation count summary (singular/plural)
+    pub label_license_violation_singular: &'static str,
+    pub label_license_violation_plural: &'static str,
+
     // License compliance section strings
     pub section_violations: &'static str,
     pub section_warnings: &'static str,
@@ -254,6 +258,10 @@ static EN_MESSAGES: Messages = Messages {
     label_package_singular: "package",
     label_package_plural: "packages",
 
+    // License violation count summary (singular/plural)
+    label_license_violation_singular: "license violation found.",
+    label_license_violation_plural: "license violations found.",
+
     // License compliance section strings
     section_violations: "### Violations",
     section_warnings: "### Warnings",
@@ -370,6 +378,10 @@ static JA_MESSAGES: Messages = Messages {
     label_vulnerability_plural: "件の脆弱性",
     label_package_singular: "個のパッケージ",
     label_package_plural: "個のパッケージ",
+
+    // License violation count summary (no plural distinction in Japanese)
+    label_license_violation_singular: "件のライセンス違反が見つかりました。",
+    label_license_violation_plural: "件のライセンス違反が見つかりました。",
 
     // License compliance section strings
     section_violations: "### 違反",
