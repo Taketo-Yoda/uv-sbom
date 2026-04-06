@@ -1,8 +1,12 @@
 use crate::application::read_models::{ResolutionGuideView, UpgradeRecommendationView};
 use crate::i18n::Messages;
 
-/// Renders the resolution guide section
-pub(super) fn render_resolution_guide(
+/// Renders the vulnerability resolution guide section as a Markdown table.
+///
+/// When `upgrade_recommendations` is `Some`, an extra "Recommended Action" column is
+/// appended to each row, showing whether an upgrade path exists for the affected
+/// direct dependency. When `None`, that column is omitted entirely.
+pub(in super::super) fn render(
     messages: &'static Messages,
     output: &mut String,
     guide: &ResolutionGuideView,
@@ -14,45 +18,22 @@ pub(super) fn render_resolution_guide(
     output.push_str(messages.desc_transitive_vuln_table);
     output.push_str("\n\n");
 
+    // Build column list — optional "Recommended Action" column included only when
+    // upgrade_recommendations is provided.
+    let mut columns: Vec<&str> = vec![
+        messages.col_vulnerable_package,
+        messages.col_current,
+        messages.col_fixed_version,
+        messages.col_severity,
+        messages.col_introduced_by,
+    ];
     if upgrade_recommendations.is_some() {
-        output.push_str(&format!(
-            "| {} | {} | {} | {} | {} | {} | {} |\n",
-            messages.col_vulnerable_package,
-            messages.col_current,
-            messages.col_fixed_version,
-            messages.col_severity,
-            messages.col_introduced_by,
-            messages.col_recommended_action,
-            messages.col_vuln_id,
-        ));
-        output.push_str(&super::table::make_separator(&[
-            messages.col_vulnerable_package,
-            messages.col_current,
-            messages.col_fixed_version,
-            messages.col_severity,
-            messages.col_introduced_by,
-            messages.col_recommended_action,
-            messages.col_vuln_id,
-        ]));
-    } else {
-        output.push_str(&format!(
-            "| {} | {} | {} | {} | {} | {} |\n",
-            messages.col_vulnerable_package,
-            messages.col_current,
-            messages.col_fixed_version,
-            messages.col_severity,
-            messages.col_introduced_by,
-            messages.col_vuln_id,
-        ));
-        output.push_str(&super::table::make_separator(&[
-            messages.col_vulnerable_package,
-            messages.col_current,
-            messages.col_fixed_version,
-            messages.col_severity,
-            messages.col_introduced_by,
-            messages.col_vuln_id,
-        ]));
+        columns.push(messages.col_recommended_action);
     }
+    columns.push(messages.col_vuln_id);
+
+    output.push_str(&format!("| {} |\n", columns.join(" | ")));
+    output.push_str(&super::super::table::make_separator(&columns));
 
     for entry in &guide.entries {
         let fixed = entry.fixed_version.as_deref().unwrap_or("N/A");
@@ -71,36 +52,31 @@ pub(super) fn render_resolution_guide(
             .collect::<Vec<_>>()
             .join(", ");
 
-        if let Some(recommendations) = upgrade_recommendations {
-            let action = super::helpers::find_upgrade_action(
+        // Compute the optional action cell before building the row.
+        let action = upgrade_recommendations.map(|recommendations| {
+            super::super::helpers::find_upgrade_action(
                 messages,
                 recommendations,
                 &entry.vulnerability_id,
                 &entry.introduced_by,
-            );
-            output.push_str(&format!(
-                "| {} | {} | {} | {} {} | {} | {} | {} |\n",
-                super::table::escape_markdown_table_cell(&entry.vulnerable_package),
-                super::table::escape_markdown_table_cell(&entry.current_version),
-                super::table::escape_markdown_table_cell(fixed),
-                severity_emoji,
-                entry.severity.as_str(),
-                super::table::escape_markdown_table_cell(&introduced_by),
-                super::table::escape_markdown_table_cell(&action),
-                super::links::vulnerability_id_to_link(&entry.vulnerability_id),
-            ));
-        } else {
-            output.push_str(&format!(
-                "| {} | {} | {} | {} {} | {} | {} |\n",
-                super::table::escape_markdown_table_cell(&entry.vulnerable_package),
-                super::table::escape_markdown_table_cell(&entry.current_version),
-                super::table::escape_markdown_table_cell(fixed),
-                severity_emoji,
-                entry.severity.as_str(),
-                super::table::escape_markdown_table_cell(&introduced_by),
-                super::links::vulnerability_id_to_link(&entry.vulnerability_id),
-            ));
+            )
+        });
+
+        let mut cells: Vec<String> = vec![
+            super::super::table::escape_markdown_table_cell(&entry.vulnerable_package),
+            super::super::table::escape_markdown_table_cell(&entry.current_version),
+            super::super::table::escape_markdown_table_cell(fixed),
+            format!("{} {}", severity_emoji, entry.severity.as_str()),
+            super::super::table::escape_markdown_table_cell(&introduced_by),
+        ];
+        if let Some(ref act) = action {
+            cells.push(super::super::table::escape_markdown_table_cell(act));
         }
+        cells.push(super::super::links::vulnerability_id_to_link(
+            &entry.vulnerability_id,
+        ));
+
+        output.push_str(&format!("| {} |\n", cells.join(" | ")));
     }
     output.push('\n');
 }
@@ -178,7 +154,7 @@ mod tests {
             }],
         });
 
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("## Vulnerability Resolution Guide"));
@@ -215,7 +191,7 @@ mod tests {
             }],
         });
 
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("requests (2.31.0), httpx (0.25.0)"));
@@ -226,7 +202,7 @@ mod tests {
         let mut model = create_test_read_model();
         model.resolution_guide = Some(ResolutionGuideView { entries: vec![] });
 
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(!markdown.contains("## Vulnerability Resolution Guide"));
@@ -235,7 +211,7 @@ mod tests {
     #[test]
     fn test_resolution_guide_omitted_when_none() {
         let model = create_test_read_model();
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(!markdown.contains("## Vulnerability Resolution Guide"));
@@ -258,7 +234,7 @@ mod tests {
             }],
         });
 
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown
@@ -293,7 +269,7 @@ mod tests {
             }],
         });
 
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("Recommended Action"));
@@ -324,7 +300,7 @@ mod tests {
             }],
         });
 
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("Recommended Action"));
@@ -354,7 +330,7 @@ mod tests {
             }],
         });
 
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("Recommended Action"));
@@ -379,223 +355,10 @@ mod tests {
         });
         // upgrade_recommendations is None (default in test model)
 
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
 
         assert!(!markdown.contains("Recommended Action"));
         assert!(markdown.contains("## Vulnerability Resolution Guide"));
-    }
-
-    // ===== Tests for render_summary() =====
-
-    fn make_vuln_report(
-        critical: usize,
-        high: usize,
-        medium: usize,
-        low: usize,
-    ) -> crate::application::read_models::VulnerabilityReportView {
-        use crate::application::read_models::{
-            SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
-        };
-        let mut actionable = Vec::new();
-        let mut informational = Vec::new();
-        let make = |id: &str, sev: SeverityView| VulnerabilityView {
-            bom_ref: id.to_string(),
-            id: id.to_string(),
-            affected_component: "pkg".to_string(),
-            affected_component_name: "pkg".to_string(),
-            affected_version: "1.0".to_string(),
-            cvss_score: None,
-            cvss_vector: None,
-            severity: sev,
-            fixed_version: None,
-            description: None,
-            source_url: None,
-        };
-        for i in 0..critical {
-            actionable.push(make(&format!("CRIT-{i}"), SeverityView::Critical));
-        }
-        for i in 0..high {
-            actionable.push(make(&format!("HIGH-{i}"), SeverityView::High));
-        }
-        for i in 0..medium {
-            actionable.push(make(&format!("MED-{i}"), SeverityView::Medium));
-        }
-        for i in 0..low {
-            informational.push(make(&format!("LOW-{i}"), SeverityView::Low));
-        }
-        VulnerabilityReportView {
-            actionable,
-            informational,
-            threshold_exceeded: critical > 0 || high > 0 || medium > 0,
-            summary: VulnerabilitySummary {
-                total_count: critical + high + medium + low,
-                actionable_count: critical + high + medium,
-                informational_count: low,
-                affected_package_count: 1,
-            },
-        }
-    }
-
-    #[test]
-    fn test_render_summary_all_clear_en() {
-        let model = create_test_read_model();
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("## Summary"));
-        assert!(markdown.contains("Direct dependencies"));
-        assert!(markdown.contains("Transitive dependencies"));
-        assert!(markdown.contains("**Overall: No issues found** ✅"));
-    }
-
-    #[test]
-    fn test_render_summary_all_clear_ja() {
-        let model = create_test_read_model();
-        let formatter = super::super::MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("## サマリー"));
-        assert!(markdown.contains("直接依存パッケージ"));
-        assert!(markdown.contains("間接依存パッケージ"));
-        assert!(markdown.contains("**総合判定: 問題なし** ✅"));
-    }
-
-    #[test]
-    fn test_render_summary_critical_vuln_en() {
-        let mut model = create_test_read_model();
-        model.vulnerabilities = Some(make_vuln_report(1, 0, 0, 0));
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("Vulnerabilities (CRITICAL) | 1 | ❌"));
-        assert!(markdown.contains("**Overall: Action required**"));
-    }
-
-    #[test]
-    fn test_render_summary_high_medium_vuln_en() {
-        let mut model = create_test_read_model();
-        model.vulnerabilities = Some(make_vuln_report(0, 1, 1, 0));
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("Vulnerabilities (HIGH) | 1 | ⚠️"));
-        assert!(markdown.contains("Vulnerabilities (MEDIUM) | 1 | ⚠️"));
-        assert!(markdown.contains("**Overall: Attention recommended**"));
-    }
-
-    #[test]
-    fn test_render_summary_license_violation_en() {
-        use crate::application::read_models::{
-            LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView,
-        };
-        let mut model = create_test_read_model();
-        model.license_compliance = Some(LicenseComplianceView {
-            has_violations: true,
-            violations: vec![LicenseViolationView {
-                package_name: "badpkg".to_string(),
-                package_version: "1.0".to_string(),
-                license: "GPL-3.0".to_string(),
-                reason: "Copyleft".to_string(),
-                matched_pattern: None,
-            }],
-            warnings: vec![],
-            summary: LicenseComplianceSummary {
-                violation_count: 1,
-                warning_count: 0,
-            },
-        });
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("License violations | 1 | ❌"));
-        assert!(markdown.contains("**Overall: Action required**"));
-    }
-
-    #[test]
-    fn test_render_summary_vuln_skipped_en() {
-        let model = create_test_read_model();
-        // vulnerabilities is None → skipped note shown
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("_Vulnerability check skipped._"));
-        assert!(!markdown.contains("Vulnerabilities (CRITICAL)"));
-    }
-
-    #[test]
-    fn test_render_summary_vuln_skipped_ja() {
-        let model = create_test_read_model();
-        let formatter = super::super::MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("_脆弱性チェックはスキップされました。_"));
-    }
-
-    #[test]
-    fn test_render_summary_package_counts() {
-        // create_test_read_model has 1 direct (requests) and 1 transitive (urllib3)
-        let model = create_test_read_model();
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("Direct dependencies | 1 | ✅"));
-        assert!(markdown.contains("Transitive dependencies | 1 | ✅"));
-    }
-
-    #[test]
-    fn test_license_column_prefers_spdx_id_when_present() {
-        // requests has spdx_id=Some("Apache-2.0"), name="Apache License 2.0"
-        // urllib3 has spdx_id=Some("MIT"), name="MIT License"
-        let model = create_test_read_model();
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(
-            markdown.contains("Apache-2.0"),
-            "should display SPDX ID, not raw name"
-        );
-        assert!(
-            !markdown.contains("Apache License 2.0"),
-            "should not display raw name when spdx_id is present"
-        );
-        assert!(markdown.contains("MIT"), "should display SPDX ID for MIT");
-        assert!(
-            !markdown.contains("MIT License"),
-            "should not display raw name when spdx_id is present"
-        );
-    }
-
-    #[test]
-    fn test_license_column_falls_back_to_name_when_spdx_id_none() {
-        let mut model = create_test_read_model();
-        model.components[0].license = Some(crate::application::read_models::LicenseView {
-            spdx_id: None,
-            name: "Custom License v1".to_string(),
-            url: None,
-        });
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(
-            markdown.contains("Custom License v1"),
-            "should fall back to raw name when spdx_id is None"
-        );
-    }
-
-    #[test]
-    fn test_render_summary_low_only_vuln_en() {
-        // Low-only vulnerabilities should show ⚠️ per-row but overall is "Attention recommended"
-        let mut model = create_test_read_model();
-        model.vulnerabilities = Some(make_vuln_report(0, 0, 0, 2));
-        let formatter = super::super::MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("Vulnerabilities (CRITICAL) | 0 | ✅"));
-        assert!(markdown.contains("Vulnerabilities (HIGH) | 0 | ✅"));
-        assert!(markdown.contains("Vulnerabilities (MEDIUM) | 0 | ✅"));
-        assert!(markdown.contains("Vulnerabilities (LOW) | 2 | ⚠️"));
-        assert!(markdown.contains("**Overall: Attention recommended**"));
-        assert!(!markdown.contains("**Overall: Action required**"));
     }
 }
