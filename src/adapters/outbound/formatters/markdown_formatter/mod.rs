@@ -1,6 +1,5 @@
 mod helpers;
 mod links;
-mod section;
 mod sections;
 mod table;
 mod vuln_render;
@@ -83,7 +82,7 @@ impl SbomFormatter for MarkdownFormatter {
         }
         if let Some(guide) = &model.resolution_guide {
             if !guide.entries.is_empty() {
-                section::render_resolution_guide(
+                sections::resolution_guide::render(
                     self.messages,
                     &mut output,
                     guide,
