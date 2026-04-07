@@ -1,10 +1,10 @@
+mod builders;
 mod schema;
 use schema::*;
 
 use crate::application::read_models::{
-    ComponentView, DependencyView, LicenseComplianceView, LicenseView, ResolutionGuideView,
-    SbomMetadataView, SbomReadModel, UpgradeEntryView, UpgradeRecommendationView,
-    VulnerabilityReportView, VulnerabilityView,
+    ComponentView, LicenseComplianceView, LicenseView, ResolutionGuideView, SbomReadModel,
+    UpgradeEntryView, UpgradeRecommendationView, VulnerabilityReportView, VulnerabilityView,
 };
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
@@ -38,12 +38,9 @@ impl SbomFormatter for CycloneDxFormatter {
             spec_version: "1.6".to_string(),
             version: 1,
             serial_number: model.metadata.serial_number.clone(),
-            metadata: self.build_metadata(&model.metadata),
+            metadata: builders::metadata::build(&model.metadata),
             components: self.build_components(&model.components),
-            dependencies: model
-                .dependencies
-                .as_ref()
-                .map(|d| self.build_dependencies(d)),
+            dependencies: model.dependencies.as_ref().map(builders::dependency::build),
             vulnerabilities: model.vulnerabilities.as_ref().map(|v| {
                 self.build_vulnerabilities(
                     v,
@@ -59,25 +56,6 @@ impl SbomFormatter for CycloneDxFormatter {
 }
 
 impl CycloneDxFormatter {
-    /// Build metadata from SbomMetadataView
-    fn build_metadata(&self, metadata: &SbomMetadataView) -> Metadata {
-        let component = metadata.component.as_ref().map(|c| MetadataComponent {
-            component_type: "application".to_string(),
-            bom_ref: format!("{}-{}", c.name, c.version),
-            name: c.name.clone(),
-            version: c.version.clone(),
-        });
-
-        Metadata {
-            timestamp: metadata.timestamp.clone(),
-            tools: vec![Tool {
-                name: metadata.tool_name.clone(),
-                version: metadata.tool_version.clone(),
-            }],
-            component,
-        }
-    }
-
     /// Build components from ComponentView slice
     fn build_components(&self, components: &[ComponentView]) -> Vec<Component> {
         components
@@ -123,36 +101,6 @@ impl CycloneDxFormatter {
                 }
             },
         }]
-    }
-
-    /// Build dependencies from DependencyView
-    fn build_dependencies(&self, dep_view: &DependencyView) -> Vec<Dependency> {
-        let mut dependencies = Vec::new();
-
-        // Add direct dependencies
-        for direct_ref in &dep_view.direct {
-            let depends_on = dep_view
-                .transitive
-                .get(direct_ref)
-                .cloned()
-                .unwrap_or_default();
-            dependencies.push(Dependency {
-                bom_ref: direct_ref.clone(),
-                depends_on,
-            });
-        }
-
-        // Add transitive dependencies that are not direct
-        for (parent_ref, children) in &dep_view.transitive {
-            if !dep_view.direct.contains(parent_ref) {
-                dependencies.push(Dependency {
-                    bom_ref: parent_ref.clone(),
-                    depends_on: children.clone(),
-                });
-            }
-        }
-
-        dependencies
     }
 
     /// Build vulnerabilities from VulnerabilityReportView
@@ -335,7 +283,9 @@ impl CycloneDxFormatter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::read_models::{SeverityView, VulnerabilitySummary};
+    use crate::application::read_models::{
+        DependencyView, SbomMetadataView, SeverityView, VulnerabilitySummary,
+    };
     use std::collections::HashMap;
 
     fn create_test_read_model() -> SbomReadModel {
