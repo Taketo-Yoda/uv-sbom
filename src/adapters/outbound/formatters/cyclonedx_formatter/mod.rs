@@ -28,7 +28,7 @@ impl SbomFormatter for CycloneDxFormatter {
         let properties = model
             .license_compliance
             .as_ref()
-            .map(|lc| builders::property::from_license_compliance(lc));
+            .map(builders::property::from_license_compliance);
 
         let bom = Bom {
             bom_format: "CycloneDX".to_string(),

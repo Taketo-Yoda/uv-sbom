@@ -6,7 +6,7 @@ pub(in super::super) fn build_all(components: &[ComponentView]) -> Vec<Component
     components
         .iter()
         .map(|c| {
-            let licenses = c.license.as_ref().map(|l| build_license(l));
+            let licenses = c.license.as_ref().map(build_license);
             let hashes = c.sha256_hash.as_ref().map(|hash| {
                 vec![Hash {
                     alg: "SHA-256".to_string(),
