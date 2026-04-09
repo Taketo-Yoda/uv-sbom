@@ -2,10 +2,7 @@ mod builders;
 mod schema;
 use schema::*;
 
-use crate::application::read_models::{
-    ComponentView, LicenseComplianceView, LicenseView, ResolutionGuideView, SbomReadModel,
-    UpgradeEntryView, UpgradeRecommendationView, VulnerabilityReportView, VulnerabilityView,
-};
+use crate::application::read_models::SbomReadModel;
 use crate::ports::outbound::SbomFormatter;
 use crate::shared::Result;
 
@@ -31,7 +28,7 @@ impl SbomFormatter for CycloneDxFormatter {
         let properties = model
             .license_compliance
             .as_ref()
-            .map(|lc| self.build_license_compliance_properties(lc));
+            .map(builders::property::from_license_compliance);
 
         let bom = Bom {
             bom_format: "CycloneDX".to_string(),
@@ -39,10 +36,10 @@ impl SbomFormatter for CycloneDxFormatter {
             version: 1,
             serial_number: model.metadata.serial_number.clone(),
             metadata: builders::metadata::build(&model.metadata),
-            components: self.build_components(&model.components),
+            components: builders::component::build_all(&model.components),
             dependencies: model.dependencies.as_ref().map(builders::dependency::build),
             vulnerabilities: model.vulnerabilities.as_ref().map(|v| {
-                self.build_vulnerabilities(
+                builders::vulnerability::build_all(
                     v,
                     model.resolution_guide.as_ref(),
                     model.upgrade_recommendations.as_ref(),
@@ -55,236 +52,12 @@ impl SbomFormatter for CycloneDxFormatter {
     }
 }
 
-impl CycloneDxFormatter {
-    /// Build components from ComponentView slice
-    fn build_components(&self, components: &[ComponentView]) -> Vec<Component> {
-        components
-            .iter()
-            .map(|c| {
-                let licenses = c.license.as_ref().map(|l| self.build_license(l));
-                let hashes = c.sha256_hash.as_ref().map(|hash| {
-                    vec![Hash {
-                        alg: "SHA-256".to_string(),
-                        content: hash.clone(),
-                    }]
-                });
-                Component {
-                    component_type: "library".to_string(),
-                    bom_ref: c.bom_ref.clone(),
-                    group: "pypi".to_string(),
-                    name: c.name.clone(),
-                    version: c.version.clone(),
-                    description: c.description.clone(),
-                    hashes,
-                    licenses,
-                    purl: c.purl.clone(),
-                }
-            })
-            .collect()
-    }
-
-    /// Build license from LicenseView
-    ///
-    /// When a SPDX license ID is available, outputs `id` only (CycloneDX spec preference).
-    /// Falls back to `name` when no SPDX mapping exists.
-    fn build_license(&self, license: &LicenseView) -> Vec<License> {
-        vec![License {
-            license: if license.spdx_id.is_some() {
-                LicenseContent {
-                    id: license.spdx_id.clone(),
-                    name: None,
-                }
-            } else {
-                LicenseContent {
-                    id: None,
-                    name: Some(license.name.clone()),
-                }
-            },
-        }]
-    }
-
-    /// Build vulnerabilities from VulnerabilityReportView
-    fn build_vulnerabilities(
-        &self,
-        report: &VulnerabilityReportView,
-        resolution_guide: Option<&ResolutionGuideView>,
-        upgrade_recommendations: Option<&UpgradeRecommendationView>,
-    ) -> Vec<Vulnerability> {
-        let mut vulnerabilities = Vec::new();
-
-        // Process actionable vulnerabilities
-        for vuln in &report.actionable {
-            vulnerabilities.push(self.build_vulnerability(
-                vuln,
-                resolution_guide,
-                upgrade_recommendations,
-            ));
-        }
-
-        // Process informational vulnerabilities
-        for vuln in &report.informational {
-            vulnerabilities.push(self.build_vulnerability(
-                vuln,
-                resolution_guide,
-                upgrade_recommendations,
-            ));
-        }
-
-        vulnerabilities
-    }
-
-    /// Build a single vulnerability from VulnerabilityView
-    fn build_vulnerability(
-        &self,
-        vuln: &VulnerabilityView,
-        resolution_guide: Option<&ResolutionGuideView>,
-        upgrade_recommendations: Option<&UpgradeRecommendationView>,
-    ) -> Vulnerability {
-        let source = vuln
-            .source_url
-            .as_ref()
-            .map(|url| VulnerabilitySource { url: url.clone() });
-
-        let ratings = Some(vec![Rating {
-            score: vuln.cvss_score,
-            severity: vuln.severity.as_str().to_string(),
-            vector: vuln.cvss_vector.clone(),
-        }]);
-
-        let properties =
-            self.build_vulnerability_properties(vuln, resolution_guide, upgrade_recommendations);
-
-        Vulnerability {
-            bom_ref: vuln.bom_ref.clone(),
-            id: vuln.id.clone(),
-            description: vuln.description.clone(),
-            source,
-            ratings,
-            affects: vec![Affect {
-                bom_ref: vuln.affected_component.clone(),
-            }],
-            properties,
-        }
-    }
-
-    /// Build vulnerability properties from resolution guide and upgrade recommendations
-    fn build_vulnerability_properties(
-        &self,
-        vuln: &VulnerabilityView,
-        resolution_guide: Option<&ResolutionGuideView>,
-        upgrade_recommendations: Option<&UpgradeRecommendationView>,
-    ) -> Option<Vec<Property>> {
-        // Build introduced-by properties from resolution guide
-        let mut properties: Vec<Property> = resolution_guide
-            .and_then(|guide| {
-                let entry = guide.entries.iter().find(|e| {
-                    e.vulnerability_id == vuln.id
-                        && e.vulnerable_package == vuln.affected_component_name
-                });
-                entry.map(|e| {
-                    e.introduced_by
-                        .iter()
-                        .map(|ib| Property {
-                            name: "uv-sbom:introduced-by".to_string(),
-                            value: format!("{}@{}", ib.package_name, ib.version),
-                        })
-                        .collect::<Vec<_>>()
-                })
-            })
-            .unwrap_or_default();
-
-        // Append upgrade recommendation properties
-        if let Some(recommendations) = upgrade_recommendations {
-            for rec in &recommendations.entries {
-                match rec {
-                    UpgradeEntryView::Upgradable {
-                        direct_dep,
-                        target_version,
-                        transitive_dep,
-                        resolved_version,
-                        vulnerability_id,
-                        ..
-                    } if vulnerability_id == &vuln.id => {
-                        properties.push(Property {
-                            name: "uv-sbom:recommended-action".to_string(),
-                            value: format!("upgrade {} to {}", direct_dep, target_version),
-                        });
-                        properties.push(Property {
-                            name: "uv-sbom:resolved-version".to_string(),
-                            value: format!("{}@{}", transitive_dep, resolved_version),
-                        });
-                        break;
-                    }
-                    UpgradeEntryView::Unresolvable {
-                        reason,
-                        vulnerability_id,
-                        ..
-                    } if vulnerability_id == &vuln.id => {
-                        properties.push(Property {
-                            name: "uv-sbom:recommended-action".to_string(),
-                            value: format!("cannot resolve: {}", reason),
-                        });
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        if properties.is_empty() {
-            None
-        } else {
-            Some(properties)
-        }
-    }
-
-    /// Build BOM-level properties for license compliance info
-    fn build_license_compliance_properties(
-        &self,
-        compliance: &LicenseComplianceView,
-    ) -> Vec<Property> {
-        let mut props = Vec::new();
-
-        let status = if compliance.has_violations {
-            "FAIL"
-        } else {
-            "PASS"
-        };
-        props.push(Property {
-            name: "uv-sbom:license-compliance:status".to_string(),
-            value: status.to_string(),
-        });
-
-        props.push(Property {
-            name: "uv-sbom:license-compliance:violation-count".to_string(),
-            value: compliance.summary.violation_count.to_string(),
-        });
-
-        props.push(Property {
-            name: "uv-sbom:license-compliance:warning-count".to_string(),
-            value: compliance.summary.warning_count.to_string(),
-        });
-
-        for v in &compliance.violations {
-            let detail = format!(
-                "{}@{}: {} ({})",
-                v.package_name, v.package_version, v.license, v.reason,
-            );
-            props.push(Property {
-                name: "uv-sbom:license-compliance:violation".to_string(),
-                value: detail,
-            });
-        }
-
-        props
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::application::read_models::{
-        DependencyView, SbomMetadataView, SeverityView, VulnerabilitySummary,
+        ComponentView, DependencyView, LicenseView, SbomMetadataView, SeverityView,
+        VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
     };
     use std::collections::HashMap;
 
