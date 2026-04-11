@@ -11,6 +11,7 @@ pub mod progress_reporter;
 pub mod project_config_reader;
 pub mod uv_lock_simulator;
 pub mod vulnerability_repository;
+pub mod workspace_reader;
 
 pub use enriched_package::EnrichedPackage;
 pub use formatter::SbomFormatter;
@@ -25,3 +26,6 @@ pub use uv_lock_simulator::{SimulationResult, UvLockSimulator};
 // Note: This will be used in subsequent subtasks (Subtask 3-8)
 #[allow(unused_imports)]
 pub use vulnerability_repository::VulnerabilityRepository;
+// Note: Will be used in a subsequent subtask for workspace detection
+#[allow(unused_imports)]
+pub use workspace_reader::{WorkspaceMember, WorkspaceReader};
