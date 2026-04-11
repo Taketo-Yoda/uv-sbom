@@ -167,15 +167,24 @@ Flag only if the refactoring clearly applies to the changed code.
 
 ### 7. File Size and Complexity
 
-- **1000-line threshold (🟡 SHOULD FIX)**: If any modified file now exceeds 1000 lines
-  (excluding test blocks), propose a concrete refactoring — identify which
+- **1000-line threshold — implementation logic (🟡 SHOULD FIX)**: If any modified file
+  exceeds 1000 lines of non-test code, propose a concrete refactoring — identify which
   function/module to extract and the target location.
+
+- **File bloated by tests (🔴 MUST FIX)**: If a file is large primarily because of a
+  `#[cfg(test)]` block, flag as a MUST FIX violation: do NOT propose extracting to a
+  sibling `tests.rs`. That is an anti-pattern that physically separates tests from the
+  code they test. Recommended fix: split the implementation into sub-modules and add
+  `#[cfg(test)] mod tests { use super::*; ... }` at the bottom of each sub-module.
+  Retain only true integration-level tests in `mod.rs`.
+
 - **Function length**: Flag any function exceeding 30 lines that mixes concerns.
 - **Nesting depth**: Flag any block nested more than 4 levels deep.
 
 Known large files (monitor for growth):
 - src/adapters/outbound/formatters/markdown_formatter/mod.rs (~882 lines)
-- src/application/use_cases/generate_sbom/tests.rs (1,032 lines) — test file, exempt
+- src/application/read_models/sbom_read_model_builder/mod.rs (~845 lines)
+- src/application/use_cases/generate_sbom/mod.rs (~652 lines)
 
 ### 8. Documentation Comments
 
@@ -202,6 +211,13 @@ Test surface:
 Test code quality:
 - Are test helper functions or fixtures duplicated across test modules?
 - Do test names follow the pattern: test_<function>_<scenario>_<expected>?
+
+Test placement:
+- Are tests for a sub-module placed in the sub-module's own file with
+  `#[cfg(test)] mod tests { ... }`? (🟡 SHOULD FIX if missing)
+- Does a sibling `tests.rs` exist only to reduce line count in the parent module?
+  Flag as anti-pattern — split the module instead. (🟡 SHOULD FIX)
+- Exception: `tests/` at the crate root is correct for cross-module integration tests.
 
 ### 10. Security
 
