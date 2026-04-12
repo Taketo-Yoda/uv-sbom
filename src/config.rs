@@ -55,6 +55,9 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 
 # Suggest upgrade paths to fix vulnerable transitive dependencies (requires check_cve: true)
 # suggest_fix: false
+
+# Enable workspace mode: generate per-member SBOMs for uv workspaces (equivalent to --workspace flag)
+# workspace: false
 "#;
 
 /// Generate a config template file in the specified directory.
