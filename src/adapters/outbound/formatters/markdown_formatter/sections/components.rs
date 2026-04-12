@@ -38,3 +38,135 @@ pub(in super::super) fn render(
     }
     output.push('\n');
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::read_models::LicenseView;
+    use crate::i18n::{Locale, Messages};
+
+    fn make_component(
+        name: &str,
+        version: &str,
+        spdx_id: Option<&str>,
+        license_name: &str,
+        description: Option<&str>,
+    ) -> ComponentView {
+        ComponentView {
+            bom_ref: format!("pkg:pypi/{}@{}", name, version),
+            name: name.to_string(),
+            version: version.to_string(),
+            purl: format!("pkg:pypi/{}@{}", name, version),
+            license: Some(LicenseView {
+                spdx_id: spdx_id.map(|s| s.to_string()),
+                name: license_name.to_string(),
+                url: None,
+            }),
+            description: description.map(|s| s.to_string()),
+            sha256_hash: None,
+            is_direct_dependency: true,
+        }
+    }
+
+    // ============================================================
+    // License fallback logic
+    // ============================================================
+
+    #[test]
+    fn test_license_spdx_id_is_used_when_present() {
+        let msgs = Messages::for_locale(Locale::En);
+        let component = make_component(
+            "requests",
+            "2.31.0",
+            Some("Apache-2.0"),
+            "Apache License 2.0",
+            None,
+        );
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[component]);
+        assert!(output.contains("Apache-2.0"));
+        assert!(!output.contains("Apache License 2.0"));
+    }
+
+    #[test]
+    fn test_license_name_fallback_when_spdx_id_is_none() {
+        let msgs = Messages::for_locale(Locale::En);
+        let component = make_component("requests", "2.31.0", None, "Apache License 2.0", None);
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[component]);
+        assert!(output.contains("Apache License 2.0"));
+    }
+
+    #[test]
+    fn test_license_na_fallback_when_license_is_none() {
+        let msgs = Messages::for_locale(Locale::En);
+        let component = ComponentView {
+            bom_ref: "pkg:pypi/no-license@1.0.0".to_string(),
+            name: "no-license".to_string(),
+            version: "1.0.0".to_string(),
+            purl: "pkg:pypi/no-license@1.0.0".to_string(),
+            license: None,
+            description: None,
+            sha256_hash: None,
+            is_direct_dependency: true,
+        };
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[component]);
+        assert!(output.contains("N/A"));
+    }
+
+    // ============================================================
+    // i18n column headers
+    // ============================================================
+
+    #[test]
+    fn test_en_locale_column_headers() {
+        let msgs = Messages::for_locale(Locale::En);
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[]);
+        assert!(output.contains("| Package | Version | License | Description |"));
+    }
+
+    #[test]
+    fn test_ja_locale_column_headers() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[]);
+        assert!(output.contains("| パッケージ | バージョン | ライセンス | 説明 |"));
+    }
+
+    // ============================================================
+    // Verified packages (link vs plain text)
+    // ============================================================
+
+    #[test]
+    fn test_verified_package_renders_pypi_link() {
+        let msgs = Messages::for_locale(Locale::En);
+        let component = make_component("requests", "2.31.0", Some("MIT"), "MIT License", None);
+        let mut verified = HashSet::new();
+        verified.insert("requests".to_string());
+        let mut output = String::new();
+        render(msgs, Some(&verified), &mut output, &[component]);
+        assert!(output.contains("[requests](https://pypi.org/project/requests/)"));
+    }
+
+    #[test]
+    fn test_unverified_package_renders_plain_text() {
+        let msgs = Messages::for_locale(Locale::En);
+        let component = make_component("requests", "2.31.0", Some("MIT"), "MIT License", None);
+        let verified = HashSet::new();
+        let mut output = String::new();
+        render(msgs, Some(&verified), &mut output, &[component]);
+        assert!(!output.contains("[requests](https://pypi.org/project/requests/)"));
+        assert!(output.contains("| requests |"));
+    }
+
+    #[test]
+    fn test_no_verification_always_renders_pypi_link() {
+        let msgs = Messages::for_locale(Locale::En);
+        let component = make_component("requests", "2.31.0", Some("MIT"), "MIT License", None);
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[component]);
+        assert!(output.contains("[requests](https://pypi.org/project/requests/)"));
+    }
+}
