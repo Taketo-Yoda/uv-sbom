@@ -9,6 +9,7 @@ mod shared;
 use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::FileSystemReader;
 use adapters::outbound::network::{CachingPyPiLicenseRepository, OsvClient, PyPiLicenseRepository};
+use adapters::outbound::uv::UvWorkspaceReader;
 use application::dto::{OutputFormat, SbomRequest};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::read_models::SbomReadModelBuilder;
@@ -18,12 +19,53 @@ use cli::config_resolver::{load_config, merge_config};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::Args;
 use i18n::Messages;
-use ports::outbound::ProjectConfigReader;
+use ports::outbound::{LockfileParseResult, LockfileReader, ProjectConfigReader, WorkspaceReader};
 use shared::error::ExitCode;
 use shared::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 use uv_sbom::config;
+
+/// A LockfileReader adapter that reads the workspace-root uv.lock but returns
+/// only packages reachable from the specified workspace member.
+///
+/// This adapter is used in workspace mode to scope the SBOM generation to a
+/// single workspace member, delegating to `read_and_parse_lockfile_for_member`.
+struct MemberScopedLockfileReader {
+    inner: FileSystemReader,
+    workspace_root: PathBuf,
+    member_name: String,
+}
+
+impl MemberScopedLockfileReader {
+    fn new(workspace_root: PathBuf, member_name: String) -> Self {
+        Self {
+            inner: FileSystemReader::new(),
+            workspace_root,
+            member_name,
+        }
+    }
+}
+
+impl LockfileReader for MemberScopedLockfileReader {
+    fn read_lockfile(&self, _project_path: &Path) -> Result<String> {
+        self.inner.read_lockfile(&self.workspace_root)
+    }
+
+    fn read_and_parse_lockfile(&self, _project_path: &Path) -> Result<LockfileParseResult> {
+        self.inner
+            .read_and_parse_lockfile_for_member(&self.workspace_root, &self.member_name)
+    }
+
+    fn read_and_parse_lockfile_for_member(
+        &self,
+        _project_path: &Path,
+        member_name: &str,
+    ) -> Result<LockfileParseResult> {
+        self.inner
+            .read_and_parse_lockfile_for_member(&self.workspace_root, member_name)
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -43,6 +85,25 @@ async fn main() {
             process::exit(exit_code.as_i32());
         }
     };
+
+    // Handle --workspace mode before normal flow
+    if args.workspace {
+        let workspace_root = PathBuf::from(args.path.as_deref().unwrap_or("."));
+        match run_workspace(args, workspace_root).await {
+            Ok(()) => process::exit(ExitCode::Success.as_i32()),
+            Err(e) => {
+                eprintln!("\n❌ An error occurred:\n");
+                eprintln!("{}", e);
+                let mut source = e.source();
+                while let Some(err) = source {
+                    eprintln!("\nCaused by: {}", err);
+                    source = err.source();
+                }
+                eprintln!();
+                process::exit(ExitCode::ApplicationError.as_i32());
+            }
+        }
+    }
 
     // Handle --init before normal flow
     if args.init {
@@ -263,4 +324,109 @@ async fn run(args: Args) -> Result<bool> {
         response.has_vulnerabilities_above_threshold || response.has_license_violations;
 
     Ok(has_issues)
+}
+
+/// Runs workspace mode: generates one SBOM per workspace member.
+///
+/// Reads `[manifest].members` from `workspace_root/uv.lock`, then for each
+/// member runs `GenerateSbomUseCase` scoped to that member and writes the
+/// output to `{member_path}/sbom.{ext}`. Prints a summary table when done.
+async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
+    display_banner();
+
+    validate_project_path(&workspace_root)?;
+
+    let workspace_reader = UvWorkspaceReader::new();
+    let members = workspace_reader.read_workspace_members(&workspace_root)?;
+
+    if members.is_empty() {
+        anyhow::bail!("No workspace members found. Is this a uv workspace?");
+    }
+
+    eprintln!("Workspace mode: {} members found\n", members.len());
+
+    let locale = args.lang;
+    let config = load_config(&args, &workspace_root)?;
+    let merged = merge_config(&args, &config);
+
+    let format_ext = match merged.format {
+        OutputFormat::Json => "json",
+        OutputFormat::Markdown => "md",
+    };
+
+    let mut summary: Vec<(String, PathBuf)> = Vec::new();
+
+    for member in &members {
+        eprintln!("  Processing: {}", member.name);
+
+        let lockfile_reader =
+            MemberScopedLockfileReader::new(workspace_root.clone(), member.name.clone());
+        let project_config_reader = FileSystemReader::new();
+        let pypi_repository = PyPiLicenseRepository::new()?;
+        let license_repository = CachingPyPiLicenseRepository::new(pypi_repository);
+        let progress_reporter = StderrProgressReporter::new(locale);
+
+        let vulnerability_repository = if merged.check_cve {
+            Some(OsvClient::new()?)
+        } else {
+            None
+        };
+
+        let use_case = GenerateSbomUseCase::new(
+            lockfile_reader,
+            project_config_reader,
+            license_repository,
+            progress_reporter,
+            vulnerability_repository,
+            locale,
+        );
+
+        let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
+        let request = SbomRequest::builder()
+            .project_path(member.absolute_path.clone())
+            .include_dependency_info(include_dependency_info)
+            .exclude_patterns(merged.exclude_patterns.clone())
+            .check_cve(merged.check_cve)
+            .severity_threshold_opt(merged.severity_threshold)
+            .cvss_threshold_opt(merged.cvss_threshold)
+            .ignore_cves(merged.ignore_cves.clone())
+            .check_license(merged.check_license)
+            .license_policy(merged.license_policy.clone())
+            .suggest_fix(false)
+            .locale(locale)
+            .build()?;
+
+        let response = use_case.execute(request).await?;
+
+        let read_model = SbomReadModelBuilder::build_with_project(
+            response.enriched_packages,
+            &response.metadata,
+            response.dependency_graph.as_ref(),
+            response.vulnerability_check_result.as_ref(),
+            response.license_compliance_result.as_ref(),
+            None,
+            response.upgrade_recommendations.as_deref(),
+        );
+
+        let formatter = FormatterFactory::create(merged.format, None, locale);
+        let formatted_output = formatter.format(&read_model)?;
+
+        let output_path = member.absolute_path.join(format!("sbom.{}", format_ext));
+        let presenter = PresenterFactory::create(PresenterType::File(output_path.clone()));
+        presenter.present(&formatted_output)?;
+
+        summary.push((member.name.clone(), output_path));
+    }
+
+    // Print summary table
+    eprintln!("\n📦 Workspace SBOM Summary");
+    eprintln!("{}", "─".repeat(60));
+    eprintln!("{:<20} Output File", "Member");
+    eprintln!("{}", "─".repeat(60));
+    for (name, path) in &summary {
+        eprintln!("{:<20} {}", name, path.display());
+    }
+    eprintln!("{}", "─".repeat(60));
+
+    Ok(())
 }
