@@ -3,7 +3,7 @@ use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
 use crate::shared::security::{read_file_with_security, MAX_FILE_SIZE};
 use crate::shared::Result;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 
 /// FileSystemReader adapter for reading files from the file system
@@ -39,6 +39,15 @@ impl FileSystemReader {
 }
 
 impl LockfileReader for FileSystemReader {
+    fn read_and_parse_lockfile_for_member(
+        &self,
+        project_path: &Path,
+        member_name: &str,
+    ) -> Result<LockfileParseResult> {
+        let lockfile_content = self.read_lockfile(project_path)?;
+        self.parse_lockfile_content_for_member(&lockfile_content, project_path, member_name)
+    }
+
     fn read_lockfile(&self, project_path: &Path) -> Result<String> {
         let lockfile_path = project_path.join("uv.lock");
 
@@ -139,6 +148,132 @@ impl FileSystemReader {
 
         Ok((packages, dependency_map))
     }
+
+    /// Parse lockfile content and return only packages reachable from the given member.
+    ///
+    /// Identifies the member root package by matching `name == member_name` with
+    /// `source.editable` set, then performs BFS over the dependency graph to collect
+    /// all transitively reachable packages. The member root itself is excluded.
+    #[allow(dead_code)]
+    fn parse_lockfile_content_for_member(
+        &self,
+        content: &str,
+        project_path: &Path,
+        member_name: &str,
+    ) -> Result<LockfileParseResult> {
+        use serde::Deserialize;
+
+        #[derive(Debug, Deserialize)]
+        struct PackageSource {
+            editable: Option<String>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct UvPackage {
+            name: String,
+            version: String,
+            #[serde(default)]
+            dependencies: Vec<UvDependency>,
+            #[serde(default, rename = "dev-dependencies")]
+            dev_dependencies: Option<DevDependencies>,
+            source: Option<PackageSource>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct UvDependency {
+            name: String,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct DevDependencies {
+            #[serde(default)]
+            dev: Vec<UvDependency>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct UvLock {
+            package: Vec<UvPackage>,
+        }
+
+        let lockfile: UvLock =
+            toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
+                path: project_path.join("uv.lock"),
+                details: e.to_string(),
+            })?;
+
+        // Build dependency map (name -> list of dependency names) and package lookup
+        let mut full_dep_map: HashMap<String, Vec<String>> = HashMap::new();
+        let mut pkg_lookup: HashMap<String, (String, String)> = HashMap::new(); // name -> (name, version)
+        let mut member_direct_deps: Option<Vec<String>> = None;
+
+        for pkg in &lockfile.package {
+            let mut deps: Vec<String> = pkg.dependencies.iter().map(|d| d.name.clone()).collect();
+            if let Some(dev_deps) = &pkg.dev_dependencies {
+                for dep in &dev_deps.dev {
+                    deps.push(dep.name.clone());
+                }
+            }
+
+            // Detect member root: name matches AND source.editable is set
+            let is_member_root = pkg.name == member_name
+                && pkg
+                    .source
+                    .as_ref()
+                    .and_then(|s| s.editable.as_ref())
+                    .is_some();
+
+            if is_member_root {
+                member_direct_deps = Some(deps.clone());
+            }
+
+            full_dep_map.insert(pkg.name.clone(), deps);
+            pkg_lookup.insert(pkg.name.clone(), (pkg.name.clone(), pkg.version.clone()));
+        }
+
+        let direct_deps = member_direct_deps.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Workspace member '{}' not found in uv.lock (no package with source.editable set)",
+                member_name
+            )
+        })?;
+
+        // BFS traversal from direct dependencies of the member root
+        let mut visited: HashSet<String> = HashSet::new();
+        let mut queue: VecDeque<String> = VecDeque::new();
+
+        for dep in direct_deps {
+            if !visited.contains(&dep) {
+                visited.insert(dep.clone());
+                queue.push_back(dep);
+            }
+        }
+
+        while let Some(current) = queue.pop_front() {
+            if let Some(deps) = full_dep_map.get(&current) {
+                for dep in deps {
+                    if !visited.contains(dep) {
+                        visited.insert(dep.clone());
+                        queue.push_back(dep.clone());
+                    }
+                }
+            }
+        }
+
+        // Build result from visited set (excluding member root itself)
+        let mut packages = Vec::new();
+        let mut dependency_map = HashMap::new();
+
+        for name in &visited {
+            if let Some((pkg_name, pkg_version)) = pkg_lookup.get(name) {
+                packages.push(Package::new(pkg_name.clone(), pkg_version.clone())?);
+                if let Some(deps) = full_dep_map.get(name) {
+                    dependency_map.insert(pkg_name.clone(), deps.clone());
+                }
+            }
+        }
+
+        Ok((packages, dependency_map))
+    }
 }
 
 impl ProjectConfigReader for FileSystemReader {
@@ -168,7 +303,9 @@ impl ProjectConfigReader for FileSystemReader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     #[test]
@@ -260,5 +397,176 @@ version = "1.0.0"
         assert!(result.is_err());
         let err_string = format!("{}", result.unwrap_err());
         assert!(err_string.contains("Project name not found"));
+    }
+
+    // Workspace lock fixture used by member-scoped filtering tests.
+    //
+    // Dependency graph:
+    //   alpha (editable) -> requests, certifi
+    //   beta  (editable) -> urllib3
+    //   requests         -> urllib3
+    //   urllib3          -> (none)
+    //   certifi          -> (none)
+    //   shared-lib       -> certifi
+    const WORKSPACE_LOCK_FOR_MEMBER: &str = r#"
+version = 1
+requires-python = ">=3.11"
+
+[manifest]
+members = [
+    "packages/alpha",
+    "packages/beta",
+]
+
+[[package]]
+name = "alpha"
+version = "0.1.0"
+source = { editable = "packages/alpha" }
+dependencies = [
+  { name = "certifi" },
+  { name = "requests" },
+]
+
+[[package]]
+name = "beta"
+version = "0.2.0"
+source = { editable = "packages/beta" }
+dependencies = [
+  { name = "urllib3" },
+]
+
+[[package]]
+name = "certifi"
+version = "2024.1.1"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+  { name = "urllib3" },
+]
+
+[[package]]
+name = "shared-lib"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+  { name = "certifi" },
+]
+
+[[package]]
+name = "urllib3"
+version = "2.0.7"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_lockfile_for_member_returns_correct_subtree_for_alpha() {
+        let reader = FileSystemReader::new();
+        let (packages, dep_map) = reader
+            .parse_lockfile_content_for_member(
+                WORKSPACE_LOCK_FOR_MEMBER,
+                Path::new("/workspace"),
+                "alpha",
+            )
+            .unwrap();
+
+        let names: HashSet<String> = packages.iter().map(|p| p.name().to_string()).collect();
+
+        // alpha itself must NOT appear
+        assert!(!names.contains("alpha"), "member root must be excluded");
+        // beta is not reachable from alpha
+        assert!(!names.contains("beta"), "sibling member must be excluded");
+        // shared-lib is not reachable from alpha
+        assert!(
+            !names.contains("shared-lib"),
+            "unreachable package must be excluded"
+        );
+
+        // alpha -> requests -> urllib3, alpha -> certifi
+        assert!(names.contains("requests"));
+        assert!(names.contains("urllib3"));
+        assert!(names.contains("certifi"));
+
+        // dependency_map must contain entries for all returned packages
+        assert!(dep_map.contains_key("requests"));
+        assert!(dep_map.contains_key("urllib3"));
+        assert!(dep_map.contains_key("certifi"));
+    }
+
+    #[test]
+    fn test_parse_lockfile_for_member_returns_correct_subtree_for_beta() {
+        let reader = FileSystemReader::new();
+        let (packages, _dep_map) = reader
+            .parse_lockfile_content_for_member(
+                WORKSPACE_LOCK_FOR_MEMBER,
+                Path::new("/workspace"),
+                "beta",
+            )
+            .unwrap();
+
+        let names: HashSet<String> = packages.iter().map(|p| p.name().to_string()).collect();
+
+        assert!(!names.contains("beta"), "member root must be excluded");
+        assert!(!names.contains("alpha"), "sibling member must be excluded");
+        assert!(!names.contains("requests"), "unreachable from beta");
+        assert!(!names.contains("certifi"), "unreachable from beta");
+        assert!(!names.contains("shared-lib"), "unreachable from beta");
+
+        assert!(names.contains("urllib3"));
+    }
+
+    #[test]
+    fn test_parse_lockfile_for_member_member_root_excluded() {
+        let reader = FileSystemReader::new();
+        let (packages, _) = reader
+            .parse_lockfile_content_for_member(
+                WORKSPACE_LOCK_FOR_MEMBER,
+                Path::new("/workspace"),
+                "alpha",
+            )
+            .unwrap();
+
+        let names: Vec<String> = packages.iter().map(|p| p.name().to_string()).collect();
+        assert!(
+            !names.contains(&"alpha".to_string()),
+            "member root must not appear in result"
+        );
+    }
+
+    #[test]
+    fn test_parse_lockfile_for_member_nonexistent_member_returns_error() {
+        let reader = FileSystemReader::new();
+        let result = reader.parse_lockfile_content_for_member(
+            WORKSPACE_LOCK_FOR_MEMBER,
+            Path::new("/workspace"),
+            "nonexistent-member",
+        );
+
+        assert!(result.is_err());
+        let err_string = result.unwrap_err().to_string();
+        assert!(
+            err_string.contains("nonexistent-member"),
+            "error must mention the missing member name"
+        );
+    }
+
+    #[test]
+    fn test_read_and_parse_lockfile_for_member_reads_from_file() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("uv.lock"), WORKSPACE_LOCK_FOR_MEMBER).unwrap();
+
+        let reader = FileSystemReader::new();
+        let (packages, _) = reader
+            .read_and_parse_lockfile_for_member(temp_dir.path(), "alpha")
+            .unwrap();
+
+        let names: HashSet<String> = packages.iter().map(|p| p.name().to_string()).collect();
+        assert!(names.contains("requests"));
+        assert!(names.contains("urllib3"));
+        assert!(names.contains("certifi"));
+        assert!(!names.contains("alpha"));
     }
 }
