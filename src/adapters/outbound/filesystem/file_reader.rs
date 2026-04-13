@@ -151,9 +151,11 @@ impl FileSystemReader {
 
     /// Parse lockfile content and return only packages reachable from the given member.
     ///
-    /// Identifies the member root package by matching `name == member_name` with
-    /// `source.editable` set, then performs BFS over the dependency graph to collect
-    /// all transitively reachable packages. The member root itself is excluded.
+    /// Identifies the member root package by matching `name == member_name` with either
+    /// `source.editable` or `source.virtual` set (uv < 0.5 uses `editable`; uv >= 0.5
+    /// uses `virtual` for packages without a build system), then performs BFS over the
+    /// dependency graph to collect all transitively reachable packages. The member root
+    /// itself is excluded.
     #[allow(dead_code)]
     fn parse_lockfile_content_for_member(
         &self,
@@ -166,6 +168,14 @@ impl FileSystemReader {
         #[derive(Debug, Deserialize)]
         struct PackageSource {
             editable: Option<String>,
+            #[serde(rename = "virtual")]
+            virtual_path: Option<String>,
+        }
+
+        impl PackageSource {
+            fn is_local(&self) -> bool {
+                self.editable.is_some() || self.virtual_path.is_some()
+            }
         }
 
         #[derive(Debug, Deserialize)]
@@ -214,13 +224,10 @@ impl FileSystemReader {
                 }
             }
 
-            // Detect member root: name matches AND source.editable is set
+            // Detect member root: name matches AND source is a local path
+            // (editable for uv < 0.5, virtual for uv >= 0.5)
             let is_member_root = pkg.name == member_name
-                && pkg
-                    .source
-                    .as_ref()
-                    .and_then(|s| s.editable.as_ref())
-                    .is_some();
+                && pkg.source.as_ref().map(|s| s.is_local()).unwrap_or(false);
 
             if is_member_root {
                 member_direct_deps = Some(deps.clone());
@@ -232,7 +239,7 @@ impl FileSystemReader {
 
         let direct_deps = member_direct_deps.ok_or_else(|| {
             anyhow::anyhow!(
-                "Workspace member '{}' not found in uv.lock (no package with source.editable set)",
+                "Workspace member '{}' not found in uv.lock (no package with source.editable or source.virtual set)",
                 member_name
             )
         })?;
@@ -568,5 +575,94 @@ source = { registry = "https://pypi.org/simple" }
         assert!(names.contains("urllib3"));
         assert!(names.contains("certifi"));
         assert!(!names.contains("alpha"));
+    }
+
+    // uv >= 0.5 workspace lock fixture using `source.virtual` instead of `source.editable`.
+    //
+    // Dependency graph:
+    //   api    (virtual at packages/api)    -> requests, fastapi
+    //   worker (virtual at packages/worker) -> celery
+    const WORKSPACE_LOCK_VIRTUAL_FORMAT: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = [
+    "api",
+    "worker",
+]
+
+[[package]]
+name = "api"
+version = "0.1.0"
+source = { virtual = "packages/api" }
+dependencies = [
+  { name = "fastapi" },
+  { name = "requests" },
+]
+
+[[package]]
+name = "celery"
+version = "5.4.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "fastapi"
+version = "0.115.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.32.3"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "worker"
+version = "0.1.0"
+source = { virtual = "packages/worker" }
+dependencies = [
+  { name = "celery" },
+]
+"#;
+
+    #[test]
+    fn test_parse_lockfile_for_member_handles_virtual_source_for_api() {
+        let reader = FileSystemReader::new();
+        let (packages, _) = reader
+            .parse_lockfile_content_for_member(
+                WORKSPACE_LOCK_VIRTUAL_FORMAT,
+                Path::new("/workspace"),
+                "api",
+            )
+            .unwrap();
+
+        let names: HashSet<String> = packages.iter().map(|p| p.name().to_string()).collect();
+
+        assert!(!names.contains("api"), "member root must be excluded");
+        assert!(!names.contains("worker"), "sibling member must be excluded");
+        assert!(names.contains("requests"));
+        assert!(names.contains("fastapi"));
+        assert!(!names.contains("celery"), "unreachable from api");
+    }
+
+    #[test]
+    fn test_parse_lockfile_for_member_handles_virtual_source_for_worker() {
+        let reader = FileSystemReader::new();
+        let (packages, _) = reader
+            .parse_lockfile_content_for_member(
+                WORKSPACE_LOCK_VIRTUAL_FORMAT,
+                Path::new("/workspace"),
+                "worker",
+            )
+            .unwrap();
+
+        let names: HashSet<String> = packages.iter().map(|p| p.name().to_string()).collect();
+
+        assert!(!names.contains("worker"), "member root must be excluded");
+        assert!(!names.contains("api"), "sibling member must be excluded");
+        assert!(names.contains("celery"));
+        assert!(!names.contains("requests"), "unreachable from worker");
+        assert!(!names.contains("fastapi"), "unreachable from worker");
     }
 }

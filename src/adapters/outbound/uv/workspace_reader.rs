@@ -42,6 +42,16 @@ impl UvWorkspaceReader {
         #[derive(Deserialize)]
         struct PackageSource {
             editable: Option<String>,
+            #[serde(rename = "virtual")]
+            virtual_path: Option<String>,
+        }
+
+        impl PackageSource {
+            /// Returns the local path recorded in this source entry, regardless of whether
+            /// it is an `editable` install or a `virtual` (no-build-system) package.
+            fn local_path(&self) -> Option<&str> {
+                self.editable.as_deref().or(self.virtual_path.as_deref())
+            }
         }
 
         #[derive(Deserialize)]
@@ -59,39 +69,60 @@ impl UvWorkspaceReader {
 
         let lock: UvLock = toml::from_str(content).context("Failed to parse uv.lock")?;
 
-        let member_paths = match lock.manifest.and_then(|m| m.members) {
-            Some(paths) if !paths.is_empty() => paths,
+        let member_ids = match lock.manifest.and_then(|m| m.members) {
+            Some(ids) if !ids.is_empty() => ids,
             _ => return Ok(vec![]),
         };
 
-        let members = member_paths
+        let members = member_ids
             .into_iter()
-            .map(|relative_path| {
-                // Find the matching [[package]] entry where source.editable == relative_path
-                let name = lock
-                    .package
-                    .iter()
-                    .find(|p| {
-                        p.source
-                            .as_ref()
-                            .and_then(|s| s.editable.as_deref())
-                            .map(|e| e == relative_path)
-                            .unwrap_or(false)
-                    })
-                    .map(|p| p.name.clone())
-                    .unwrap_or_else(|| {
-                        // Fallback: derive name from the last path component
-                        PathBuf::from(&relative_path)
-                            .file_name()
-                            .map(|n| n.to_string_lossy().into_owned())
-                            .unwrap_or_else(|| relative_path.clone())
-                    });
+            .map(|member_id| {
+                // Strategy 1 (old uv format): member_id is a relative path such as
+                // "packages/alpha". Look for a package whose source.editable or
+                // source.virtual matches that path exactly.
+                if let Some(pkg) = lock.package.iter().find(|p| {
+                    p.source
+                        .as_ref()
+                        .and_then(|s| s.local_path())
+                        .map(|path| path == member_id)
+                        .unwrap_or(false)
+                }) {
+                    let absolute_path = workspace_root.join(&member_id);
+                    return WorkspaceMember {
+                        name: pkg.name.clone(),
+                        relative_path: member_id,
+                        absolute_path,
+                    };
+                }
 
-                let absolute_path = workspace_root.join(&relative_path);
+                // Strategy 2 (new uv format ≥ 0.5): member_id is the package *name*
+                // such as "api". Look for a package whose name matches and derive the
+                // relative path from its source.editable / source.virtual field.
+                if let Some(pkg) = lock.package.iter().find(|p| p.name == member_id) {
+                    let relative_path = pkg
+                        .source
+                        .as_ref()
+                        .and_then(|s| s.local_path())
+                        .map(|p| p.to_owned())
+                        .unwrap_or_else(|| member_id.clone());
+                    let absolute_path = workspace_root.join(&relative_path);
+                    return WorkspaceMember {
+                        name: pkg.name.clone(),
+                        relative_path,
+                        absolute_path,
+                    };
+                }
 
+                // Fallback: treat member_id as a relative path and derive name from
+                // its last path component.
+                let name = PathBuf::from(&member_id)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| member_id.clone());
+                let absolute_path = workspace_root.join(&member_id);
                 WorkspaceMember {
                     name,
-                    relative_path,
+                    relative_path: member_id,
                     absolute_path,
                 }
             })
@@ -289,5 +320,67 @@ source = { registry = "https://pypi.org/simple" }
         assert_eq!(members.len(), 2);
         assert!(members.iter().any(|m| m.name == "alpha"));
         assert!(members.iter().any(|m| m.name == "beta"));
+    }
+
+    /// uv >= 0.5 generates `[manifest].members` as package *names* (e.g. "api")
+    /// instead of relative paths (e.g. "packages/api"). The package source uses
+    /// `virtual = "packages/api"` instead of `editable = "packages/api"`.
+    /// This test verifies that Strategy 2 correctly resolves the absolute path
+    /// from the `virtual` source field.
+    #[test]
+    fn test_parse_members_handles_new_uv_format_with_name_ids_and_virtual_source() {
+        let content = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = [
+    "api",
+    "worker",
+]
+
+[[package]]
+name = "api"
+version = "0.1.0"
+source = { virtual = "packages/api" }
+
+[[package]]
+name = "worker"
+version = "0.1.0"
+source = { virtual = "packages/worker" }
+
+[[package]]
+name = "requests"
+version = "2.32.3"
+source = { registry = "https://pypi.org/simple" }
+"#;
+        let root = Path::new("/workspace");
+        let members = UvWorkspaceReader::parse_members(content, root).unwrap();
+
+        assert_eq!(members.len(), 2);
+
+        let api = members.iter().find(|m| m.name == "api").unwrap();
+        assert_eq!(api.relative_path, "packages/api");
+        assert_eq!(api.absolute_path, root.join("packages/api"));
+
+        let worker = members.iter().find(|m| m.name == "worker").unwrap();
+        assert_eq!(worker.relative_path, "packages/worker");
+        assert_eq!(worker.absolute_path, root.join("packages/worker"));
+    }
+
+    #[test]
+    fn test_parse_members_handles_old_uv_format_with_path_ids_and_editable_source() {
+        let root = Path::new("/workspace");
+        let members = UvWorkspaceReader::parse_members(WORKSPACE_LOCK, root).unwrap();
+
+        assert_eq!(members.len(), 2);
+
+        let alpha = members
+            .iter()
+            .find(|m| m.relative_path == "packages/alpha")
+            .unwrap();
+        assert_eq!(alpha.name, "alpha");
+        assert_eq!(alpha.absolute_path, root.join("packages/alpha"));
     }
 }
