@@ -603,6 +603,60 @@ No security vulnerabilities were found in the scanned packages.
 *Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
 ```
 
+### uv Workspace Support
+
+[uv workspaces](https://docs.astral.sh/uv/concepts/projects/workspaces/) let you manage multiple Python
+packages in a single repository with a shared `uv.lock` file. `uv-sbom --workspace` generates a separate
+SBOM for each member package, reflecting only the dependencies reachable from that member.
+
+**When to use:**
+- Your repository contains multiple Python packages (e.g., `api/`, `worker/`)
+- You need per-member SBOMs for independent security scanning or compliance reporting
+
+**Usage:**
+
+```bash
+# Generate one SBOM per workspace member (CycloneDX JSON, default)
+uv-sbom --workspace --path /path/to/workspace
+```
+
+**Expected output:**
+
+```
+Workspace mode: 2 members found
+
+  Processing: api
+  ...
+  Processing: worker
+  ...
+
+📦 Workspace SBOM Summary
+────────────────────────────────────────────────────────────
+Member               Output File
+────────────────────────────────────────────────────────────
+api                  /path/to/workspace/packages/api/sbom.json
+worker               /path/to/workspace/packages/worker/sbom.json
+────────────────────────────────────────────────────────────
+```
+
+Each member gets its own `sbom.json` containing only the packages reachable from that member.
+Transitive dependencies are included, but packages belonging to other members are excluded.
+
+**With other options:**
+
+```bash
+# Markdown output for all members
+uv-sbom --workspace --path examples/workspace --format markdown
+
+# With CVE check
+uv-sbom --workspace --path examples/workspace --check-cve
+```
+
+> **Note:** `--workspace` and `--output` are mutually exclusive. In workspace mode, each member's SBOM is
+> automatically written to `sbom.json` (or `sbom.md` for Markdown) inside the member's own directory.
+
+See [`examples/workspace/`](examples/workspace/) for a runnable demo with two member packages (`api` and `worker`).
+
 ### Validating configuration with dry-run
 
 Use the `--dry-run` option to validate your configuration before the tool communicates with external registries:
@@ -700,6 +754,8 @@ Options:
                                      Cannot be used with --no-check-cve
       --suggest-fix                  Suggest direct dependency upgrade versions to resolve transitive vulnerabilities
                                      Requires uv CLI installed and pyproject.toml in project directory
+      --workspace                    Generate one SBOM per workspace member
+                                     Cannot be used with --output
       --check-license                Check license compliance against policy
       --license-allow <LIST>         Comma-separated list of allowed license patterns (overrides config)
       --license-deny <LIST>          Comma-separated list of denied license patterns (overrides config)
