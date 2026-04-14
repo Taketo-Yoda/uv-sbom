@@ -604,7 +604,7 @@ No security vulnerabilities were found in the scanned packages.
 
 [uv ワークスペース](https://docs.astral.sh/uv/concepts/projects/workspaces/)を使うと、共通の `uv.lock` ファイルを持つ複数の Python パッケージをひとつのリポジトリで管理できます。`uv-sbom --workspace` は各メンバーパッケージごとに個別の SBOM を生成し、そのメンバーから到達可能な依存関係のみを反映します。
 
-**こんなときに使う:**
+**ユースケース:**
 - リポジトリに複数の Python パッケージ（例: `api/`、`worker/`）が含まれている
 - セキュリティスキャンやコンプライアンス対応のためにメンバーごとの SBOM が必要
 
@@ -642,8 +642,8 @@ worker               /path/to/workspace/packages/worker/sbom.json
 # 全メンバーを Markdown 形式で出力
 uv-sbom --workspace --path examples/workspace --format markdown
 
-# CVE チェックを追加
-uv-sbom --workspace --path examples/workspace --check-cve
+# ライセンスコンプライアンスチェックを追加
+uv-sbom --workspace --path examples/workspace --check-license
 ```
 
 > **注意:** `--workspace` と `--output` は同時に使用できません。ワークスペースモードでは、各メンバーの SBOM は自動的にメンバー自身のディレクトリ内の `sbom.json`（Markdown の場合は `sbom.md`）に書き込まれます。
