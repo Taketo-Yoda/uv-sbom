@@ -600,6 +600,56 @@ No security vulnerabilities were found in the scanned packages.
 *Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
 ```
 
+### uv ワークスペースサポート
+
+[uv ワークスペース](https://docs.astral.sh/uv/concepts/projects/workspaces/)を使うと、共通の `uv.lock` ファイルを持つ複数の Python パッケージをひとつのリポジトリで管理できます。`uv-sbom --workspace` は各メンバーパッケージごとに個別の SBOM を生成し、そのメンバーから到達可能な依存関係のみを反映します。
+
+**こんなときに使う:**
+- リポジトリに複数の Python パッケージ（例: `api/`、`worker/`）が含まれている
+- セキュリティスキャンやコンプライアンス対応のためにメンバーごとの SBOM が必要
+
+**使用例:**
+
+```bash
+# ワークスペースの各メンバーに対して SBOM を生成（デフォルト: CycloneDX JSON）
+uv-sbom --workspace --path /path/to/workspace
+```
+
+**実行結果の例:**
+
+```
+Workspace mode: 2 members found
+
+  Processing: api
+  ...
+  Processing: worker
+  ...
+
+📦 Workspace SBOM Summary
+────────────────────────────────────────────────────────────
+Member               Output File
+────────────────────────────────────────────────────────────
+api                  /path/to/workspace/packages/api/sbom.json
+worker               /path/to/workspace/packages/worker/sbom.json
+────────────────────────────────────────────────────────────
+```
+
+各メンバーは、そのメンバーから到達可能なパッケージのみを含む独自の `sbom.json` を取得します。推移的依存関係は含まれますが、他のメンバーに属するパッケージは除外されます。
+
+**他のオプションとの組み合わせ:**
+
+```bash
+# 全メンバーを Markdown 形式で出力
+uv-sbom --workspace --path examples/workspace --format markdown
+
+# CVE チェックを追加
+uv-sbom --workspace --path examples/workspace --check-cve
+```
+
+> **注意:** `--workspace` と `--output` は同時に使用できません。ワークスペースモードでは、各メンバーの SBOM は自動的にメンバー自身のディレクトリ内の `sbom.json`（Markdown の場合は `sbom.md`）に書き込まれます。
+
+2 つのメンバーパッケージ（`api` と `worker`）を含む実行可能なデモは [`examples/workspace/`](examples/workspace/) を参照してください。
+
 ### dry-runモードで設定を検証する
 
 `--dry-run`オプションを使用して、ツールが外部レジストリと通信する前に設定を検証できます：
@@ -698,6 +748,8 @@ Options:
                                      --no-check-cveとの同時使用は不可
       --suggest-fix                  推移的脆弱性を解決するための直接依存関係アップグレードバージョンを提案
                                      --no-check-cveとの同時使用は不可、uvのインストール、プロジェクトディレクトリのpyproject.tomlが必要
+      --workspace                    ワークスペースの各メンバーに対して SBOM を生成
+                                     --outputとの同時使用は不可
       --check-license                ライセンスコンプライアンスをポリシーに対してチェック
       --license-allow <LIST>         許可するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
       --license-deny <LIST>          拒否するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
