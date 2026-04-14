@@ -39,6 +39,19 @@ git diff HEAD               # full diff for the reviewer
 For each file listed by `--name-only`, also read its **full current content**.
 This is required for file-size checks and documentation coverage checks.
 
+In addition, run the following scan and include its output as supplemental
+context for criterion 11:
+
+```bash
+grep -rn 'eprintln!\|println!' src/ \
+  | grep -v 'msgs\.\|Messages::' \
+  | grep -v '#\[cfg(test)\]' \
+  | grep -v '\.rs:.*//.*i18n-ok'
+```
+
+- Lines in **changed files**: flag as 🔴 MUST FIX under criterion 11.
+- Lines in **unchanged files**: flag as 🟡 SHOULD FIX (pre-existing violation).
+
 If `git diff HEAD` is empty, report "Nothing to review — no uncommitted changes."
 and exit.
 
@@ -243,9 +256,15 @@ Sensitive data:
 
 ### 11. i18n Consistency
 
-- Does any new user-visible string bypass the i18n system (hardcoded English in output)?
-- Are new message keys added to both EN_MESSAGES and JA_MESSAGES?
-- If {} placeholder order differs between EN and JA templates, is this covered by tests?
+User-visible string bypass (🔴 MUST FIX if any):
+- Does any new user-visible string bypass the i18n system (hardcoded English
+  in `eprintln!`/`println!` output)?
+- Is a new message key missing from either `EN_MESSAGES` or `JA_MESSAGES`
+  in `src/i18n/mod.rs`?
+
+Test coverage (🟡 SHOULD FIX):
+- If `{}` placeholder order differs between EN and JA templates, is this
+  covered by a dedicated unit test in `src/i18n/mod.rs`?
 
 ---
 
