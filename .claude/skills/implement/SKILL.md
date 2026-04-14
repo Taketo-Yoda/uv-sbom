@@ -61,9 +61,12 @@ git checkout -b <branch-name> origin/develop
 ### Step 4: Implement Changes
 
 - Follow the issue's technical specifications
-- Adhere to project architecture (see `.claude/instructions.md`)
+- Adhere to project architecture (see `.claude/CLAUDE.md`)
 - Add tests for new functionality
 - Update documentation as needed
+- **i18n**: Every new user-visible string output via `eprintln!` or `println!`
+  MUST be added as a named key in both `EN_MESSAGES` and `JA_MESSAGES` in
+  `src/i18n/mod.rs`. Never hardcode English text in output paths.
 
 ### Step 4.5: Code Review (MANDATORY)
 
