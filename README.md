@@ -648,8 +648,8 @@ Transitive dependencies are included, but packages belonging to other members ar
 # Markdown output for all members
 uv-sbom --workspace --path examples/workspace --format markdown
 
-# With CVE check
-uv-sbom --workspace --path examples/workspace --check-cve
+# With license compliance check
+uv-sbom --workspace --path examples/workspace --check-license
 ```
 
 > **Note:** `--workspace` and `--output` are mutually exclusive. In workspace mode, each member's SBOM is
