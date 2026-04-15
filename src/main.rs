@@ -422,7 +422,10 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     let msgs = Messages::for_locale(locale);
     eprintln!("\n{}", msgs.workspace_summary_header);
     eprintln!("{}", "─".repeat(60));
-    eprintln!("{:<20} {}", msgs.workspace_col_member, msgs.workspace_col_output_file);
+    eprintln!(
+        "{:<20} {}",
+        msgs.workspace_col_member, msgs.workspace_col_output_file
+    );
     eprintln!("{}", "─".repeat(60));
     for (name, path) in &summary {
         eprintln!("{:<20} {}", name, path.display());
