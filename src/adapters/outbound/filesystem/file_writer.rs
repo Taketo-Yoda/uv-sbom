@@ -1,3 +1,4 @@
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::OutputPresenter;
 use crate::shared::error::SbomError;
 use crate::shared::security::validate_not_symlink;
@@ -11,11 +12,15 @@ use std::path::{Path, PathBuf};
 /// This adapter implements the OutputPresenter port for file output.
 pub struct FileSystemWriter {
     output_path: PathBuf,
+    locale: Locale,
 }
 
 impl FileSystemWriter {
-    pub fn new(output_path: PathBuf) -> Self {
-        Self { output_path }
+    pub fn new(output_path: PathBuf, locale: Locale) -> Self {
+        Self {
+            output_path,
+            locale,
+        }
     }
 
     /// Validates that the parent directory exists before writing
@@ -85,7 +90,14 @@ impl OutputPresenter for FileSystemWriter {
             details: e.to_string(),
         })?;
 
-        eprintln!("✅ Output complete: {}", self.output_path.display());
+        let msgs = Messages::for_locale(self.locale);
+        eprintln!(
+            "{}",
+            Messages::format(
+                msgs.output_complete,
+                &[&self.output_path.display().to_string()]
+            )
+        );
         Ok(())
     }
 }
@@ -119,6 +131,7 @@ impl OutputPresenter for StdoutPresenter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::Locale;
     use tempfile::TempDir;
 
     #[test]
@@ -126,7 +139,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let output_path = temp_dir.path().join("output.json");
 
-        let writer = FileSystemWriter::new(output_path.clone());
+        let writer = FileSystemWriter::new(output_path.clone(), Locale::En);
         let result = writer.present("test content");
 
         assert!(result.is_ok());
@@ -138,7 +151,7 @@ mod tests {
     fn test_file_writer_parent_directory_not_found() {
         let output_path = PathBuf::from("/nonexistent/directory/output.json");
 
-        let writer = FileSystemWriter::new(output_path);
+        let writer = FileSystemWriter::new(output_path, Locale::En);
         let result = writer.present("test content");
 
         assert!(result.is_err());

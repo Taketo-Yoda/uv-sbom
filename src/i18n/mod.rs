@@ -134,6 +134,12 @@ pub struct Messages {
     // Vulnerability summary line (4 placeholders: count, unit, count, unit)
     pub summary_vuln_found: &'static str,
 
+    // Workspace output messages
+    pub output_complete: &'static str,
+    pub workspace_summary_header: &'static str,
+    pub workspace_col_member: &'static str,
+    pub workspace_col_output_file: &'static str,
+
     // Executive summary section
     pub section_summary: &'static str,
     pub col_item: &'static str,
@@ -286,6 +292,12 @@ static EN_MESSAGES: Messages = Messages {
     // Vulnerability summary line
     summary_vuln_found: "**Found {} {} in {} {}.**",
 
+    // Workspace output messages
+    output_complete: "✅ Output complete: {}",
+    workspace_summary_header: "📦 Workspace SBOM Summary",
+    workspace_col_member: "Member",
+    workspace_col_output_file: "Output File",
+
     // Executive summary section
     section_summary: "## Summary",
     col_item: "Item",
@@ -407,6 +419,12 @@ static JA_MESSAGES: Messages = Messages {
 
     // Vulnerability summary line
     summary_vuln_found: "**{}{}が{}{}で見つかりました。**",
+
+    // Workspace output messages
+    output_complete: "✅ 出力完了: {}",
+    workspace_summary_header: "📦 ワークスペース SBOM サマリー",
+    workspace_col_member: "メンバー",
+    workspace_col_output_file: "出力ファイル",
 
     // Executive summary section
     section_summary: "## サマリー",
@@ -643,6 +661,27 @@ mod tests {
         assert_eq!(msgs.col_recommended_action, "推奨アクション");
         assert_eq!(msgs.action_cannot_resolve, "⚠️ 解決不可: {}");
         assert_eq!(msgs.action_could_not_analyze, "❓ 分析不可: {}");
+    }
+
+    #[test]
+    fn test_workspace_messages_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(msgs.output_complete, "✅ Output complete: {}");
+        assert_eq!(msgs.workspace_summary_header, "📦 Workspace SBOM Summary");
+        assert_eq!(msgs.workspace_col_member, "Member");
+        assert_eq!(msgs.workspace_col_output_file, "Output File");
+    }
+
+    #[test]
+    fn test_workspace_messages_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(msgs.output_complete, "✅ 出力完了: {}");
+        assert_eq!(
+            msgs.workspace_summary_header,
+            "📦 ワークスペース SBOM サマリー"
+        );
+        assert_eq!(msgs.workspace_col_member, "メンバー");
+        assert_eq!(msgs.workspace_col_output_file, "出力ファイル");
     }
 
     #[test]
