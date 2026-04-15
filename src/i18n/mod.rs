@@ -136,6 +136,8 @@ pub struct Messages {
 
     // Workspace output messages
     pub output_complete: &'static str,
+    pub workspace_mode_members_found: &'static str,
+    pub workspace_processing_member: &'static str,
     pub workspace_summary_header: &'static str,
     pub workspace_col_member: &'static str,
     pub workspace_col_output_file: &'static str,
@@ -294,6 +296,8 @@ static EN_MESSAGES: Messages = Messages {
 
     // Workspace output messages
     output_complete: "✅ Output complete: {}",
+    workspace_mode_members_found: "Workspace mode: {} members found",
+    workspace_processing_member: "  Processing: {}",
     workspace_summary_header: "📦 Workspace SBOM Summary",
     workspace_col_member: "Member",
     workspace_col_output_file: "Output File",
@@ -422,6 +426,8 @@ static JA_MESSAGES: Messages = Messages {
 
     // Workspace output messages
     output_complete: "✅ 出力完了: {}",
+    workspace_mode_members_found: "ワークスペースモード: {} メンバーを検出",
+    workspace_processing_member: "  処理中: {}",
     workspace_summary_header: "📦 ワークスペース SBOM サマリー",
     workspace_col_member: "メンバー",
     workspace_col_output_file: "出力ファイル",
@@ -667,6 +673,11 @@ mod tests {
     fn test_workspace_messages_en() {
         let msgs = Messages::for_locale(Locale::En);
         assert_eq!(msgs.output_complete, "✅ Output complete: {}");
+        assert_eq!(
+            msgs.workspace_mode_members_found,
+            "Workspace mode: {} members found"
+        );
+        assert_eq!(msgs.workspace_processing_member, "  Processing: {}");
         assert_eq!(msgs.workspace_summary_header, "📦 Workspace SBOM Summary");
         assert_eq!(msgs.workspace_col_member, "Member");
         assert_eq!(msgs.workspace_col_output_file, "Output File");
@@ -676,6 +687,11 @@ mod tests {
     fn test_workspace_messages_ja() {
         let msgs = Messages::for_locale(Locale::Ja);
         assert_eq!(msgs.output_complete, "✅ 出力完了: {}");
+        assert_eq!(
+            msgs.workspace_mode_members_found,
+            "ワークスペースモード: {} メンバーを検出"
+        );
+        assert_eq!(msgs.workspace_processing_member, "  処理中: {}");
         assert_eq!(
             msgs.workspace_summary_header,
             "📦 ワークスペース SBOM サマリー"

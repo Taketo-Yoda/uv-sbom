@@ -343,9 +343,16 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
         anyhow::bail!("No workspace members found. Is this a uv workspace?");
     }
 
-    eprintln!("Workspace mode: {} members found\n", members.len());
-
     let locale = args.lang;
+    let msgs = Messages::for_locale(locale);
+    eprintln!(
+        "{}\n",
+        Messages::format(
+            msgs.workspace_mode_members_found,
+            &[&members.len().to_string()]
+        )
+    );
+
     let config = load_config(&args, &workspace_root)?;
     let merged = merge_config(&args, &config);
 
@@ -357,7 +364,10 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     let mut summary: Vec<(String, PathBuf)> = Vec::new();
 
     for member in &members {
-        eprintln!("  Processing: {}", member.name);
+        eprintln!(
+            "{}",
+            Messages::format(msgs.workspace_processing_member, &[&member.name])
+        );
 
         let lockfile_reader =
             MemberScopedLockfileReader::new(workspace_root.clone(), member.name.clone());
@@ -419,7 +429,6 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     }
 
     // Print summary table
-    let msgs = Messages::for_locale(locale);
     eprintln!("\n{}", msgs.workspace_summary_header);
     eprintln!("{}", "─".repeat(60));
     eprintln!(
