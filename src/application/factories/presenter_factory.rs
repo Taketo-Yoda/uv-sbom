@@ -1,4 +1,5 @@
 use crate::adapters::outbound::filesystem::{FileSystemWriter, StdoutPresenter};
+use crate::i18n::Locale;
 use crate::ports::outbound::OutputPresenter;
 use std::path::PathBuf;
 
@@ -21,6 +22,7 @@ impl PresenterFactory {
     ///
     /// # Arguments
     /// * `presenter_type` - The type of presenter to create
+    /// * `locale` - The locale used for status messages (only applies to `File` variant)
     ///
     /// # Returns
     /// A boxed OutputPresenter trait object appropriate for the specified type
@@ -28,13 +30,14 @@ impl PresenterFactory {
     /// # Examples
     /// ```
     /// use uv_sbom::application::factories::{PresenterFactory, PresenterType};
+    /// use uv_sbom::i18n::Locale;
     ///
-    /// let presenter = PresenterFactory::create(PresenterType::Stdout);
+    /// let presenter = PresenterFactory::create(PresenterType::Stdout, Locale::En);
     /// ```
-    pub fn create(presenter_type: PresenterType) -> Box<dyn OutputPresenter> {
+    pub fn create(presenter_type: PresenterType, locale: Locale) -> Box<dyn OutputPresenter> {
         match presenter_type {
             PresenterType::Stdout => Box::new(StdoutPresenter::new()),
-            PresenterType::File(path) => Box::new(FileSystemWriter::new(path)),
+            PresenterType::File(path) => Box::new(FileSystemWriter::new(path, locale)),
         }
     }
 }
@@ -42,10 +45,11 @@ impl PresenterFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::Locale;
 
     #[test]
     fn test_create_stdout_presenter() {
-        let presenter = PresenterFactory::create(PresenterType::Stdout);
+        let presenter = PresenterFactory::create(PresenterType::Stdout, Locale::En);
         // Verify it doesn't panic when created
         assert!(std::mem::size_of_val(&presenter) > 0);
     }
@@ -53,7 +57,7 @@ mod tests {
     #[test]
     fn test_create_file_presenter() {
         let path = PathBuf::from("/tmp/test_output.json");
-        let presenter = PresenterFactory::create(PresenterType::File(path));
+        let presenter = PresenterFactory::create(PresenterType::File(path), Locale::En);
         assert!(std::mem::size_of_val(&presenter) > 0);
     }
 
