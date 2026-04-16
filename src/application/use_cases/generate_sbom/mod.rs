@@ -466,20 +466,21 @@ where
         let result = LicenseComplianceChecker::check(&packages, policy);
 
         // Report results
+        let msgs = Messages::for_locale(self.locale);
         if result.has_violations() {
-            self.progress_reporter.report(&format!(
-                "⚠️  License compliance: {} violation(s) found",
-                result.violations.len()
+            self.progress_reporter.report(&Messages::format(
+                msgs.progress_license_violations_found,
+                &[&result.violations.len().to_string()],
             ));
         } else {
             self.progress_reporter
-                .report("✅ License compliance: No violations found");
+                .report(msgs.progress_license_no_violations);
         }
 
         if !result.warnings.is_empty() {
-            self.progress_reporter.report(&format!(
-                "⚠️  License compliance: {} package(s) with unknown license",
-                result.warnings.len()
+            self.progress_reporter.report(&Messages::format(
+                msgs.progress_license_unknown_packages,
+                &[&result.warnings.len().to_string()],
             ));
         }
 
