@@ -378,7 +378,7 @@ static JA_MESSAGES: Messages = Messages {
 
     // License compliance progress messages (use case layer)
     progress_license_violations_found: "⚠️  ライセンスコンプライアンス: {}件の違反が見つかりました",
-    progress_license_no_violations: "✅ ライセンスコンプライアンス: 違反なし",
+    progress_license_no_violations: "✅ ライセンスコンプライアンス: 違反は見つかりませんでした",
     progress_license_unknown_packages: "⚠️  ライセンスコンプライアンス: ライセンス不明のパッケージが{}件あります",
 
     // Warning messages
@@ -588,7 +588,7 @@ mod tests {
         );
         assert_eq!(
             msgs.progress_license_no_violations,
-            "✅ ライセンスコンプライアンス: 違反なし"
+            "✅ ライセンスコンプライアンス: 違反は見つかりませんでした"
         );
         assert_eq!(
             msgs.progress_license_unknown_packages,
