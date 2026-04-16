@@ -77,6 +77,11 @@ pub struct Messages {
     pub progress_vuln_found: &'static str,
     pub progress_vuln_none: &'static str,
 
+    // License compliance progress messages (use case layer)
+    pub progress_license_violations_found: &'static str,
+    pub progress_license_no_violations: &'static str,
+    pub progress_license_unknown_packages: &'static str,
+
     // Warning messages
     pub warn_check_cve_no_effect: &'static str,
     pub warn_check_license_no_effect: &'static str,
@@ -238,6 +243,11 @@ static EN_MESSAGES: Messages = Messages {
     progress_vuln_found: "✅ Vulnerability check complete: {} vulnerabilities found in {} packages",
     progress_vuln_none: "✅ Vulnerability check complete: No known vulnerabilities found",
 
+    // License compliance progress messages (use case layer)
+    progress_license_violations_found: "⚠️  License compliance: {} violation(s) found",
+    progress_license_no_violations: "✅ License compliance: No violations found",
+    progress_license_unknown_packages: "⚠️  License compliance: {} package(s) with unknown license",
+
     // Warning messages
     warn_check_cve_no_effect: "⚠️  Warning: --check-cve has no effect with JSON format.",
     warn_check_license_no_effect: "⚠️  Warning: --check-license has no effect with JSON format.",
@@ -365,6 +375,11 @@ static JA_MESSAGES: Messages = Messages {
     progress_license_complete: "✅ ライセンス情報取得完了: {}件成功 / {}件中、{}件失敗",
     progress_vuln_found: "✅ 脆弱性チェック完了: {}個のパッケージで{}件の脆弱性を検出",
     progress_vuln_none: "✅ 脆弱性チェック完了: 既知の脆弱性は検出されませんでした",
+
+    // License compliance progress messages (use case layer)
+    progress_license_violations_found: "⚠️  ライセンスコンプライアンス: {}件の違反が見つかりました",
+    progress_license_no_violations: "✅ ライセンスコンプライアンス: 違反なし",
+    progress_license_unknown_packages: "⚠️  ライセンスコンプライアンス: ライセンス不明のパッケージが{}件あります",
 
     // Warning messages
     warn_check_cve_no_effect: "⚠️  警告: JSON形式では --check-cve は効果がありません。",
@@ -526,6 +541,18 @@ mod tests {
             msgs.progress_vuln_none,
             "✅ Vulnerability check complete: No known vulnerabilities found"
         );
+        assert_eq!(
+            msgs.progress_license_violations_found,
+            "⚠️  License compliance: {} violation(s) found"
+        );
+        assert_eq!(
+            msgs.progress_license_no_violations,
+            "✅ License compliance: No violations found"
+        );
+        assert_eq!(
+            msgs.progress_license_unknown_packages,
+            "⚠️  License compliance: {} package(s) with unknown license"
+        );
     }
 
     #[test]
@@ -554,6 +581,18 @@ mod tests {
         assert_eq!(
             msgs.progress_vuln_none,
             "✅ 脆弱性チェック完了: 既知の脆弱性は検出されませんでした"
+        );
+        assert_eq!(
+            msgs.progress_license_violations_found,
+            "⚠️  ライセンスコンプライアンス: {}件の違反が見つかりました"
+        );
+        assert_eq!(
+            msgs.progress_license_no_violations,
+            "✅ ライセンスコンプライアンス: 違反なし"
+        );
+        assert_eq!(
+            msgs.progress_license_unknown_packages,
+            "⚠️  ライセンスコンプライアンス: ライセンス不明のパッケージが{}件あります"
         );
     }
 
