@@ -88,7 +88,6 @@ impl UvWorkspaceReader {
                     let absolute_path = workspace_root.join(&member_id);
                     return WorkspaceMember {
                         name: pkg.name.clone(),
-                        relative_path: member_id,
                         absolute_path,
                     };
                 }
@@ -97,16 +96,15 @@ impl UvWorkspaceReader {
                 // such as "api". Look for a package whose name matches and derive the
                 // relative path from its source.editable / source.virtual field.
                 if let Some(pkg) = lock.package.iter().find(|p| p.name == member_id) {
-                    let relative_path = pkg
+                    let rel = pkg
                         .source
                         .as_ref()
                         .and_then(|s| s.local_path())
                         .map(|p| p.to_owned())
                         .unwrap_or_else(|| member_id.clone());
-                    let absolute_path = workspace_root.join(&relative_path);
+                    let absolute_path = workspace_root.join(&rel);
                     return WorkspaceMember {
                         name: pkg.name.clone(),
-                        relative_path,
                         absolute_path,
                     };
                 }
@@ -120,7 +118,6 @@ impl UvWorkspaceReader {
                 let absolute_path = workspace_root.join(&member_id);
                 WorkspaceMember {
                     name,
-                    relative_path: member_id,
                     absolute_path,
                 }
             })
@@ -142,12 +139,6 @@ impl WorkspaceReader for UvWorkspaceReader {
         let content = read_file_with_security(&lock_path, "uv.lock", MAX_FILE_SIZE)
             .with_context(|| format!("Failed to read uv.lock at: {}", lock_path.display()))?;
         Self::parse_members(&content, workspace_root)
-    }
-
-    fn is_workspace_root(&self, path: &Path) -> bool {
-        self.read_workspace_members(path)
-            .map(|members| !members.is_empty())
-            .unwrap_or(false)
     }
 }
 
@@ -220,17 +211,15 @@ source = { registry = "https://pypi.org/simple" }
 
         let alpha = members
             .iter()
-            .find(|m| m.relative_path == "packages/alpha")
+            .find(|m| m.absolute_path == root.join("packages/alpha"))
             .unwrap();
         assert_eq!(alpha.name, "alpha");
-        assert_eq!(alpha.absolute_path, root.join("packages/alpha"));
 
         let beta = members
             .iter()
-            .find(|m| m.relative_path == "packages/beta")
+            .find(|m| m.absolute_path == root.join("packages/beta"))
             .unwrap();
         assert_eq!(beta.name, "beta");
-        assert_eq!(beta.absolute_path, root.join("packages/beta"));
     }
 
     #[test]
@@ -267,7 +256,7 @@ source = { registry = "https://pypi.org/simple" }
 
         assert_eq!(members.len(), 1);
         assert_eq!(members[0].name, "gamma");
-        assert_eq!(members[0].relative_path, "packages/gamma");
+        assert_eq!(members[0].absolute_path, root.join("packages/gamma"));
     }
 
     #[test]
@@ -279,32 +268,6 @@ source = { registry = "https://pypi.org/simple" }
             .unwrap_err()
             .to_string()
             .contains("Failed to parse uv.lock"));
-    }
-
-    #[test]
-    fn test_is_workspace_root_returns_true_for_workspace_lock_file() {
-        let temp_dir = TempDir::new().unwrap();
-        std::fs::write(temp_dir.path().join("uv.lock"), WORKSPACE_LOCK).unwrap();
-
-        let reader = UvWorkspaceReader::new();
-        assert!(reader.is_workspace_root(temp_dir.path()));
-    }
-
-    #[test]
-    fn test_is_workspace_root_returns_false_for_non_workspace_lock_file() {
-        let temp_dir = TempDir::new().unwrap();
-        std::fs::write(temp_dir.path().join("uv.lock"), NON_WORKSPACE_LOCK).unwrap();
-
-        let reader = UvWorkspaceReader::new();
-        assert!(!reader.is_workspace_root(temp_dir.path()));
-    }
-
-    #[test]
-    fn test_is_workspace_root_returns_false_when_no_lock_file() {
-        let reader = UvWorkspaceReader::new();
-        // Use a path that definitely does not have a uv.lock
-        let result = reader.is_workspace_root(Path::new("/nonexistent/path/that/does/not/exist"));
-        assert!(!result);
     }
 
     #[test]
@@ -359,11 +322,9 @@ source = { registry = "https://pypi.org/simple" }
         assert_eq!(members.len(), 2);
 
         let api = members.iter().find(|m| m.name == "api").unwrap();
-        assert_eq!(api.relative_path, "packages/api");
         assert_eq!(api.absolute_path, root.join("packages/api"));
 
         let worker = members.iter().find(|m| m.name == "worker").unwrap();
-        assert_eq!(worker.relative_path, "packages/worker");
         assert_eq!(worker.absolute_path, root.join("packages/worker"));
     }
 
@@ -376,9 +337,8 @@ source = { registry = "https://pypi.org/simple" }
 
         let alpha = members
             .iter()
-            .find(|m| m.relative_path == "packages/alpha")
+            .find(|m| m.absolute_path == root.join("packages/alpha"))
             .unwrap();
         assert_eq!(alpha.name, "alpha");
-        assert_eq!(alpha.absolute_path, root.join("packages/alpha"));
     }
 }

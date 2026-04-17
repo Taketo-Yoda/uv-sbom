@@ -203,11 +203,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -282,11 +279,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });

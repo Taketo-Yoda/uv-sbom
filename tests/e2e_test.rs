@@ -95,12 +95,14 @@ async fn test_e2e_json_format() {
     let response = result.unwrap();
 
     // Build read model and format as JSON
-    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
+    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build_with_project(
         response.enriched_packages,
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
+        None,
     );
     let formatter = CycloneDxFormatter::new();
     let json_output = formatter.format(&read_model);
@@ -144,12 +146,14 @@ async fn test_e2e_markdown_format() {
     let response = result.unwrap();
 
     // Build read model and format as Markdown
-    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
+    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build_with_project(
         response.enriched_packages,
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
+        None,
     );
     let formatter = MarkdownFormatter::new(uv_sbom::i18n::Locale::En);
     let markdown_output = formatter.format(&read_model);
@@ -252,7 +256,7 @@ async fn test_e2e_exclude_single_package() {
     // Exclude urllib3
     let request = SbomRequest::builder()
         .project_path(project_path)
-        .add_exclude_pattern("urllib3")
+        .exclude_patterns(vec!["urllib3".to_string()])
         .build()
         .unwrap();
     let result = use_case.execute(request).await;
@@ -334,7 +338,7 @@ async fn test_e2e_exclude_with_wildcard() {
     // Exclude packages starting with "char"
     let request = SbomRequest::builder()
         .project_path(project_path)
-        .add_exclude_pattern("char*")
+        .exclude_patterns(vec!["char*".to_string()])
         .build()
         .unwrap();
     let result = use_case.execute(request).await;
@@ -419,7 +423,7 @@ async fn test_e2e_exclude_root_project_preserves_dependency_classification() {
     let request = SbomRequest::builder()
         .project_path(project_path)
         .include_dependency_info(true)
-        .add_exclude_pattern("sample-project")
+        .exclude_patterns(vec!["sample-project".to_string()])
         .build()
         .unwrap();
     let result = use_case.execute(request).await;
@@ -472,7 +476,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
     let request = SbomRequest::builder()
         .project_path(project_path)
         .include_dependency_info(true)
-        .add_exclude_pattern("sample-project")
+        .exclude_patterns(vec!["sample-project".to_string()])
         .build()
         .unwrap();
     let result = use_case.execute(request).await;
@@ -481,12 +485,14 @@ async fn test_e2e_exclude_root_project_markdown_output() {
     let response = result.unwrap();
 
     // Build read model and format as Markdown
-    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
+    let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build_with_project(
         response.enriched_packages,
         &response.metadata,
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
+        None,
     );
     let formatter = MarkdownFormatter::new(uv_sbom::i18n::Locale::En);
     let markdown_output = formatter.format(&read_model);

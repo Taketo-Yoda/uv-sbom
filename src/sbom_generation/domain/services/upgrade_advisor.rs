@@ -59,7 +59,6 @@ impl UpgradeAdvisor {
 
             for introduced in entry.introduced_by() {
                 let direct_dep_name = introduced.package_name().to_string();
-                let direct_dep_current_version = introduced.version().to_string();
 
                 match simulation_outcomes.get(&direct_dep_name) {
                     Some(Ok(sim_result)) => {
@@ -69,7 +68,6 @@ impl UpgradeAdvisor {
                             if version_satisfies_min(resolved_version, &fixed_version_normalized) {
                                 recommendations.push(UpgradeRecommendation::Upgradable {
                                     direct_dep_name,
-                                    direct_dep_current_version,
                                     direct_dep_target_version: sim_result
                                         .upgraded_to_version
                                         .clone(),
@@ -94,7 +92,6 @@ impl UpgradeAdvisor {
                             // Vulnerable package removed after upgrade — treat as resolved
                             recommendations.push(UpgradeRecommendation::Upgradable {
                                 direct_dep_name,
-                                direct_dep_current_version,
                                 direct_dep_target_version: sim_result.upgraded_to_version.clone(),
                                 transitive_dep_name: entry.vulnerable_package().to_string(),
                                 transitive_resolved_version: String::new(),
@@ -311,7 +308,7 @@ mod tests {
     }
 
     fn make_sim_result(
-        upgraded_package: &str,
+        _upgraded_package: &str,
         upgraded_to: &str,
         resolved: Vec<(&str, &str)>,
     ) -> SimulationResult {
@@ -320,7 +317,6 @@ mod tests {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
         SimulationResult {
-            upgraded_package: upgraded_package.to_string(),
             upgraded_to_version: upgraded_to.to_string(),
             resolved_versions,
         }

@@ -1,7 +1,6 @@
 use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
-use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecommendation};
 use crate::shared::error::SbomError;
 
@@ -17,10 +16,6 @@ pub struct SbomResponse {
     pub dependency_graph: Option<DependencyGraph>,
     /// SBOM metadata (timestamp, tool info, serial number)
     pub metadata: SbomMetadata,
-    /// Optional vulnerability report (only present when CVE check is enabled)
-    /// None = not checked, Some(vec) = checked (empty vec means no vulnerabilities found)
-    #[allow(dead_code)] // Reserved for Issue #486: public DTO field for library consumers
-    pub vulnerability_report: Option<Vec<PackageVulnerabilities>>,
     /// Whether vulnerabilities above threshold were detected
     /// Used to determine exit code for CI integration
     pub has_vulnerabilities_above_threshold: bool,
@@ -46,7 +41,6 @@ pub struct SbomResponseBuilder {
     enriched_packages: Vec<EnrichedPackage>,
     dependency_graph: Option<DependencyGraph>,
     metadata: Option<SbomMetadata>,
-    vulnerability_report: Option<Vec<PackageVulnerabilities>>,
     has_vulnerabilities_above_threshold: bool,
     vulnerability_check_result: Option<VulnerabilityCheckResult>,
     license_compliance_result: Option<LicenseComplianceResult>,
@@ -60,7 +54,6 @@ impl SbomResponseBuilder {
             enriched_packages: Vec::new(),
             dependency_graph: None,
             metadata: None,
-            vulnerability_report: None,
             has_vulnerabilities_above_threshold: false,
             vulnerability_check_result: None,
             license_compliance_result: None,
@@ -87,11 +80,6 @@ impl SbomResponseBuilder {
 
     pub fn metadata(mut self, metadata: SbomMetadata) -> Self {
         self.metadata = Some(metadata);
-        self
-    }
-
-    pub fn vulnerability_report(mut self, report: Vec<PackageVulnerabilities>) -> Self {
-        self.vulnerability_report = Some(report);
         self
     }
 
@@ -129,7 +117,6 @@ impl SbomResponseBuilder {
             enriched_packages: self.enriched_packages,
             dependency_graph: self.dependency_graph,
             metadata,
-            vulnerability_report: self.vulnerability_report,
             has_vulnerabilities_above_threshold: self.has_vulnerabilities_above_threshold,
             vulnerability_check_result: self.vulnerability_check_result,
             license_compliance_result: self.license_compliance_result,
@@ -166,7 +153,6 @@ mod tests {
 
         assert!(response.enriched_packages.is_empty());
         assert!(response.dependency_graph.is_none());
-        assert!(response.vulnerability_report.is_none());
         assert!(!response.has_vulnerabilities_above_threshold);
         assert!(response.vulnerability_check_result.is_none());
         assert!(response.license_compliance_result.is_none());

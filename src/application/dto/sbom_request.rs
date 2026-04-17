@@ -80,7 +80,7 @@ impl SbomRequest {
 ///     .project_path("/path/to/project")
 ///     .include_dependency_info(true)
 ///     .check_cve(true)
-///     .add_exclude_pattern("test-*")
+///     .exclude_patterns(vec!["test-*".to_string()])
 ///     .build()
 ///     .unwrap();
 /// ```
@@ -148,13 +148,6 @@ impl SbomRequestBuilder {
         self
     }
 
-    /// Adds a single exclusion pattern.
-    #[allow(dead_code)] // Reserved for Issue #486: public library builder API, used by integration tests and library consumers
-    pub fn add_exclude_pattern(mut self, pattern: impl Into<String>) -> Self {
-        self.exclude_patterns.push(pattern.into());
-        self
-    }
-
     /// Sets whether to perform dry-run validation only.
     pub fn dry_run(mut self, dry_run: bool) -> Self {
         self.dry_run = dry_run;
@@ -167,26 +160,12 @@ impl SbomRequestBuilder {
         self
     }
 
-    /// Sets the severity threshold for vulnerability filtering.
-    #[allow(dead_code)] // Reserved for Issue #486: public library builder API, used by integration tests and library consumers
-    pub fn severity_threshold(mut self, severity: Severity) -> Self {
-        self.severity_threshold = Some(severity);
-        self
-    }
-
     /// Sets the severity threshold from an Option value.
     ///
     /// This is useful when the threshold comes from CLI arguments
     /// which may or may not be specified.
     pub fn severity_threshold_opt(mut self, severity: Option<Severity>) -> Self {
         self.severity_threshold = severity;
-        self
-    }
-
-    /// Sets the CVSS threshold for vulnerability filtering.
-    #[allow(dead_code)] // Reserved for Issue #486: public library builder API, used by integration tests and library consumers
-    pub fn cvss_threshold(mut self, cvss: f32) -> Self {
-        self.cvss_threshold = Some(cvss);
         self
     }
 
@@ -301,8 +280,8 @@ mod tests {
             .exclude_patterns(vec!["test-*".to_string()])
             .dry_run(true)
             .check_cve(true)
-            .severity_threshold(Severity::High)
-            .cvss_threshold(7.5)
+            .severity_threshold_opt(Some(Severity::High))
+            .cvss_threshold_opt(Some(7.5))
             .ignore_cves(vec![IgnoreCve {
                 id: "CVE-2024-1234".to_string(),
                 reason: Some("test".to_string()),
@@ -322,12 +301,14 @@ mod tests {
     }
 
     #[test]
-    fn test_add_exclude_pattern_accumulates() {
+    fn test_exclude_patterns_accumulates() {
         let request = SbomRequest::builder()
             .project_path("/test/project")
-            .add_exclude_pattern("pattern1")
-            .add_exclude_pattern("pattern2")
-            .add_exclude_pattern("pattern3")
+            .exclude_patterns(vec![
+                "pattern1".to_string(),
+                "pattern2".to_string(),
+                "pattern3".to_string(),
+            ])
             .build()
             .unwrap();
 
@@ -342,7 +323,7 @@ mod tests {
     fn test_exclude_patterns_replaces_previous() {
         let request = SbomRequest::builder()
             .project_path("/test/project")
-            .add_exclude_pattern("old-pattern")
+            .exclude_patterns(vec!["old-pattern".to_string()])
             .exclude_patterns(vec!["new-pattern".to_string()])
             .build()
             .unwrap();

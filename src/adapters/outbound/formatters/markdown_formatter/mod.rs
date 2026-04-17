@@ -213,11 +213,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -256,11 +253,8 @@ mod tests {
                 description: None,
                 source_url: None,
             }],
-            threshold_exceeded: false,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 0,
-                informational_count: 1,
                 affected_package_count: 1,
             },
         });
@@ -376,11 +370,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -431,11 +422,8 @@ mod tests {
                 description: None,
                 source_url: None,
             }],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 2,
-                actionable_count: 1,
-                informational_count: 1,
                 affected_package_count: 2,
             },
         });
@@ -574,11 +562,8 @@ mod tests {
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![],
             informational: vec![],
-            threshold_exceeded: false,
             summary: VulnerabilitySummary {
                 total_count: 0,
-                actionable_count: 0,
-                informational_count: 0,
                 affected_package_count: 0,
             },
         });
@@ -608,11 +593,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -630,11 +612,8 @@ mod tests {
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![],
             informational: vec![],
-            threshold_exceeded: false,
             summary: VulnerabilitySummary {
                 total_count: 0,
-                actionable_count: 0,
-                informational_count: 0,
                 affected_package_count: 0,
             },
         });
@@ -753,7 +732,6 @@ mod tests {
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
             entries: vec![UpgradeEntryView::Upgradable {
                 direct_dep: "requests".to_string(),
-                current_version: "2.31.0".to_string(),
                 target_version: "2.32.3".to_string(),
                 transitive_dep: "urllib3".to_string(),
                 resolved_version: "2.2.1".to_string(),
@@ -787,11 +765,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -838,11 +813,8 @@ mod tests {
                 },
             ],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 2,
-                actionable_count: 2,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });

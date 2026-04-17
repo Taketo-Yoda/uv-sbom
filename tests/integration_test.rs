@@ -322,7 +322,7 @@ source = { registry = "https://pypi.org/simple" }
     // Exclude urllib3
     let request = SbomRequest::builder()
         .project_path(".")
-        .add_exclude_pattern("urllib3")
+        .exclude_patterns(vec!["urllib3".to_string()])
         .build()
         .unwrap();
     let result = use_case.execute(request).await;
@@ -451,7 +451,7 @@ source = { registry = "https://pypi.org/simple" }
     // Exclude all pytest-related packages
     let request = SbomRequest::builder()
         .project_path(".")
-        .add_exclude_pattern("pytest*")
+        .exclude_patterns(vec!["pytest*".to_string()])
         .build()
         .unwrap();
     let result = use_case.execute(request).await;
@@ -493,7 +493,7 @@ source = { registry = "https://pypi.org/simple" }
     // Exclude all packages with a pattern that matches everything
     let request = SbomRequest::builder()
         .project_path(".")
-        .add_exclude_pattern("*requests*")
+        .exclude_patterns(vec!["*requests*".to_string()])
         .build()
         .unwrap();
     let result = use_case.execute(request).await;
@@ -556,7 +556,7 @@ source = { registry = "https://pypi.org/simple" }
     let request = SbomRequest::builder()
         .project_path(".")
         .include_dependency_info(true)
-        .add_exclude_pattern("urllib3")
+        .exclude_patterns(vec!["urllib3".to_string()])
         .build()
         .unwrap();
     let result = use_case.execute(request).await;

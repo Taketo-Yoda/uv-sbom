@@ -127,7 +127,6 @@ impl UvLockSimulator for UvLockAdapter {
 
         // 7. Return result (temp_dir is dropped here, cleaning up automatically)
         Ok(SimulationResult {
-            upgraded_package: package_name.to_string(),
             upgraded_to_version,
             resolved_versions: new_versions,
         })
@@ -209,7 +208,6 @@ version = "0.1.0"
             .expect("requests must appear in after fixture");
 
         let sim_result = SimulationResult {
-            upgraded_package: package_name.to_string(),
             upgraded_to_version,
             resolved_versions,
         };

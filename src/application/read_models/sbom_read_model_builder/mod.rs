@@ -26,36 +26,6 @@ use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecom
 pub struct SbomReadModelBuilder;
 
 impl SbomReadModelBuilder {
-    /// Builds a SbomReadModel from domain objects
-    ///
-    /// # Arguments
-    /// * `packages` - List of enriched packages with license information
-    /// * `metadata` - SBOM metadata (timestamp, tool info, serial number)
-    /// * `dependency_graph` - Optional dependency graph for determining direct dependencies
-    /// * `_vulnerability_result` - Optional vulnerability check result (reserved for future use)
-    ///
-    /// # Returns
-    /// A fully constructed SbomReadModel
-    /// Builds a SbomReadModel without project metadata component (backwards compatible)
-    #[allow(dead_code)] // Reserved for Issue #486: backwards-compatible wrapper used by integration tests and library consumers
-    pub fn build(
-        packages: Vec<EnrichedPackage>,
-        metadata: &SbomMetadata,
-        dependency_graph: Option<&DependencyGraph>,
-        vulnerability_result: Option<&VulnerabilityCheckResult>,
-        license_compliance_result: Option<&LicenseComplianceResult>,
-    ) -> SbomReadModel {
-        Self::build_with_project(
-            packages,
-            metadata,
-            dependency_graph,
-            vulnerability_result,
-            license_compliance_result,
-            None,
-            None,
-        )
-    }
-
     /// Builds a SbomReadModel from domain objects with optional project metadata component
     pub fn build_with_project(
         packages: Vec<EnrichedPackage>,
@@ -232,7 +202,7 @@ mod tests {
         let metadata = create_test_metadata();
         let graph = create_test_graph();
 
-        let read_model = SbomReadModelBuilder::build(packages, &metadata, Some(&graph), None, None);
+        let read_model = SbomReadModelBuilder::build_with_project(packages, &metadata, Some(&graph), None, None, None, None);
 
         // Check metadata
         assert_eq!(read_model.metadata.tool_name, "uv-sbom");
@@ -255,7 +225,7 @@ mod tests {
         let packages: Vec<EnrichedPackage> = vec![];
         let metadata = create_test_metadata();
 
-        let read_model = SbomReadModelBuilder::build(packages, &metadata, None, None, None);
+        let read_model = SbomReadModelBuilder::build_with_project(packages, &metadata, None, None, None, None, None);
 
         assert!(read_model.components.is_empty());
     }
@@ -504,7 +474,7 @@ mod tests {
         assert_eq!(report.actionable[0].id, "CVE-2024-001");
         assert_eq!(report.informational.len(), 1);
         assert_eq!(report.informational[0].id, "CVE-2024-002");
-        assert!(report.threshold_exceeded);
+        assert!(!report.actionable.is_empty());
     }
 
     #[test]
@@ -526,8 +496,8 @@ mod tests {
         let report = vulnerability_builder::build_vulnerabilities(&result, &components);
 
         assert_eq!(report.summary.total_count, 3);
-        assert_eq!(report.summary.actionable_count, 2);
-        assert_eq!(report.summary.informational_count, 1);
+        assert_eq!(report.actionable.len(), 2);
+        assert_eq!(report.informational.len(), 1);
         assert_eq!(report.summary.affected_package_count, 2);
     }
 
@@ -544,7 +514,7 @@ mod tests {
 
         assert!(report.actionable.is_empty());
         assert!(report.informational.is_empty());
-        assert!(!report.threshold_exceeded);
+        assert!(report.actionable.is_empty());
         assert_eq!(report.summary.total_count, 0);
         assert_eq!(report.summary.affected_package_count, 0);
     }
@@ -590,13 +560,13 @@ mod tests {
         };
 
         let read_model =
-            SbomReadModelBuilder::build(packages, &metadata, None, Some(&vuln_result), None);
+            SbomReadModelBuilder::build_with_project(packages, &metadata, None, Some(&vuln_result), None, None, None);
 
         assert!(read_model.vulnerabilities.is_some());
         let vulns = read_model.vulnerabilities.unwrap();
         assert_eq!(vulns.actionable.len(), 1);
         assert_eq!(vulns.actionable[0].id, "CVE-2024-1234");
-        assert!(vulns.threshold_exceeded);
+        assert!(!vulns.actionable.is_empty());
     }
 
     // Tests for resolution guide builder
@@ -706,11 +676,13 @@ mod tests {
             threshold_exceeded: true,
         };
 
-        let read_model = SbomReadModelBuilder::build(
+        let read_model = SbomReadModelBuilder::build_with_project(
             packages,
             &metadata,
             Some(&graph),
             Some(&vuln_result),
+            None,
+            None,
             None,
         );
 
@@ -735,7 +707,7 @@ mod tests {
         };
 
         let read_model =
-            SbomReadModelBuilder::build(packages, &metadata, None, Some(&vuln_result), None);
+            SbomReadModelBuilder::build_with_project(packages, &metadata, None, Some(&vuln_result), None, None, None);
 
         assert!(read_model.resolution_guide.is_none());
     }
@@ -746,7 +718,7 @@ mod tests {
         let metadata = create_test_metadata();
         let graph = create_test_graph();
 
-        let read_model = SbomReadModelBuilder::build(packages, &metadata, Some(&graph), None, None);
+        let read_model = SbomReadModelBuilder::build_with_project(packages, &metadata, Some(&graph), None, None, None, None);
 
         assert!(read_model.resolution_guide.is_none());
     }
@@ -766,11 +738,13 @@ mod tests {
             threshold_exceeded: true,
         };
 
-        let read_model = SbomReadModelBuilder::build(
+        let read_model = SbomReadModelBuilder::build_with_project(
             packages,
             &metadata,
             Some(&graph),
             Some(&vuln_result),
+            None,
+            None,
             None,
         );
 

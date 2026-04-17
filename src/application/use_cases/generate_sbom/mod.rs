@@ -134,7 +134,6 @@ where
         Ok(self.build_response(
             enriched_packages,
             dependency_graph,
-            vulnerability_report,
             vulnerability_check_result,
             license_compliance_result,
             upgrade_recommendations,
@@ -492,7 +491,6 @@ where
         &self,
         enriched_packages: Vec<EnrichedPackage>,
         dependency_graph: Option<crate::sbom_generation::domain::DependencyGraph>,
-        vulnerability_report: Option<Vec<crate::sbom_generation::domain::PackageVulnerabilities>>,
         vulnerability_check_result: Option<VulnerabilityCheckResult>,
         license_compliance_result: Option<LicenseComplianceResult>,
         upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
@@ -518,9 +516,6 @@ where
 
         if let Some(graph) = dependency_graph {
             builder = builder.dependency_graph(graph);
-        }
-        if let Some(report) = vulnerability_report {
-            builder = builder.vulnerability_report(report);
         }
         if let Some(result) = vulnerability_check_result {
             builder = builder.vulnerability_check_result(result);

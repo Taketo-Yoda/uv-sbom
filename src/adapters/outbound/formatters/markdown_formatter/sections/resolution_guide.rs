@@ -259,7 +259,6 @@ mod tests {
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
             entries: vec![UpgradeEntryView::Upgradable {
                 direct_dep: "requests".to_string(),
-                current_version: "2.31.0".to_string(),
                 target_version: "2.32.3".to_string(),
                 transitive_dep: "urllib3".to_string(),
                 resolved_version: "2.2.1".to_string(),
@@ -292,7 +291,6 @@ mod tests {
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
             entries: vec![UpgradeEntryView::Unresolvable {
-                direct_dep: "httpx".to_string(),
                 reason: "latest httpx still pins idna < 3.7".to_string(),
                 vulnerability_id: "GHSA-ZZZZZ".to_string(),
             }],

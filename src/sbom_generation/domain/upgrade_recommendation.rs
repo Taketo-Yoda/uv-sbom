@@ -5,8 +5,6 @@ pub enum UpgradeRecommendation {
     Upgradable {
         /// Direct dependency to upgrade (e.g., "requests")
         direct_dep_name: String,
-        /// Current version of the direct dependency (e.g., "2.31.0")
-        direct_dep_current_version: String,
         /// Recommended version to upgrade to (e.g., "2.32.3")
         direct_dep_target_version: String,
         /// Vulnerable transitive dep name (e.g., "urllib3")
