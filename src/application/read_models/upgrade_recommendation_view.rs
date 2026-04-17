@@ -5,14 +5,13 @@
 
 /// View model aggregating all upgrade recommendation entries
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct UpgradeRecommendationView {
     pub entries: Vec<UpgradeEntryView>,
 }
 
 /// Individual upgrade recommendation entry view
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Reserved for Issue #486: enum variant fields unused in binary but read by library consumers/formatters
 pub enum UpgradeEntryView {
     /// Upgrading the direct dependency resolves the vulnerability
     Upgradable {

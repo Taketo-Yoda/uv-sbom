@@ -293,7 +293,7 @@ struct OsvAffected {
 #[derive(Debug, Deserialize)]
 struct OsvRange {
     #[serde(rename = "type")]
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for Issue #486: future OSV range-type handling
     range_type: String,
     events: Vec<OsvEvent>,
 }
@@ -302,6 +302,7 @@ struct OsvRange {
 struct OsvEvent {
     #[serde(default)]
     #[allow(dead_code)]
+    // Reserved for Issue #486: paired with `fixed` for full OSV version-range evaluation
     introduced: Option<String>,
     #[serde(default)]
     fixed: Option<String>,

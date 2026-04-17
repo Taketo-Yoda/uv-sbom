@@ -1,6 +1,5 @@
 /// Result of analyzing whether upgrading a direct dep fixes a transitive vulnerability
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum UpgradeRecommendation {
     /// Upgrading the direct dep resolves the vulnerability
     Upgradable {

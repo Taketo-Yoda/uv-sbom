@@ -34,7 +34,6 @@ fn build_component(enriched: &EnrichedPackage, graph: Option<&DependencyGraph>) 
         LicenseView {
             spdx_id,
             name: license_str.clone(),
-            url: None,
         }
     });
 

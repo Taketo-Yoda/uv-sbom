@@ -156,7 +156,6 @@ impl FileSystemReader {
     /// uses `virtual` for packages without a build system), then performs BFS over the
     /// dependency graph to collect all transitively reachable packages. The member root
     /// itself is excluded.
-    #[allow(dead_code)]
     fn parse_lockfile_content_for_member(
         &self,
         content: &str,

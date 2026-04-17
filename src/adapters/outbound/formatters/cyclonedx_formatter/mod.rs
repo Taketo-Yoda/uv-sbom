@@ -79,7 +79,6 @@ mod tests {
                     license: Some(LicenseView {
                         spdx_id: Some("Apache-2.0".to_string()),
                         name: "Apache License 2.0".to_string(),
-                        url: None,
                     }),
                     description: Some("HTTP library".to_string()),
                     sha256_hash: None,
@@ -204,7 +203,6 @@ mod tests {
         model.components[0].license = Some(LicenseView {
             spdx_id: None,
             name: "Some Proprietary License".to_string(),
-            url: None,
         });
         let formatter = CycloneDxFormatter::new();
 

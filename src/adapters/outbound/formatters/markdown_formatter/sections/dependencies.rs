@@ -109,7 +109,6 @@ mod tests {
             license: Some(LicenseView {
                 spdx_id: Some("MIT".to_string()),
                 name: "MIT License".to_string(),
-                url: None,
             }),
             description: Some(format!("{name} description")),
             sha256_hash: None,

@@ -60,7 +60,6 @@ mod tests {
             license: Some(LicenseView {
                 spdx_id: spdx_id.map(|s| s.to_string()),
                 name: license_name.to_string(),
-                url: None,
             }),
             description: description.map(|s| s.to_string()),
             sha256_hash: None,

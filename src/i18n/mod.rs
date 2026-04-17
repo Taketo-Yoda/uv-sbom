@@ -30,7 +30,7 @@ impl Locale {
 }
 
 /// All translatable strings used in formatted output.
-#[allow(dead_code)] // Some status fields reserved for future formatter sections
+#[allow(dead_code)] // Reserved for Issue #486: some message keys are unused pending future formatter sections
 pub struct Messages {
     // Section headers
     pub section_sbom_title: &'static str,
