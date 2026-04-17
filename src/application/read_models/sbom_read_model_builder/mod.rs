@@ -202,7 +202,15 @@ mod tests {
         let metadata = create_test_metadata();
         let graph = create_test_graph();
 
-        let read_model = SbomReadModelBuilder::build_with_project(packages, &metadata, Some(&graph), None, None, None, None);
+        let read_model = SbomReadModelBuilder::build_with_project(
+            packages,
+            &metadata,
+            Some(&graph),
+            None,
+            None,
+            None,
+            None,
+        );
 
         // Check metadata
         assert_eq!(read_model.metadata.tool_name, "uv-sbom");
@@ -225,7 +233,9 @@ mod tests {
         let packages: Vec<EnrichedPackage> = vec![];
         let metadata = create_test_metadata();
 
-        let read_model = SbomReadModelBuilder::build_with_project(packages, &metadata, None, None, None, None, None);
+        let read_model = SbomReadModelBuilder::build_with_project(
+            packages, &metadata, None, None, None, None, None,
+        );
 
         assert!(read_model.components.is_empty());
     }
@@ -559,8 +569,15 @@ mod tests {
             threshold_exceeded: true,
         };
 
-        let read_model =
-            SbomReadModelBuilder::build_with_project(packages, &metadata, None, Some(&vuln_result), None, None, None);
+        let read_model = SbomReadModelBuilder::build_with_project(
+            packages,
+            &metadata,
+            None,
+            Some(&vuln_result),
+            None,
+            None,
+            None,
+        );
 
         assert!(read_model.vulnerabilities.is_some());
         let vulns = read_model.vulnerabilities.unwrap();
@@ -706,8 +723,15 @@ mod tests {
             threshold_exceeded: true,
         };
 
-        let read_model =
-            SbomReadModelBuilder::build_with_project(packages, &metadata, None, Some(&vuln_result), None, None, None);
+        let read_model = SbomReadModelBuilder::build_with_project(
+            packages,
+            &metadata,
+            None,
+            Some(&vuln_result),
+            None,
+            None,
+            None,
+        );
 
         assert!(read_model.resolution_guide.is_none());
     }
@@ -718,7 +742,15 @@ mod tests {
         let metadata = create_test_metadata();
         let graph = create_test_graph();
 
-        let read_model = SbomReadModelBuilder::build_with_project(packages, &metadata, Some(&graph), None, None, None, None);
+        let read_model = SbomReadModelBuilder::build_with_project(
+            packages,
+            &metadata,
+            Some(&graph),
+            None,
+            None,
+            None,
+            None,
+        );
 
         assert!(read_model.resolution_guide.is_none());
     }

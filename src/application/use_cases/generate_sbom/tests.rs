@@ -747,13 +747,7 @@ fn test_build_response_with_threshold_exceeded() {
         threshold_exceeded: true,
     };
 
-    let response = use_case.build_response(
-        enriched_packages,
-        None,
-        Some(check_result),
-        None,
-        None,
-    );
+    let response = use_case.build_response(enriched_packages, None, Some(check_result), None, None);
 
     assert!(response.has_vulnerabilities_above_threshold);
     assert!(response.vulnerability_check_result.is_some());
@@ -810,13 +804,7 @@ fn test_build_response_with_threshold_not_exceeded() {
         threshold_exceeded: false,
     };
 
-    let response = use_case.build_response(
-        enriched_packages,
-        None,
-        Some(check_result),
-        None,
-        None,
-    );
+    let response = use_case.build_response(enriched_packages, None, Some(check_result), None, None);
 
     assert!(!response.has_vulnerabilities_above_threshold);
     assert!(response.vulnerability_check_result.is_some());
