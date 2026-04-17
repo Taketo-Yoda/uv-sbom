@@ -1,7 +1,6 @@
 use super::vulnerability::Severity;
 
 /// Represents a resolution entry for a single vulnerable transitive dependency
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ResolutionEntry {
     /// Name of the vulnerable transitive package
@@ -19,7 +18,6 @@ pub struct ResolutionEntry {
 }
 
 impl ResolutionEntry {
-    #[allow(dead_code)]
     pub fn new(
         vulnerable_package: String,
         current_version: String,
@@ -38,39 +36,32 @@ impl ResolutionEntry {
         }
     }
 
-    #[allow(dead_code)]
     pub fn vulnerable_package(&self) -> &str {
         &self.vulnerable_package
     }
 
-    #[allow(dead_code)]
     pub fn current_version(&self) -> &str {
         &self.current_version
     }
 
-    #[allow(dead_code)]
     pub fn fixed_version(&self) -> Option<&str> {
         self.fixed_version.as_deref()
     }
 
-    #[allow(dead_code)]
     pub fn severity(&self) -> Severity {
         self.severity
     }
 
-    #[allow(dead_code)]
     pub fn vulnerability_id(&self) -> &str {
         &self.vulnerability_id
     }
 
-    #[allow(dead_code)]
     pub fn introduced_by(&self) -> &[IntroducedBy] {
         &self.introduced_by
     }
 }
 
 /// Represents a direct dependency that introduces a vulnerable transitive dep
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct IntroducedBy {
     /// Name of the direct dependency
@@ -80,7 +71,6 @@ pub struct IntroducedBy {
 }
 
 impl IntroducedBy {
-    #[allow(dead_code)]
     pub fn new(package_name: String, version: String) -> Self {
         Self {
             package_name,
@@ -88,12 +78,10 @@ impl IntroducedBy {
         }
     }
 
-    #[allow(dead_code)]
     pub fn package_name(&self) -> &str {
         &self.package_name
     }
 
-    #[allow(dead_code)]
     pub fn version(&self) -> &str {
         &self.version
     }

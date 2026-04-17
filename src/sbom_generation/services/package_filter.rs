@@ -1,7 +1,6 @@
 use crate::sbom_generation::domain::Package;
 use crate::shared::Result;
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 /// Maximum number of exclude patterns to prevent DoS attacks
 ///
@@ -82,36 +81,6 @@ impl PackageFilter {
             .into_iter()
             .filter(|pkg| !self.matches(pkg.name()))
             .collect()
-    }
-
-    /// Filters dependency map by removing excluded packages
-    ///
-    /// Removes excluded packages from both map keys and dependency lists
-    ///
-    /// Note: This method is intentionally not used in the main SBOM generation flow
-    /// (see issue #206). The dependency_map is preserved to maintain correct dependency
-    /// classification even when the root project is excluded. However, this method is
-    /// kept for future use cases where filtering the dependency map is desired.
-    ///
-    /// # Arguments
-    /// * `dependency_map` - HashMap mapping package names to their dependencies
-    ///
-    /// # Returns
-    /// Filtered dependency map with excluded packages removed
-    #[allow(dead_code)]
-    pub fn filter_dependency_map(
-        &self,
-        mut dependency_map: HashMap<String, Vec<String>>,
-    ) -> HashMap<String, Vec<String>> {
-        // Remove excluded packages from map keys
-        dependency_map.retain(|package_name, _| !self.matches(package_name));
-
-        // Remove excluded packages from dependency lists
-        for deps in dependency_map.values_mut() {
-            deps.retain(|dep_name| !self.matches(dep_name));
-        }
-
-        dependency_map
     }
 
     /// Checks if a package name matches any exclusion pattern
@@ -535,27 +504,6 @@ mod tests {
     fn test_empty_pattern_list() {
         let filter = PackageFilter::new(vec![]).unwrap();
         assert!(!filter.matches("anything"));
-    }
-
-    #[test]
-    fn test_filter_dependency_map() {
-        let mut dependency_map = HashMap::new();
-        dependency_map.insert(
-            "app".to_string(),
-            vec!["requests".to_string(), "pytest".to_string()],
-        );
-        dependency_map.insert("pytest".to_string(), vec!["pluggy".to_string()]);
-        dependency_map.insert("requests".to_string(), vec!["urllib3".to_string()]);
-
-        let filter = PackageFilter::new(vec!["pytest".to_string()]).unwrap();
-        let filtered = filter.filter_dependency_map(dependency_map);
-
-        // pytest should be removed from keys
-        assert!(!filtered.contains_key("pytest"));
-        // pytest should be removed from app's dependencies
-        assert_eq!(filtered.get("app").unwrap(), &vec!["requests".to_string()]);
-        // Other entries should remain
-        assert!(filtered.contains_key("requests"));
     }
 
     #[test]

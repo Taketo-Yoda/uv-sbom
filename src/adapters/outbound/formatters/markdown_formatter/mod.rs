@@ -126,7 +126,6 @@ mod tests {
                     license: Some(LicenseView {
                         spdx_id: Some("Apache-2.0".to_string()),
                         name: "Apache License 2.0".to_string(),
-                        url: None,
                     }),
                     description: Some("HTTP library".to_string()),
                     sha256_hash: None,
@@ -140,7 +139,6 @@ mod tests {
                     license: Some(LicenseView {
                         spdx_id: Some("MIT".to_string()),
                         name: "MIT License".to_string(),
-                        url: None,
                     }),
                     description: None,
                     sha256_hash: None,
@@ -867,7 +865,6 @@ mod tests {
             license: Some(LicenseView {
                 spdx_id: None,
                 name: "Some Custom License".to_string(),
-                url: None,
             }),
             description: None,
             sha256_hash: None,

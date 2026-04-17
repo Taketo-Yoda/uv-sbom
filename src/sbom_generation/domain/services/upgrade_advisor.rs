@@ -7,7 +7,6 @@ use crate::sbom_generation::domain::upgrade_recommendation::UpgradeRecommendatio
 /// Stateless domain service that orchestrates upgrade simulations and produces
 /// `UpgradeRecommendation` results by comparing resolved transitive versions
 /// against OSV fixed versions.
-#[allow(dead_code)]
 pub struct UpgradeAdvisor;
 
 impl UpgradeAdvisor {
@@ -23,7 +22,6 @@ impl UpgradeAdvisor {
     ///    c. resolved >= fixed → Upgradable
     ///    d. resolved < fixed → Unresolvable
     /// 4. On simulation error → SimulationFailed
-    #[allow(dead_code)]
     pub async fn advise<S: UvLockSimulator>(
         simulator: &S,
         resolution_entries: &[ResolutionEntry],

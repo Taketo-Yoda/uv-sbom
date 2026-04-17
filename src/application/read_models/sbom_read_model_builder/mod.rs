@@ -37,7 +37,7 @@ impl SbomReadModelBuilder {
     /// # Returns
     /// A fully constructed SbomReadModel
     /// Builds a SbomReadModel without project metadata component (backwards compatible)
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for Issue #486: backwards-compatible wrapper used by integration tests and library consumers
     pub fn build(
         packages: Vec<EnrichedPackage>,
         metadata: &SbomMetadata,

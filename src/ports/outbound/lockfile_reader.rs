@@ -65,7 +65,6 @@ pub trait LockfileReader {
     /// - The uv.lock file does not exist or cannot be read
     /// - The TOML parsing fails
     /// - No package with `name == member_name` and `source.editable` set is found
-    #[allow(dead_code)]
     fn read_and_parse_lockfile_for_member(
         &self,
         project_path: &Path,

@@ -2,19 +2,18 @@ use crate::shared::Result;
 use std::path::{Path, PathBuf};
 
 /// Represents a member of a uv workspace.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct WorkspaceMember {
     /// The package name as declared in the `[[package]]` entry.
     pub name: String,
     /// The relative path to the workspace member (as listed in `[manifest].members`).
+    #[allow(dead_code)] // Reserved for Issue #486: public field for library consumers
     pub relative_path: String,
     /// The absolute path to the workspace member, resolved from the workspace root.
     pub absolute_path: PathBuf,
 }
 
 /// Port for reading uv workspace members from a `uv.lock` file.
-#[allow(dead_code)]
 pub trait WorkspaceReader {
     /// Reads workspace members from `uv.lock` in the given workspace root directory.
     ///
@@ -42,5 +41,6 @@ pub trait WorkspaceReader {
     /// Returns `false` if `uv.lock` does not exist, cannot be read, or has no
     /// `[manifest].members` section. Errors reading the lock file are silently
     /// treated as non-workspace (returns `false`).
+    #[allow(dead_code)] // Reserved for Issue #486: public trait method for library consumers
     fn is_workspace_root(&self, path: &Path) -> bool;
 }

@@ -8,7 +8,6 @@ use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 /// Stateless domain service for cross-referencing vulnerability data with the
 /// dependency graph to identify which direct dependencies introduce vulnerable
 /// transitive packages.
-#[allow(dead_code)]
 pub struct ResolutionAnalyzer;
 
 impl ResolutionAnalyzer {
@@ -21,7 +20,6 @@ impl ResolutionAnalyzer {
     /// 3. Reverse-lookup which direct dep(s) pull in the vulnerable transitive dep
     /// 4. For each vulnerability in that package, create a ResolutionEntry
     /// 5. Return only entries for transitive vulnerabilities
-    #[allow(dead_code)]
     pub fn analyze(
         dependency_graph: &DependencyGraph,
         vulnerabilities: &[PackageVulnerabilities],
@@ -78,7 +76,6 @@ impl ResolutionAnalyzer {
 
 /// Look up the version of a package by name from the enriched package list.
 /// Returns "unknown" if the package is not found.
-#[allow(dead_code)]
 fn find_package_version(all_packages: &[EnrichedPackage], name: &str) -> String {
     all_packages
         .iter()

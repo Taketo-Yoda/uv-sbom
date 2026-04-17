@@ -34,7 +34,6 @@ pub struct SbomRequest {
     pub license_policy: Option<LicensePolicy>,
     /// Whether to suggest direct dependency upgrade versions to fix transitive vulnerabilities.
     /// Only meaningful when `check_cve` is true.
-    #[allow(dead_code)] // Will be used by upgrade advisor use case
     pub suggest_fix: bool,
     /// Output locale for human-readable formats
     pub locale: Locale,
@@ -150,7 +149,7 @@ impl SbomRequestBuilder {
     }
 
     /// Adds a single exclusion pattern.
-    #[allow(dead_code)] // Used by library consumers and tests
+    #[allow(dead_code)] // Reserved for Issue #486: public library builder API, used by integration tests and library consumers
     pub fn add_exclude_pattern(mut self, pattern: impl Into<String>) -> Self {
         self.exclude_patterns.push(pattern.into());
         self
@@ -169,7 +168,7 @@ impl SbomRequestBuilder {
     }
 
     /// Sets the severity threshold for vulnerability filtering.
-    #[allow(dead_code)] // Used by library consumers and tests
+    #[allow(dead_code)] // Reserved for Issue #486: public library builder API, used by integration tests and library consumers
     pub fn severity_threshold(mut self, severity: Severity) -> Self {
         self.severity_threshold = Some(severity);
         self
@@ -185,7 +184,7 @@ impl SbomRequestBuilder {
     }
 
     /// Sets the CVSS threshold for vulnerability filtering.
-    #[allow(dead_code)] // Used by library consumers and tests
+    #[allow(dead_code)] // Reserved for Issue #486: public library builder API, used by integration tests and library consumers
     pub fn cvss_threshold(mut self, cvss: f32) -> Self {
         self.cvss_threshold = Some(cvss);
         self

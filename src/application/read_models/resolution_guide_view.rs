@@ -9,7 +9,6 @@ use super::vulnerability_view::SeverityView;
 ///
 /// Contains a list of resolution entries that map vulnerable transitive
 /// dependencies back to the direct dependencies that introduce them.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct ResolutionGuideView {
     /// Resolution entries for vulnerable transitive dependencies
@@ -20,7 +19,6 @@ pub struct ResolutionGuideView {
 ///
 /// Maps a vulnerable transitive package to the direct dependency(ies)
 /// that pull it in, along with vulnerability details.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ResolutionEntryView {
     /// Name of the vulnerable transitive package
@@ -38,7 +36,6 @@ pub struct ResolutionEntryView {
 }
 
 /// View representation of a direct dependency that introduces a vulnerable package
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct IntroducedByView {
     /// Name of the direct dependency

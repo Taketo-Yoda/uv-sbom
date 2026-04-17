@@ -19,7 +19,7 @@ pub struct SbomResponse {
     pub metadata: SbomMetadata,
     /// Optional vulnerability report (only present when CVE check is enabled)
     /// None = not checked, Some(vec) = checked (empty vec means no vulnerabilities found)
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for Issue #486: public DTO field for library consumers
     pub vulnerability_report: Option<Vec<PackageVulnerabilities>>,
     /// Whether vulnerabilities above threshold were detected
     /// Used to determine exit code for CI integration
@@ -33,7 +33,6 @@ pub struct SbomResponse {
     pub has_license_violations: bool,
     /// Upgrade recommendations for vulnerable transitive dependencies.
     /// Populated only when `suggest_fix` was true in the request.
-    #[allow(dead_code)] // Will be populated by upgrade advisor use case
     pub upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
 }
 
@@ -116,7 +115,6 @@ impl SbomResponseBuilder {
         self
     }
 
-    #[allow(dead_code)] // Will be used by upgrade advisor use case
     pub fn upgrade_recommendations(mut self, recommendations: Vec<UpgradeRecommendation>) -> Self {
         self.upgrade_recommendations = Some(recommendations);
         self

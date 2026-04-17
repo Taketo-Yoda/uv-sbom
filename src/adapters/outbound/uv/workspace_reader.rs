@@ -6,10 +6,8 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
 /// Adapter that reads uv workspace members by parsing `uv.lock`.
-#[allow(dead_code)]
 pub struct UvWorkspaceReader;
 
-#[allow(dead_code)]
 impl UvWorkspaceReader {
     /// Creates a new `UvWorkspaceReader` instance.
     pub fn new() -> Self {
