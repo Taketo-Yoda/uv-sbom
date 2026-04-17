@@ -133,6 +133,7 @@ Role-based agents in `.claude/agents/` provide specialized perspectives for open
 | Reviewing `src/i18n/` or `README-JP.md` | i18n Specialist | `.claude/agents/i18n.md` |
 | Reviewing test coverage for a new feature | QA Engineer | `.claude/agents/qa.md` |
 | Checking release readiness before `/release` | Release Manager | `.claude/agents/release.md` |
+| Planning decomposition of a large Issue before `/split` | PM | `.claude/agents/pm.md` |
 
 ### Agents vs Skills
 
