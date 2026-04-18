@@ -6,9 +6,6 @@ use std::path::{Path, PathBuf};
 pub struct WorkspaceMember {
     /// The package name as declared in the `[[package]]` entry.
     pub name: String,
-    /// The relative path to the workspace member (as listed in `[manifest].members`).
-    #[allow(dead_code)] // Reserved for Issue #486: public field for library consumers
-    pub relative_path: String,
     /// The absolute path to the workspace member, resolved from the workspace root.
     pub absolute_path: PathBuf,
 }
@@ -31,16 +28,4 @@ pub trait WorkspaceReader {
     /// # Errors
     /// Returns an error if the `uv.lock` file cannot be read or parsed.
     fn read_workspace_members(&self, workspace_root: &Path) -> Result<Vec<WorkspaceMember>>;
-
-    /// Returns `true` if the given path is a uv workspace root.
-    ///
-    /// A path is considered a workspace root if its `uv.lock` file contains a
-    /// non-empty `[manifest].members` array.
-    ///
-    /// # Postconditions
-    /// Returns `false` if `uv.lock` does not exist, cannot be read, or has no
-    /// `[manifest].members` section. Errors reading the lock file are silently
-    /// treated as non-workspace (returns `false`).
-    #[allow(dead_code)] // Reserved for Issue #486: public trait method for library consumers
-    fn is_workspace_root(&self, path: &Path) -> bool;
 }

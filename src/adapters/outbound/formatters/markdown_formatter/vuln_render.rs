@@ -200,8 +200,6 @@ mod tests {
     fn test_render_vulnerability_summary() {
         let summary = VulnerabilitySummary {
             total_count: 3,
-            actionable_count: 2,
-            informational_count: 1,
             affected_package_count: 2,
         };
 
@@ -215,8 +213,6 @@ mod tests {
     fn test_render_vulnerability_summary_singular() {
         let summary = VulnerabilitySummary {
             total_count: 1,
-            actionable_count: 1,
-            informational_count: 0,
             affected_package_count: 1,
         };
 

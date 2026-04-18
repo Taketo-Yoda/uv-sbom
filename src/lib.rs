@@ -44,9 +44,11 @@
 //! let response = use_case.execute(request).await?;
 //!
 //! // Build read model and format output
-//! let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build(
+//! let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build_with_project(
 //!     response.enriched_packages,
 //!     &response.metadata,
+//!     None,
+//!     None,
 //!     None,
 //!     None,
 //!     None,

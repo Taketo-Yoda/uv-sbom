@@ -30,7 +30,6 @@ impl Locale {
 }
 
 /// All translatable strings used in formatted output.
-#[allow(dead_code)] // Reserved for Issue #486: some message keys are unused pending future formatter sections
 pub struct Messages {
     // Section headers
     pub section_sbom_title: &'static str,
@@ -51,13 +50,6 @@ pub struct Messages {
     pub col_severity: &'static str,
     pub col_vuln_id: &'static str,
     pub col_cvss: &'static str,
-
-    // Status labels
-    pub status_compliant: &'static str,
-    pub status_violation: &'static str,
-    pub status_no_vulns: &'static str,
-    pub status_direct_dep: &'static str,
-    pub status_introduced_by: &'static str,
 
     // Progress messages (formatter/main layer)
     pub progress_generating_json: &'static str,
@@ -217,13 +209,6 @@ static EN_MESSAGES: Messages = Messages {
     col_vuln_id: "Vulnerability ID",
     col_cvss: "CVSS",
 
-    // Status labels
-    status_compliant: "Compliant",
-    status_violation: "Violation",
-    status_no_vulns: "No vulnerabilities found",
-    status_direct_dep: "Direct dependency",
-    status_introduced_by: "Introduced by",
-
     // Progress messages
     progress_generating_json: "📝 Generating CycloneDX JSON format output...",
     progress_generating_markdown: "📝 Generating Markdown format output...",
@@ -350,13 +335,6 @@ static JA_MESSAGES: Messages = Messages {
     col_severity: "深刻度",
     col_vuln_id: "脆弱性ID",
     col_cvss: "CVSS",
-
-    // Status labels
-    status_compliant: "準拠",
-    status_violation: "違反",
-    status_no_vulns: "脆弱性は検出されませんでした",
-    status_direct_dep: "直接依存",
-    status_introduced_by: "導入元",
 
     // Progress messages
     progress_generating_json: "📝 CycloneDX JSON形式で出力を生成中...",
@@ -500,7 +478,6 @@ mod tests {
         );
         assert_eq!(msgs.section_direct_deps, "## Direct Dependencies");
         assert_eq!(msgs.col_package, "Package");
-        assert_eq!(msgs.status_compliant, "Compliant");
         assert_eq!(
             msgs.progress_generating_json,
             "📝 Generating CycloneDX JSON format output..."
@@ -513,7 +490,6 @@ mod tests {
         assert_eq!(msgs.section_sbom_title, "# ソフトウェア部品表 (SBOM)");
         assert_eq!(msgs.section_direct_deps, "## 直接依存パッケージ");
         assert_eq!(msgs.col_package, "パッケージ");
-        assert_eq!(msgs.status_compliant, "準拠");
         assert_eq!(
             msgs.progress_generating_json,
             "📝 CycloneDX JSON形式で出力を生成中..."

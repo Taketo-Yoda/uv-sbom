@@ -4,10 +4,6 @@ use std::collections::HashMap;
 /// Represents the result of a `uv lock --upgrade-package` simulation
 #[derive(Debug, Clone)]
 pub struct SimulationResult {
-    /// The direct package that was upgraded
-    #[allow(dead_code)]
-    // Reserved for Issue #486: field retained for completeness of SimulationResult API
-    pub upgraded_package: String,
     /// The version it was upgraded to
     pub upgraded_to_version: String,
     /// Map of transitive package name → resolved version after upgrade

@@ -10,25 +10,23 @@ pub(super) fn build_upgrade_recommendations(
         .map(|rec| match rec {
             UpgradeRecommendation::Upgradable {
                 direct_dep_name,
-                direct_dep_current_version,
                 direct_dep_target_version,
                 transitive_dep_name,
                 transitive_resolved_version,
                 vulnerability_id,
+                ..
             } => UpgradeEntryView::Upgradable {
                 direct_dep: direct_dep_name.clone(),
-                current_version: direct_dep_current_version.clone(),
                 target_version: direct_dep_target_version.clone(),
                 transitive_dep: transitive_dep_name.clone(),
                 resolved_version: transitive_resolved_version.clone(),
                 vulnerability_id: vulnerability_id.clone(),
             },
             UpgradeRecommendation::Unresolvable {
-                direct_dep_name,
                 reason,
                 vulnerability_id,
+                ..
             } => UpgradeEntryView::Unresolvable {
-                direct_dep: direct_dep_name.clone(),
                 reason: reason.clone(),
                 vulnerability_id: vulnerability_id.clone(),
             },
