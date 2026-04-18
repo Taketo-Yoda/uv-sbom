@@ -128,7 +128,7 @@ jobs:
         run: ls -R
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.6.2
         with:
           files: |
             uv-sbom-*-linux-gnu/*.tar.gz
