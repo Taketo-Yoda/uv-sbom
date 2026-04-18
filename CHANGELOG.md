@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.2.0] - 2026-04-18
 
+### Added
+- **`--workspace` flag**: Generate a combined SBOM across all members of a uv workspace in a single run (#443, #444)
+- **Workspace config support**: `--init` config template now includes the `workspace` option (#456)
+
+### Fixed
+- **Workspace progress messages now localized**: Progress and summary output during `--workspace` runs respect `--lang ja` (#463, #468)
+- **License compliance progress messages now localized**: Progress messages during license compliance checks respect `--lang ja` (#478)
+
+### Security
+- Updated `rustls-webpki` to 0.103.12 to fix GHSA-965h-392x-2mh5
+
 ## [2.1.0] - 2026-04-05
 
 ### Added
