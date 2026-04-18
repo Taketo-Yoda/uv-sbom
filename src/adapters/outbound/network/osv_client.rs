@@ -174,7 +174,7 @@ impl VulnerabilityRepository for OsvClient {
 
             let osv_results = self.fetch_batch(chunk).await?;
 
-            for (package, osv_result) in chunk.iter().zip(osv_results.into_iter()) {
+            for (package, osv_result) in chunk.iter().zip(osv_results) {
                 total_vulns += osv_result.vulns.len();
                 batch_results.push((package.clone(), osv_result));
             }
@@ -292,17 +292,11 @@ struct OsvAffected {
 
 #[derive(Debug, Deserialize)]
 struct OsvRange {
-    #[serde(rename = "type")]
-    #[allow(dead_code)]
-    range_type: String,
     events: Vec<OsvEvent>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OsvEvent {
-    #[serde(default)]
-    #[allow(dead_code)]
-    introduced: Option<String>,
     #[serde(default)]
     fixed: Option<String>,
 }

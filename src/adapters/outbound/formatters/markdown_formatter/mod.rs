@@ -1,6 +1,6 @@
 mod helpers;
 mod links;
-mod section;
+mod sections;
 mod table;
 mod vuln_render;
 
@@ -49,22 +49,22 @@ impl SbomFormatter for MarkdownFormatter {
     fn format(&self, model: &SbomReadModel) -> Result<String> {
         let mut output = String::new();
 
-        section::render_summary(
+        sections::summary::render(
             self.messages,
             &mut output,
             &model.components,
             model.vulnerabilities.as_ref(),
             model.license_compliance.as_ref(),
         );
-        section::render_header(self.messages, &mut output);
-        section::render_components(
+        sections::header::render(self.messages, &mut output);
+        sections::components::render(
             self.messages,
             self.verified_packages.as_ref(),
             &mut output,
             &model.components,
         );
         if let Some(deps) = &model.dependencies {
-            section::render_dependencies(
+            sections::dependencies::render(
                 self.messages,
                 self.verified_packages.as_ref(),
                 &mut output,
@@ -82,7 +82,7 @@ impl SbomFormatter for MarkdownFormatter {
         }
         if let Some(guide) = &model.resolution_guide {
             if !guide.entries.is_empty() {
-                section::render_resolution_guide(
+                sections::resolution_guide::render(
                     self.messages,
                     &mut output,
                     guide,
@@ -91,7 +91,7 @@ impl SbomFormatter for MarkdownFormatter {
             }
         }
         if let Some(compliance) = &model.license_compliance {
-            section::render_license_compliance(self.messages, &mut output, compliance);
+            sections::license_compliance::render(self.messages, &mut output, compliance);
         }
 
         Ok(output)
@@ -126,7 +126,6 @@ mod tests {
                     license: Some(LicenseView {
                         spdx_id: Some("Apache-2.0".to_string()),
                         name: "Apache License 2.0".to_string(),
-                        url: None,
                     }),
                     description: Some("HTTP library".to_string()),
                     sha256_hash: None,
@@ -140,7 +139,6 @@ mod tests {
                     license: Some(LicenseView {
                         spdx_id: Some("MIT".to_string()),
                         name: "MIT License".to_string(),
-                        url: None,
                     }),
                     description: None,
                     sha256_hash: None,
@@ -215,11 +213,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -258,11 +253,8 @@ mod tests {
                 description: None,
                 source_url: None,
             }],
-            threshold_exceeded: false,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 0,
-                informational_count: 1,
                 affected_package_count: 1,
             },
         });
@@ -378,11 +370,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -433,11 +422,8 @@ mod tests {
                 description: None,
                 source_url: None,
             }],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 2,
-                actionable_count: 1,
-                informational_count: 1,
                 affected_package_count: 2,
             },
         });
@@ -576,11 +562,8 @@ mod tests {
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![],
             informational: vec![],
-            threshold_exceeded: false,
             summary: VulnerabilitySummary {
                 total_count: 0,
-                actionable_count: 0,
-                informational_count: 0,
                 affected_package_count: 0,
             },
         });
@@ -610,11 +593,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -632,11 +612,8 @@ mod tests {
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![],
             informational: vec![],
-            threshold_exceeded: false,
             summary: VulnerabilitySummary {
                 total_count: 0,
-                actionable_count: 0,
-                informational_count: 0,
                 affected_package_count: 0,
             },
         });
@@ -755,7 +732,6 @@ mod tests {
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
             entries: vec![UpgradeEntryView::Upgradable {
                 direct_dep: "requests".to_string(),
-                current_version: "2.31.0".to_string(),
                 target_version: "2.32.3".to_string(),
                 transitive_dep: "urllib3".to_string(),
                 resolved_version: "2.2.1".to_string(),
@@ -789,11 +765,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -840,11 +813,8 @@ mod tests {
                 },
             ],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 2,
-                actionable_count: 2,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -867,7 +837,6 @@ mod tests {
             license: Some(LicenseView {
                 spdx_id: None,
                 name: "Some Custom License".to_string(),
-                url: None,
             }),
             description: None,
             sha256_hash: None,

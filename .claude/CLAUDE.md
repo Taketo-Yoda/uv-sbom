@@ -46,6 +46,7 @@ When the user requests any of the following operations, ALWAYS invoke the corres
 | Sync CLI options to config | /sync-config | Audit `ConfigFile`, `MergedConfig`, `CONFIG_TEMPLATE` for gaps |
 | Split Issue into subtasks | /split | Confirm decomposition before creating Issues; all Issues in English |
 | Propose or evaluate a feature idea | /ideate | Run triage, competitive analysis, draft Issue |
+| Review code quality before commit | /code-review | Spawn Reviewer Agent; do not recheck CI concerns (fmt/clippy) |
 
 ### Why This Rule Exists
 
@@ -118,6 +119,30 @@ invoke the `/ideate` skill or `/issue` skill directly.
 | Evaluate feature idea | (manual triage, see above) | Before any Issue |
 | Draft Issue from approved idea | /ideate | Feature passed triage |
 | Create Issue directly | /issue | Feature already approved by user |
+
+## Agent Invocation Rules
+
+Role-based agents in `.claude/agents/` provide specialized perspectives for open-ended analysis tasks. Invoke the appropriate agent when you need domain expertise beyond what skills and context files provide.
+
+| Situation | Agent to Invoke | File |
+|-----------|----------------|------|
+| Evaluating a feature proposal | PdM | `.claude/agents/pdm.md` |
+| Reviewing code structure or module placement | Architect | `.claude/agents/architect.md` |
+| Security review of new CVE/network code | Security Expert | `.claude/agents/security.md` |
+| Reviewing English README or documentation | DevRel | `.claude/agents/devrel.md` |
+| Reviewing `src/i18n/` or `README-JP.md` | i18n Specialist | `.claude/agents/i18n.md` |
+| Reviewing test coverage for a new feature | QA Engineer | `.claude/agents/qa.md` |
+| Checking release readiness before `/release` | Release Manager | `.claude/agents/release.md` |
+| Planning decomposition of a large Issue before `/split` | PM | `.claude/agents/pm.md` |
+
+### Agents vs Skills
+
+- **Skills** = procedural workflows ("what steps to take") — e.g., `/commit`, `/release`
+- **Agents** = domain perspectives ("what lens to apply") — e.g., PdM, Architect
+
+Agents complement skills: the Release Manager agent judges readiness; the `/release` skill executes the mechanics.
+
+---
 
 ## README Update Checklist
 

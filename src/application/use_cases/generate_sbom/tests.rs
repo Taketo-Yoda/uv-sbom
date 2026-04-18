@@ -67,6 +67,14 @@ impl LockfileReader for MockLockfileReader {
 
         Ok((packages, dependency_map))
     }
+
+    fn read_and_parse_lockfile_for_member(
+        &self,
+        _path: &Path,
+        _member_name: &str,
+    ) -> Result<LockfileParseResult> {
+        unimplemented!("not needed for current mock usage")
+    }
 }
 
 struct MockProjectConfigReader {
@@ -245,7 +253,7 @@ version = "3.4.0"
     let response = use_case.execute(request).await.unwrap();
 
     assert_eq!(response.enriched_packages.len(), 2);
-    assert!(response.vulnerability_report.is_some());
+    assert!(response.vulnerability_check_result.is_some());
 }
 
 #[tokio::test]
@@ -279,7 +287,7 @@ version = "2024.8.30"
     let response = use_case.execute(request).await.unwrap();
 
     assert_eq!(response.enriched_packages.len(), 1);
-    assert!(response.vulnerability_report.is_none());
+    assert!(response.vulnerability_check_result.is_none());
 }
 
 #[tokio::test]
@@ -311,7 +319,7 @@ version = "2024.8.30"
     let response = use_case.execute(request).await.unwrap();
 
     assert_eq!(response.enriched_packages.len(), 1);
-    assert!(response.vulnerability_report.is_none());
+    assert!(response.vulnerability_check_result.is_none());
 }
 
 #[tokio::test]
@@ -345,7 +353,7 @@ version = "2024.8.30"
     let response = use_case.execute(request).await.unwrap();
 
     assert_eq!(response.enriched_packages.len(), 0); // dry-run returns empty
-    assert!(response.vulnerability_report.is_none()); // CVE check skipped
+    assert!(response.vulnerability_check_result.is_none()); // CVE check skipped
 }
 
 // ===== Tests for extracted methods =====
@@ -405,7 +413,7 @@ fn test_apply_exclusion_filters_with_patterns() {
     ];
     let request = SbomRequest::builder()
         .project_path("/test/project")
-        .add_exclude_pattern("requests")
+        .exclude_patterns(vec!["requests".to_string()])
         .build()
         .unwrap();
 
@@ -436,7 +444,7 @@ fn test_apply_exclusion_filters_all_excluded_error() {
     let packages = vec![Package::new("pkg1".to_string(), "1.0.0".to_string()).unwrap()];
     let request = SbomRequest::builder()
         .project_path("/test/project")
-        .add_exclude_pattern("pkg1")
+        .exclude_patterns(vec!["pkg1".to_string()])
         .build()
         .unwrap();
 
@@ -533,11 +541,11 @@ fn test_build_response() {
         Some("Test description".to_string()),
     )];
 
-    let response = use_case.build_response(enriched_packages.clone(), None, None, None, None, None);
+    let response = use_case.build_response(enriched_packages.clone(), None, None, None, None);
 
     assert_eq!(response.enriched_packages.len(), 1);
     assert!(response.dependency_graph.is_none());
-    assert!(response.vulnerability_report.is_none());
+    assert!(response.vulnerability_check_result.is_none());
     assert!(response.vulnerability_check_result.is_none());
     assert!(!response.metadata.serial_number().is_empty());
     assert!(!response.metadata.timestamp().is_empty());
@@ -659,7 +667,7 @@ fn test_build_threshold_config_severity() {
     let request = SbomRequest::builder()
         .project_path("/test/project")
         .check_cve(true)
-        .severity_threshold(Severity::High)
+        .severity_threshold_opt(Some(Severity::High))
         .build()
         .unwrap();
 
@@ -679,7 +687,7 @@ fn test_build_threshold_config_cvss() {
     let request = SbomRequest::builder()
         .project_path("/test/project")
         .check_cve(true)
-        .cvss_threshold(7.0)
+        .cvss_threshold_opt(Some(7.0))
         .build()
         .unwrap();
 
@@ -739,14 +747,7 @@ fn test_build_response_with_threshold_exceeded() {
         threshold_exceeded: true,
     };
 
-    let response = use_case.build_response(
-        enriched_packages,
-        None,
-        None,
-        Some(check_result),
-        None,
-        None,
-    );
+    let response = use_case.build_response(enriched_packages, None, Some(check_result), None, None);
 
     assert!(response.has_vulnerabilities_above_threshold);
     assert!(response.vulnerability_check_result.is_some());
@@ -803,14 +804,7 @@ fn test_build_response_with_threshold_not_exceeded() {
         threshold_exceeded: false,
     };
 
-    let response = use_case.build_response(
-        enriched_packages,
-        None,
-        None,
-        Some(check_result),
-        None,
-        None,
-    );
+    let response = use_case.build_response(enriched_packages, None, Some(check_result), None, None);
 
     assert!(!response.has_vulnerabilities_above_threshold);
     assert!(response.vulnerability_check_result.is_some());
@@ -877,7 +871,7 @@ version = "1.26.0"
     let request = SbomRequest::builder()
         .project_path("/test/project")
         .include_dependency_info(true)
-        .add_exclude_pattern("myproject")
+        .exclude_patterns(vec!["myproject".to_string()])
         .build()
         .unwrap();
 
@@ -1009,7 +1003,7 @@ version = "7.0.0"
     let request = SbomRequest::builder()
         .project_path("/test/project")
         .include_dependency_info(true)
-        .add_exclude_pattern("pytest")
+        .exclude_patterns(vec!["pytest".to_string()])
         .build()
         .unwrap();
 

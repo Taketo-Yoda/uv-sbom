@@ -1,0 +1,18 @@
+version = 1
+requires-python = ">=3.11"
+
+[manifest]
+members = [
+    "packages/api",
+    "packages/worker",
+]
+
+[[package]]
+name = "api"
+version = "0.1.0"
+source = { editable = "packages/api" }
+
+[[package]]
+name = "worker"
+version = "0.1.0"
+source = { editable = "packages/worker" }

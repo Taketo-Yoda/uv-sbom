@@ -86,6 +86,10 @@ pub struct Args {
     #[arg(long)]
     pub init: bool,
 
+    /// Analyze all workspace members (requires a uv workspace root with [manifest] in uv.lock)
+    #[arg(long, conflicts_with = "output")]
+    pub workspace: bool,
+
     /// Output language for human-readable formats: en (default) or ja
     #[arg(long, default_value = "en", value_parser = parse_lang)]
     pub lang: Locale,

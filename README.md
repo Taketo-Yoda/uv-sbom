@@ -24,8 +24,6 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 💾 Output to stdout or file
 - 🛡️ Robust error handling with helpful error messages and suggestions
 - 📈 Progress tracking during license information retrieval
-- 🏗️ Built with **Hexagonal Architecture** (Ports and Adapters) + **Domain-Driven Design** for maintainability and testability
-- ✅ Comprehensive test coverage (Unit, Integration, E2E)
 
 ## Scope and Key Differences from CycloneDX
 
@@ -605,6 +603,60 @@ No security vulnerabilities were found in the scanned packages.
 *Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
 ```
 
+### uv Workspace Support
+
+[uv workspaces](https://docs.astral.sh/uv/concepts/projects/workspaces/) let you manage multiple Python
+packages in a single repository with a shared `uv.lock` file. `uv-sbom --workspace` generates a separate
+SBOM for each member package, reflecting only the dependencies reachable from that member.
+
+**When to use:**
+- Your repository contains multiple Python packages (e.g., `api/`, `worker/`)
+- You need per-member SBOMs for independent security scanning or compliance reporting
+
+**Usage:**
+
+```bash
+# Generate one SBOM per workspace member (CycloneDX JSON, default)
+uv-sbom --workspace --path /path/to/workspace
+```
+
+**Expected output:**
+
+```
+Workspace mode: 2 members found
+
+  Processing: api
+  ...
+  Processing: worker
+  ...
+
+📦 Workspace SBOM Summary
+────────────────────────────────────────────────────────────
+Member               Output File
+────────────────────────────────────────────────────────────
+api                  /path/to/workspace/packages/api/sbom.json
+worker               /path/to/workspace/packages/worker/sbom.json
+────────────────────────────────────────────────────────────
+```
+
+Each member gets its own `sbom.json` containing only the packages reachable from that member.
+Transitive dependencies are included, but packages belonging to other members are excluded.
+
+**With other options:**
+
+```bash
+# Markdown output for all members
+uv-sbom --workspace --path examples/workspace --format markdown
+
+# With license compliance check
+uv-sbom --workspace --path examples/workspace --check-license
+```
+
+> **Note:** `--workspace` and `--output` are mutually exclusive. In workspace mode, each member's SBOM is
+> automatically written to `sbom.json` (or `sbom.md` for Markdown) inside the member's own directory.
+
+See [`examples/workspace/`](examples/workspace/) for a runnable demo with two member packages (`api` and `worker`).
+
 ### Validating configuration with dry-run
 
 Use the `--dry-run` option to validate your configuration before the tool communicates with external registries:
@@ -702,6 +754,8 @@ Options:
                                      Cannot be used with --no-check-cve
       --suggest-fix                  Suggest direct dependency upgrade versions to resolve transitive vulnerabilities
                                      Requires uv CLI installed and pyproject.toml in project directory
+      --workspace                    Generate one SBOM per workspace member
+                                     Cannot be used with --output
       --check-license                Check license compliance against policy
       --license-allow <LIST>         Comma-separated list of allowed license patterns (overrides config)
       --license-deny <LIST>          Comma-separated list of denied license patterns (overrides config)
@@ -1012,22 +1066,37 @@ Some packages may fail to retrieve license information from PyPI. The tool will:
 ### Network issues
 If you're behind a proxy or firewall, ensure that you can access `https://pypi.org`. The tool uses a 10-second timeout for API requests.
 
-## Documentation
+## For Developers
 
-### For Users
-- [README.md](README.md) - User documentation
-- [LICENSE](LICENSE) - MIT License
+### Architecture
 
-### For Developers
-- [DEVELOPMENT.md](DEVELOPMENT.md) - Development guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) - **Hexagonal Architecture + DDD implementation** (layers, ports, adapters, test strategy, ADRs)
-- [CHANGELOG.md](CHANGELOG.md) - Change history
+uv-sbom is built with **Hexagonal Architecture** (Ports and Adapters) + **Domain-Driven Design (DDD)** for maintainability and testability.
 
-### For Claude Code Users
-- [.claude/project-context.md](.claude/project-context.md) - Complete project context for Claude Code
-- [.claude/instructions.md](.claude/instructions.md) - Coding guidelines and instructions for Claude Code
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a full breakdown of layers, ports, adapters, and architectural decision records (ADRs).
 
-These files provide comprehensive context for AI-assisted development with Claude Code.
+### Test Coverage
+
+The test suite covers Unit, Integration, and End-to-End scenarios.
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for how to run tests and contribute.
+
+### Development Setup
+
+After cloning the repository, activate the git hooks:
+
+```bash
+make setup
+```
+
+This enables `pre-commit` (auto-format) and `pre-push` (fmt check, clippy, tests) hooks from `.githooks/`, ensuring code quality checks run automatically for all contributors.
+
+### Reference
+
+- [DEVELOPMENT.md](DEVELOPMENT.md) — Development guide
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal Architecture + DDD implementation details
+- [CHANGELOG.md](CHANGELOG.md) — Change history
+- [.claude/project-context.md](.claude/project-context.md) — Complete project context for Claude Code
+- [.claude/instructions.md](.claude/instructions.md) — Coding guidelines and instructions for Claude Code
 
 ## Attribution
 

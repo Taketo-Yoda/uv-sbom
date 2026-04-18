@@ -1,0 +1,3 @@
+# Generated SBOM output files — run uv-sbom to recreate
+sbom.json
+sbom.md

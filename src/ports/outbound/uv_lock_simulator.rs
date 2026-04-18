@@ -2,11 +2,8 @@ use anyhow::Result;
 use std::collections::HashMap;
 
 /// Represents the result of a `uv lock --upgrade-package` simulation
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SimulationResult {
-    /// The direct package that was upgraded
-    pub upgraded_package: String,
     /// The version it was upgraded to
     pub upgraded_to_version: String,
     /// Map of transitive package name → resolved version after upgrade
@@ -14,7 +11,6 @@ pub struct SimulationResult {
 }
 
 /// Port for simulating dependency resolution with package upgrades
-#[allow(dead_code)]
 #[async_trait::async_trait]
 pub trait UvLockSimulator: Send + Sync {
     /// Simulate upgrading a specific package and return the resolved dependency versions.

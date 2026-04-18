@@ -12,10 +12,8 @@ use crate::ports::outbound::uv_lock_simulator::{SimulationResult, UvLockSimulato
 /// Uses a temporary directory strategy: copies `pyproject.toml` and `uv.lock`
 /// to a temp dir, runs `uv lock --upgrade-package <pkg>`, then parses the
 /// resulting lock file to determine resolved versions.
-#[allow(dead_code)]
 pub struct UvLockAdapter;
 
-#[allow(dead_code)]
 impl UvLockAdapter {
     pub fn new() -> Self {
         Self
@@ -129,7 +127,6 @@ impl UvLockSimulator for UvLockAdapter {
 
         // 7. Return result (temp_dir is dropped here, cleaning up automatically)
         Ok(SimulationResult {
-            upgraded_package: package_name.to_string(),
             upgraded_to_version,
             resolved_versions: new_versions,
         })
@@ -211,7 +208,6 @@ version = "0.1.0"
             .expect("requests must appear in after fixture");
 
         let sim_result = SimulationResult {
-            upgraded_package: package_name.to_string(),
             upgraded_to_version,
             resolved_versions,
         };

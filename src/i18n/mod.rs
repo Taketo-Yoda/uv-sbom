@@ -30,7 +30,6 @@ impl Locale {
 }
 
 /// All translatable strings used in formatted output.
-#[allow(dead_code)] // Some status fields reserved for future formatter sections
 pub struct Messages {
     // Section headers
     pub section_sbom_title: &'static str,
@@ -52,13 +51,6 @@ pub struct Messages {
     pub col_vuln_id: &'static str,
     pub col_cvss: &'static str,
 
-    // Status labels
-    pub status_compliant: &'static str,
-    pub status_violation: &'static str,
-    pub status_no_vulns: &'static str,
-    pub status_direct_dep: &'static str,
-    pub status_introduced_by: &'static str,
-
     // Progress messages (formatter/main layer)
     pub progress_generating_json: &'static str,
     pub progress_generating_markdown: &'static str,
@@ -76,6 +68,11 @@ pub struct Messages {
     pub progress_license_complete: &'static str,
     pub progress_vuln_found: &'static str,
     pub progress_vuln_none: &'static str,
+
+    // License compliance progress messages (use case layer)
+    pub progress_license_violations_found: &'static str,
+    pub progress_license_no_violations: &'static str,
+    pub progress_license_unknown_packages: &'static str,
 
     // Warning messages
     pub warn_check_cve_no_effect: &'static str,
@@ -133,6 +130,14 @@ pub struct Messages {
 
     // Vulnerability summary line (4 placeholders: count, unit, count, unit)
     pub summary_vuln_found: &'static str,
+
+    // Workspace output messages
+    pub output_complete: &'static str,
+    pub workspace_mode_members_found: &'static str,
+    pub workspace_processing_member: &'static str,
+    pub workspace_summary_header: &'static str,
+    pub workspace_col_member: &'static str,
+    pub workspace_col_output_file: &'static str,
 
     // Executive summary section
     pub section_summary: &'static str,
@@ -204,13 +209,6 @@ static EN_MESSAGES: Messages = Messages {
     col_vuln_id: "Vulnerability ID",
     col_cvss: "CVSS",
 
-    // Status labels
-    status_compliant: "Compliant",
-    status_violation: "Violation",
-    status_no_vulns: "No vulnerabilities found",
-    status_direct_dep: "Direct dependency",
-    status_introduced_by: "Introduced by",
-
     // Progress messages
     progress_generating_json: "📝 Generating CycloneDX JSON format output...",
     progress_generating_markdown: "📝 Generating Markdown format output...",
@@ -229,6 +227,11 @@ static EN_MESSAGES: Messages = Messages {
         "✅ License information retrieval complete: {} succeeded out of {}, {} failed",
     progress_vuln_found: "✅ Vulnerability check complete: {} vulnerabilities found in {} packages",
     progress_vuln_none: "✅ Vulnerability check complete: No known vulnerabilities found",
+
+    // License compliance progress messages (use case layer)
+    progress_license_violations_found: "⚠️  License compliance: {} violation(s) found",
+    progress_license_no_violations: "✅ License compliance: No violations found",
+    progress_license_unknown_packages: "⚠️  License compliance: {} package(s) with unknown license",
 
     // Warning messages
     warn_check_cve_no_effect: "⚠️  Warning: --check-cve has no effect with JSON format.",
@@ -286,6 +289,14 @@ static EN_MESSAGES: Messages = Messages {
     // Vulnerability summary line
     summary_vuln_found: "**Found {} {} in {} {}.**",
 
+    // Workspace output messages
+    output_complete: "✅ Output complete: {}",
+    workspace_mode_members_found: "Workspace mode: {} members found",
+    workspace_processing_member: "  Processing: {}",
+    workspace_summary_header: "📦 Workspace SBOM Summary",
+    workspace_col_member: "Member",
+    workspace_col_output_file: "Output File",
+
     // Executive summary section
     section_summary: "## Summary",
     col_item: "Item",
@@ -325,13 +336,6 @@ static JA_MESSAGES: Messages = Messages {
     col_vuln_id: "脆弱性ID",
     col_cvss: "CVSS",
 
-    // Status labels
-    status_compliant: "準拠",
-    status_violation: "違反",
-    status_no_vulns: "脆弱性は検出されませんでした",
-    status_direct_dep: "直接依存",
-    status_introduced_by: "導入元",
-
     // Progress messages
     progress_generating_json: "📝 CycloneDX JSON形式で出力を生成中...",
     progress_generating_markdown: "📝 Markdown形式で出力を生成中...",
@@ -349,6 +353,11 @@ static JA_MESSAGES: Messages = Messages {
     progress_license_complete: "✅ ライセンス情報取得完了: {}件成功 / {}件中、{}件失敗",
     progress_vuln_found: "✅ 脆弱性チェック完了: {}個のパッケージで{}件の脆弱性を検出",
     progress_vuln_none: "✅ 脆弱性チェック完了: 既知の脆弱性は検出されませんでした",
+
+    // License compliance progress messages (use case layer)
+    progress_license_violations_found: "⚠️  ライセンスコンプライアンス: {}件の違反が見つかりました",
+    progress_license_no_violations: "✅ ライセンスコンプライアンス: 違反は見つかりませんでした",
+    progress_license_unknown_packages: "⚠️  ライセンスコンプライアンス: ライセンス不明のパッケージが{}件あります",
 
     // Warning messages
     warn_check_cve_no_effect: "⚠️  警告: JSON形式では --check-cve は効果がありません。",
@@ -408,6 +417,14 @@ static JA_MESSAGES: Messages = Messages {
     // Vulnerability summary line
     summary_vuln_found: "**{}{}が{}{}で見つかりました。**",
 
+    // Workspace output messages
+    output_complete: "✅ 出力完了: {}",
+    workspace_mode_members_found: "ワークスペースモード: {} メンバーを検出",
+    workspace_processing_member: "  処理中: {}",
+    workspace_summary_header: "📦 ワークスペース SBOM サマリー",
+    workspace_col_member: "メンバー",
+    workspace_col_output_file: "出力ファイル",
+
     // Executive summary section
     section_summary: "## サマリー",
     col_item: "項目",
@@ -461,7 +478,6 @@ mod tests {
         );
         assert_eq!(msgs.section_direct_deps, "## Direct Dependencies");
         assert_eq!(msgs.col_package, "Package");
-        assert_eq!(msgs.status_compliant, "Compliant");
         assert_eq!(
             msgs.progress_generating_json,
             "📝 Generating CycloneDX JSON format output..."
@@ -474,7 +490,6 @@ mod tests {
         assert_eq!(msgs.section_sbom_title, "# ソフトウェア部品表 (SBOM)");
         assert_eq!(msgs.section_direct_deps, "## 直接依存パッケージ");
         assert_eq!(msgs.col_package, "パッケージ");
-        assert_eq!(msgs.status_compliant, "準拠");
         assert_eq!(
             msgs.progress_generating_json,
             "📝 CycloneDX JSON形式で出力を生成中..."
@@ -501,6 +516,18 @@ mod tests {
         assert_eq!(
             msgs.progress_vuln_none,
             "✅ Vulnerability check complete: No known vulnerabilities found"
+        );
+        assert_eq!(
+            msgs.progress_license_violations_found,
+            "⚠️  License compliance: {} violation(s) found"
+        );
+        assert_eq!(
+            msgs.progress_license_no_violations,
+            "✅ License compliance: No violations found"
+        );
+        assert_eq!(
+            msgs.progress_license_unknown_packages,
+            "⚠️  License compliance: {} package(s) with unknown license"
         );
     }
 
@@ -530,6 +557,18 @@ mod tests {
         assert_eq!(
             msgs.progress_vuln_none,
             "✅ 脆弱性チェック完了: 既知の脆弱性は検出されませんでした"
+        );
+        assert_eq!(
+            msgs.progress_license_violations_found,
+            "⚠️  ライセンスコンプライアンス: {}件の違反が見つかりました"
+        );
+        assert_eq!(
+            msgs.progress_license_no_violations,
+            "✅ ライセンスコンプライアンス: 違反は見つかりませんでした"
+        );
+        assert_eq!(
+            msgs.progress_license_unknown_packages,
+            "⚠️  ライセンスコンプライアンス: ライセンス不明のパッケージが{}件あります"
         );
     }
 
@@ -643,6 +682,37 @@ mod tests {
         assert_eq!(msgs.col_recommended_action, "推奨アクション");
         assert_eq!(msgs.action_cannot_resolve, "⚠️ 解決不可: {}");
         assert_eq!(msgs.action_could_not_analyze, "❓ 分析不可: {}");
+    }
+
+    #[test]
+    fn test_workspace_messages_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(msgs.output_complete, "✅ Output complete: {}");
+        assert_eq!(
+            msgs.workspace_mode_members_found,
+            "Workspace mode: {} members found"
+        );
+        assert_eq!(msgs.workspace_processing_member, "  Processing: {}");
+        assert_eq!(msgs.workspace_summary_header, "📦 Workspace SBOM Summary");
+        assert_eq!(msgs.workspace_col_member, "Member");
+        assert_eq!(msgs.workspace_col_output_file, "Output File");
+    }
+
+    #[test]
+    fn test_workspace_messages_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(msgs.output_complete, "✅ 出力完了: {}");
+        assert_eq!(
+            msgs.workspace_mode_members_found,
+            "ワークスペースモード: {} メンバーを検出"
+        );
+        assert_eq!(msgs.workspace_processing_member, "  処理中: {}");
+        assert_eq!(
+            msgs.workspace_summary_header,
+            "📦 ワークスペース SBOM サマリー"
+        );
+        assert_eq!(msgs.workspace_col_member, "メンバー");
+        assert_eq!(msgs.workspace_col_output_file, "出力ファイル");
     }
 
     #[test]

@@ -88,4 +88,12 @@ impl LockfileReader for MockLockfileReader {
 
         Ok((packages, dependency_map))
     }
+
+    fn read_and_parse_lockfile_for_member(
+        &self,
+        _project_path: &Path,
+        _member_name: &str,
+    ) -> Result<LockfileParseResult> {
+        unimplemented!("not needed for current mock usage")
+    }
 }

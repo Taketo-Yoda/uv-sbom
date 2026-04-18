@@ -82,7 +82,6 @@ mod tests {
                     license: Some(LicenseView {
                         spdx_id: Some("Apache-2.0".to_string()),
                         name: "Apache License 2.0".to_string(),
-                        url: None,
                     }),
                     description: Some("HTTP library".to_string()),
                     sha256_hash: None,
@@ -96,7 +95,6 @@ mod tests {
                     license: Some(LicenseView {
                         spdx_id: Some("MIT".to_string()),
                         name: "MIT License".to_string(),
-                        url: None,
                     }),
                     description: None,
                     sha256_hash: None,
@@ -205,11 +203,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });
@@ -284,11 +279,8 @@ mod tests {
                 source_url: None,
             }],
             informational: vec![],
-            threshold_exceeded: true,
             summary: VulnerabilitySummary {
                 total_count: 1,
-                actionable_count: 1,
-                informational_count: 0,
                 affected_package_count: 1,
             },
         });

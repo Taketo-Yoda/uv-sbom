@@ -27,11 +27,9 @@ pub struct SbomReadModel {
     /// License compliance report
     pub license_compliance: Option<LicenseComplianceView>,
     /// Resolution guide for vulnerable transitive dependencies
-    #[allow(dead_code)]
     pub resolution_guide: Option<ResolutionGuideView>,
     /// Upgrade recommendations for vulnerable transitive dependencies.
     /// Populated only when `suggest_fix` was true in the request.
-    #[allow(dead_code)]
     pub upgrade_recommendations: Option<UpgradeRecommendationView>,
 }
 

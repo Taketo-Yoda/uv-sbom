@@ -30,7 +30,4 @@ pub struct LicenseView {
     pub spdx_id: Option<String>,
     /// License name
     pub name: String,
-    /// URL to license text
-    #[allow(dead_code)]
-    pub url: Option<String>,
 }

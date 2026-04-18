@@ -24,8 +24,6 @@
 - 💾 標準出力またはファイルへ出力
 - 🛡️ 堅牢なエラーハンドリングと親切なエラーメッセージ・提案
 - 📈 ライセンス情報取得時の進捗表示
-- 🏗️ **ヘキサゴナルアーキテクチャ**（ポート＆アダプター）+ **ドメイン駆動設計**による保守性とテスタビリティ
-- ✅ 包括的なテストカバレッジ（ユニット、統合、E2E）
 
 ## スコープとCycloneDXとの主な違い
 
@@ -602,6 +600,56 @@ No security vulnerabilities were found in the scanned packages.
 *Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
 ```
 
+### uv ワークスペースサポート
+
+[uv ワークスペース](https://docs.astral.sh/uv/concepts/projects/workspaces/)を使うと、共通の `uv.lock` ファイルを持つ複数の Python パッケージをひとつのリポジトリで管理できます。`uv-sbom --workspace` は各メンバーパッケージごとに個別の SBOM を生成し、そのメンバーから到達可能な依存関係のみを反映します。
+
+**ユースケース:**
+- リポジトリに複数の Python パッケージ（例: `api/`、`worker/`）が含まれている
+- セキュリティスキャンやコンプライアンス対応のためにメンバーごとの SBOM が必要
+
+**使用例:**
+
+```bash
+# ワークスペースの各メンバーに対して SBOM を生成（デフォルト: CycloneDX JSON）
+uv-sbom --workspace --path /path/to/workspace
+```
+
+**実行結果の例:**
+
+```
+Workspace mode: 2 members found
+
+  Processing: api
+  ...
+  Processing: worker
+  ...
+
+📦 Workspace SBOM Summary
+────────────────────────────────────────────────────────────
+Member               Output File
+────────────────────────────────────────────────────────────
+api                  /path/to/workspace/packages/api/sbom.json
+worker               /path/to/workspace/packages/worker/sbom.json
+────────────────────────────────────────────────────────────
+```
+
+各メンバーは、そのメンバーから到達可能なパッケージのみを含む独自の `sbom.json` を取得します。推移的依存関係は含まれますが、他のメンバーに属するパッケージは除外されます。
+
+**他のオプションとの組み合わせ:**
+
+```bash
+# 全メンバーを Markdown 形式で出力
+uv-sbom --workspace --path examples/workspace --format markdown
+
+# ライセンスコンプライアンスチェックを追加
+uv-sbom --workspace --path examples/workspace --check-license
+```
+
+> **注意:** `--workspace` と `--output` は同時に使用できません。ワークスペースモードでは、各メンバーの SBOM は自動的にメンバー自身のディレクトリ内の `sbom.json`（Markdown の場合は `sbom.md`）に書き込まれます。
+
+2 つのメンバーパッケージ（`api` と `worker`）を含む実行可能なデモは [`examples/workspace/`](examples/workspace/) を参照してください。
+
 ### dry-runモードで設定を検証する
 
 `--dry-run`オプションを使用して、ツールが外部レジストリと通信する前に設定を検証できます：
@@ -700,6 +748,8 @@ Options:
                                      --no-check-cveとの同時使用は不可
       --suggest-fix                  推移的脆弱性を解決するための直接依存関係アップグレードバージョンを提案
                                      --no-check-cveとの同時使用は不可、uvのインストール、プロジェクトディレクトリのpyproject.tomlが必要
+      --workspace                    ワークスペースの各メンバーに対して SBOM を生成
+                                     --outputとの同時使用は不可
       --check-license                ライセンスコンプライアンスをポリシーに対してチェック
       --license-allow <LIST>         許可するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
       --license-deny <LIST>          拒否するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
@@ -1012,22 +1062,37 @@ uv.lock file not found: /path/to/project/uv.lock
 ### ネットワークの問題
 プロキシやファイアウォールの内側にいる場合は、`https://pypi.org`にアクセスできることを確認してください。ツールはAPIリクエストに10秒のタイムアウトを使用します。
 
-## ドキュメント
+## 開発者向け
 
-### ユーザー向け
-- [README-JP.md](README-JP.md) - ユーザードキュメント
-- [LICENSE](LICENSE) - MITライセンス
+### アーキテクチャ
 
-### 開発者向け
-- [DEVELOPMENT.md](DEVELOPMENT.md) - 開発ガイド
-- [ARCHITECTURE-JP.md](ARCHITECTURE-JP.md) - **ヘキサゴナルアーキテクチャ + DDD実装**（レイヤー、ポート、アダプター、テスト戦略、ADR）
-- [CHANGELOG.md](CHANGELOG.md) - 変更履歴
+uv-sbomは保守性とテスタビリティのために**ヘキサゴナルアーキテクチャ**（ポート＆アダプター）+ **ドメイン駆動設計（DDD）**で実装されています。
 
-### Claude Codeユーザー向け
-- [.claude/project-context.md](.claude/project-context.md) - Claude Code用の完全なプロジェクトコンテキスト
-- [.claude/instructions.md](.claude/instructions.md) - Claude Code用のコーディングガイドラインと指示
+レイヤー、ポート、アダプター、アーキテクチャ決定記録（ADR）の詳細は[ARCHITECTURE-JP.md](ARCHITECTURE-JP.md)を参照してください。
 
-これらのファイルは、Claude Codeを使用したAI支援開発のための包括的なコンテキストを提供します。
+### テストカバレッジ
+
+テストスイートはユニット、統合、エンドツーエンドの各シナリオをカバーしています。
+
+テストの実行方法やコントリビュート方法については[DEVELOPMENT.md](DEVELOPMENT.md)を参照してください。
+
+### 開発環境のセットアップ
+
+リポジトリをクローンした後、gitフックを有効化してください：
+
+```bash
+make setup
+```
+
+これにより `.githooks/` の `pre-commit`（自動フォーマット）と `pre-push`（フォーマット確認・clippy・テスト）フックが有効になり、すべてのコントリビュータに対してコード品質チェックが自動的に実行されます。
+
+### リファレンス
+
+- [DEVELOPMENT.md](DEVELOPMENT.md) — 開発ガイド
+- [ARCHITECTURE-JP.md](ARCHITECTURE-JP.md) — ヘキサゴナルアーキテクチャ + DDD実装の詳細
+- [CHANGELOG.md](CHANGELOG.md) — 変更履歴
+- [.claude/project-context.md](.claude/project-context.md) — Claude Code用の完全なプロジェクトコンテキスト
+- [.claude/instructions.md](.claude/instructions.md) — Claude Code用のコーディングガイドラインと指示
 
 ## 帰属表示
 

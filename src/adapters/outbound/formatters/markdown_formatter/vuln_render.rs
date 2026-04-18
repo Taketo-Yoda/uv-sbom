@@ -106,7 +106,7 @@ pub(super) fn render_actionable_vulnerabilities(
 
     // Sort by severity (Critical first)
     let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
-    sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
+    sorted_vulns.sort_by_key(|v| &v.severity);
 
     for vuln in sorted_vulns {
         render_vulnerability_row(verified_packages, output, vuln);
@@ -149,7 +149,7 @@ pub(super) fn render_informational_vulnerabilities(
     output.push_str(&super::table::vuln_table_separator(messages));
 
     let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
-    sorted_vulns.sort_by(|a, b| a.severity.cmp(&b.severity));
+    sorted_vulns.sort_by_key(|v| &v.severity);
 
     for vuln in sorted_vulns {
         render_vulnerability_row(verified_packages, output, vuln);
@@ -200,8 +200,6 @@ mod tests {
     fn test_render_vulnerability_summary() {
         let summary = VulnerabilitySummary {
             total_count: 3,
-            actionable_count: 2,
-            informational_count: 1,
             affected_package_count: 2,
         };
 
@@ -215,8 +213,6 @@ mod tests {
     fn test_render_vulnerability_summary_singular() {
         let summary = VulnerabilitySummary {
             total_count: 1,
-            actionable_count: 1,
-            informational_count: 0,
             affected_package_count: 1,
         };
 

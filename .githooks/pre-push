@@ -1,0 +1,21 @@
+#!/bin/sh
+# Pre-push hook: Run quality checks before pushing to remote.
+# Enforces CI-equivalent checks for all contributors.
+#
+# To activate this hook, run:
+#   make setup
+# or:
+#   git config core.hooksPath .githooks
+
+set -e
+
+echo "[pre-push] Running cargo fmt check..."
+cargo fmt --all -- --check
+
+echo "[pre-push] Running cargo clippy..."
+cargo clippy --all-targets --all-features -- -D warnings
+
+echo "[pre-push] Running cargo test..."
+cargo test --all
+
+echo "[pre-push] All checks passed."
