@@ -61,6 +61,7 @@ Skills contain mandatory pre-flight checks and language requirements that preven
 
 - **PR #121**: Created in Japanese, `cargo fmt --all -- --check` failed in CI
 - **Issue #59**: `cargo clippy` was run without `-D warnings`, causing CI failure after push
+- **2026-04-18**: v2.2.0 release promoted an empty `[Unreleased]` section. Features added in PRs #441–#483 were never recorded in CHANGELOG. Fixed by Issue #491 (added gate in `/release` Step 3.6 and `/pr` Step 4.5).
 
 ### Enforcement
 

@@ -158,14 +158,34 @@ versioned entry in Step 4.
 
 #### Edge case: [Unreleased] becomes empty after cleaning
 
-If all entries are removed, leave only the empty `## [Unreleased]` placeholder
-and proceed with an empty versioned section:
+⚠️ **WARNING: STOP — DO NOT PROCEED SILENTLY.**
 
-```markdown
-## [Unreleased]
+If after removing internal entries the `[Unreleased]` section is empty, this
+typically means one of two things:
+- (a) Every entry in `[Unreleased]` was legitimately internal (refactor, CI, tests) — safe to release with no user-facing changelog.
+- (b) Feature PRs landed without anyone updating `CHANGELOG.md` — this is the v2.2.0 incident (Issue #491).
 
-## [X.Y.Z] - YYYY-MM-DD
-```
+**You must ask the user explicitly before continuing:**
+
+> ⚠️ The `[Unreleased]` section is empty after removing internal entries.
+> Promoting this will produce a release with no user-facing changelog.
+>
+> Did you intentionally make no user-facing changes in this release?
+> Run `git log <last-tag>..HEAD --oneline` to audit merged PRs if unsure.
+>
+> Type **yes** to proceed with an empty release entry, or **no** to pause and add missing entries first.
+
+- If the user answers **yes**: continue to Step 4. The resulting file will look like:
+
+  ```markdown
+  ## [Unreleased]
+
+  ## [X.Y.Z] - YYYY-MM-DD
+  ```
+
+- If the user answers **no**: **STOP HERE.** Do not proceed to Step 4.
+  Instruct the user to add missing entries under the appropriate sections
+  (`### Added`, `### Fixed`, `### Security`, `### Changed`) and then re-run `/release`.
 
 ### Step 4: Update CHANGELOG.md
 
