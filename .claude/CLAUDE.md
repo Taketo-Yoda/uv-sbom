@@ -209,3 +209,60 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 
 - `src/adapters/outbound/network/` — HTTP client internals (unrelated to most refactors)
 - `src/i18n/` — Locale catalogs (separate concern)
+
+## Dead Code Policy
+
+### Prohibition: Speculative `#[allow(dead_code)]`
+
+Never add `#[allow(dead_code)]` to silence the dead_code lint speculatively.
+Examples of prohibited patterns:
+
+```rust
+// ❌ PROHIBITED — "Reserved for future issue" pattern
+#[allow(dead_code)]  // Reserved for Issue #N
+pub fn compute_something(&self) -> Result<Output> { ... }
+
+// ❌ PROHIBITED — stub field without current consumer
+#[allow(dead_code)]  // Will be used in Issue #M
+pub current_version: String,
+```
+
+**Why**: These stubs accumulate silently, become technical debt, and require
+large-scale cleanup (e.g., PR #488: 388 lines deleted across 26 files).
+Bulk removal is error-prone when multiple structs share field names.
+
+### Acceptable Use Cases
+
+`#[allow(dead_code)]` is allowed ONLY for:
+
+| Use Case | Example |
+|----------|---------|
+| serde wire-format fields that are deserialized but not yet processed in Rust | `#[allow(dead_code)] pub experimental_flag: Option<bool>` on a `#[derive(Deserialize)]` struct |
+| `#[cfg(test)]`-bounded test helpers defined in a test module | Inside `#[cfg(test)] mod tests { ... }` only |
+
+In both cases, add a comment explaining WHY the field is intentionally unused in
+production code.
+
+### YAGNI Workflow
+
+If you identify that a future issue will need a field/method that doesn't exist yet:
+
+1. **Do NOT add the stub field.** The future issue will introduce it when needed.
+2. **Note the need** in the current Issue or PR description.
+3. **Open a new Issue** describing what needs to be added and why.
+4. Close the current PR without the stub. The future issue owns its own implementation.
+
+### Clippy Requirement
+
+CI and all local checks MUST use `--all-targets --all-features`:
+
+```bash
+# ✅ CORRECT — catches dead code in binary and integration-test targets
+cargo clippy --all-targets --all-features -- -D warnings
+
+# ❌ WRONG — misses dead code visible only from binary/integration targets
+cargo clippy --lib -- -D warnings
+```
+
+This is already enforced in `.claude/skills/commit/SKILL.md` and
+`.claude/skills/pr/SKILL.md`. Do not weaken this to `--lib` only.
