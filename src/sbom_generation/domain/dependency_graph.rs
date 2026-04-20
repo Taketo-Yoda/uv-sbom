@@ -39,6 +39,8 @@ impl DependencyGraph {
     /// Each path is ordered `[direct_dep, ..., target]`.
     /// Returns an empty Vec if `target` is itself a direct dependency (one-hop not shown).
     /// Uses BFS with per-path visited tracking to handle cyclic graphs safely.
+    // Called by the use case in #498; remove this annotation when that issue is implemented.
+    #[allow(dead_code)]
     pub fn find_paths_to(&self, target: &PackageName) -> Vec<Vec<PackageName>> {
         let mut results: Vec<Vec<PackageName>> = Vec::new();
         let mut queue: VecDeque<(PackageName, Vec<PackageName>, HashSet<PackageName>)> =
@@ -89,10 +91,7 @@ mod tests {
         PackageName::new(name.to_string()).unwrap()
     }
 
-    fn make_graph(
-        direct: Vec<&str>,
-        edges: Vec<(&str, Vec<&str>)>,
-    ) -> DependencyGraph {
+    fn make_graph(direct: Vec<&str>, edges: Vec<(&str, Vec<&str>)>) -> DependencyGraph {
         let direct_deps = direct.into_iter().map(pkg).collect();
         let transitive = edges
             .into_iter()
@@ -126,10 +125,7 @@ mod tests {
 
     #[test]
     fn test_find_paths_to_simple_transitive() {
-        let graph = make_graph(
-            vec!["requests"],
-            vec![("requests", vec!["urllib3"])],
-        );
+        let graph = make_graph(vec!["requests"], vec![("requests", vec!["urllib3"])]);
         let paths = graph.find_paths_to(&pkg("urllib3"));
         assert_eq!(paths, vec![vec![pkg("requests"), pkg("urllib3")]]);
     }
@@ -148,10 +144,7 @@ mod tests {
     fn test_find_paths_to_diamond() {
         let graph = make_graph(
             vec!["requests", "httpx"],
-            vec![
-                ("requests", vec!["urllib3"]),
-                ("httpx", vec!["urllib3"]),
-            ],
+            vec![("requests", vec!["urllib3"]), ("httpx", vec!["urllib3"])],
         );
         let paths = graph.find_paths_to(&pkg("urllib3"));
         assert_eq!(paths.len(), 2);
@@ -169,10 +162,7 @@ mod tests {
     #[test]
     fn test_find_paths_to_direct_dep_reachable_via_other() {
         // "b" is direct dep AND reachable via "a" -> "b"
-        let graph = make_graph(
-            vec!["a", "b"],
-            vec![("a", vec!["b"])],
-        );
+        let graph = make_graph(vec!["a", "b"], vec![("a", vec!["b"])]);
         let paths = graph.find_paths_to(&pkg("b"));
         // trivial start from "b" is suppressed; multi-hop via "a" is returned
         assert_eq!(paths, vec![vec![pkg("a"), pkg("b")]]);
