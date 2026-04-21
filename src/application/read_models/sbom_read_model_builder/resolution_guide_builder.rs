@@ -46,11 +46,7 @@ mod tests {
     use crate::sbom_generation::domain::resolution_guide::{IntroducedBy, ResolutionEntry};
     use crate::sbom_generation::domain::vulnerability::Severity;
 
-    fn make_entry(
-        pkg: &str,
-        version: &str,
-        chains: Vec<Vec<String>>,
-    ) -> ResolutionEntry {
+    fn make_entry(pkg: &str, version: &str, chains: Vec<Vec<String>>) -> ResolutionEntry {
         ResolutionEntry::new(
             pkg.to_string(),
             version.to_string(),
