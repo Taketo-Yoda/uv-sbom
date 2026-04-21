@@ -727,6 +727,7 @@ mod tests {
                     package_name: "requests".to_string(),
                     version: "2.31.0".to_string(),
                 }],
+                dependency_chains: vec![],
             }],
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {

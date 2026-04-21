@@ -39,8 +39,6 @@ impl DependencyGraph {
     /// Each path is ordered `[direct_dep, ..., target]`.
     /// Returns an empty Vec if `target` is itself a direct dependency (one-hop not shown).
     /// Uses BFS with per-path visited tracking to handle cyclic graphs safely.
-    // Called by the use case in #498; remove this annotation when that issue is implemented.
-    #[allow(dead_code)]
     pub fn find_paths_to(&self, target: &PackageName) -> Vec<Vec<PackageName>> {
         let mut results: Vec<Vec<PackageName>> = Vec::new();
         let mut queue: VecDeque<(PackageName, Vec<PackageName>, HashSet<PackageName>)> =

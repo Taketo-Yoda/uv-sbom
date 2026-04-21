@@ -33,6 +33,12 @@ pub struct ResolutionEntryView {
     pub vulnerability_id: String,
     /// Direct dependencies that introduce this vulnerable package
     pub introduced_by: Vec<IntroducedByView>,
+    /// Full dependency chains from direct deps to the vulnerable package.
+    /// Each inner Vec is [direct_dep, ..., vulnerable_package].
+    /// Populated by the builder (Issue #498) but not yet rendered by formatters;
+    /// rendering will be added in Issue #499.
+    #[allow(dead_code)]
+    pub dependency_chains: Vec<Vec<String>>,
 }
 
 /// View representation of a direct dependency that introduces a vulnerable package
@@ -66,6 +72,7 @@ mod tests {
                 package_name: "requests".to_string(),
                 version: "2.28.0".to_string(),
             }],
+            dependency_chains: vec![vec!["requests".to_string(), "urllib3".to_string()]],
         };
 
         assert_eq!(entry.vulnerable_package, "urllib3");
@@ -76,6 +83,8 @@ mod tests {
         assert_eq!(entry.introduced_by.len(), 1);
         assert_eq!(entry.introduced_by[0].package_name, "requests");
         assert_eq!(entry.introduced_by[0].version, "2.28.0");
+        assert_eq!(entry.dependency_chains.len(), 1);
+        assert_eq!(entry.dependency_chains[0], ["requests", "urllib3"]);
     }
 
     #[test]
@@ -87,11 +96,13 @@ mod tests {
             severity: SeverityView::Critical,
             vulnerability_id: "CVE-2024-0001".to_string(),
             introduced_by: vec![],
+            dependency_chains: vec![],
         };
 
         assert_eq!(entry.fixed_version, None);
         assert_eq!(entry.severity, SeverityView::Critical);
         assert!(entry.introduced_by.is_empty());
+        assert!(entry.dependency_chains.is_empty());
     }
 
     #[test]
