@@ -602,6 +602,7 @@ mod tests {
                     "2.28.0".to_string(),
                 ),
             ],
+            vec![],
         )];
 
         let guide = resolution_guide_builder::build_resolution_guide(&entries);
@@ -631,6 +632,7 @@ mod tests {
                     "1.0.0".to_string(),
                 ),
             ],
+            vec![],
         )];
 
         let guide = resolution_guide_builder::build_resolution_guide(&entries);
@@ -658,6 +660,7 @@ mod tests {
                     "2.28.0".to_string(),
                 ),
             ],
+            vec![],
         )];
 
         let guide = resolution_guide_builder::build_resolution_guide(&entries);

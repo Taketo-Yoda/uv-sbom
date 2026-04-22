@@ -15,6 +15,10 @@ pub struct ResolutionEntry {
     vulnerability_id: String,
     /// List of direct dependencies that introduce this vulnerable package
     introduced_by: Vec<IntroducedBy>,
+    /// Full dependency chains from direct deps to the vulnerable package.
+    /// Each inner Vec is [direct_dep, ..., vulnerable_package].
+    /// Empty if introduced directly (one-hop) or if the target is a direct dependency.
+    dependency_chains: Vec<Vec<String>>,
 }
 
 impl ResolutionEntry {
@@ -25,6 +29,7 @@ impl ResolutionEntry {
         severity: Severity,
         vulnerability_id: String,
         introduced_by: Vec<IntroducedBy>,
+        dependency_chains: Vec<Vec<String>>,
     ) -> Self {
         Self {
             vulnerable_package,
@@ -33,6 +38,7 @@ impl ResolutionEntry {
             severity,
             vulnerability_id,
             introduced_by,
+            dependency_chains,
         }
     }
 
@@ -58,6 +64,10 @@ impl ResolutionEntry {
 
     pub fn introduced_by(&self) -> &[IntroducedBy] {
         &self.introduced_by
+    }
+
+    pub fn dependency_chains(&self) -> &[Vec<String>] {
+        &self.dependency_chains
     }
 }
 
@@ -105,6 +115,10 @@ mod tests {
             IntroducedBy::new("requests".to_string(), "2.28.0".to_string()),
             IntroducedBy::new("httpx".to_string(), "0.23.0".to_string()),
         ];
+        let chains = vec![
+            vec!["requests".to_string(), "urllib3".to_string()],
+            vec!["httpx".to_string(), "urllib3".to_string()],
+        ];
 
         let entry = ResolutionEntry::new(
             "urllib3".to_string(),
@@ -113,6 +127,7 @@ mod tests {
             Severity::High,
             "CVE-2023-43804".to_string(),
             introduced,
+            chains,
         );
 
         assert_eq!(entry.vulnerable_package(), "urllib3");
@@ -123,6 +138,9 @@ mod tests {
         assert_eq!(entry.introduced_by().len(), 2);
         assert_eq!(entry.introduced_by()[0].package_name(), "requests");
         assert_eq!(entry.introduced_by()[1].package_name(), "httpx");
+        assert_eq!(entry.dependency_chains().len(), 2);
+        assert_eq!(entry.dependency_chains()[0], ["requests", "urllib3"]);
+        assert_eq!(entry.dependency_chains()[1], ["httpx", "urllib3"]);
     }
 
     #[test]
@@ -137,6 +155,7 @@ mod tests {
                 "parent-pkg".to_string(),
                 "1.0.0".to_string(),
             )],
+            vec![],
         );
 
         assert_eq!(entry.fixed_version(), None);
@@ -152,8 +171,29 @@ mod tests {
             Severity::Medium,
             "GHSA-xxxx-yyyy-zzzz".to_string(),
             vec![],
+            vec![],
         );
 
         assert!(entry.introduced_by().is_empty());
+        assert!(entry.dependency_chains().is_empty());
+    }
+
+    #[test]
+    fn test_resolution_entry_dependency_chains_accessor() {
+        let chains = vec![
+            vec!["a".to_string(), "b".to_string(), "vuln".to_string()],
+            vec!["c".to_string(), "vuln".to_string()],
+        ];
+        let entry = ResolutionEntry::new(
+            "vuln".to_string(),
+            "1.0.0".to_string(),
+            None,
+            Severity::Low,
+            "CVE-2024-0002".to_string(),
+            vec![],
+            chains.clone(),
+        );
+
+        assert_eq!(entry.dependency_chains(), chains.as_slice());
     }
 }

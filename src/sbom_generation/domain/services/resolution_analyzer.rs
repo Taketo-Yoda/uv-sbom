@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::ports::outbound::enriched_package::EnrichedPackage;
 use crate::sbom_generation::domain::dependency_graph::DependencyGraph;
+use crate::sbom_generation::domain::package::PackageName;
 use crate::sbom_generation::domain::resolution_guide::{IntroducedBy, ResolutionEntry};
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 
@@ -58,6 +59,19 @@ impl ResolutionAnalyzer {
             // Sort introduced_by for deterministic output
             introduced_by.sort_by(|a, b| a.package_name().cmp(b.package_name()));
 
+            // Compute full dependency chains. If PackageName construction fails for a
+            // malformed name, default to empty chains to preserve the entry.
+            let dependency_chains: Vec<Vec<String>> =
+                PackageName::new(pkg_vuln.package_name().to_string())
+                    .map(|pkg_name| {
+                        dependency_graph
+                            .find_paths_to(&pkg_name)
+                            .into_iter()
+                            .map(|path| path.iter().map(|p| p.as_str().to_string()).collect())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
             for vuln in pkg_vuln.vulnerabilities() {
                 entries.push(ResolutionEntry::new(
                     pkg_vuln.package_name().to_string(),
@@ -66,6 +80,7 @@ impl ResolutionAnalyzer {
                     vuln.severity(),
                     vuln.id().to_string(),
                     introduced_by.clone(),
+                    dependency_chains.clone(),
                 ));
             }
         }
@@ -169,6 +184,8 @@ mod tests {
         assert_eq!(entries[0].introduced_by().len(), 1);
         assert_eq!(entries[0].introduced_by()[0].package_name(), "requests");
         assert_eq!(entries[0].introduced_by()[0].version(), "2.28.0");
+        assert_eq!(entries[0].dependency_chains().len(), 1);
+        assert_eq!(entries[0].dependency_chains()[0], ["requests", "urllib3"]);
     }
 
     #[test]
@@ -217,6 +234,11 @@ mod tests {
         // Sorted alphabetically
         assert_eq!(entries[0].introduced_by()[0].package_name(), "httpx");
         assert_eq!(entries[0].introduced_by()[1].package_name(), "requests");
+        // Both direct deps produce a chain to urllib3
+        assert_eq!(entries[0].dependency_chains().len(), 2);
+        let chains = entries[0].dependency_chains();
+        assert!(chains.contains(&vec!["requests".to_string(), "urllib3".to_string()]));
+        assert!(chains.contains(&vec!["httpx".to_string(), "urllib3".to_string()]));
     }
 
     #[test]
@@ -310,5 +332,54 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].introduced_by()[0].package_name(), "requests");
         assert_eq!(entries[0].introduced_by()[0].version(), "unknown");
+    }
+
+    #[test]
+    fn test_analyze_populates_dependency_chains_deep_transitive() {
+        // a -> b -> vuln (two-hop chain)
+        let graph = make_graph(vec!["a"], vec![("a", vec!["b"]), ("b", vec!["vuln"])]);
+        let vulns = vec![make_pkg_vulns(
+            "vuln",
+            "0.1.0",
+            vec![make_vuln("CVE-2024-1111", Severity::High, None)],
+        )];
+        let packages = vec![
+            make_enriched("a", "1.0.0"),
+            make_enriched("b", "2.0.0"),
+            make_enriched("vuln", "0.1.0"),
+        ];
+
+        let entries = ResolutionAnalyzer::analyze(&graph, &vulns, &packages);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].dependency_chains().len(), 1);
+        assert_eq!(entries[0].dependency_chains()[0], ["a", "b", "vuln"]);
+    }
+
+    #[test]
+    fn test_analyze_dependency_chains_shared_across_multiple_vulns_same_package() {
+        let graph = make_graph(vec!["requests"], vec![("requests", vec!["urllib3"])]);
+        let vulns = vec![make_pkg_vulns(
+            "urllib3",
+            "1.26.5",
+            vec![
+                make_vuln("CVE-2023-43804", Severity::High, Some("1.26.18")),
+                make_vuln("CVE-2023-45803", Severity::Medium, Some("2.0.7")),
+            ],
+        )];
+        let packages = vec![
+            make_enriched("requests", "2.28.0"),
+            make_enriched("urllib3", "1.26.5"),
+        ];
+
+        let entries = ResolutionAnalyzer::analyze(&graph, &vulns, &packages);
+
+        assert_eq!(entries.len(), 2);
+        // Both entries for the same package share the same chains
+        assert_eq!(
+            entries[0].dependency_chains(),
+            entries[1].dependency_chains()
+        );
+        assert_eq!(entries[0].dependency_chains()[0], ["requests", "urllib3"]);
     }
 }

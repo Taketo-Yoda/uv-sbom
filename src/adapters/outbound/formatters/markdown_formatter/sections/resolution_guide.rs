@@ -149,6 +149,7 @@ mod tests {
                     package_name: "requests".to_string(),
                     version: "2.31.0".to_string(),
                 }],
+                dependency_chains: vec![],
             }],
         });
 
@@ -186,6 +187,7 @@ mod tests {
                         version: "0.25.0".to_string(),
                     },
                 ],
+                dependency_chains: vec![],
             }],
         });
 
@@ -229,6 +231,7 @@ mod tests {
                     package_name: "requests".to_string(),
                     version: "2.31.0".to_string(),
                 }],
+                dependency_chains: vec![],
             }],
         });
 
@@ -254,6 +257,7 @@ mod tests {
                     package_name: "requests".to_string(),
                     version: "2.31.0".to_string(),
                 }],
+                dependency_chains: vec![],
             }],
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
@@ -287,6 +291,7 @@ mod tests {
                     package_name: "httpx".to_string(),
                     version: "0.25.0".to_string(),
                 }],
+                dependency_chains: vec![],
             }],
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
@@ -317,6 +322,7 @@ mod tests {
                     package_name: "requests".to_string(),
                     version: "2.31.0".to_string(),
                 }],
+                dependency_chains: vec![],
             }],
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
@@ -347,6 +353,7 @@ mod tests {
                     package_name: "requests".to_string(),
                     version: "2.31.0".to_string(),
                 }],
+                dependency_chains: vec![],
             }],
         });
         // upgrade_recommendations is None (default in test model)

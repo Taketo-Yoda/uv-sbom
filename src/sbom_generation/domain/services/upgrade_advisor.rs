@@ -304,6 +304,7 @@ mod tests {
             Severity::High,
             vuln_id.to_string(),
             introduced,
+            vec![],
         )
     }
 
