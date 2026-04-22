@@ -39,6 +39,7 @@ pub struct Messages {
     pub section_vuln_report: &'static str,
     pub section_license_compliance: &'static str,
     pub section_resolution_guide: &'static str,
+    pub section_dependency_chains: &'static str,
 
     // Table column headers
     pub col_package: &'static str,
@@ -197,6 +198,7 @@ static EN_MESSAGES: Messages = Messages {
     section_vuln_report: "## Vulnerability Report",
     section_license_compliance: "## License Compliance Report",
     section_resolution_guide: "## Vulnerability Resolution Guide",
+    section_dependency_chains: "### Dependency Chains",
 
     // Table column headers
     col_package: "Package",
@@ -324,6 +326,7 @@ static JA_MESSAGES: Messages = Messages {
     section_vuln_report: "## 脆弱性レポート",
     section_license_compliance: "## ライセンスコンプライアンスレポート",
     section_resolution_guide: "## 脆弱性解決ガイド",
+    section_dependency_chains: "### 依存チェーン",
 
     // Table column headers
     col_package: "パッケージ",
@@ -607,6 +610,18 @@ mod tests {
     #[test]
     fn test_messages_format_fewer_args_than_placeholders() {
         assert_eq!(Messages::format("{} of {} done", &["3"]), "3 of {} done");
+    }
+
+    #[test]
+    fn test_section_dependency_chains_i18n() {
+        assert_eq!(
+            Messages::for_locale(Locale::En).section_dependency_chains,
+            "### Dependency Chains"
+        );
+        assert_eq!(
+            Messages::for_locale(Locale::Ja).section_dependency_chains,
+            "### 依存チェーン"
+        );
     }
 
     #[test]

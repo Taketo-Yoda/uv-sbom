@@ -79,6 +79,52 @@ pub(in super::super) fn render(
         output.push_str(&format!("| {} |\n", cells.join(" | ")));
     }
     output.push('\n');
+
+    // Dependency Chains subsection: only render entries that contain at least
+    // one multi-hop chain (len > 2). A 2-element chain means the vulnerable
+    // package is a direct dependency, which the main table already makes
+    // obvious, so listing it here would be noise.
+    let has_multi_hop = guide
+        .entries
+        .iter()
+        .any(|e| e.dependency_chains.iter().any(|c| c.len() > 2));
+
+    if has_multi_hop {
+        output.push_str(messages.section_dependency_chains);
+        output.push_str("\n\n");
+
+        for entry in &guide.entries {
+            if !entry.dependency_chains.iter().any(|c| c.len() > 2) {
+                continue;
+            }
+
+            output.push_str(&format!(
+                "**`{} {}`** — {} ({})\n",
+                entry.vulnerable_package,
+                entry.current_version,
+                entry.vulnerability_id,
+                entry.severity.as_str(),
+            ));
+
+            for chain in entry.dependency_chains.iter().filter(|c| c.len() > 2) {
+                let last_idx = chain.len() - 1;
+                let rendered = chain
+                    .iter()
+                    .enumerate()
+                    .map(|(i, node)| {
+                        if i == last_idx {
+                            format!("**`{} {}`** ⚠️", node, entry.current_version)
+                        } else {
+                            format!("`{}`", node)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                output.push_str(&format!("- {}\n", rendered));
+            }
+            output.push('\n');
+        }
+    }
 }
 
 #[cfg(test)]
@@ -337,6 +383,197 @@ mod tests {
 
         assert!(markdown.contains("Recommended Action"));
         assert!(markdown.contains("❓ Could not analyze: dependency resolution timed out"));
+    }
+
+    #[test]
+    fn test_dependency_chains_subsection_rendered_when_multi_hop() {
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: Some(">= 2.0.7".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+                dependency_chains: vec![vec![
+                    "requests".to_string(),
+                    "httpcore".to_string(),
+                    "urllib3".to_string(),
+                ]],
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("### Dependency Chains"));
+        assert!(markdown.contains("**`urllib3 1.26.15`** — CVE-2024-XXXXX (HIGH)"));
+        assert!(markdown.contains("- `requests` → `httpcore` → **`urllib3 1.26.15`** ⚠️"));
+    }
+
+    #[test]
+    fn test_dependency_chains_subsection_omitted_when_direct_only() {
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "requests".to_string(),
+                current_version: "2.31.0".to_string(),
+                fixed_version: Some(">= 2.32.0".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-ABCDE".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+                dependency_chains: vec![vec!["requests".to_string(), "requests".to_string()]],
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("## Vulnerability Resolution Guide"));
+        assert!(!markdown.contains("### Dependency Chains"));
+    }
+
+    #[test]
+    fn test_dependency_chains_subsection_multiple_paths_as_bullets() {
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: Some(">= 2.0.7".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+                dependency_chains: vec![
+                    vec![
+                        "requests".to_string(),
+                        "httpcore".to_string(),
+                        "urllib3".to_string(),
+                    ],
+                    vec![
+                        "httpx".to_string(),
+                        "httpcore".to_string(),
+                        "urllib3".to_string(),
+                    ],
+                ],
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("- `requests` → `httpcore` → **`urllib3 1.26.15`** ⚠️"));
+        assert!(markdown.contains("- `httpx` → `httpcore` → **`urllib3 1.26.15`** ⚠️"));
+    }
+
+    #[test]
+    fn test_dependency_chains_subsection_filters_direct_only_entries() {
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![
+                ResolutionEntryView {
+                    vulnerable_package: "requests".to_string(),
+                    current_version: "2.31.0".to_string(),
+                    fixed_version: Some(">= 2.32.0".to_string()),
+                    severity: SeverityView::High,
+                    vulnerability_id: "CVE-DIRECT".to_string(),
+                    introduced_by: vec![IntroducedByView {
+                        package_name: "requests".to_string(),
+                        version: "2.31.0".to_string(),
+                    }],
+                    dependency_chains: vec![vec!["requests".to_string(), "requests".to_string()]],
+                },
+                ResolutionEntryView {
+                    vulnerable_package: "urllib3".to_string(),
+                    current_version: "1.26.15".to_string(),
+                    fixed_version: Some(">= 2.0.7".to_string()),
+                    severity: SeverityView::High,
+                    vulnerability_id: "CVE-TRANSITIVE".to_string(),
+                    introduced_by: vec![IntroducedByView {
+                        package_name: "requests".to_string(),
+                        version: "2.31.0".to_string(),
+                    }],
+                    dependency_chains: vec![vec![
+                        "requests".to_string(),
+                        "httpcore".to_string(),
+                        "urllib3".to_string(),
+                    ]],
+                },
+            ],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("### Dependency Chains"));
+        assert!(!markdown.contains("**`requests 2.31.0`** — CVE-DIRECT"));
+        assert!(markdown.contains("**`urllib3 1.26.15`** — CVE-TRANSITIVE (HIGH)"));
+    }
+
+    #[test]
+    fn test_dependency_chains_subsection_ja_locale() {
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: Some(">= 2.0.7".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+                dependency_chains: vec![vec![
+                    "requests".to_string(),
+                    "httpcore".to_string(),
+                    "urllib3".to_string(),
+                ]],
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("### 依存チェーン"));
+        assert!(!markdown.contains("### Dependency Chains"));
+        assert!(markdown.contains("- `requests` → `httpcore` → **`urllib3 1.26.15`** ⚠️"));
+        assert!(markdown.contains("(HIGH)"));
+    }
+
+    #[test]
+    fn test_dependency_chains_subsection_omitted_when_chains_empty() {
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: Some(">= 2.0.7".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+                dependency_chains: vec![],
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("## Vulnerability Resolution Guide"));
+        assert!(!markdown.contains("### Dependency Chains"));
     }
 
     #[test]

@@ -35,9 +35,8 @@ pub struct ResolutionEntryView {
     pub introduced_by: Vec<IntroducedByView>,
     /// Full dependency chains from direct deps to the vulnerable package.
     /// Each inner Vec is [direct_dep, ..., vulnerable_package].
-    /// Populated by the builder (Issue #498) but not yet rendered by formatters;
-    /// rendering will be added in Issue #499.
-    #[allow(dead_code)]
+    /// Populated by the builder (Issue #498) and rendered in the Markdown
+    /// "Dependency Chains" subsection when chains are multi-hop (len > 2).
     pub dependency_chains: Vec<Vec<String>>,
 }
 
