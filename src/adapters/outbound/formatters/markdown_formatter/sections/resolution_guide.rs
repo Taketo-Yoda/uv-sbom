@@ -81,20 +81,27 @@ pub(in super::super) fn render(
     output.push('\n');
 
     // Dependency Chains subsection: only render entries that contain at least
-    // one multi-hop chain (len > 2). A 2-element chain means the vulnerable
-    // package is a direct dependency, which the main table already makes
-    // obvious, so listing it here would be noise.
-    let has_multi_hop = guide
-        .entries
-        .iter()
-        .any(|e| e.dependency_chains.iter().any(|c| c.len() > 2));
+    // one multi-hop chain. A 2-element chain [direct_dep, vulnerable_pkg]
+    // means the vulnerable package is a direct dependency, which the main
+    // table already makes obvious, so listing it here would be noise.
+    const DIRECT_CHAIN_LEN: usize = 2;
+
+    let has_multi_hop = guide.entries.iter().any(|e| {
+        e.dependency_chains
+            .iter()
+            .any(|c| c.len() > DIRECT_CHAIN_LEN)
+    });
 
     if has_multi_hop {
         output.push_str(messages.section_dependency_chains);
         output.push_str("\n\n");
 
         for entry in &guide.entries {
-            if !entry.dependency_chains.iter().any(|c| c.len() > 2) {
+            if !entry
+                .dependency_chains
+                .iter()
+                .any(|c| c.len() > DIRECT_CHAIN_LEN)
+            {
                 continue;
             }
 
@@ -106,7 +113,11 @@ pub(in super::super) fn render(
                 entry.severity.as_str(),
             ));
 
-            for chain in entry.dependency_chains.iter().filter(|c| c.len() > 2) {
+            for chain in entry
+                .dependency_chains
+                .iter()
+                .filter(|c| c.len() > DIRECT_CHAIN_LEN)
+            {
                 let last_idx = chain.len() - 1;
                 let rendered = chain
                     .iter()
@@ -566,6 +577,31 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("## Vulnerability Resolution Guide"));
+        assert!(!markdown.contains("### Dependency Chains"));
+    }
+
+    #[test]
+    fn test_dependency_chains_subsection_omitted_when_single_node_chain() {
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: Some(">= 2.0.7".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "urllib3".to_string(),
+                    version: "1.26.15".to_string(),
+                }],
+                dependency_chains: vec![vec!["urllib3".to_string()]],
             }],
         });
 
