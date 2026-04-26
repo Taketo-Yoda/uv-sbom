@@ -110,7 +110,7 @@ mod tests {
     fn create_test_graph() -> DependencyGraph {
         let direct_deps = vec![PackageName::new("requests".to_string()).unwrap()];
         let transitive: HashMap<PackageName, Vec<PackageName>> = HashMap::new();
-        DependencyGraph::new(direct_deps, transitive)
+        DependencyGraph::new(direct_deps, transitive, HashMap::new())
     }
 
     #[test]
@@ -267,7 +267,7 @@ mod tests {
             PackageName::new("requests".to_string()).unwrap(),
             PackageName::new("urllib3".to_string()).unwrap(),
         ];
-        let graph = DependencyGraph::new(direct_deps, HashMap::new());
+        let graph = DependencyGraph::new(direct_deps, HashMap::new(), HashMap::new());
 
         let deps = dependency_builder::build_dependencies(&graph, &components);
 
@@ -294,7 +294,7 @@ mod tests {
                 PackageName::new("certifi".to_string()).unwrap(),
             ],
         );
-        let graph = DependencyGraph::new(direct_deps, transitive);
+        let graph = DependencyGraph::new(direct_deps, transitive, HashMap::new());
 
         let deps = dependency_builder::build_dependencies(&graph, &components);
 
@@ -316,7 +316,7 @@ mod tests {
             PackageName::new("requests".to_string()).unwrap(),
             PackageName::new("unknown-pkg".to_string()).unwrap(),
         ];
-        let graph = DependencyGraph::new(direct_deps, HashMap::new());
+        let graph = DependencyGraph::new(direct_deps, HashMap::new(), HashMap::new());
 
         let deps = dependency_builder::build_dependencies(&graph, &components);
 
@@ -329,7 +329,7 @@ mod tests {
     fn test_build_dependencies_empty_graph() {
         let packages = vec![create_test_package("requests", "2.31.0")];
         let components = component_builder::build_components(&packages, None);
-        let graph = DependencyGraph::new(vec![], HashMap::new());
+        let graph = DependencyGraph::new(vec![], HashMap::new(), HashMap::new());
 
         let deps = dependency_builder::build_dependencies(&graph, &components);
 
@@ -686,6 +686,7 @@ mod tests {
         let graph = DependencyGraph::new(
             vec![PackageName::new("requests".to_string()).unwrap()],
             transitive,
+            HashMap::new(),
         );
 
         let vuln = create_vulnerability("CVE-2023-43804", Some(7.5), Severity::High);

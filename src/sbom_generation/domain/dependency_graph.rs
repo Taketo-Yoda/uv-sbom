@@ -5,17 +5,28 @@ use std::collections::{HashMap, HashSet, VecDeque};
 #[derive(Debug, Clone)]
 pub struct DependencyGraph {
     direct_dependencies: Vec<PackageName>,
+    /// direct_dep → flat list of all reachable transitives (used by resolution_analyzer for membership checks)
     transitive_dependencies: HashMap<PackageName, Vec<PackageName>>,
+    /// pkg → immediate children for ALL packages (used by find_paths_to for BFS traversal)
+    package_edges: HashMap<PackageName, Vec<PackageName>>,
 }
 
 impl DependencyGraph {
+    /// Creates a new `DependencyGraph`.
+    ///
+    /// - `transitive_dependencies`: maps each direct dependency to a **flat list of all
+    ///   reachable transitives** (used by [`ResolutionAnalyzer`] for membership checks).
+    /// - `package_edges`: maps **every package** (excluding the project root) to its
+    ///   **immediate children** (used by [`find_paths_to`] for multi-hop BFS traversal).
     pub fn new(
         direct_dependencies: Vec<PackageName>,
         transitive_dependencies: HashMap<PackageName, Vec<PackageName>>,
+        package_edges: HashMap<PackageName, Vec<PackageName>>,
     ) -> Self {
         Self {
             direct_dependencies,
             transitive_dependencies,
+            package_edges,
         }
     }
 
@@ -55,7 +66,7 @@ impl DependencyGraph {
         }
 
         while let Some((current, path, visited)) = queue.pop_front() {
-            let Some(children) = self.transitive_dependencies.get(&current) else {
+            let Some(children) = self.package_edges.get(&current) else {
                 continue;
             };
 
@@ -91,11 +102,12 @@ mod tests {
 
     fn make_graph(direct: Vec<&str>, edges: Vec<(&str, Vec<&str>)>) -> DependencyGraph {
         let direct_deps = direct.into_iter().map(pkg).collect();
-        let transitive = edges
+        let package_edges: HashMap<PackageName, Vec<PackageName>> = edges
             .into_iter()
             .map(|(parent, children)| (pkg(parent), children.into_iter().map(pkg).collect()))
             .collect();
-        DependencyGraph::new(direct_deps, transitive)
+        // These tests only exercise find_paths_to (BFS), so transitive_dependencies is unused.
+        DependencyGraph::new(direct_deps, HashMap::new(), package_edges)
     }
 
     #[test]
@@ -107,7 +119,7 @@ mod tests {
             vec![PackageName::new("pkg2".to_string()).unwrap()],
         );
 
-        let graph = DependencyGraph::new(direct_deps, transitive);
+        let graph = DependencyGraph::new(direct_deps, transitive, HashMap::new());
 
         assert_eq!(graph.direct_dependency_count(), 1);
         assert_eq!(graph.transitive_dependency_count(), 1);
@@ -115,7 +127,7 @@ mod tests {
 
     #[test]
     fn test_dependency_graph_empty() {
-        let graph = DependencyGraph::new(vec![], HashMap::new());
+        let graph = DependencyGraph::new(vec![], HashMap::new(), HashMap::new());
 
         assert_eq!(graph.direct_dependency_count(), 0);
         assert_eq!(graph.transitive_dependency_count(), 0);

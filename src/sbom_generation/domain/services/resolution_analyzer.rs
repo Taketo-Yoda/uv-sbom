@@ -106,7 +106,7 @@ mod tests {
     use crate::sbom_generation::domain::package::PackageName;
     use crate::sbom_generation::domain::vulnerability::{Severity, Vulnerability};
     use crate::sbom_generation::domain::Package;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet, VecDeque};
 
     fn make_vuln(id: &str, severity: Severity, fixed: Option<&str>) -> Vulnerability {
         Vulnerability::new(
@@ -137,11 +137,11 @@ mod tests {
 
     fn make_graph(direct: Vec<&str>, transitive: Vec<(&str, Vec<&str>)>) -> DependencyGraph {
         let direct_deps: Vec<PackageName> = direct
-            .into_iter()
+            .iter()
             .map(|n| PackageName::new(n.to_string()).unwrap())
             .collect();
 
-        let trans_deps: HashMap<PackageName, Vec<PackageName>> = transitive
+        let package_edges: HashMap<PackageName, Vec<PackageName>> = transitive
             .into_iter()
             .map(|(key, vals)| {
                 let k = PackageName::new(key.to_string()).unwrap();
@@ -153,7 +153,38 @@ mod tests {
             })
             .collect();
 
-        DependencyGraph::new(direct_deps, trans_deps)
+        // Build flat transitive closure (direct_dep → all reachable non-direct packages)
+        // to match the semantics expected by ResolutionAnalyzer::introduced_by lookup.
+        let direct_set: HashSet<&PackageName> = direct_deps.iter().collect();
+        let mut flat_transitive: HashMap<PackageName, Vec<PackageName>> = HashMap::new();
+        for dep in &direct_deps {
+            let mut reachable: Vec<PackageName> = Vec::new();
+            let mut visited: HashSet<PackageName> = HashSet::new();
+            let mut queue: VecDeque<PackageName> = VecDeque::new();
+            if let Some(children) = package_edges.get(dep) {
+                for child in children {
+                    if !direct_set.contains(child) && visited.insert(child.clone()) {
+                        reachable.push(child.clone());
+                        queue.push_back(child.clone());
+                    }
+                }
+            }
+            while let Some(current) = queue.pop_front() {
+                if let Some(children) = package_edges.get(&current) {
+                    for child in children {
+                        if !direct_set.contains(child) && visited.insert(child.clone()) {
+                            reachable.push(child.clone());
+                            queue.push_back(child.clone());
+                        }
+                    }
+                }
+            }
+            if !reachable.is_empty() {
+                flat_transitive.insert(dep.clone(), reachable);
+            }
+        }
+
+        DependencyGraph::new(direct_deps, flat_transitive, package_edges)
     }
 
     #[test]
