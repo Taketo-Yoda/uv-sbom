@@ -16,7 +16,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 🔍 Automatically fetches license information from PyPI with retry logic
 - 🛡️ Checks for known vulnerabilities using OSV API (Markdown format only)
 - 📋 License compliance policy check with configurable allow/deny lists and wildcard support
-- 🔎 **Vulnerability Resolution Guide** - Identifies which direct dependency introduces each vulnerable transitive package
+- 🔎 **Vulnerability Resolution Guide** - Identifies which direct dependency introduces each vulnerable transitive package, and shows the **full dependency chain** for multi-hop transitive vulnerabilities
 - 📊 Outputs in multiple formats:
   - **CycloneDX 1.6** JSON format (standard SBOM format)
   - **Markdown** format with direct and transitive dependencies clearly separated
@@ -522,8 +522,15 @@ The following transitive dependencies have known vulnerabilities. The table show
 | Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID |
 |--------------------|---------|---------------|----------|---------------------------|-----------------|
 | urllib3 | 1.26.15 | >= 2.0.7 | 🟠 HIGH | requests (2.31.0) | [CVE-2024-XXXXX](https://nvd.nist.gov/vuln/detail/CVE-2024-XXXXX) |
-| certifi | 2023.7.22 | >= 2024.2.2 | 🟠 HIGH | requests (2.31.0), httpx (0.25.0) | [CVE-2024-YYYYY](https://nvd.nist.gov/vuln/detail/CVE-2024-YYYYY) |
+| h11 | 0.14.0 | >= 0.14.4 | 🟠 HIGH | httpx (0.24.0) | [CVE-2024-ZZZZZ](https://nvd.nist.gov/vuln/detail/CVE-2024-ZZZZZ) |
+
+### Dependency Chains
+
+**`h11 0.14.0`** — CVE-2024-ZZZZZ (HIGH)
+- `httpcore` → `httpx` → **`h11 0.14.0`** ⚠️
 ```
+
+> **Note:** The `### Dependency Chains` subsection is only rendered when at least one vulnerable package is reachable via a multi-hop chain (chain length > 2). It is omitted entirely when all vulnerable packages are introduced directly by a first-level dependency.
 
 #### CycloneDX JSON output
 

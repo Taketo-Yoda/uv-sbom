@@ -16,7 +16,7 @@
 - 🔍 PyPIからライセンス情報を自動取得（リトライロジック付き）
 - 🛡️ OSV APIを使用した既知の脆弱性チェック（Markdownフォーマットのみ）
 - 📋 許可/拒否リストとワイルドカード対応のライセンスコンプライアンスポリシーチェック
-- 🔎 **脆弱性解決ガイド** - 脆弱な推移的パッケージを導入している直接依存関係を特定
+- 🔎 **脆弱性解決ガイド** - 脆弱な推移的パッケージを導入している直接依存関係を特定し、マルチホップの推移的脆弱性に対しては**完全な依存チェーン**を表示
 - 📊 複数のフォーマットに対応:
   - **CycloneDX 1.6** JSON形式（標準SBOM形式）
   - **Markdown**形式（直接依存と推移的依存を明確に分離）
@@ -518,8 +518,15 @@ The following transitive dependencies have known vulnerabilities. The table show
 | Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID |
 |--------------------|---------|---------------|----------|---------------------------|-----------------|
 | urllib3 | 1.26.15 | >= 2.0.7 | 🟠 HIGH | requests (2.31.0) | [CVE-2024-XXXXX](https://nvd.nist.gov/vuln/detail/CVE-2024-XXXXX) |
-| certifi | 2023.7.22 | >= 2024.2.2 | 🟠 HIGH | requests (2.31.0), httpx (0.25.0) | [CVE-2024-YYYYY](https://nvd.nist.gov/vuln/detail/CVE-2024-YYYYY) |
+| h11 | 0.14.0 | >= 0.14.4 | 🟠 HIGH | httpx (0.24.0) | [CVE-2024-ZZZZZ](https://nvd.nist.gov/vuln/detail/CVE-2024-ZZZZZ) |
+
+### 依存チェーン
+
+**`h11 0.14.0`** — CVE-2024-ZZZZZ (HIGH)
+- `httpcore` → `httpx` → **`h11 0.14.0`** ⚠️
 ```
+
+> **注:** `### 依存チェーン`サブセクションは、脆弱なパッケージがマルチホップチェーン（チェーン長 > 2）を経由して到達可能な場合にのみ表示されます。全ての脆弱なパッケージが直接依存関係から導入されている場合は省略されます。
 
 #### CycloneDX JSON出力
 
