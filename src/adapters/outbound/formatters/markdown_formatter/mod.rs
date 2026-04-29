@@ -312,9 +312,8 @@ mod tests {
                 "severity={severity:?}"
             );
             assert!(
-                markdown.contains(
-                    "[CVE-2024-1234](https://nvd.nist.gov/vuln/detail/CVE-2024-1234)"
-                ),
+                markdown
+                    .contains("[CVE-2024-1234](https://nvd.nist.gov/vuln/detail/CVE-2024-1234)"),
                 "severity={severity:?}"
             );
 
