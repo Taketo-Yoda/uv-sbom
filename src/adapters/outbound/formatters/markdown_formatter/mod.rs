@@ -207,7 +207,10 @@ mod tests {
         }
     }
 
-    fn assert_ja_output_contains(model: &crate::application::read_models::SbomReadModel, expected: &str) {
+    fn assert_ja_output_contains(
+        model: &crate::application::read_models::SbomReadModel,
+        expected: &str,
+    ) {
         let formatter = MarkdownFormatter::new(Locale::Ja);
         let output = formatter.format(model).unwrap();
         assert!(
@@ -216,7 +219,10 @@ mod tests {
         );
     }
 
-    fn assert_ja_output_excludes(model: &crate::application::read_models::SbomReadModel, unexpected: &str) {
+    fn assert_ja_output_excludes(
+        model: &crate::application::read_models::SbomReadModel,
+        unexpected: &str,
+    ) {
         let formatter = MarkdownFormatter::new(Locale::Ja);
         let output = formatter.format(model).unwrap();
         assert!(
@@ -557,7 +563,10 @@ mod tests {
     #[test]
     fn test_lang_ja_section_descriptions_are_japanese() {
         let model = test_fixtures::base_model();
-        assert_ja_output_contains(&model, "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。");
+        assert_ja_output_contains(
+            &model,
+            "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。",
+        );
         assert_ja_output_excludes(&model, "A comprehensive list of all software components");
     }
 
@@ -594,8 +603,14 @@ mod tests {
                 affected_package_count: 0,
             },
         });
-        assert_ja_output_contains(&model, "### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。");
-        assert_ja_output_excludes(&model, "### ⚠️Warning No vulnerabilities found above threshold.");
+        assert_ja_output_contains(
+            &model,
+            "### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。",
+        );
+        assert_ja_output_excludes(
+            &model,
+            "### ⚠️Warning No vulnerabilities found above threshold.",
+        );
     }
 
     #[test]
@@ -621,7 +636,10 @@ mod tests {
                 affected_package_count: 1,
             },
         });
-        assert_ja_output_contains(&model, "### ⚠️警告 1件の脆弱性が1個のパッケージで見つかりました。");
+        assert_ja_output_contains(
+            &model,
+            "### ⚠️警告 1件の脆弱性が1個のパッケージで見つかりました。",
+        );
         assert_ja_output_excludes(&model, "### ⚠️Warning Found");
     }
 
@@ -741,7 +759,10 @@ mod tests {
         });
 
         assert_ja_output_contains(&model, "推奨アクション");
-        assert_ja_output_contains(&model, "⬆️ requestsを2.32.3にアップグレード（urllib3が2.2.1に解決）");
+        assert_ja_output_contains(
+            &model,
+            "⬆️ requestsを2.32.3にアップグレード（urllib3が2.2.1に解決）",
+        );
         assert_ja_output_excludes(&model, "⬆️ Upgrade");
     }
 
