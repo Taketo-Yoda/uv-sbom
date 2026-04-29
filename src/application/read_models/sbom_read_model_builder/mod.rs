@@ -89,6 +89,92 @@ impl SbomReadModelBuilder {
 }
 
 #[cfg(test)]
+pub(crate) mod test_helpers {
+    use crate::ports::outbound::EnrichedPackage;
+    use crate::sbom_generation::domain::resolution_guide::{IntroducedBy, ResolutionEntry};
+    use crate::sbom_generation::domain::vulnerability::{
+        CvssScore, PackageVulnerabilities, Severity, Vulnerability,
+    };
+    use crate::sbom_generation::domain::{DependencyGraph, Package, PackageName, SbomMetadata};
+    use std::collections::HashMap;
+
+    pub(crate) fn metadata() -> SbomMetadata {
+        SbomMetadata::new(
+            "2024-01-15T10:30:00Z".to_string(),
+            "uv-sbom".to_string(),
+            "0.1.0".to_string(),
+            "urn:uuid:12345678-1234-1234-1234-123456789012".to_string(),
+        )
+    }
+
+    pub(crate) fn package(name: &str, version: &str) -> EnrichedPackage {
+        EnrichedPackage::new(
+            Package::new(name.to_string(), version.to_string()).unwrap(),
+            Some("MIT".to_string()),
+            Some("A test package".to_string()),
+        )
+    }
+
+    pub(crate) fn graph() -> DependencyGraph {
+        let direct_deps = vec![PackageName::new("requests".to_string()).unwrap()];
+        let transitive: HashMap<PackageName, Vec<PackageName>> = HashMap::new();
+        DependencyGraph::new(direct_deps, transitive, HashMap::new())
+    }
+
+    pub(crate) fn vulnerability(id: &str, cvss: Option<f32>, severity: Severity) -> Vulnerability {
+        let cvss_score = cvss.and_then(|s| CvssScore::new(s).ok());
+        Vulnerability::new(id.to_string(), cvss_score, severity, None, None).unwrap()
+    }
+
+    pub(crate) fn vulnerability_with_fix(
+        id: &str,
+        cvss: Option<f32>,
+        severity: Severity,
+        fixed_version: &str,
+    ) -> Vulnerability {
+        let cvss_score = cvss.and_then(|s| CvssScore::new(s).ok());
+        Vulnerability::new(
+            id.to_string(),
+            cvss_score,
+            severity,
+            Some(fixed_version.to_string()),
+            None,
+        )
+        .unwrap()
+    }
+
+    pub(crate) fn package_vulnerabilities(
+        name: &str,
+        version: &str,
+        vulnerabilities: Vec<Vulnerability>,
+    ) -> PackageVulnerabilities {
+        PackageVulnerabilities::new(name.to_string(), version.to_string(), vulnerabilities)
+    }
+
+    pub(crate) fn resolution_entry(
+        pkg: &str,
+        current: &str,
+        fixed: Option<&str>,
+        severity: Severity,
+        cve: &str,
+        introducers: &[(&str, &str)],
+    ) -> ResolutionEntry {
+        ResolutionEntry::new(
+            pkg.to_string(),
+            current.to_string(),
+            fixed.map(str::to_string),
+            severity,
+            cve.to_string(),
+            introducers
+                .iter()
+                .map(|(name, version)| IntroducedBy::new(name.to_string(), version.to_string()))
+                .collect(),
+            vec![],
+        )
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::super::component_view::ComponentView;
     use super::super::vulnerability_view::SeverityView;
@@ -97,109 +183,7 @@ mod tests {
     use crate::sbom_generation::domain::{Package, PackageName};
     use std::collections::HashMap;
 
-    mod test_helpers {
-        use super::*;
-        use crate::sbom_generation::domain::resolution_guide::{IntroducedBy, ResolutionEntry};
-        use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
-        use crate::sbom_generation::domain::{Package, PackageName};
-        use std::collections::HashMap;
-
-        pub(super) fn metadata() -> SbomMetadata {
-            SbomMetadata::new(
-                "2024-01-15T10:30:00Z".to_string(),
-                "uv-sbom".to_string(),
-                "0.1.0".to_string(),
-                "urn:uuid:12345678-1234-1234-1234-123456789012".to_string(),
-            )
-        }
-
-        pub(super) fn package(name: &str, version: &str) -> EnrichedPackage {
-            EnrichedPackage::new(
-                Package::new(name.to_string(), version.to_string()).unwrap(),
-                Some("MIT".to_string()),
-                Some("A test package".to_string()),
-            )
-        }
-
-        pub(super) fn graph() -> DependencyGraph {
-            let direct_deps = vec![PackageName::new("requests".to_string()).unwrap()];
-            let transitive: HashMap<PackageName, Vec<PackageName>> = HashMap::new();
-            DependencyGraph::new(direct_deps, transitive, HashMap::new())
-        }
-
-        pub(super) fn vulnerability(
-            id: &str,
-            cvss: Option<f32>,
-            severity: Severity,
-        ) -> Vulnerability {
-            let cvss_score = cvss.and_then(|s| CvssScore::new(s).ok());
-            Vulnerability::new(id.to_string(), cvss_score, severity, None, None).unwrap()
-        }
-
-        pub(super) fn vulnerability_with_fix(
-            id: &str,
-            cvss: Option<f32>,
-            severity: Severity,
-            fixed_version: &str,
-        ) -> Vulnerability {
-            let cvss_score = cvss.and_then(|s| CvssScore::new(s).ok());
-            Vulnerability::new(
-                id.to_string(),
-                cvss_score,
-                severity,
-                Some(fixed_version.to_string()),
-                None,
-            )
-            .unwrap()
-        }
-
-        pub(super) fn package_vulnerabilities(
-            name: &str,
-            version: &str,
-            vulnerabilities: Vec<Vulnerability>,
-        ) -> PackageVulnerabilities {
-            PackageVulnerabilities::new(name.to_string(), version.to_string(), vulnerabilities)
-        }
-
-        pub(super) fn resolution_entry(
-            pkg: &str,
-            current: &str,
-            fixed: Option<&str>,
-            severity: Severity,
-            cve: &str,
-            introducers: &[(&str, &str)],
-        ) -> ResolutionEntry {
-            ResolutionEntry::new(
-                pkg.to_string(),
-                current.to_string(),
-                fixed.map(str::to_string),
-                severity,
-                cve.to_string(),
-                introducers
-                    .iter()
-                    .map(|(name, version)| IntroducedBy::new(name.to_string(), version.to_string()))
-                    .collect(),
-                vec![],
-            )
-        }
-    }
-
-    use test_helpers as th;
-
-    #[test]
-    fn test_build_metadata() {
-        let metadata = th::metadata();
-        let view = metadata_builder::build_metadata(&metadata, None);
-
-        assert_eq!(view.timestamp, "2024-01-15T10:30:00Z");
-        assert_eq!(view.tool_name, "uv-sbom");
-        assert_eq!(view.tool_version, "0.1.0");
-        assert_eq!(
-            view.serial_number,
-            "urn:uuid:12345678-1234-1234-1234-123456789012"
-        );
-        assert!(view.component.is_none());
-    }
+    use super::test_helpers as th;
 
     #[test]
     fn test_build_components_generates_bom_ref() {
@@ -794,25 +778,6 @@ mod tests {
         let components = component_builder::build_components(&[package], None);
 
         assert!(components[0].sha256_hash.is_none());
-    }
-
-    #[test]
-    fn test_build_metadata_with_project_component() {
-        let metadata = th::metadata();
-        let view = metadata_builder::build_metadata(&metadata, Some(("my-project", "1.0.0")));
-
-        assert!(view.component.is_some());
-        let component = view.component.unwrap();
-        assert_eq!(component.name, "my-project");
-        assert_eq!(component.version, "1.0.0");
-    }
-
-    #[test]
-    fn test_build_metadata_without_project_component() {
-        let metadata = th::metadata();
-        let view = metadata_builder::build_metadata(&metadata, None);
-
-        assert!(view.component.is_none());
     }
 
     #[test]
