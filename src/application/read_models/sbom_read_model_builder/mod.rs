@@ -177,9 +177,7 @@ mod tests {
                 cve.to_string(),
                 introducers
                     .iter()
-                    .map(|(name, version)| {
-                        IntroducedBy::new(name.to_string(), version.to_string())
-                    })
+                    .map(|(name, version)| IntroducedBy::new(name.to_string(), version.to_string()))
                     .collect(),
                 vec![],
             )
@@ -453,8 +451,7 @@ mod tests {
 
     #[test]
     fn test_build_vulnerability_view_with_fixed_version() {
-        let vuln =
-            th::vulnerability_with_fix("CVE-2024-5678", Some(7.5), Severity::High, "3.0.0");
+        let vuln = th::vulnerability_with_fix("CVE-2024-5678", Some(7.5), Severity::High, "3.0.0");
         let pkg = th::package_vulnerabilities("requests", "2.31.0", vec![vuln.clone()]);
         let components = vec![];
 
@@ -557,8 +554,7 @@ mod tests {
         let vuln2 = th::vulnerability("CVE-2024-002", Some(8.5), Severity::High);
         let vuln3 = th::vulnerability("CVE-2024-003", Some(7.0), Severity::High);
 
-        let pkg =
-            th::package_vulnerabilities("multi-vuln-pkg", "1.0.0", vec![vuln1, vuln2, vuln3]);
+        let pkg = th::package_vulnerabilities("multi-vuln-pkg", "1.0.0", vec![vuln1, vuln2, vuln3]);
 
         let result = VulnerabilityCheckResult {
             above_threshold: vec![pkg],
