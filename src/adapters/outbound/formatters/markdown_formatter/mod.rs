@@ -45,29 +45,33 @@ impl Default for MarkdownFormatter {
     }
 }
 
-impl SbomFormatter for MarkdownFormatter {
-    fn format(&self, model: &SbomReadModel) -> Result<String> {
-        let mut output = String::new();
-
+impl MarkdownFormatter {
+    /// Renders the three always-present sections in fixed order: summary, header, components.
+    fn render_required_sections(&self, output: &mut String, model: &SbomReadModel) {
         sections::summary::render(
             self.messages,
-            &mut output,
+            output,
             &model.components,
             model.vulnerabilities.as_ref(),
             model.license_compliance.as_ref(),
         );
-        sections::header::render(self.messages, &mut output);
+        sections::header::render(self.messages, output);
         sections::components::render(
             self.messages,
             self.verified_packages.as_ref(),
-            &mut output,
+            output,
             &model.components,
         );
+    }
+
+    /// Renders the four conditional sections when present: dependencies, vulnerabilities,
+    /// resolution guide, and license compliance.
+    fn render_optional_sections(&self, output: &mut String, model: &SbomReadModel) {
         if let Some(deps) = &model.dependencies {
             sections::dependencies::render(
                 self.messages,
                 self.verified_packages.as_ref(),
-                &mut output,
+                output,
                 deps,
                 &model.components,
             );
@@ -76,7 +80,7 @@ impl SbomFormatter for MarkdownFormatter {
             vuln_render::render_vulnerabilities(
                 self.messages,
                 self.verified_packages.as_ref(),
-                &mut output,
+                output,
                 vulns,
             );
         }
@@ -84,16 +88,23 @@ impl SbomFormatter for MarkdownFormatter {
             if !guide.entries.is_empty() {
                 sections::resolution_guide::render(
                     self.messages,
-                    &mut output,
+                    output,
                     guide,
                     model.upgrade_recommendations.as_ref(),
                 );
             }
         }
         if let Some(compliance) = &model.license_compliance {
-            sections::license_compliance::render(self.messages, &mut output, compliance);
+            sections::license_compliance::render(self.messages, output, compliance);
         }
+    }
+}
 
+impl SbomFormatter for MarkdownFormatter {
+    fn format(&self, model: &SbomReadModel) -> Result<String> {
+        let mut output = String::new();
+        self.render_required_sections(&mut output, model);
+        self.render_optional_sections(&mut output, model);
         Ok(output)
     }
 }
