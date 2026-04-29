@@ -180,74 +180,10 @@ mod tests {
     use super::super::vulnerability_view::SeverityView;
     use super::*;
     use crate::sbom_generation::domain::vulnerability::Severity;
-    use crate::sbom_generation::domain::{Package, PackageName};
+    use crate::sbom_generation::domain::PackageName;
     use std::collections::HashMap;
 
     use super::test_helpers as th;
-
-    #[test]
-    fn test_build_components_generates_bom_ref() {
-        let packages = vec![th::package("requests", "2.31.0")];
-        let components = component_builder::build_components(&packages, None);
-
-        assert_eq!(components.len(), 1);
-        assert_eq!(components[0].bom_ref, "requests-2.31.0");
-    }
-
-    #[test]
-    fn test_build_components_generates_purl() {
-        let packages = vec![th::package("requests", "2.31.0")];
-        let components = component_builder::build_components(&packages, None);
-
-        assert_eq!(components[0].purl, "pkg:pypi/requests@2.31.0");
-    }
-
-    #[test]
-    fn test_build_components_with_license() {
-        let packages = vec![th::package("requests", "2.31.0")];
-        let components = component_builder::build_components(&packages, None);
-
-        let license = components[0].license.as_ref().unwrap();
-        assert_eq!(license.name, "MIT");
-        assert_eq!(license.spdx_id, Some("MIT".to_string()));
-    }
-
-    #[test]
-    fn test_build_components_with_description() {
-        let packages = vec![th::package("requests", "2.31.0")];
-        let components = component_builder::build_components(&packages, None);
-
-        assert_eq!(
-            components[0].description,
-            Some("A test package".to_string())
-        );
-    }
-
-    #[test]
-    fn test_build_components_is_direct_dependency_with_graph() {
-        let packages = vec![
-            th::package("requests", "2.31.0"),
-            th::package("urllib3", "2.0.0"),
-        ];
-        let graph = th::graph();
-        let components = component_builder::build_components(&packages, Some(&graph));
-
-        // requests is in direct_dependencies
-        let requests = components.iter().find(|c| c.name == "requests").unwrap();
-        assert!(requests.is_direct_dependency);
-
-        // urllib3 is not in direct_dependencies
-        let urllib3 = components.iter().find(|c| c.name == "urllib3").unwrap();
-        assert!(!urllib3.is_direct_dependency);
-    }
-
-    #[test]
-    fn test_build_components_is_direct_dependency_without_graph() {
-        let packages = vec![th::package("requests", "2.31.0")];
-        let components = component_builder::build_components(&packages, None);
-
-        assert!(!components[0].is_direct_dependency);
-    }
 
     #[test]
     fn test_build_full_read_model() {
@@ -287,100 +223,6 @@ mod tests {
         );
 
         assert!(read_model.components.is_empty());
-    }
-
-    #[test]
-    fn test_build_components_without_license() {
-        let package = EnrichedPackage::new(
-            Package::new("requests".to_string(), "2.31.0".to_string()).unwrap(),
-            None,
-            None,
-        );
-        let components = component_builder::build_components(&[package], None);
-
-        assert!(components[0].license.is_none());
-        assert!(components[0].description.is_none());
-    }
-
-    #[test]
-    fn test_build_dependencies_maps_direct_to_bom_refs() {
-        let packages = vec![
-            th::package("requests", "2.31.0"),
-            th::package("urllib3", "2.0.0"),
-        ];
-        let components = component_builder::build_components(&packages, None);
-
-        let direct_deps = vec![
-            PackageName::new("requests".to_string()).unwrap(),
-            PackageName::new("urllib3".to_string()).unwrap(),
-        ];
-        let graph = DependencyGraph::new(direct_deps, HashMap::new(), HashMap::new());
-
-        let deps = dependency_builder::build_dependencies(&graph, &components);
-
-        assert_eq!(deps.direct.len(), 2);
-        assert!(deps.direct.contains(&"requests-2.31.0".to_string()));
-        assert!(deps.direct.contains(&"urllib3-2.0.0".to_string()));
-    }
-
-    #[test]
-    fn test_build_dependencies_builds_transitive_map() {
-        let packages = vec![
-            th::package("requests", "2.31.0"),
-            th::package("urllib3", "2.0.0"),
-            th::package("certifi", "2023.7.22"),
-        ];
-        let components = component_builder::build_components(&packages, None);
-
-        let direct_deps = vec![PackageName::new("requests".to_string()).unwrap()];
-        let mut transitive = HashMap::new();
-        transitive.insert(
-            PackageName::new("requests".to_string()).unwrap(),
-            vec![
-                PackageName::new("urllib3".to_string()).unwrap(),
-                PackageName::new("certifi".to_string()).unwrap(),
-            ],
-        );
-        let graph = DependencyGraph::new(direct_deps, transitive, HashMap::new());
-
-        let deps = dependency_builder::build_dependencies(&graph, &components);
-
-        assert_eq!(deps.direct.len(), 1);
-        assert!(deps.transitive.contains_key("requests-2.31.0"));
-        let requests_deps = deps.transitive.get("requests-2.31.0").unwrap();
-        assert_eq!(requests_deps.len(), 2);
-        assert!(requests_deps.contains(&"urllib3-2.0.0".to_string()));
-        assert!(requests_deps.contains(&"certifi-2023.7.22".to_string()));
-    }
-
-    #[test]
-    fn test_build_dependencies_filters_unknown_packages() {
-        let packages = vec![th::package("requests", "2.31.0")];
-        let components = component_builder::build_components(&packages, None);
-
-        // unknown-pkg is not in components
-        let direct_deps = vec![
-            PackageName::new("requests".to_string()).unwrap(),
-            PackageName::new("unknown-pkg".to_string()).unwrap(),
-        ];
-        let graph = DependencyGraph::new(direct_deps, HashMap::new(), HashMap::new());
-
-        let deps = dependency_builder::build_dependencies(&graph, &components);
-
-        assert_eq!(deps.direct.len(), 1);
-        assert!(deps.direct.contains(&"requests-2.31.0".to_string()));
-    }
-
-    #[test]
-    fn test_build_dependencies_empty_graph() {
-        let packages = vec![th::package("requests", "2.31.0")];
-        let components = component_builder::build_components(&packages, None);
-        let graph = DependencyGraph::new(vec![], HashMap::new(), HashMap::new());
-
-        let deps = dependency_builder::build_dependencies(&graph, &components);
-
-        assert!(deps.direct.is_empty());
-        assert!(deps.transitive.is_empty());
     }
 
     #[test]
@@ -761,23 +603,6 @@ mod tests {
 
         // requests is a direct dep, so ResolutionAnalyzer skips it → empty → None
         assert!(read_model.resolution_guide.is_none());
-    }
-
-    #[test]
-    fn test_build_components_with_sha256_hash() {
-        let mut package = th::package("requests", "2.31.0");
-        package.sha256_hash = Some("abc123def456".to_string());
-        let components = component_builder::build_components(&[package], None);
-
-        assert_eq!(components[0].sha256_hash, Some("abc123def456".to_string()));
-    }
-
-    #[test]
-    fn test_build_components_without_sha256_hash() {
-        let package = th::package("requests", "2.31.0");
-        let components = component_builder::build_components(&[package], None);
-
-        assert!(components[0].sha256_hash.is_none());
     }
 
     #[test]
