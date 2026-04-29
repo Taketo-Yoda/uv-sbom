@@ -231,6 +231,27 @@ mod tests {
         );
     }
 
+    fn assert_section_order(markdown: &str, sections: &[&str]) {
+        let positions: Vec<usize> = sections
+            .iter()
+            .map(|section| {
+                markdown.find(section).unwrap_or_else(|| {
+                    panic!("Expected section {section:?} to be present, got:\n{markdown}")
+                })
+            })
+            .collect();
+        for (pos_pair, label_pair) in positions.windows(2).zip(sections.windows(2)) {
+            assert!(
+                pos_pair[0] < pos_pair[1],
+                "Expected section {:?} (pos {}) to appear before {:?} (pos {})",
+                label_pair[0],
+                pos_pair[0],
+                label_pair[1],
+                pos_pair[1],
+            );
+        }
+    }
+
     #[test]
     fn test_format_basic() {
         let model = test_fixtures::base_model();
@@ -275,60 +296,43 @@ mod tests {
 
     #[test]
     fn test_format_with_vulnerabilities() {
-        let model = test_fixtures::with_vulnerabilities(SeverityView::Critical);
+        // Informational-only rendering (ℹ️Info section, "No vulnerabilities found above
+        // threshold.") is covered by test_format_vulnerability_section_ordering, which uses
+        // a model with both actionable and informational vulns.
+        for severity in [SeverityView::Critical, SeverityView::Low] {
+            let model = test_fixtures::with_vulnerabilities(severity);
+            let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
 
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let result = formatter.format(&model);
+            assert!(
+                markdown.contains("## Vulnerability Report"),
+                "severity={severity:?}"
+            );
+            assert!(
+                markdown.contains("### ⚠️Warning Found 1 vulnerability in 1 package."),
+                "severity={severity:?}"
+            );
+            assert!(
+                markdown.contains(
+                    "[CVE-2024-1234](https://nvd.nist.gov/vuln/detail/CVE-2024-1234)"
+                ),
+                "severity={severity:?}"
+            );
 
-        assert!(result.is_ok());
-        let markdown = result.unwrap();
-        assert!(markdown.contains("## Vulnerability Report"));
-        assert!(markdown.contains("### ⚠️Warning Found 1 vulnerability in 1 package."));
-        assert!(
-            markdown.contains("[CVE-2024-1234](https://nvd.nist.gov/vuln/detail/CVE-2024-1234)")
-        );
-        assert!(markdown.contains("9.8"));
-        assert!(markdown.contains("🔴"));
-        assert!(markdown.contains("CRITICAL"));
-        assert!(markdown.contains("2.32.0"));
-    }
-
-    #[test]
-    fn test_format_with_informational_vulnerabilities() {
-        let mut model = test_fixtures::base_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![],
-            informational: vec![VulnerabilityView {
-                bom_ref: "vuln-002".to_string(),
-                id: "CVE-2024-5678".to_string(),
-                affected_component: "pkg:pypi/urllib3@1.26.0".to_string(),
-                affected_component_name: "urllib3".to_string(),
-                affected_version: "1.26.0".to_string(),
-                cvss_score: Some(3.1),
-                cvss_vector: None,
-                severity: SeverityView::Low,
-                fixed_version: None,
-                description: None,
-                source_url: None,
-            }],
-            summary: VulnerabilitySummary {
-                total_count: 1,
-                affected_package_count: 1,
-            },
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let result = formatter.format(&model);
-
-        assert!(result.is_ok());
-        let markdown = result.unwrap();
-        assert!(markdown.contains("### ⚠️Warning No vulnerabilities found above threshold."));
-        assert!(markdown.contains("### ℹ️Info Found 1 vulnerability in 1 package."));
-        assert!(
-            markdown.contains("[CVE-2024-5678](https://nvd.nist.gov/vuln/detail/CVE-2024-5678)")
-        );
-        assert!(markdown.contains("🟢"));
-        assert!(markdown.contains("LOW"));
+            match severity {
+                SeverityView::Critical => {
+                    assert!(markdown.contains("🔴"));
+                    assert!(markdown.contains("CRITICAL"));
+                    assert!(markdown.contains("9.8"));
+                    assert!(markdown.contains("2.32.0"));
+                }
+                SeverityView::Low => {
+                    assert!(markdown.contains("🟢"));
+                    assert!(markdown.contains("LOW"));
+                    assert!(markdown.contains("3.1"));
+                }
+                _ => unreachable!(),
+            }
+        }
     }
 
     #[test]
@@ -344,60 +348,18 @@ mod tests {
             transitive,
         });
 
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let result = formatter.format(&model);
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
 
-        assert!(result.is_ok());
-        let markdown = result.unwrap();
-
-        // Check key sections exist in correct order
-        let summary_pos = markdown.find("## Summary");
-        let sbom_pos = markdown.find("# Software Bill of Materials (SBOM)");
-        let inventory_pos = markdown.find("## Component Inventory");
-        let direct_pos = markdown.find("## Direct Dependencies");
-        let transitive_pos = markdown.find("## Transitive Dependencies");
-
-        assert!(summary_pos.is_some());
-        assert!(sbom_pos.is_some());
-        assert!(inventory_pos.is_some());
-        assert!(direct_pos.is_some());
-        assert!(transitive_pos.is_some());
-
-        // Verify ordering: summary must come before all other sections
-        assert!(summary_pos.unwrap() < sbom_pos.unwrap());
-        assert!(sbom_pos.unwrap() < inventory_pos.unwrap());
-        assert!(inventory_pos.unwrap() < direct_pos.unwrap());
-        assert!(direct_pos.unwrap() < transitive_pos.unwrap());
-    }
-
-    #[test]
-    fn test_summary_appears_before_all_sections() {
-        let mut model = test_fixtures::base_model();
-        let mut transitive = HashMap::new();
-        transitive.insert(
-            "pkg:pypi/requests@2.31.0".to_string(),
-            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
+        assert_section_order(
+            &markdown,
+            &[
+                "## Summary",
+                "# Software Bill of Materials (SBOM)",
+                "## Component Inventory",
+                "## Direct Dependencies",
+                "## Transitive Dependencies",
+            ],
         );
-        model.dependencies = Some(DependencyView {
-            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
-            transitive,
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        let summary_pos = markdown.find("## Summary").unwrap();
-        let header_pos = markdown
-            .find("# Software Bill of Materials (SBOM)")
-            .unwrap();
-        let inventory_pos = markdown.find("## Component Inventory").unwrap();
-        let direct_pos = markdown.find("## Direct Dependencies").unwrap();
-        let transitive_pos = markdown.find("## Transitive Dependencies").unwrap();
-
-        assert!(summary_pos < header_pos);
-        assert!(summary_pos < inventory_pos);
-        assert!(summary_pos < direct_pos);
-        assert!(summary_pos < transitive_pos);
     }
 
     #[test]
