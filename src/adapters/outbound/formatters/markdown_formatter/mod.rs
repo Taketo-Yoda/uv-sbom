@@ -113,8 +113,7 @@ impl SbomFormatter for MarkdownFormatter {
 mod tests {
     use super::*;
     use crate::application::read_models::{
-        ComponentView, DependencyView, LicenseView, SeverityView, VulnerabilityReportView,
-        VulnerabilitySummary, VulnerabilityView,
+        ComponentView, DependencyView, LicenseView, SeverityView,
     };
     use crate::i18n::Locale;
     use std::collections::HashMap;
@@ -204,6 +203,112 @@ mod tests {
                 },
             });
             model
+        }
+
+        /// Returns a model with one Critical-severity actionable vulnerability (CVE-2024-1234).
+        pub(super) fn with_critical_vuln() -> SbomReadModel {
+            with_vulnerabilities(SeverityView::Critical)
+        }
+
+        /// Returns a model with an empty vulnerability report (no actionable or informational).
+        pub(super) fn with_empty_vuln_report() -> SbomReadModel {
+            let mut model = base_model();
+            model.vulnerabilities = Some(VulnerabilityReportView {
+                actionable: vec![],
+                informational: vec![],
+                summary: VulnerabilitySummary {
+                    total_count: 0,
+                    affected_package_count: 0,
+                },
+            });
+            model
+        }
+
+        /// Returns a model with two actionable vulnerabilities on the same package (Critical + High).
+        pub(super) fn with_two_actionable_vulns() -> SbomReadModel {
+            let mut model = base_model();
+            model.vulnerabilities = Some(VulnerabilityReportView {
+                actionable: vec![
+                    make_vuln(
+                        "CVE-2024-1234",
+                        "pkg:pypi/requests@2.31.0",
+                        "requests",
+                        "2.31.0",
+                        SeverityView::Critical,
+                        Some(9.8_f32),
+                        Some("2.32.0"),
+                    ),
+                    make_vuln(
+                        "CVE-2024-5678",
+                        "pkg:pypi/requests@2.31.0",
+                        "requests",
+                        "2.31.0",
+                        SeverityView::High,
+                        Some(7.5_f32),
+                        None,
+                    ),
+                ],
+                informational: vec![],
+                summary: VulnerabilitySummary {
+                    total_count: 2,
+                    affected_package_count: 1,
+                },
+            });
+            model
+        }
+
+        /// Returns a model with one Critical actionable and one Low informational vulnerability.
+        pub(super) fn with_actionable_and_informational_vulns() -> SbomReadModel {
+            let mut model = base_model();
+            model.vulnerabilities = Some(VulnerabilityReportView {
+                actionable: vec![make_vuln(
+                    "CVE-2024-1234",
+                    "pkg:pypi/requests@2.31.0",
+                    "requests",
+                    "2.31.0",
+                    SeverityView::Critical,
+                    Some(9.8_f32),
+                    Some("2.32.0"),
+                )],
+                informational: vec![make_vuln(
+                    "CVE-2024-5678",
+                    "pkg:pypi/urllib3@1.26.0",
+                    "urllib3",
+                    "1.26.0",
+                    SeverityView::Low,
+                    Some(2.0_f32),
+                    None,
+                )],
+                summary: VulnerabilitySummary {
+                    total_count: 2,
+                    affected_package_count: 2,
+                },
+            });
+            model
+        }
+
+        fn make_vuln(
+            id: &str,
+            affected_component: &str,
+            name: &str,
+            version: &str,
+            severity: SeverityView,
+            cvss_score: Option<f32>,
+            fixed_version: Option<&str>,
+        ) -> VulnerabilityView {
+            VulnerabilityView {
+                bom_ref: id.to_string(),
+                id: id.to_string(),
+                affected_component: affected_component.to_string(),
+                affected_component_name: name.to_string(),
+                affected_version: version.to_string(),
+                cvss_score,
+                cvss_vector: None,
+                severity,
+                fixed_version: fixed_version.map(str::to_string),
+                description: None,
+                source_url: None,
+            }
         }
     }
 
@@ -373,31 +478,8 @@ mod tests {
 
     #[test]
     fn test_summary_overall_action_required_when_critical_vuln() {
-        let mut model = test_fixtures::base_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![VulnerabilityView {
-                bom_ref: "vuln-001".to_string(),
-                id: "CVE-2024-9999".to_string(),
-                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
-                affected_component_name: "requests".to_string(),
-                affected_version: "2.31.0".to_string(),
-                cvss_score: Some(9.8),
-                cvss_vector: None,
-                severity: SeverityView::Critical,
-                fixed_version: Some("2.32.0".to_string()),
-                description: None,
-                source_url: None,
-            }],
-            informational: vec![],
-            summary: VulnerabilitySummary {
-                total_count: 1,
-                affected_package_count: 1,
-            },
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
+        let model = test_fixtures::with_critical_vuln();
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
         assert!(markdown.contains("**Overall: Action required**"));
     }
 
@@ -413,57 +495,18 @@ mod tests {
 
     #[test]
     fn test_format_vulnerability_section_ordering() {
-        let mut model = test_fixtures::base_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![VulnerabilityView {
-                bom_ref: "vuln-001".to_string(),
-                id: "CVE-2024-1234".to_string(),
-                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
-                affected_component_name: "requests".to_string(),
-                affected_version: "2.31.0".to_string(),
-                cvss_score: Some(9.8),
-                cvss_vector: None,
-                severity: SeverityView::Critical,
-                fixed_version: Some("2.32.0".to_string()),
-                description: None,
-                source_url: None,
-            }],
-            informational: vec![VulnerabilityView {
-                bom_ref: "vuln-002".to_string(),
-                id: "CVE-2024-5678".to_string(),
-                affected_component: "pkg:pypi/urllib3@1.26.0".to_string(),
-                affected_component_name: "urllib3".to_string(),
-                affected_version: "1.26.0".to_string(),
-                cvss_score: Some(2.0),
-                cvss_vector: None,
-                severity: SeverityView::Low,
-                fixed_version: None,
-                description: None,
-                source_url: None,
-            }],
-            summary: VulnerabilitySummary {
-                total_count: 2,
-                affected_package_count: 2,
-            },
-        });
+        let model = test_fixtures::with_actionable_and_informational_vulns();
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
 
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        // Verify sections appear in correct order
-        let summary_pos = markdown.find("**Found 2 vulnerabilities in 2 packages.**");
-        let warning_pos = markdown.find("### ⚠️Warning");
-        let info_pos = markdown.find("### ℹ️Info");
-        let attribution_pos = markdown.find("*Vulnerability data provided by");
-
-        assert!(summary_pos.is_some());
-        assert!(warning_pos.is_some());
-        assert!(info_pos.is_some());
-        assert!(attribution_pos.is_some());
-
-        assert!(summary_pos.unwrap() < warning_pos.unwrap());
-        assert!(warning_pos.unwrap() < info_pos.unwrap());
-        assert!(info_pos.unwrap() < attribution_pos.unwrap());
+        assert_section_order(
+            &markdown,
+            &[
+                "**Found 2 vulnerabilities in 2 packages.**",
+                "### ⚠️Warning",
+                "### ℹ️Info",
+                "*Vulnerability data provided by",
+            ],
+        );
     }
 
     // ===== Tests for --lang option (i18n) =====
@@ -555,15 +598,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_vuln_above_threshold_warning_is_japanese() {
-        let mut model = test_fixtures::base_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![],
-            informational: vec![],
-            summary: VulnerabilitySummary {
-                total_count: 0,
-                affected_package_count: 0,
-            },
-        });
+        let model = test_fixtures::with_empty_vuln_report();
         assert_ja_output_contains(
             &model,
             "### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。",
@@ -576,27 +611,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_actionable_vuln_count_is_japanese() {
-        let mut model = test_fixtures::base_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![VulnerabilityView {
-                bom_ref: "vuln-001".to_string(),
-                id: "CVE-2024-1234".to_string(),
-                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
-                affected_component_name: "requests".to_string(),
-                affected_version: "2.31.0".to_string(),
-                cvss_score: Some(9.8),
-                cvss_vector: None,
-                severity: SeverityView::Critical,
-                fixed_version: Some("2.32.0".to_string()),
-                description: None,
-                source_url: None,
-            }],
-            informational: vec![],
-            summary: VulnerabilitySummary {
-                total_count: 1,
-                affected_package_count: 1,
-            },
-        });
+        let model = test_fixtures::with_critical_vuln();
         assert_ja_output_contains(
             &model,
             "### ⚠️警告 1件の脆弱性が1個のパッケージで見つかりました。",
@@ -606,15 +621,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_osv_attribution_is_japanese() {
-        let mut model = test_fixtures::base_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![],
-            informational: vec![],
-            summary: VulnerabilitySummary {
-                total_count: 0,
-                affected_package_count: 0,
-            },
-        });
+        let model = test_fixtures::with_empty_vuln_report();
         assert_ja_output_contains(&model, "*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*");
         assert_ja_output_excludes(&model, "*Vulnerability data provided by");
     }
@@ -729,28 +736,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_with_vulnerabilities_contains_japanese_vuln_headers() {
-        let mut model = test_fixtures::base_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![VulnerabilityView {
-                bom_ref: "vuln-001".to_string(),
-                id: "CVE-2024-1234".to_string(),
-                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
-                affected_component_name: "requests".to_string(),
-                affected_version: "2.31.0".to_string(),
-                cvss_score: Some(9.8),
-                cvss_vector: None,
-                severity: SeverityView::Critical,
-                fixed_version: Some("2.32.0".to_string()),
-                description: None,
-                source_url: None,
-            }],
-            informational: vec![],
-            summary: VulnerabilitySummary {
-                total_count: 1,
-                affected_package_count: 1,
-            },
-        });
-
+        let model = test_fixtures::with_critical_vuln();
         // CVE ID remains in its original form regardless of locale
         assert_ja_output_contains(&model, "## 脆弱性レポート");
         assert_ja_output_excludes(&model, "## Vulnerability Report");
@@ -759,43 +745,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_vuln_summary_is_japanese() {
-        let mut model = test_fixtures::base_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![
-                VulnerabilityView {
-                    bom_ref: "vuln-001".to_string(),
-                    id: "CVE-2024-1234".to_string(),
-                    affected_component: "pkg:pypi/requests@2.31.0".to_string(),
-                    affected_component_name: "requests".to_string(),
-                    affected_version: "2.31.0".to_string(),
-                    cvss_score: Some(9.8),
-                    cvss_vector: None,
-                    severity: SeverityView::Critical,
-                    fixed_version: Some("2.32.0".to_string()),
-                    description: None,
-                    source_url: None,
-                },
-                VulnerabilityView {
-                    bom_ref: "vuln-002".to_string(),
-                    id: "CVE-2024-5678".to_string(),
-                    affected_component: "pkg:pypi/requests@2.31.0".to_string(),
-                    affected_component_name: "requests".to_string(),
-                    affected_version: "2.31.0".to_string(),
-                    cvss_score: Some(7.5),
-                    cvss_vector: None,
-                    severity: SeverityView::High,
-                    fixed_version: None,
-                    description: None,
-                    source_url: None,
-                },
-            ],
-            informational: vec![],
-            summary: VulnerabilitySummary {
-                total_count: 2,
-                affected_package_count: 1,
-            },
-        });
-
+        let model = test_fixtures::with_two_actionable_vulns();
         assert_ja_output_contains(&model, "**2件の脆弱性が1個のパッケージで見つかりました。**");
         assert_ja_output_excludes(&model, "**Found");
     }
