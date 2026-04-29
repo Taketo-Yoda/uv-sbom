@@ -113,60 +113,103 @@ impl SbomFormatter for MarkdownFormatter {
 mod tests {
     use super::*;
     use crate::application::read_models::{
-        ComponentView, DependencyView, LicenseView, SbomMetadataView, SbomReadModel, SeverityView,
-        VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
+        ComponentView, DependencyView, LicenseView, SeverityView, VulnerabilityReportView,
+        VulnerabilitySummary, VulnerabilityView,
     };
     use crate::i18n::Locale;
     use std::collections::HashMap;
 
-    fn create_test_read_model() -> SbomReadModel {
-        SbomReadModel {
-            metadata: SbomMetadataView {
-                timestamp: "2024-01-01T00:00:00Z".to_string(),
-                tool_name: "uv-sbom".to_string(),
-                tool_version: "1.0.0".to_string(),
-                serial_number: "urn:uuid:test-123".to_string(),
-                component: None,
-            },
-            components: vec![
-                ComponentView {
-                    bom_ref: "pkg:pypi/requests@2.31.0".to_string(),
-                    name: "requests".to_string(),
-                    version: "2.31.0".to_string(),
-                    purl: "pkg:pypi/requests@2.31.0".to_string(),
-                    license: Some(LicenseView {
-                        spdx_id: Some("Apache-2.0".to_string()),
-                        name: "Apache License 2.0".to_string(),
-                    }),
-                    description: Some("HTTP library".to_string()),
-                    sha256_hash: None,
-                    is_direct_dependency: true,
+    mod test_fixtures {
+        use crate::application::read_models::{
+            ComponentView, LicenseView, SbomMetadataView, SbomReadModel, SeverityView,
+            VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
+        };
+
+        pub(super) fn base_model() -> SbomReadModel {
+            SbomReadModel {
+                metadata: SbomMetadataView {
+                    timestamp: "2024-01-01T00:00:00Z".to_string(),
+                    tool_name: "uv-sbom".to_string(),
+                    tool_version: "1.0.0".to_string(),
+                    serial_number: "urn:uuid:test-123".to_string(),
+                    component: None,
                 },
-                ComponentView {
-                    bom_ref: "pkg:pypi/urllib3@1.26.0".to_string(),
-                    name: "urllib3".to_string(),
-                    version: "1.26.0".to_string(),
-                    purl: "pkg:pypi/urllib3@1.26.0".to_string(),
-                    license: Some(LicenseView {
-                        spdx_id: Some("MIT".to_string()),
-                        name: "MIT License".to_string(),
-                    }),
+                components: vec![
+                    ComponentView {
+                        bom_ref: "pkg:pypi/requests@2.31.0".to_string(),
+                        name: "requests".to_string(),
+                        version: "2.31.0".to_string(),
+                        purl: "pkg:pypi/requests@2.31.0".to_string(),
+                        license: Some(LicenseView {
+                            spdx_id: Some("Apache-2.0".to_string()),
+                            name: "Apache License 2.0".to_string(),
+                        }),
+                        description: Some("HTTP library".to_string()),
+                        sha256_hash: None,
+                        is_direct_dependency: true,
+                    },
+                    ComponentView {
+                        bom_ref: "pkg:pypi/urllib3@1.26.0".to_string(),
+                        name: "urllib3".to_string(),
+                        version: "1.26.0".to_string(),
+                        purl: "pkg:pypi/urllib3@1.26.0".to_string(),
+                        license: Some(LicenseView {
+                            spdx_id: Some("MIT".to_string()),
+                            name: "MIT License".to_string(),
+                        }),
+                        description: None,
+                        sha256_hash: None,
+                        is_direct_dependency: false,
+                    },
+                ],
+                dependencies: None,
+                vulnerabilities: None,
+                license_compliance: None,
+                resolution_guide: None,
+                upgrade_recommendations: None,
+            }
+        }
+
+        pub(super) fn with_vulnerabilities(severity: SeverityView) -> SbomReadModel {
+            let mut model = base_model();
+            let cvss_score = match severity {
+                SeverityView::Critical => Some(9.8),
+                SeverityView::High => Some(7.5),
+                SeverityView::Medium => Some(5.0),
+                SeverityView::Low => Some(3.1),
+                SeverityView::None => None,
+            };
+            let fixed_version = match severity {
+                SeverityView::Critical | SeverityView::High => Some("2.32.0".to_string()),
+                _ => None,
+            };
+            model.vulnerabilities = Some(VulnerabilityReportView {
+                actionable: vec![VulnerabilityView {
+                    bom_ref: "vuln-001".to_string(),
+                    id: "CVE-2024-1234".to_string(),
+                    affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+                    affected_component_name: "requests".to_string(),
+                    affected_version: "2.31.0".to_string(),
+                    cvss_score,
+                    cvss_vector: None,
+                    severity,
+                    fixed_version,
                     description: None,
-                    sha256_hash: None,
-                    is_direct_dependency: false,
+                    source_url: None,
+                }],
+                informational: vec![],
+                summary: VulnerabilitySummary {
+                    total_count: 1,
+                    affected_package_count: 1,
                 },
-            ],
-            dependencies: None,
-            vulnerabilities: None,
-            license_compliance: None,
-            resolution_guide: None,
-            upgrade_recommendations: None,
+            });
+            model
         }
     }
 
     #[test]
     fn test_format_basic() {
-        let model = create_test_read_model();
+        let model = test_fixtures::base_model();
         let formatter = MarkdownFormatter::new(Locale::En);
 
         let result = formatter.format(&model);
@@ -183,7 +226,7 @@ mod tests {
 
     #[test]
     fn test_format_with_dependencies() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         let mut transitive = HashMap::new();
         transitive.insert(
             "pkg:pypi/requests@2.31.0".to_string(),
@@ -208,27 +251,7 @@ mod tests {
 
     #[test]
     fn test_format_with_vulnerabilities() {
-        let mut model = create_test_read_model();
-        model.vulnerabilities = Some(VulnerabilityReportView {
-            actionable: vec![VulnerabilityView {
-                bom_ref: "vuln-001".to_string(),
-                id: "CVE-2024-1234".to_string(),
-                affected_component: "pkg:pypi/requests@2.31.0".to_string(),
-                affected_component_name: "requests".to_string(),
-                affected_version: "2.31.0".to_string(),
-                cvss_score: Some(9.8),
-                cvss_vector: None,
-                severity: SeverityView::Critical,
-                fixed_version: Some("2.32.0".to_string()),
-                description: None,
-                source_url: None,
-            }],
-            informational: vec![],
-            summary: VulnerabilitySummary {
-                total_count: 1,
-                affected_package_count: 1,
-            },
-        });
+        let model = test_fixtures::with_vulnerabilities(SeverityView::Critical);
 
         let formatter = MarkdownFormatter::new(Locale::En);
         let result = formatter.format(&model);
@@ -248,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_format_with_informational_vulnerabilities() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![],
             informational: vec![VulnerabilityView {
@@ -286,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_format_output_section_ordering() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         let mut transitive = HashMap::new();
         transitive.insert(
             "pkg:pypi/requests@2.31.0".to_string(),
@@ -325,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_summary_appears_before_all_sections() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         let mut transitive = HashMap::new();
         transitive.insert(
             "pkg:pypi/requests@2.31.0".to_string(),
@@ -355,7 +378,7 @@ mod tests {
 
     #[test]
     fn test_summary_vuln_skipped_note_when_no_network() {
-        let model = create_test_read_model(); // vulnerabilities: None
+        let model = test_fixtures::base_model(); // vulnerabilities: None
 
         let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
@@ -365,7 +388,7 @@ mod tests {
 
     #[test]
     fn test_summary_overall_action_required_when_critical_vuln() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![VulnerabilityView {
                 bom_ref: "vuln-001".to_string(),
@@ -395,7 +418,7 @@ mod tests {
 
     #[test]
     fn test_summary_overall_no_issues_when_clean() {
-        let model = create_test_read_model(); // no vulns, no license violations
+        let model = test_fixtures::base_model(); // no vulns, no license violations
 
         let formatter = MarkdownFormatter::new(Locale::En);
         let markdown = formatter.format(&model).unwrap();
@@ -405,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_format_vulnerability_section_ordering() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![VulnerabilityView {
                 bom_ref: "vuln-001".to_string(),
@@ -462,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_markdown_output_contains_japanese_headers() {
-        let model = create_test_read_model();
+        let model = test_fixtures::base_model();
         let formatter = MarkdownFormatter::new(Locale::Ja);
 
         let markdown = formatter.format(&model).unwrap();
@@ -475,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_markdown_output_contains_japanese_table_column() {
-        let model = create_test_read_model();
+        let model = test_fixtures::base_model();
         let formatter = MarkdownFormatter::new(Locale::Ja);
 
         let markdown = formatter.format(&model).unwrap();
@@ -487,7 +510,7 @@ mod tests {
 
     #[test]
     fn test_lang_en_markdown_output_unchanged() {
-        let model = create_test_read_model();
+        let model = test_fixtures::base_model();
         let formatter = MarkdownFormatter::new(Locale::En);
 
         let markdown = formatter.format(&model).unwrap();
@@ -503,7 +526,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_with_dependencies_contains_japanese_dep_headers() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         let mut transitive = HashMap::new();
         transitive.insert(
             "pkg:pypi/requests@2.31.0".to_string(),
@@ -527,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_section_descriptions_are_japanese() {
-        let model = create_test_read_model();
+        let model = test_fixtures::base_model();
         let formatter = MarkdownFormatter::new(Locale::Ja);
         let markdown = formatter.format(&model).unwrap();
 
@@ -539,7 +562,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_no_direct_deps_label_is_japanese() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.dependencies = Some(DependencyView {
             direct: vec![],
             transitive: HashMap::new(),
@@ -554,7 +577,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_no_transitive_deps_label_is_japanese() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.dependencies = Some(DependencyView {
             direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
             transitive: HashMap::new(),
@@ -569,7 +592,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_vuln_above_threshold_warning_is_japanese() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![],
             informational: vec![],
@@ -588,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_actionable_vuln_count_is_japanese() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![VulnerabilityView {
                 bom_ref: "vuln-001".to_string(),
@@ -619,7 +642,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_osv_attribution_is_japanese() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![],
             informational: vec![],
@@ -640,7 +663,7 @@ mod tests {
     fn test_lang_ja_no_license_violations_is_japanese() {
         use crate::application::read_models::{LicenseComplianceSummary, LicenseComplianceView};
 
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.license_compliance = Some(LicenseComplianceView {
             has_violations: false,
             violations: vec![],
@@ -664,7 +687,7 @@ mod tests {
             LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView,
         };
 
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.license_compliance = Some(LicenseComplianceView {
             has_violations: true,
             violations: vec![
@@ -726,7 +749,7 @@ mod tests {
             UpgradeRecommendationView,
         };
 
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.resolution_guide = Some(ResolutionGuideView {
             entries: vec![ResolutionEntryView {
                 vulnerable_package: "urllib3".to_string(),
@@ -761,7 +784,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_with_vulnerabilities_contains_japanese_vuln_headers() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![VulnerabilityView {
                 bom_ref: "vuln-001".to_string(),
@@ -794,7 +817,7 @@ mod tests {
 
     #[test]
     fn test_lang_ja_vuln_summary_is_japanese() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.vulnerabilities = Some(VulnerabilityReportView {
             actionable: vec![
                 VulnerabilityView {
@@ -840,7 +863,7 @@ mod tests {
 
     #[test]
     fn test_format_license_falls_back_to_name_when_spdx_id_is_none() {
-        let mut model = create_test_read_model();
+        let mut model = test_fixtures::base_model();
         model.components.push(ComponentView {
             bom_ref: "pkg:pypi/somelib@1.0.0".to_string(),
             name: "somelib".to_string(),
