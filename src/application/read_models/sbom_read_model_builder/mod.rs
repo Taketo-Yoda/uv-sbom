@@ -93,37 +93,102 @@ mod tests {
     use super::super::component_view::ComponentView;
     use super::super::vulnerability_view::SeverityView;
     use super::*;
-    use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
-    use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
+    use crate::sbom_generation::domain::vulnerability::Severity;
     use crate::sbom_generation::domain::{Package, PackageName};
     use std::collections::HashMap;
 
-    fn create_test_metadata() -> SbomMetadata {
-        SbomMetadata::new(
-            "2024-01-15T10:30:00Z".to_string(),
-            "uv-sbom".to_string(),
-            "0.1.0".to_string(),
-            "urn:uuid:12345678-1234-1234-1234-123456789012".to_string(),
-        )
+    mod test_helpers {
+        use super::*;
+        use crate::sbom_generation::domain::resolution_guide::{IntroducedBy, ResolutionEntry};
+        use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
+        use crate::sbom_generation::domain::{Package, PackageName};
+        use std::collections::HashMap;
+
+        pub(super) fn metadata() -> SbomMetadata {
+            SbomMetadata::new(
+                "2024-01-15T10:30:00Z".to_string(),
+                "uv-sbom".to_string(),
+                "0.1.0".to_string(),
+                "urn:uuid:12345678-1234-1234-1234-123456789012".to_string(),
+            )
+        }
+
+        pub(super) fn package(name: &str, version: &str) -> EnrichedPackage {
+            EnrichedPackage::new(
+                Package::new(name.to_string(), version.to_string()).unwrap(),
+                Some("MIT".to_string()),
+                Some("A test package".to_string()),
+            )
+        }
+
+        pub(super) fn graph() -> DependencyGraph {
+            let direct_deps = vec![PackageName::new("requests".to_string()).unwrap()];
+            let transitive: HashMap<PackageName, Vec<PackageName>> = HashMap::new();
+            DependencyGraph::new(direct_deps, transitive, HashMap::new())
+        }
+
+        pub(super) fn vulnerability(
+            id: &str,
+            cvss: Option<f32>,
+            severity: Severity,
+        ) -> Vulnerability {
+            let cvss_score = cvss.and_then(|s| CvssScore::new(s).ok());
+            Vulnerability::new(id.to_string(), cvss_score, severity, None, None).unwrap()
+        }
+
+        pub(super) fn vulnerability_with_fix(
+            id: &str,
+            cvss: Option<f32>,
+            severity: Severity,
+            fixed_version: &str,
+        ) -> Vulnerability {
+            let cvss_score = cvss.and_then(|s| CvssScore::new(s).ok());
+            Vulnerability::new(
+                id.to_string(),
+                cvss_score,
+                severity,
+                Some(fixed_version.to_string()),
+                None,
+            )
+            .unwrap()
+        }
+
+        pub(super) fn package_vulnerabilities(
+            name: &str,
+            version: &str,
+            vulnerabilities: Vec<Vulnerability>,
+        ) -> PackageVulnerabilities {
+            PackageVulnerabilities::new(name.to_string(), version.to_string(), vulnerabilities)
+        }
+
+        pub(super) fn resolution_entry(
+            pkg: &str,
+            current: &str,
+            fixed: Option<&str>,
+            severity: Severity,
+            cve: &str,
+            introducers: &[(&str, &str)],
+        ) -> ResolutionEntry {
+            ResolutionEntry::new(
+                pkg.to_string(),
+                current.to_string(),
+                fixed.map(str::to_string),
+                severity,
+                cve.to_string(),
+                introducers
+                    .iter()
+                    .map(|(name, version)| IntroducedBy::new(name.to_string(), version.to_string()))
+                    .collect(),
+                vec![],
+            )
+        }
     }
 
-    fn create_test_package(name: &str, version: &str) -> EnrichedPackage {
-        EnrichedPackage::new(
-            Package::new(name.to_string(), version.to_string()).unwrap(),
-            Some("MIT".to_string()),
-            Some("A test package".to_string()),
-        )
-    }
-
-    fn create_test_graph() -> DependencyGraph {
-        let direct_deps = vec![PackageName::new("requests".to_string()).unwrap()];
-        let transitive: HashMap<PackageName, Vec<PackageName>> = HashMap::new();
-        DependencyGraph::new(direct_deps, transitive, HashMap::new())
-    }
+    use test_helpers as th;
 
     #[test]
     fn test_build_metadata() {
-        let metadata = create_test_metadata();
+        let metadata = th::metadata();
         let view = metadata_builder::build_metadata(&metadata, None);
 
         assert_eq!(view.timestamp, "2024-01-15T10:30:00Z");
@@ -138,7 +203,7 @@ mod tests {
 
     #[test]
     fn test_build_components_generates_bom_ref() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
+        let packages = vec![th::package("requests", "2.31.0")];
         let components = component_builder::build_components(&packages, None);
 
         assert_eq!(components.len(), 1);
@@ -147,7 +212,7 @@ mod tests {
 
     #[test]
     fn test_build_components_generates_purl() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
+        let packages = vec![th::package("requests", "2.31.0")];
         let components = component_builder::build_components(&packages, None);
 
         assert_eq!(components[0].purl, "pkg:pypi/requests@2.31.0");
@@ -155,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_build_components_with_license() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
+        let packages = vec![th::package("requests", "2.31.0")];
         let components = component_builder::build_components(&packages, None);
 
         let license = components[0].license.as_ref().unwrap();
@@ -165,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_build_components_with_description() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
+        let packages = vec![th::package("requests", "2.31.0")];
         let components = component_builder::build_components(&packages, None);
 
         assert_eq!(
@@ -177,10 +242,10 @@ mod tests {
     #[test]
     fn test_build_components_is_direct_dependency_with_graph() {
         let packages = vec![
-            create_test_package("requests", "2.31.0"),
-            create_test_package("urllib3", "2.0.0"),
+            th::package("requests", "2.31.0"),
+            th::package("urllib3", "2.0.0"),
         ];
-        let graph = create_test_graph();
+        let graph = th::graph();
         let components = component_builder::build_components(&packages, Some(&graph));
 
         // requests is in direct_dependencies
@@ -194,21 +259,20 @@ mod tests {
 
     #[test]
     fn test_build_components_is_direct_dependency_without_graph() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
+        let packages = vec![th::package("requests", "2.31.0")];
         let components = component_builder::build_components(&packages, None);
 
-        // Without graph, all packages default to not direct
         assert!(!components[0].is_direct_dependency);
     }
 
     #[test]
     fn test_build_full_read_model() {
         let packages = vec![
-            create_test_package("requests", "2.31.0"),
-            create_test_package("urllib3", "2.0.0"),
+            th::package("requests", "2.31.0"),
+            th::package("urllib3", "2.0.0"),
         ];
-        let metadata = create_test_metadata();
-        let graph = create_test_graph();
+        let metadata = th::metadata();
+        let graph = th::graph();
 
         let read_model = SbomReadModelBuilder::build_with_project(
             packages,
@@ -220,26 +284,19 @@ mod tests {
             None,
         );
 
-        // Check metadata
         assert_eq!(read_model.metadata.tool_name, "uv-sbom");
-
-        // Check components
         assert_eq!(read_model.components.len(), 2);
-
-        // Check dependencies are built when graph is provided
         assert!(read_model.dependencies.is_some());
         let deps = read_model.dependencies.unwrap();
         assert_eq!(deps.direct.len(), 1);
         assert_eq!(deps.direct[0], "requests-2.31.0");
-
-        // Check vulnerabilities are None when not provided
         assert!(read_model.vulnerabilities.is_none());
     }
 
     #[test]
     fn test_build_with_empty_packages() {
         let packages: Vec<EnrichedPackage> = vec![];
-        let metadata = create_test_metadata();
+        let metadata = th::metadata();
 
         let read_model = SbomReadModelBuilder::build_with_project(
             packages, &metadata, None, None, None, None, None,
@@ -261,13 +318,11 @@ mod tests {
         assert!(components[0].description.is_none());
     }
 
-    // Tests for build_dependencies
-
     #[test]
     fn test_build_dependencies_maps_direct_to_bom_refs() {
         let packages = vec![
-            create_test_package("requests", "2.31.0"),
-            create_test_package("urllib3", "2.0.0"),
+            th::package("requests", "2.31.0"),
+            th::package("urllib3", "2.0.0"),
         ];
         let components = component_builder::build_components(&packages, None);
 
@@ -287,9 +342,9 @@ mod tests {
     #[test]
     fn test_build_dependencies_builds_transitive_map() {
         let packages = vec![
-            create_test_package("requests", "2.31.0"),
-            create_test_package("urllib3", "2.0.0"),
-            create_test_package("certifi", "2023.7.22"),
+            th::package("requests", "2.31.0"),
+            th::package("urllib3", "2.0.0"),
+            th::package("certifi", "2023.7.22"),
         ];
         let components = component_builder::build_components(&packages, None);
 
@@ -316,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_build_dependencies_filters_unknown_packages() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
+        let packages = vec![th::package("requests", "2.31.0")];
         let components = component_builder::build_components(&packages, None);
 
         // unknown-pkg is not in components
@@ -328,14 +383,13 @@ mod tests {
 
         let deps = dependency_builder::build_dependencies(&graph, &components);
 
-        // Only requests should be included
         assert_eq!(deps.direct.len(), 1);
         assert!(deps.direct.contains(&"requests-2.31.0".to_string()));
     }
 
     #[test]
     fn test_build_dependencies_empty_graph() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
+        let packages = vec![th::package("requests", "2.31.0")];
         let components = component_builder::build_components(&packages, None);
         let graph = DependencyGraph::new(vec![], HashMap::new(), HashMap::new());
 
@@ -344,8 +398,6 @@ mod tests {
         assert!(deps.direct.is_empty());
         assert!(deps.transitive.is_empty());
     }
-
-    // Tests for map_severity
 
     #[test]
     fn test_map_severity_all_levels() {
@@ -371,44 +423,10 @@ mod tests {
         );
     }
 
-    // Helper functions for vulnerability tests
-
-    fn create_vulnerability(id: &str, cvss: Option<f32>, severity: Severity) -> Vulnerability {
-        let cvss_score = cvss.and_then(|s| CvssScore::new(s).ok());
-        Vulnerability::new(id.to_string(), cvss_score, severity, None, None).unwrap()
-    }
-
-    fn create_vulnerability_with_fix(
-        id: &str,
-        cvss: Option<f32>,
-        severity: Severity,
-        fixed_version: &str,
-    ) -> Vulnerability {
-        let cvss_score = cvss.and_then(|s| CvssScore::new(s).ok());
-        Vulnerability::new(
-            id.to_string(),
-            cvss_score,
-            severity,
-            Some(fixed_version.to_string()),
-            None,
-        )
-        .unwrap()
-    }
-
-    fn create_package_vulnerabilities(
-        name: &str,
-        version: &str,
-        vulnerabilities: Vec<Vulnerability>,
-    ) -> PackageVulnerabilities {
-        PackageVulnerabilities::new(name.to_string(), version.to_string(), vulnerabilities)
-    }
-
-    // Tests for build_vulnerability_view
-
     #[test]
     fn test_build_vulnerability_view_basic() {
-        let vuln = create_vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
-        let pkg = create_package_vulnerabilities("requests", "2.31.0", vec![vuln.clone()]);
+        let vuln = th::vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
+        let pkg = th::package_vulnerabilities("requests", "2.31.0", vec![vuln.clone()]);
         let components = vec![ComponentView {
             bom_ref: "requests-2.31.0".to_string(),
             name: "requests".to_string(),
@@ -433,9 +451,8 @@ mod tests {
 
     #[test]
     fn test_build_vulnerability_view_with_fixed_version() {
-        let vuln =
-            create_vulnerability_with_fix("CVE-2024-5678", Some(7.5), Severity::High, "3.0.0");
-        let pkg = create_package_vulnerabilities("requests", "2.31.0", vec![vuln.clone()]);
+        let vuln = th::vulnerability_with_fix("CVE-2024-5678", Some(7.5), Severity::High, "3.0.0");
+        let pkg = th::package_vulnerabilities("requests", "2.31.0", vec![vuln.clone()]);
         let components = vec![];
 
         let view = vulnerability_builder::build_vulnerability_view(&vuln, &pkg, &components);
@@ -445,8 +462,8 @@ mod tests {
 
     #[test]
     fn test_build_vulnerability_view_without_cvss() {
-        let vuln = create_vulnerability("GHSA-xxxx-yyyy-zzzz", None, Severity::High);
-        let pkg = create_package_vulnerabilities("requests", "2.31.0", vec![vuln.clone()]);
+        let vuln = th::vulnerability("GHSA-xxxx-yyyy-zzzz", None, Severity::High);
+        let pkg = th::package_vulnerabilities("requests", "2.31.0", vec![vuln.clone()]);
         let components = vec![];
 
         let view = vulnerability_builder::build_vulnerability_view(&vuln, &pkg, &components);
@@ -457,27 +474,23 @@ mod tests {
 
     #[test]
     fn test_build_vulnerability_view_component_not_found() {
-        let vuln = create_vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
-        let pkg = create_package_vulnerabilities("unknown-pkg", "1.0.0", vec![vuln.clone()]);
-        let components = vec![]; // Empty components
+        let vuln = th::vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
+        let pkg = th::package_vulnerabilities("unknown-pkg", "1.0.0", vec![vuln.clone()]);
+        let components = vec![];
 
         let view = vulnerability_builder::build_vulnerability_view(&vuln, &pkg, &components);
 
-        // Should generate bom-ref from package name and version
         assert_eq!(view.affected_component, "unknown-pkg-1.0.0");
         assert_eq!(view.bom_ref, "CVE-2024-1234-unknown-pkg-1.0.0");
     }
 
-    // Tests for build_vulnerabilities
-
     #[test]
     fn test_build_vulnerabilities_actionable_and_informational() {
-        let vuln_critical = create_vulnerability("CVE-2024-001", Some(9.8), Severity::Critical);
-        let vuln_low = create_vulnerability("CVE-2024-002", Some(2.0), Severity::Low);
+        let vuln_critical = th::vulnerability("CVE-2024-001", Some(9.8), Severity::Critical);
+        let vuln_low = th::vulnerability("CVE-2024-002", Some(2.0), Severity::Low);
 
-        let above_pkg =
-            create_package_vulnerabilities("critical-pkg", "1.0.0", vec![vuln_critical]);
-        let below_pkg = create_package_vulnerabilities("low-pkg", "1.0.0", vec![vuln_low]);
+        let above_pkg = th::package_vulnerabilities("critical-pkg", "1.0.0", vec![vuln_critical]);
+        let below_pkg = th::package_vulnerabilities("low-pkg", "1.0.0", vec![vuln_low]);
 
         let result = VulnerabilityCheckResult {
             above_threshold: vec![above_pkg],
@@ -492,17 +505,16 @@ mod tests {
         assert_eq!(report.actionable[0].id, "CVE-2024-001");
         assert_eq!(report.informational.len(), 1);
         assert_eq!(report.informational[0].id, "CVE-2024-002");
-        assert!(!report.actionable.is_empty());
     }
 
     #[test]
     fn test_build_vulnerabilities_summary_statistics() {
-        let vuln1 = create_vulnerability("CVE-2024-001", Some(9.8), Severity::Critical);
-        let vuln2 = create_vulnerability("CVE-2024-002", Some(8.0), Severity::High);
-        let vuln3 = create_vulnerability("CVE-2024-003", Some(3.0), Severity::Low);
+        let vuln1 = th::vulnerability("CVE-2024-001", Some(9.8), Severity::Critical);
+        let vuln2 = th::vulnerability("CVE-2024-002", Some(8.0), Severity::High);
+        let vuln3 = th::vulnerability("CVE-2024-003", Some(3.0), Severity::Low);
 
-        let above_pkg = create_package_vulnerabilities("critical-pkg", "1.0.0", vec![vuln1, vuln2]);
-        let below_pkg = create_package_vulnerabilities("low-pkg", "1.0.0", vec![vuln3]);
+        let above_pkg = th::package_vulnerabilities("critical-pkg", "1.0.0", vec![vuln1, vuln2]);
+        let below_pkg = th::package_vulnerabilities("low-pkg", "1.0.0", vec![vuln3]);
 
         let result = VulnerabilityCheckResult {
             above_threshold: vec![above_pkg],
@@ -532,19 +544,17 @@ mod tests {
 
         assert!(report.actionable.is_empty());
         assert!(report.informational.is_empty());
-        assert!(report.actionable.is_empty());
         assert_eq!(report.summary.total_count, 0);
         assert_eq!(report.summary.affected_package_count, 0);
     }
 
     #[test]
     fn test_build_vulnerabilities_multiple_vulns_per_package() {
-        let vuln1 = create_vulnerability("CVE-2024-001", Some(9.8), Severity::Critical);
-        let vuln2 = create_vulnerability("CVE-2024-002", Some(8.5), Severity::High);
-        let vuln3 = create_vulnerability("CVE-2024-003", Some(7.0), Severity::High);
+        let vuln1 = th::vulnerability("CVE-2024-001", Some(9.8), Severity::Critical);
+        let vuln2 = th::vulnerability("CVE-2024-002", Some(8.5), Severity::High);
+        let vuln3 = th::vulnerability("CVE-2024-003", Some(7.0), Severity::High);
 
-        let pkg =
-            create_package_vulnerabilities("multi-vuln-pkg", "1.0.0", vec![vuln1, vuln2, vuln3]);
+        let pkg = th::package_vulnerabilities("multi-vuln-pkg", "1.0.0", vec![vuln1, vuln2, vuln3]);
 
         let result = VulnerabilityCheckResult {
             above_threshold: vec![pkg],
@@ -556,7 +566,6 @@ mod tests {
         let report = vulnerability_builder::build_vulnerabilities(&result, &components);
 
         assert_eq!(report.actionable.len(), 3);
-        // All should reference the same package
         for vuln_view in &report.actionable {
             assert_eq!(vuln_view.affected_component_name, "multi-vuln-pkg");
             assert_eq!(vuln_view.affected_version, "1.0.0");
@@ -565,11 +574,11 @@ mod tests {
 
     #[test]
     fn test_build_full_read_model_with_vulnerabilities() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
-        let metadata = create_test_metadata();
+        let packages = vec![th::package("requests", "2.31.0")];
+        let metadata = th::metadata();
 
-        let vuln = create_vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
-        let pkg_vuln = create_package_vulnerabilities("requests", "2.31.0", vec![vuln]);
+        let vuln = th::vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
+        let pkg_vuln = th::package_vulnerabilities("requests", "2.31.0", vec![vuln]);
 
         let vuln_result = VulnerabilityCheckResult {
             above_threshold: vec![pkg_vuln],
@@ -591,26 +600,17 @@ mod tests {
         let vulns = read_model.vulnerabilities.unwrap();
         assert_eq!(vulns.actionable.len(), 1);
         assert_eq!(vulns.actionable[0].id, "CVE-2024-1234");
-        assert!(!vulns.actionable.is_empty());
     }
-
-    // Tests for resolution guide builder
 
     #[test]
     fn test_build_resolution_guide_converts_entries() {
-        let entries = vec![ResolutionEntry::new(
-            "urllib3".to_string(),
-            "1.26.5".to_string(),
-            Some("1.26.18".to_string()),
+        let entries = vec![th::resolution_entry(
+            "urllib3",
+            "1.26.5",
+            Some("1.26.18"),
             Severity::High,
-            "CVE-2023-43804".to_string(),
-            vec![
-                crate::sbom_generation::domain::resolution_guide::IntroducedBy::new(
-                    "requests".to_string(),
-                    "2.28.0".to_string(),
-                ),
-            ],
-            vec![],
+            "CVE-2023-43804",
+            &[("requests", "2.28.0")],
         )];
 
         let guide = resolution_guide_builder::build_resolution_guide(&entries);
@@ -628,19 +628,13 @@ mod tests {
 
     #[test]
     fn test_build_resolution_guide_without_fixed_version() {
-        let entries = vec![ResolutionEntry::new(
-            "vulnerable-pkg".to_string(),
-            "0.1.0".to_string(),
+        let entries = vec![th::resolution_entry(
+            "vulnerable-pkg",
+            "0.1.0",
             None,
             Severity::Critical,
-            "CVE-2024-0001".to_string(),
-            vec![
-                crate::sbom_generation::domain::resolution_guide::IntroducedBy::new(
-                    "parent-pkg".to_string(),
-                    "1.0.0".to_string(),
-                ),
-            ],
-            vec![],
+            "CVE-2024-0001",
+            &[("parent-pkg", "1.0.0")],
         )];
 
         let guide = resolution_guide_builder::build_resolution_guide(&entries);
@@ -652,23 +646,13 @@ mod tests {
 
     #[test]
     fn test_build_resolution_guide_multiple_introduced_by() {
-        let entries = vec![ResolutionEntry::new(
-            "urllib3".to_string(),
-            "1.26.5".to_string(),
-            Some("1.26.18".to_string()),
+        let entries = vec![th::resolution_entry(
+            "urllib3",
+            "1.26.5",
+            Some("1.26.18"),
             Severity::High,
-            "CVE-2023-43804".to_string(),
-            vec![
-                crate::sbom_generation::domain::resolution_guide::IntroducedBy::new(
-                    "httpx".to_string(),
-                    "0.23.0".to_string(),
-                ),
-                crate::sbom_generation::domain::resolution_guide::IntroducedBy::new(
-                    "requests".to_string(),
-                    "2.28.0".to_string(),
-                ),
-            ],
-            vec![],
+            "CVE-2023-43804",
+            &[("httpx", "0.23.0"), ("requests", "2.28.0")],
         )];
 
         let guide = resolution_guide_builder::build_resolution_guide(&entries);
@@ -681,10 +665,10 @@ mod tests {
     #[test]
     fn test_build_full_model_resolution_guide_when_both_graph_and_vulns() {
         let packages = vec![
-            create_test_package("requests", "2.28.0"),
-            create_test_package("urllib3", "1.26.5"),
+            th::package("requests", "2.28.0"),
+            th::package("urllib3", "1.26.5"),
         ];
-        let metadata = create_test_metadata();
+        let metadata = th::metadata();
 
         let mut transitive = HashMap::new();
         transitive.insert(
@@ -697,8 +681,8 @@ mod tests {
             HashMap::new(),
         );
 
-        let vuln = create_vulnerability("CVE-2023-43804", Some(7.5), Severity::High);
-        let pkg_vuln = create_package_vulnerabilities("urllib3", "1.26.5", vec![vuln]);
+        let vuln = th::vulnerability("CVE-2023-43804", Some(7.5), Severity::High);
+        let pkg_vuln = th::package_vulnerabilities("urllib3", "1.26.5", vec![vuln]);
         let vuln_result = VulnerabilityCheckResult {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
@@ -724,11 +708,11 @@ mod tests {
 
     #[test]
     fn test_build_full_model_resolution_guide_none_without_graph() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
-        let metadata = create_test_metadata();
+        let packages = vec![th::package("requests", "2.31.0")];
+        let metadata = th::metadata();
 
-        let vuln = create_vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
-        let pkg_vuln = create_package_vulnerabilities("requests", "2.31.0", vec![vuln]);
+        let vuln = th::vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
+        let pkg_vuln = th::package_vulnerabilities("requests", "2.31.0", vec![vuln]);
         let vuln_result = VulnerabilityCheckResult {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
@@ -750,9 +734,9 @@ mod tests {
 
     #[test]
     fn test_build_full_model_resolution_guide_none_without_vulns() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
-        let metadata = create_test_metadata();
-        let graph = create_test_graph();
+        let packages = vec![th::package("requests", "2.31.0")];
+        let metadata = th::metadata();
+        let graph = th::graph();
 
         let read_model = SbomReadModelBuilder::build_with_project(
             packages,
@@ -769,13 +753,12 @@ mod tests {
 
     #[test]
     fn test_build_full_model_resolution_guide_none_when_no_transitive_vulns() {
-        // Only direct dependency has vulnerabilities — resolution guide should be None
-        let packages = vec![create_test_package("requests", "2.31.0")];
-        let metadata = create_test_metadata();
-        let graph = create_test_graph(); // requests is direct
+        let packages = vec![th::package("requests", "2.31.0")];
+        let metadata = th::metadata();
+        let graph = th::graph(); // requests is direct
 
-        let vuln = create_vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
-        let pkg_vuln = create_package_vulnerabilities("requests", "2.31.0", vec![vuln]);
+        let vuln = th::vulnerability("CVE-2024-1234", Some(9.8), Severity::Critical);
+        let pkg_vuln = th::package_vulnerabilities("requests", "2.31.0", vec![vuln]);
         let vuln_result = VulnerabilityCheckResult {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
@@ -796,13 +779,9 @@ mod tests {
         assert!(read_model.resolution_guide.is_none());
     }
 
-    // ============================================================
-    // SHA-256 hash wiring tests
-    // ============================================================
-
     #[test]
     fn test_build_components_with_sha256_hash() {
-        let mut package = create_test_package("requests", "2.31.0");
+        let mut package = th::package("requests", "2.31.0");
         package.sha256_hash = Some("abc123def456".to_string());
         let components = component_builder::build_components(&[package], None);
 
@@ -811,19 +790,15 @@ mod tests {
 
     #[test]
     fn test_build_components_without_sha256_hash() {
-        let package = create_test_package("requests", "2.31.0");
+        let package = th::package("requests", "2.31.0");
         let components = component_builder::build_components(&[package], None);
 
         assert!(components[0].sha256_hash.is_none());
     }
 
-    // ============================================================
-    // Metadata component tests
-    // ============================================================
-
     #[test]
     fn test_build_metadata_with_project_component() {
-        let metadata = create_test_metadata();
+        let metadata = th::metadata();
         let view = metadata_builder::build_metadata(&metadata, Some(("my-project", "1.0.0")));
 
         assert!(view.component.is_some());
@@ -834,7 +809,7 @@ mod tests {
 
     #[test]
     fn test_build_metadata_without_project_component() {
-        let metadata = create_test_metadata();
+        let metadata = th::metadata();
         let view = metadata_builder::build_metadata(&metadata, None);
 
         assert!(view.component.is_none());
@@ -842,8 +817,8 @@ mod tests {
 
     #[test]
     fn test_build_with_project_includes_metadata_component() {
-        let packages = vec![create_test_package("requests", "2.31.0")];
-        let metadata = create_test_metadata();
+        let packages = vec![th::package("requests", "2.31.0")];
+        let metadata = th::metadata();
 
         let read_model = SbomReadModelBuilder::build_with_project(
             packages,
