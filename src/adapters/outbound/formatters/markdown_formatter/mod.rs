@@ -207,6 +207,24 @@ mod tests {
         }
     }
 
+    fn assert_ja_output_contains(model: &crate::application::read_models::SbomReadModel, expected: &str) {
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let output = formatter.format(model).unwrap();
+        assert!(
+            output.contains(expected),
+            "Expected ja output to contain {expected:?}, got:\n{output}"
+        );
+    }
+
+    fn assert_ja_output_excludes(model: &crate::application::read_models::SbomReadModel, unexpected: &str) {
+        let formatter = MarkdownFormatter::new(Locale::Ja);
+        let output = formatter.format(model).unwrap();
+        assert!(
+            !output.contains(unexpected),
+            "Expected ja output to NOT contain {unexpected:?}, got:\n{output}"
+        );
+    }
+
     #[test]
     fn test_format_basic() {
         let model = test_fixtures::base_model();
@@ -486,26 +504,18 @@ mod tests {
     #[test]
     fn test_lang_ja_markdown_output_contains_japanese_headers() {
         let model = test_fixtures::base_model();
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("# ソフトウェア部品表 (SBOM)"));
-        assert!(markdown.contains("## コンポーネント一覧"));
-        assert!(!markdown.contains("# Software Bill of Materials (SBOM)"));
-        assert!(!markdown.contains("## Component Inventory"));
+        assert_ja_output_contains(&model, "# ソフトウェア部品表 (SBOM)");
+        assert_ja_output_contains(&model, "## コンポーネント一覧");
+        assert_ja_output_excludes(&model, "# Software Bill of Materials (SBOM)");
+        assert_ja_output_excludes(&model, "## Component Inventory");
     }
 
     #[test]
     fn test_lang_ja_markdown_output_contains_japanese_table_column() {
         let model = test_fixtures::base_model();
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("パッケージ"));
-        assert!(markdown.contains("バージョン"));
-        assert!(markdown.contains("ライセンス"));
+        assert_ja_output_contains(&model, "パッケージ");
+        assert_ja_output_contains(&model, "バージョン");
+        assert_ja_output_contains(&model, "ライセンス");
     }
 
     #[test]
@@ -536,28 +546,19 @@ mod tests {
             direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
             transitive,
         });
-
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("## 直接依存パッケージ"));
-        assert!(markdown.contains("## 間接依存パッケージ"));
-        assert!(!markdown.contains("## Direct Dependencies"));
-        assert!(!markdown.contains("## Transitive Dependencies"));
-        assert!(markdown.contains("### requestsの依存パッケージ"));
-        assert!(!markdown.contains("### Dependencies for requests"));
+        assert_ja_output_contains(&model, "## 直接依存パッケージ");
+        assert_ja_output_contains(&model, "## 間接依存パッケージ");
+        assert_ja_output_excludes(&model, "## Direct Dependencies");
+        assert_ja_output_excludes(&model, "## Transitive Dependencies");
+        assert_ja_output_contains(&model, "### requestsの依存パッケージ");
+        assert_ja_output_excludes(&model, "### Dependencies for requests");
     }
 
     #[test]
     fn test_lang_ja_section_descriptions_are_japanese() {
         let model = test_fixtures::base_model();
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains(
-            "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。"
-        ));
-        assert!(!markdown.contains("A comprehensive list of all software components"));
+        assert_ja_output_contains(&model, "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。");
+        assert_ja_output_excludes(&model, "A comprehensive list of all software components");
     }
 
     #[test]
@@ -567,12 +568,8 @@ mod tests {
             direct: vec![],
             transitive: HashMap::new(),
         });
-
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("*直接依存パッケージなし*"));
-        assert!(!markdown.contains("*No direct dependencies*"));
+        assert_ja_output_contains(&model, "*直接依存パッケージなし*");
+        assert_ja_output_excludes(&model, "*No direct dependencies*");
     }
 
     #[test]
@@ -582,12 +579,8 @@ mod tests {
             direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
             transitive: HashMap::new(),
         });
-
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("*間接依存パッケージなし*"));
-        assert!(!markdown.contains("*No transitive dependencies*"));
+        assert_ja_output_contains(&model, "*間接依存パッケージなし*");
+        assert_ja_output_excludes(&model, "*No transitive dependencies*");
     }
 
     #[test]
@@ -601,12 +594,8 @@ mod tests {
                 affected_package_count: 0,
             },
         });
-
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。"));
-        assert!(!markdown.contains("### ⚠️Warning No vulnerabilities found above threshold."));
+        assert_ja_output_contains(&model, "### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。");
+        assert_ja_output_excludes(&model, "### ⚠️Warning No vulnerabilities found above threshold.");
     }
 
     #[test]
@@ -632,12 +621,8 @@ mod tests {
                 affected_package_count: 1,
             },
         });
-
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("### ⚠️警告 1件の脆弱性が1個のパッケージで見つかりました。"));
-        assert!(!markdown.contains("### ⚠️Warning Found"));
+        assert_ja_output_contains(&model, "### ⚠️警告 1件の脆弱性が1個のパッケージで見つかりました。");
+        assert_ja_output_excludes(&model, "### ⚠️Warning Found");
     }
 
     #[test]
@@ -651,12 +636,8 @@ mod tests {
                 affected_package_count: 0,
             },
         });
-
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*"));
-        assert!(!markdown.contains("*Vulnerability data provided by"));
+        assert_ja_output_contains(&model, "*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*");
+        assert_ja_output_excludes(&model, "*Vulnerability data provided by");
     }
 
     #[test]
@@ -673,12 +654,8 @@ mod tests {
                 warning_count: 0,
             },
         });
-
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("**ライセンス違反は見つかりませんでした。**"));
-        assert!(!markdown.contains("**No license violations found.**"));
+        assert_ja_output_contains(&model, "**ライセンス違反は見つかりませんでした。**");
+        assert_ja_output_excludes(&model, "**No license violations found.**");
     }
 
     #[test]
@@ -727,19 +704,8 @@ mod tests {
             },
         });
 
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        // Japanese summary must appear
-        assert!(
-            markdown.contains("**4 件のライセンス違反が見つかりました。**"),
-            "Expected Japanese violation count summary, got:\n{markdown}"
-        );
-        // English hardcoded string must NOT appear
-        assert!(
-            !markdown.contains("license violations found"),
-            "English violation summary leaked into JA output:\n{markdown}"
-        );
+        assert_ja_output_contains(&model, "**4 件のライセンス違反が見つかりました。**");
+        assert_ja_output_excludes(&model, "license violations found");
     }
 
     #[test]
@@ -774,12 +740,9 @@ mod tests {
             }],
         });
 
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("推奨アクション"));
-        assert!(markdown.contains("⬆️ requestsを2.32.3にアップグレード（urllib3が2.2.1に解決）"));
-        assert!(!markdown.contains("⬆️ Upgrade"));
+        assert_ja_output_contains(&model, "推奨アクション");
+        assert_ja_output_contains(&model, "⬆️ requestsを2.32.3にアップグレード（urllib3が2.2.1に解決）");
+        assert_ja_output_excludes(&model, "⬆️ Upgrade");
     }
 
     #[test]
@@ -806,13 +769,10 @@ mod tests {
             },
         });
 
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("## 脆弱性レポート"));
-        assert!(!markdown.contains("## Vulnerability Report"));
         // CVE ID remains in its original form regardless of locale
-        assert!(markdown.contains("CVE-2024-1234"));
+        assert_ja_output_contains(&model, "## 脆弱性レポート");
+        assert_ja_output_excludes(&model, "## Vulnerability Report");
+        assert_ja_output_contains(&model, "CVE-2024-1234");
     }
 
     #[test]
@@ -854,11 +814,8 @@ mod tests {
             },
         });
 
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("**2件の脆弱性が1個のパッケージで見つかりました。**"));
-        assert!(!markdown.contains("**Found"));
+        assert_ja_output_contains(&model, "**2件の脆弱性が1個のパッケージで見つかりました。**");
+        assert_ja_output_excludes(&model, "**Found");
     }
 
     #[test]
