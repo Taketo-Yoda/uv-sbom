@@ -11,6 +11,7 @@ mod resolution_guide_builder;
 mod upgrade_recommendation_builder;
 mod vulnerability_builder;
 
+use super::resolution_guide_view::ResolutionGuideView;
 use super::sbom_read_model::SbomReadModel;
 use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
@@ -46,24 +47,11 @@ impl SbomReadModelBuilder {
         let license_compliance =
             license_compliance_result.map(license_compliance_builder::build_license_compliance);
 
-        // Build resolution guide only when BOTH dependency graph and vulnerability data exist
-        let resolution_guide = match (dependency_graph, vulnerability_result) {
-            (Some(graph), Some(vuln_result)) => {
-                let all_vulns: Vec<PackageVulnerabilities> = vuln_result
-                    .above_threshold
-                    .iter()
-                    .chain(vuln_result.below_threshold.iter())
-                    .cloned()
-                    .collect();
-                let entries = ResolutionAnalyzer::analyze(graph, &all_vulns, &packages);
-                if entries.is_empty() {
-                    None
-                } else {
-                    Some(resolution_guide_builder::build_resolution_guide(&entries))
-                }
-            }
-            _ => None,
-        };
+        let resolution_guide = Self::build_resolution_guide_if_applicable(
+            dependency_graph,
+            vulnerability_result,
+            &packages,
+        );
 
         let upgrade_recommendations = upgrade_recommendations
             .map(upgrade_recommendation_builder::build_upgrade_recommendations);
@@ -76,6 +64,26 @@ impl SbomReadModelBuilder {
             license_compliance,
             resolution_guide,
             upgrade_recommendations,
+        }
+    }
+
+    fn build_resolution_guide_if_applicable(
+        dependency_graph: Option<&DependencyGraph>,
+        vulnerability_result: Option<&VulnerabilityCheckResult>,
+        packages: &[EnrichedPackage],
+    ) -> Option<ResolutionGuideView> {
+        let (graph, vuln_result) = (dependency_graph?, vulnerability_result?);
+        let all_vulns: Vec<PackageVulnerabilities> = vuln_result
+            .above_threshold
+            .iter()
+            .chain(vuln_result.below_threshold.iter())
+            .cloned()
+            .collect();
+        let entries = ResolutionAnalyzer::analyze(graph, &all_vulns, packages);
+        if entries.is_empty() {
+            None
+        } else {
+            Some(resolution_guide_builder::build_resolution_guide(&entries))
         }
     }
 }
