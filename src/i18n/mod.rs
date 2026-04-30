@@ -75,6 +75,16 @@ pub struct Messages {
     pub progress_license_no_violations: &'static str,
     pub progress_license_unknown_packages: &'static str,
 
+    // Upgrade advisor progress messages (use case layer)
+    pub progress_analyzing_upgrade_paths: &'static str,
+    pub progress_upgrade_resolves: &'static str,
+    pub progress_upgrade_unresolvable: &'static str,
+    pub progress_upgrade_simulation_failed: &'static str,
+
+    // Singular/plural unit labels for direct dependency count
+    pub label_dependency_singular: &'static str,
+    pub label_dependency_plural: &'static str,
+
     // Warning messages
     pub warn_check_cve_no_effect: &'static str,
     pub warn_check_license_no_effect: &'static str,
@@ -235,6 +245,16 @@ static EN_MESSAGES: Messages = Messages {
     progress_license_no_violations: "✅ License compliance: No violations found",
     progress_license_unknown_packages: "⚠️  License compliance: {} package(s) with unknown license",
 
+    // Upgrade advisor progress messages (use case layer)
+    progress_analyzing_upgrade_paths: "🔍 Analyzing upgrade paths for {} direct {}...",
+    progress_upgrade_resolves: "  ✓ Upgrade {} → {} resolves {} to {} ({})",
+    progress_upgrade_unresolvable: "  ✗ Cannot resolve via {}: {} ({})",
+    progress_upgrade_simulation_failed: "  ❓ Simulation failed for {}: {}",
+
+    // Singular/plural unit labels for direct dependency count
+    label_dependency_singular: "dependency",
+    label_dependency_plural: "dependencies",
+
     // Warning messages
     warn_check_cve_no_effect: "⚠️  Warning: --check-cve has no effect with JSON format.",
     warn_check_license_no_effect: "⚠️  Warning: --check-license has no effect with JSON format.",
@@ -361,6 +381,17 @@ static JA_MESSAGES: Messages = Messages {
     progress_license_violations_found: "⚠️  ライセンスコンプライアンス: {}件の違反が見つかりました",
     progress_license_no_violations: "✅ ライセンスコンプライアンス: 違反は見つかりませんでした",
     progress_license_unknown_packages: "⚠️  ライセンスコンプライアンス: ライセンス不明のパッケージが{}件あります",
+
+    // Upgrade advisor progress messages (use case layer)
+    // JA: only first {} (count) is used; second {} (unit word) is ignored
+    progress_analyzing_upgrade_paths: "🔍 {}個の直接依存パッケージのアップグレード経路を解析中...",
+    progress_upgrade_resolves: "  ✓ {}を{}にアップグレードすると{}が{}に解決されます ({})",
+    progress_upgrade_unresolvable: "  ✗ {}経由で解決できません: {} ({})",
+    progress_upgrade_simulation_failed: "  ❓ {}のシミュレーションに失敗しました: {}",
+
+    // Singular/plural unit labels (no distinction in Japanese; unused by JA template)
+    label_dependency_singular: "個の直接依存パッケージ",
+    label_dependency_plural: "個の直接依存パッケージ",
 
     // Warning messages
     warn_check_cve_no_effect: "⚠️  警告: JSON形式では --check-cve は効果がありません。",
@@ -746,6 +777,125 @@ mod tests {
             result,
             "### ⚠️Warning Found 2 vulnerabilities in 1 package."
         );
+    }
+
+    #[test]
+    fn test_messages_upgrade_advisor_progress_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.progress_analyzing_upgrade_paths,
+            "🔍 Analyzing upgrade paths for {} direct {}..."
+        );
+        assert_eq!(
+            msgs.progress_upgrade_resolves,
+            "  ✓ Upgrade {} → {} resolves {} to {} ({})"
+        );
+        assert_eq!(
+            msgs.progress_upgrade_unresolvable,
+            "  ✗ Cannot resolve via {}: {} ({})"
+        );
+        assert_eq!(
+            msgs.progress_upgrade_simulation_failed,
+            "  ❓ Simulation failed for {}: {}"
+        );
+        assert_eq!(msgs.label_dependency_singular, "dependency");
+        assert_eq!(msgs.label_dependency_plural, "dependencies");
+    }
+
+    #[test]
+    fn test_messages_upgrade_advisor_progress_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.progress_analyzing_upgrade_paths,
+            "🔍 {}個の直接依存パッケージのアップグレード経路を解析中..."
+        );
+        assert_eq!(
+            msgs.progress_upgrade_resolves,
+            "  ✓ {}を{}にアップグレードすると{}が{}に解決されます ({})"
+        );
+        assert_eq!(
+            msgs.progress_upgrade_unresolvable,
+            "  ✗ {}経由で解決できません: {} ({})"
+        );
+        assert_eq!(
+            msgs.progress_upgrade_simulation_failed,
+            "  ❓ {}のシミュレーションに失敗しました: {}"
+        );
+    }
+
+    #[test]
+    fn test_progress_analyzing_upgrade_paths_en_singular() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.progress_analyzing_upgrade_paths,
+            &["1", msgs.label_dependency_singular],
+        );
+        assert_eq!(
+            result,
+            "🔍 Analyzing upgrade paths for 1 direct dependency..."
+        );
+    }
+
+    #[test]
+    fn test_progress_analyzing_upgrade_paths_en_plural() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.progress_analyzing_upgrade_paths,
+            &["3", msgs.label_dependency_plural],
+        );
+        assert_eq!(
+            result,
+            "🔍 Analyzing upgrade paths for 3 direct dependencies..."
+        );
+    }
+
+    #[test]
+    fn test_progress_analyzing_upgrade_paths_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.progress_analyzing_upgrade_paths,
+            &["3", msgs.label_dependency_plural],
+        );
+        assert_eq!(
+            result,
+            "🔍 3個の直接依存パッケージのアップグレード経路を解析中..."
+        );
+    }
+
+    #[test]
+    fn test_progress_upgrade_resolves_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.progress_upgrade_resolves,
+            &["requests", "2.32.3", "urllib3", "2.2.1", "GHSA-xxxx"],
+        );
+        assert_eq!(
+            result,
+            "  ✓ Upgrade requests → 2.32.3 resolves urllib3 to 2.2.1 (GHSA-xxxx)"
+        );
+    }
+
+    #[test]
+    fn test_progress_upgrade_unresolvable_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.progress_upgrade_unresolvable,
+            &["pkg-a", "no compatible version", "GHSA-yyyy"],
+        );
+        assert_eq!(
+            result,
+            "  ✗ Cannot resolve via pkg-a: no compatible version (GHSA-yyyy)"
+        );
+    }
+
+    #[test]
+    fn test_progress_upgrade_simulation_failed_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.progress_upgrade_simulation_failed,
+            &["pkg-b", "uv lock failed"],
+        );
+        assert_eq!(result, "  ❓ Simulation failed for pkg-b: uv lock failed");
     }
 
     #[test]
