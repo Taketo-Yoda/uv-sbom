@@ -608,12 +608,13 @@ mod lang_option_tests {
 
 // Helper function to create a test license repository
 // In real tests, we would use a mock to avoid network calls
-fn create_test_license_repository() -> impl LicenseRepository {
+fn create_test_license_repository() -> impl LicenseRepository + Clone {
     use std::collections::HashMap;
 
     // Type alias for license data: (license, license_expression, classifiers, description)
     type LicenseData = (Option<String>, Option<String>, Vec<String>, Option<String>);
 
+    #[derive(Clone)]
     struct TestLicenseRepository {
         licenses: HashMap<String, LicenseData>,
     }
