@@ -44,6 +44,7 @@ struct PyPiInfo {
 /// # Async Support
 /// Uses async reqwest client for non-blocking HTTP requests, enabling parallel
 /// license fetching for improved performance.
+#[derive(Clone)]
 pub struct PyPiLicenseRepository {
     client: reqwest::Client,
     max_retries: u32,

@@ -89,6 +89,7 @@ impl ProjectConfigReader for MockProjectConfigReader {
 
 use crate::ports::outbound::PyPiMetadata;
 
+#[derive(Clone)]
 struct MockLicenseRepository;
 
 #[async_trait::async_trait]
