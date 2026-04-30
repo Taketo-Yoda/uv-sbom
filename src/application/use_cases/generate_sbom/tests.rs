@@ -1,4 +1,5 @@
 use super::*;
+use crate::application::use_cases::test_doubles::MockVulnerabilityRepository;
 use crate::i18n::Locale;
 use crate::ports::outbound::LockfileParseResult;
 use crate::sbom_generation::domain::Package;
@@ -207,19 +208,6 @@ version = "1.26.0"
     assert_eq!(graph.transitive_dependency_count(), 1);
 }
 
-#[derive(Clone)]
-struct MockVulnerabilityRepository;
-
-#[async_trait::async_trait]
-impl VulnerabilityRepository for MockVulnerabilityRepository {
-    async fn fetch_vulnerabilities(
-        &self,
-        _packages: Vec<Package>,
-    ) -> Result<Vec<crate::sbom_generation::domain::PackageVulnerabilities>> {
-        Ok(vec![])
-    }
-}
-
 #[tokio::test]
 async fn test_execute_with_cve_check_enabled() {
     let lockfile_content = r#"
@@ -241,7 +229,7 @@ version = "3.4.0"
         },
         MockLicenseRepository,
         MockProgressReporter,
-        Some(MockVulnerabilityRepository),
+        Some(MockVulnerabilityRepository::new()),
         Locale::default(),
     );
 
@@ -308,7 +296,7 @@ version = "2024.8.30"
         },
         MockLicenseRepository,
         MockProgressReporter,
-        Some(MockVulnerabilityRepository),
+        Some(MockVulnerabilityRepository::new()),
         Locale::default(),
     );
 
@@ -340,7 +328,7 @@ version = "2024.8.30"
         },
         MockLicenseRepository,
         MockProgressReporter,
-        Some(MockVulnerabilityRepository),
+        Some(MockVulnerabilityRepository::new()),
         Locale::default(),
     );
 
@@ -592,7 +580,7 @@ async fn test_check_vulnerabilities_if_requested_disabled() {
         },
         MockLicenseRepository,
         MockProgressReporter,
-        Some(MockVulnerabilityRepository),
+        Some(MockVulnerabilityRepository::new()),
         Locale::default(),
     );
 
@@ -621,7 +609,7 @@ async fn test_check_vulnerabilities_if_requested_enabled() {
         },
         MockLicenseRepository,
         MockProgressReporter,
-        Some(MockVulnerabilityRepository),
+        Some(MockVulnerabilityRepository::new()),
         Locale::default(),
     );
 
