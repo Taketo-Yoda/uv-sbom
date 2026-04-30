@@ -395,16 +395,22 @@ where
             return Some(vec![]);
         }
 
+        let msgs = Messages::for_locale(self.locale);
+
         let unique_dep_count = entries
             .iter()
             .flat_map(|e| e.introduced_by())
             .map(|i| i.package_name())
             .collect::<std::collections::HashSet<_>>()
             .len();
-        self.progress_reporter.report(&format!(
-            "🔍 Analyzing upgrade paths for {} direct dependenc{}...",
-            unique_dep_count,
-            if unique_dep_count == 1 { "y" } else { "ies" },
+        let unit = if unique_dep_count == 1 {
+            msgs.label_dependency_singular
+        } else {
+            msgs.label_dependency_plural
+        };
+        self.progress_reporter.report(&Messages::format(
+            msgs.progress_analyzing_upgrade_paths,
+            &[&unique_dep_count.to_string(), unit],
         ));
 
         let simulator = UvLockAdapter::new();
@@ -421,13 +427,15 @@ where
                     vulnerability_id,
                     ..
                 } => {
-                    self.progress_reporter.report(&format!(
-                        "  ✓ Upgrade {} → {} resolves {} to {} ({})",
-                        direct_dep_name,
-                        direct_dep_target_version,
-                        transitive_dep_name,
-                        transitive_resolved_version,
-                        vulnerability_id,
+                    self.progress_reporter.report(&Messages::format(
+                        msgs.progress_upgrade_resolves,
+                        &[
+                            direct_dep_name,
+                            direct_dep_target_version,
+                            transitive_dep_name,
+                            transitive_resolved_version,
+                            vulnerability_id,
+                        ],
                     ));
                 }
                 UpgradeRecommendation::Unresolvable {
@@ -435,18 +443,18 @@ where
                     reason,
                     vulnerability_id,
                 } => {
-                    self.progress_reporter.report(&format!(
-                        "  ✗ Cannot resolve via {}: {} ({})",
-                        direct_dep_name, reason, vulnerability_id,
+                    self.progress_reporter.report(&Messages::format(
+                        msgs.progress_upgrade_unresolvable,
+                        &[direct_dep_name, reason, vulnerability_id],
                     ));
                 }
                 UpgradeRecommendation::SimulationFailed {
                     direct_dep_name,
                     error,
                 } => {
-                    self.progress_reporter.report(&format!(
-                        "  ❓ Simulation failed for {}: {}",
-                        direct_dep_name, error,
+                    self.progress_reporter.report(&Messages::format(
+                        msgs.progress_upgrade_simulation_failed,
+                        &[direct_dep_name, error],
                     ));
                 }
             }
