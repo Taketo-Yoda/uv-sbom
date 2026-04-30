@@ -30,6 +30,7 @@ impl CacheKey {
 /// In hexagonal architecture, caching is an implementation detail of the adapter layer.
 /// The domain layer only cares about fetching license information - whether it comes
 /// from cache or API is transparent to the domain.
+#[derive(Clone)]
 pub struct CachingPyPiLicenseRepository<R: LicenseRepository> {
     inner: R,
     cache: Arc<DashMap<CacheKey, PyPiMetadata>>,

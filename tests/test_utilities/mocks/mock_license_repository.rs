@@ -4,6 +4,7 @@ use uv_sbom::ports::outbound::PyPiMetadata;
 use uv_sbom::prelude::*;
 
 /// Mock LicenseRepository for testing
+#[derive(Clone)]
 pub struct MockLicenseRepository {
     pub licenses: HashMap<String, PyPiMetadata>,
     pub should_fail: bool,
