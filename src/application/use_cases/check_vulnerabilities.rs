@@ -126,31 +126,8 @@ impl<R: VulnerabilityRepository> CheckVulnerabilitiesUseCase<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ports::outbound::ProgressCallback;
+    use crate::application::use_cases::test_doubles::MockVulnerabilityRepository;
     use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
-    use async_trait::async_trait;
-
-    struct MockVulnerabilityRepository {
-        vulnerabilities: Vec<PackageVulnerabilities>,
-    }
-
-    #[async_trait]
-    impl VulnerabilityRepository for MockVulnerabilityRepository {
-        async fn fetch_vulnerabilities(
-            &self,
-            _packages: Vec<Package>,
-        ) -> Result<Vec<PackageVulnerabilities>> {
-            Ok(self.vulnerabilities.clone())
-        }
-
-        async fn fetch_vulnerabilities_with_progress(
-            &self,
-            _packages: Vec<Package>,
-            _progress_callback: ProgressCallback<'static>,
-        ) -> Result<Vec<PackageVulnerabilities>> {
-            Ok(self.vulnerabilities.clone())
-        }
-    }
 
     fn create_test_package(name: &str, version: &str) -> Package {
         Package::new(name.to_string(), version.to_string()).unwrap()
