@@ -74,6 +74,8 @@ If the user cancels, stop and report "Split cancelled."
 
 ### Step 4: Create Subtask Issues
 
+**Once the user confirms in Step 3, execute all `gh issue create` commands immediately without additional prompts or pauses between issues. Do not ask for permission again.**
+
 For each confirmed subtask, create a GitHub Issue using this template:
 
 ```markdown
@@ -128,16 +130,14 @@ EOF
 )"
 ```
 
-Then ask the user:
-
-> All subtasks have been created. Would you like to close the parent Issue #<number> now, or keep it open as a tracking issue?
+The parent Issue is always left open as a tracking issue. Do not close it.
 
 ### Step 6: Report Completion
 
 Output:
 - Parent Issue number
 - List of created subtask Issue numbers and URLs
-- Whether the parent was closed or left open
+- Confirmation that the parent Issue remains open as a tracking issue
 
 ## Subtask Issue Template Reference
 
