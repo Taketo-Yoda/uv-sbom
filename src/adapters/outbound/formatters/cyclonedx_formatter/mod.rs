@@ -278,6 +278,7 @@ mod tests {
                     package_name: "my-app".to_string(),
                     version: "1.0.0".to_string(),
                 }],
+                dependency_chains: vec![],
             }],
         });
 
@@ -333,6 +334,7 @@ mod tests {
                         version: "2.0.0".to_string(),
                     },
                 ],
+                dependency_chains: vec![],
             }],
         });
 

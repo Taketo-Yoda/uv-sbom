@@ -59,10 +59,35 @@ impl DependencyAnalyzer {
             }
         }
 
+        let package_edges = Self::build_package_edges(project_name, dependency_map)?;
+
         Ok(DependencyGraph::new(
             direct_deps_names,
             transitive_dependencies,
+            package_edges,
         ))
+    }
+
+    /// Builds an edge map of `pkg → immediate children` for every package in
+    /// `dependency_map` except the project root. This map is consumed by
+    /// [`DependencyGraph::find_paths_to`] for multi-hop BFS path traversal.
+    fn build_package_edges(
+        project_name: &PackageName,
+        dependency_map: &HashMap<String, Vec<String>>,
+    ) -> Result<HashMap<PackageName, Vec<PackageName>>> {
+        let mut package_edges: HashMap<PackageName, Vec<PackageName>> = HashMap::new();
+        for (parent, children) in dependency_map {
+            if parent == project_name.as_str() {
+                continue;
+            }
+            let parent_name = PackageName::new(parent.clone())?;
+            let child_names: Vec<PackageName> = children
+                .iter()
+                .map(|n| PackageName::new(n.clone()))
+                .collect::<Result<Vec<_>>>()?;
+            package_edges.insert(parent_name, child_names);
+        }
+        Ok(package_edges)
     }
 
     /// Maximum recursion depth to prevent stack overflow attacks
@@ -239,5 +264,80 @@ mod tests {
 
         assert_eq!(graph.direct_dependency_count(), 0);
         assert_eq!(graph.transitive_dependency_count(), 0);
+    }
+
+    #[test]
+    fn test_analyze_builds_edge_map_for_multi_hop_paths() {
+        // project -> a -> b -> c (three hops)
+        let mut dependency_map = HashMap::new();
+        dependency_map.insert("myproject".to_string(), vec!["a".to_string()]);
+        dependency_map.insert("a".to_string(), vec!["b".to_string()]);
+        dependency_map.insert("b".to_string(), vec!["c".to_string()]);
+        dependency_map.insert("c".to_string(), vec![]);
+
+        let project_name = PackageName::new("myproject".to_string()).unwrap();
+        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+
+        let target = PackageName::new("c".to_string()).unwrap();
+        let paths = graph.find_paths_to(&target);
+
+        assert_eq!(paths.len(), 1);
+        assert_eq!(
+            paths[0],
+            vec![
+                PackageName::new("a".to_string()).unwrap(),
+                PackageName::new("b".to_string()).unwrap(),
+                PackageName::new("c".to_string()).unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_analyze_excludes_project_root_from_package_edges() {
+        let mut dependency_map = HashMap::new();
+        dependency_map.insert("myproject".to_string(), vec!["requests".to_string()]);
+        dependency_map.insert("requests".to_string(), vec!["urllib3".to_string()]);
+
+        let project_name = PackageName::new("myproject".to_string()).unwrap();
+        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+
+        let target = PackageName::new("urllib3".to_string()).unwrap();
+        let paths = graph.find_paths_to(&target);
+
+        assert_eq!(
+            paths,
+            vec![vec![
+                PackageName::new("requests".to_string()).unwrap(),
+                PackageName::new("urllib3".to_string()).unwrap(),
+            ]]
+        );
+        for path in &paths {
+            assert_ne!(path[0].as_str(), "myproject");
+        }
+    }
+
+    #[test]
+    fn test_analyze_finds_multiple_paths_via_diamond() {
+        // myproject -> a, b; a -> shared -> target; b -> shared -> target
+        let mut dependency_map = HashMap::new();
+        dependency_map.insert(
+            "myproject".to_string(),
+            vec!["a".to_string(), "b".to_string()],
+        );
+        dependency_map.insert("a".to_string(), vec!["shared".to_string()]);
+        dependency_map.insert("b".to_string(), vec!["shared".to_string()]);
+        dependency_map.insert("shared".to_string(), vec!["target".to_string()]);
+        dependency_map.insert("target".to_string(), vec![]);
+
+        let project_name = PackageName::new("myproject".to_string()).unwrap();
+        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+        let paths = graph.find_paths_to(&PackageName::new("target".to_string()).unwrap());
+
+        assert_eq!(paths.len(), 2);
+        for p in &paths {
+            assert_eq!(p.len(), 3);
+            assert_eq!(p[2].as_str(), "target");
+            assert_eq!(p[1].as_str(), "shared");
+        }
     }
 }

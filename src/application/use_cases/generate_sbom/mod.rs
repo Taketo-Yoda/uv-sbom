@@ -1,6 +1,6 @@
 use crate::adapters::outbound::uv::UvLockAdapter;
 use crate::application::dto::{SbomRequest, SbomResponse};
-use crate::application::use_cases::CheckVulnerabilitiesUseCase;
+use crate::application::use_cases::{CheckVulnerabilitiesUseCase, FetchLicensesUseCase};
 use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
     EnrichedPackage, LicenseRepository, LockfileReader, ProgressReporter, ProjectConfigReader,
@@ -14,19 +14,10 @@ use crate::sbom_generation::domain::services::{
 use crate::sbom_generation::domain::{Package, PackageName, UpgradeRecommendation};
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
 use crate::shared::Result;
-use indicatif::{ProgressBar, ProgressStyle};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 
 /// Type alias for package list with dependency map
 /// Used to simplify complex return types and satisfy clippy::type_complexity
 type PackagesWithDependencyMap = (Vec<Package>, std::collections::HashMap<String, Vec<String>>);
-
-/// Rate limiting: Delay between license fetch requests to prevent DoS (milliseconds)
-/// This limits requests to ~10 per second (100ms delay = 10 requests/second)
-const LICENSE_FETCH_DELAY_MS: u64 = 100;
 
 /// GenerateSbomUseCase - Core use case for SBOM generation
 ///
@@ -52,7 +43,7 @@ impl<LR, PCR, LREPO, PR, VREPO> GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
-    LREPO: LicenseRepository,
+    LREPO: LicenseRepository + Clone,
     PR: ProgressReporter,
     VREPO: VulnerabilityRepository + Clone,
 {
@@ -282,10 +273,34 @@ where
     /// # Returns
     /// Vector of EnrichedPackage with license information
     async fn fetch_license_info(&self, packages: Vec<Package>) -> Result<Vec<EnrichedPackage>> {
+        let msgs = Messages::for_locale(self.locale);
         self.progress_reporter
-            .report(Messages::for_locale(self.locale).progress_fetching_license);
+            .report(msgs.progress_fetching_license);
 
-        self.enrich_packages_with_licenses(packages).await
+        let fetch_use_case = FetchLicensesUseCase::new(self.license_repository.clone());
+        let (enriched, errors) = fetch_use_case.fetch_with_progress(packages).await?;
+
+        eprintln!(); // Add newline after progress bar
+
+        for (package_name, error_msg) in &errors {
+            self.progress_reporter.report_error(&Messages::format(
+                msgs.warn_license_fetch_failed,
+                &[package_name, error_msg],
+            ));
+        }
+
+        let (successful, total, failed) =
+            FetchLicensesUseCase::<LREPO>::summarize(&enriched, &errors);
+        self.progress_reporter.report_completion(&Messages::format(
+            msgs.progress_license_complete,
+            &[
+                &successful.to_string(),
+                &total.to_string(),
+                &failed.to_string(),
+            ],
+        ));
+
+        Ok(enriched)
     }
 
     /// Checks vulnerabilities if CVE check is requested
@@ -380,16 +395,22 @@ where
             return Some(vec![]);
         }
 
+        let msgs = Messages::for_locale(self.locale);
+
         let unique_dep_count = entries
             .iter()
             .flat_map(|e| e.introduced_by())
             .map(|i| i.package_name())
             .collect::<std::collections::HashSet<_>>()
             .len();
-        self.progress_reporter.report(&format!(
-            "🔍 Analyzing upgrade paths for {} direct dependenc{}...",
-            unique_dep_count,
-            if unique_dep_count == 1 { "y" } else { "ies" },
+        let unit = if unique_dep_count == 1 {
+            msgs.label_dependency_singular
+        } else {
+            msgs.label_dependency_plural
+        };
+        self.progress_reporter.report(&Messages::format(
+            msgs.progress_analyzing_upgrade_paths,
+            &[&unique_dep_count.to_string(), unit],
         ));
 
         let simulator = UvLockAdapter::new();
@@ -406,13 +427,15 @@ where
                     vulnerability_id,
                     ..
                 } => {
-                    self.progress_reporter.report(&format!(
-                        "  ✓ Upgrade {} → {} resolves {} to {} ({})",
-                        direct_dep_name,
-                        direct_dep_target_version,
-                        transitive_dep_name,
-                        transitive_resolved_version,
-                        vulnerability_id,
+                    self.progress_reporter.report(&Messages::format(
+                        msgs.progress_upgrade_resolves,
+                        &[
+                            direct_dep_name,
+                            direct_dep_target_version,
+                            transitive_dep_name,
+                            transitive_resolved_version,
+                            vulnerability_id,
+                        ],
                     ));
                 }
                 UpgradeRecommendation::Unresolvable {
@@ -420,18 +443,18 @@ where
                     reason,
                     vulnerability_id,
                 } => {
-                    self.progress_reporter.report(&format!(
-                        "  ✗ Cannot resolve via {}: {} ({})",
-                        direct_dep_name, reason, vulnerability_id,
+                    self.progress_reporter.report(&Messages::format(
+                        msgs.progress_upgrade_unresolvable,
+                        &[direct_dep_name, reason, vulnerability_id],
                     ));
                 }
                 UpgradeRecommendation::SimulationFailed {
                     direct_dep_name,
                     error,
                 } => {
-                    self.progress_reporter.report(&format!(
-                        "  ❓ Simulation failed for {}: {}",
-                        direct_dep_name, error,
+                    self.progress_reporter.report(&Messages::format(
+                        msgs.progress_upgrade_simulation_failed,
+                        &[direct_dep_name, error],
                     ));
                 }
             }
@@ -528,119 +551,6 @@ where
         }
 
         builder.build().expect("response build should not fail")
-    }
-
-    /// Enriches packages with license information from the repository
-    ///
-    /// Security: This method implements rate limiting to prevent DoS attacks
-    /// via unbounded PyPI API requests. A delay is added between requests
-    /// to limit the rate to approximately 10 requests per second.
-    async fn enrich_packages_with_licenses(
-        &self,
-        packages: Vec<Package>,
-    ) -> Result<Vec<EnrichedPackage>> {
-        let total = packages.len();
-
-        // Create atomic counters for thread-safe progress sharing
-        let progress_current = Arc::new(AtomicUsize::new(0));
-        let progress_total = Arc::new(AtomicUsize::new(total));
-        let is_done = Arc::new(AtomicBool::new(false));
-
-        // Clone references for the progress bar update thread
-        let current_clone = progress_current.clone();
-        let total_clone = progress_total.clone();
-        let done_clone = is_done.clone();
-
-        // Spawn a thread to update the progress bar
-        let progress_handle = thread::spawn(move || {
-            let pb = ProgressBar::new(total_clone.load(Ordering::Relaxed) as u64);
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template("   {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} - {msg}")
-                    .expect("Failed to set progress bar template")
-                    .progress_chars("=>-"),
-            );
-            pb.set_message("Fetching license information...");
-
-            // Poll for updates until done
-            while !done_clone.load(Ordering::Relaxed) {
-                let current = current_clone.load(Ordering::Relaxed);
-                pb.set_position(current as u64);
-                thread::sleep(Duration::from_millis(50));
-            }
-
-            pb.finish_and_clear();
-        });
-
-        // Fetch licenses sequentially with rate limiting
-        // Collect errors to report after async loop (since progress_reporter may not be Send)
-        let mut enriched = Vec::new();
-        let mut successful = 0;
-        let mut failed = 0;
-        let mut errors: Vec<(String, String)> = Vec::new(); // (package_name, error_message)
-
-        for (idx, package) in packages.into_iter().enumerate() {
-            let package_name = package.name().to_string();
-            match self
-                .license_repository
-                .enrich_with_license(package.name(), package.version())
-                .await
-            {
-                Ok(license_info) => {
-                    enriched.push(
-                        EnrichedPackage::new(
-                            package,
-                            license_info.license_text().map(String::from),
-                            license_info.description().map(String::from),
-                        )
-                        .with_sha256_hash(license_info.sha256_hash().map(String::from)),
-                    );
-                    successful += 1;
-                }
-                Err(e) => {
-                    // Collect error for reporting after async loop
-                    errors.push((package_name, e.to_string()));
-                    // Include package without license information
-                    enriched.push(EnrichedPackage::new(package, None, None));
-                    failed += 1;
-                }
-            }
-
-            // Update progress
-            progress_current.store(idx + 1, Ordering::Relaxed);
-
-            // Security: Rate limiting to prevent DoS via unbounded API requests
-            // Add delay between requests (except after the last one)
-            if idx < total - 1 {
-                tokio::time::sleep(Duration::from_millis(LICENSE_FETCH_DELAY_MS)).await;
-            }
-        }
-
-        // Signal completion and wait for progress bar thread
-        is_done.store(true, Ordering::Relaxed);
-        let _ = progress_handle.join();
-
-        eprintln!(); // Add newline after progress bar
-
-        // Report errors collected during async execution
-        let msgs = Messages::for_locale(self.locale);
-        for (package_name, error_msg) in errors {
-            self.progress_reporter.report_error(&Messages::format(
-                msgs.warn_license_fetch_failed,
-                &[&package_name, &error_msg],
-            ));
-        }
-
-        self.progress_reporter.report_completion(&Messages::format(
-            msgs.progress_license_complete,
-            &[
-                &successful.to_string(),
-                &total.to_string(),
-                &failed.to_string(),
-            ],
-        ));
-
-        Ok(enriched)
     }
 }
 

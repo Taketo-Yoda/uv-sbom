@@ -103,6 +103,76 @@ git log origin/develop..HEAD --oneline
 git diff origin/develop...HEAD
 ```
 
+### Step 4.5: CHANGELOG Gate (MANDATORY)
+
+**Skip this step entirely** when the current branch prefix is one of:
+`refactor/`, `ci/`, `test/`, `chore/`, `docs/`
+
+Detect via:
+```bash
+git branch --show-current
+```
+
+If the prefix is unrecognized or not in the skip list, **do not skip** (fail-closed).
+
+**For all other branch types** (`feature/`, `bugfix/`, `hotfix/`, `security/`):
+
+#### 1. Check if CHANGELOG.md was updated on this branch
+
+```bash
+# For feature/bugfix/refactor branches (base: develop)
+git diff origin/develop...HEAD -- CHANGELOG.md
+
+# For hotfix/* branches (base: main)
+git diff origin/main...HEAD -- CHANGELOG.md
+```
+
+If this diff is **non-empty**, CHANGELOG.md was updated — gate passes. Proceed to Step 5.
+
+#### 2. If CHANGELOG.md was NOT updated, detect user-facing changes
+
+Check for user-facing changes in the diff:
+
+```bash
+# New CLI flags (additions of #[arg( or #[clap( lines)
+git diff origin/develop...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
+
+# Changes to core behavior (application, formatters, config)
+git diff origin/develop...HEAD --stat -- src/sbom_generation/ src/application/ src/adapters/outbound/formatters/ src/cli/config_resolver.rs src/config.rs
+```
+
+Also consider:
+- Branch prefix `bugfix/` or `hotfix/` → always treat as user-facing (bug fix)
+- Branch prefix `security/` or label `security` → always treat as user-facing (security fix)
+
+#### 3. Decision
+
+| User-facing changes? | CHANGELOG updated? | Action |
+|---|---|---|
+| No | No | ✅ Gate passes — internal-only PR |
+| No | Yes | ✅ Gate passes |
+| Yes | Yes | ✅ Gate passes |
+| Yes | No | ❌ **STOP** — prompt user |
+
+If user-facing changes are detected and CHANGELOG.md was **not** updated, output:
+
+> ⚠️ User-facing changes detected but `CHANGELOG.md [Unreleased]` was not updated on this branch.
+>
+> Please add an entry under the appropriate section before pushing:
+> - `### Added` — new features or CLI flags
+> - `### Fixed` — bug fixes
+> - `### Security` — security fixes
+> - `### Changed` — behavior changes
+>
+> Update `CHANGELOG.md`, commit the change, then re-run `/pr`.
+> Type **yes** to proceed anyway (only if this PR is truly internal), or **no** to abort.
+
+- **yes**: proceed but add a note in the PR body: `⚠️ CHANGELOG not updated — author confirmed internal-only.`
+- **no** (or no response): **STOP**. Do not push or create the PR.
+
+> **Note**: This gate complements `/release` Step 3.6 — catching missing entries at PR
+> time prevents the empty `[Unreleased]` scenario that caused the v2.2.0 incident (Issue #491).
+
 ### Step 5: Push to Remote
 
 ```bash

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-05-02
+
+### Added
+- **Dependency Chains subsection in Markdown Resolution Guide**: When at least one vulnerable package is introduced via a multi-hop dependency chain (chain length > 2), a "### Dependency Chains" subsection is now rendered after the vulnerability resolution table. Each chain is displayed as `` `node1` → `node2` → **`pkg version`** ⚠️ ``. The subsection is omitted when all vulnerabilities are direct introductions (#499)
+
+### Security
+- Updated `rustls-webpki` to 0.103.13 to fix GHSA-82j2-j2ch-gfr8 (DoS via panic on malformed CRL BIT STRING) (#508)
+
 ## [2.2.0] - 2026-04-18
 
 ### Added
