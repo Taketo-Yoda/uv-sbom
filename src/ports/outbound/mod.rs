@@ -6,6 +6,7 @@ pub mod enriched_package;
 pub mod formatter;
 pub mod license_repository;
 pub mod lockfile_reader;
+pub mod maintenance_repository;
 pub mod output_presenter;
 pub mod progress_reporter;
 pub mod project_config_reader;
@@ -17,6 +18,9 @@ pub use enriched_package::EnrichedPackage;
 pub use formatter::SbomFormatter;
 pub use license_repository::{LicenseRepository, PyPiMetadata};
 pub use lockfile_reader::{LockfileParseResult, LockfileReader};
+// Note: Will be used in subsequent subtasks (abandoned package detection)
+#[allow(unused_imports)]
+pub use maintenance_repository::{MaintenanceInfo, MaintenanceRepository};
 pub use output_presenter::OutputPresenter;
 pub use progress_reporter::{ProgressCallback, ProgressReporter};
 pub use project_config_reader::ProjectConfigReader;
