@@ -18,9 +18,16 @@ pub struct AbandonedPackageView {
     pub name: String,
     /// Package version as listed in the lockfile
     pub version: String,
-    /// Date of the most recent upstream release
+    /// Date of the most recent upstream release.
+    ///
+    /// Packages whose `MaintenanceInfo.last_release_date` is `None` (unknown release
+    /// date) are excluded at report construction time and never appear in this struct.
     pub last_release_date: NaiveDate,
-    /// Number of days between `last_release_date` and the report's reference date
+    /// Number of days between `last_release_date` and the report's reference date.
+    ///
+    /// Uses `i64` to match `chrono::Duration::num_days()` return type directly,
+    /// avoiding a lossy cast in the use case. Negative values are theoretically
+    /// possible for future-dated releases but are never classified as abandoned.
     pub days_inactive: i64,
     /// Whether the package is a direct dependency of the current project
     pub is_direct: bool,
@@ -32,12 +39,25 @@ pub struct AbandonedPackageView {
 /// threshold used to classify them. The threshold is captured so downstream
 /// formatters can render messages like "abandoned (>730 days inactive)".
 #[allow(dead_code)]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AbandonedPackagesReport {
     /// Packages classified as abandoned
     pub packages: Vec<AbandonedPackageView>,
     /// Inactivity threshold (in days) used to build this report
     pub threshold_days: u64,
+}
+
+impl Default for AbandonedPackagesReport {
+    /// Returns a report with no packages and the standard 730-day threshold.
+    ///
+    /// The threshold matches the application default configured in `MergedConfig`.
+    /// Use explicit construction when a different threshold is required.
+    fn default() -> Self {
+        Self {
+            packages: Vec::new(),
+            threshold_days: 730,
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -84,7 +104,7 @@ mod tests {
         assert_eq!(report.total_count(), 0);
         assert_eq!(report.direct_count(), 0);
         assert_eq!(report.transitive_count(), 0);
-        assert_eq!(report.threshold_days, 0);
+        assert_eq!(report.threshold_days, 730);
     }
 
     #[test]
