@@ -89,6 +89,7 @@ pub struct Messages {
     pub warn_check_cve_no_effect: &'static str,
     pub warn_check_license_no_effect: &'static str,
     pub warn_verify_links_no_effect: &'static str,
+    pub info_check_abandoned_deferred: &'static str,
 
     // Section description paragraphs
     pub desc_sbom_report: &'static str,
@@ -259,6 +260,7 @@ static EN_MESSAGES: Messages = Messages {
     warn_check_cve_no_effect: "⚠️  Warning: --check-cve has no effect with JSON format.",
     warn_check_license_no_effect: "⚠️  Warning: --check-license has no effect with JSON format.",
     warn_verify_links_no_effect: "⚠️  Warning: --verify-links has no effect with JSON format.",
+    info_check_abandoned_deferred: "ℹ️  --check-abandoned acknowledged (threshold: {} days). Detection arrives in a future release.",
 
     // Section description paragraphs
     desc_sbom_report: "A comprehensive list of all software components and libraries included in this project.",
@@ -397,6 +399,7 @@ static JA_MESSAGES: Messages = Messages {
     warn_check_cve_no_effect: "⚠️  警告: JSON形式では --check-cve は効果がありません。",
     warn_check_license_no_effect: "⚠️  警告: JSON形式では --check-license は効果がありません。",
     warn_verify_links_no_effect: "⚠️  警告: JSON形式では --verify-links は効果がありません。",
+    info_check_abandoned_deferred: "ℹ️  --check-abandoned を確認しました（閾値: {} 日）。検出機能は今後のリリースで追加されます。",
 
     // Section description paragraphs
     desc_sbom_report: "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。",
