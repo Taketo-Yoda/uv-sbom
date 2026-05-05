@@ -72,6 +72,14 @@ pub struct Args {
     #[arg(long)]
     pub check_license: bool,
 
+    /// Check for abandoned/unmaintained packages (no upstream release within threshold days)
+    #[arg(long)]
+    pub check_abandoned: bool,
+
+    /// Inactivity threshold in days for abandoned-package detection (default: 730)
+    #[arg(long, value_name = "DAYS", requires = "check_abandoned")]
+    pub abandoned_threshold_days: Option<u64>,
+
     /// Allowed license patterns (comma-separated, requires --check-license)
     /// Supports wildcards: "MIT,Apache-2.0,BSD-*"
     #[arg(long, value_delimiter = ',', requires = "check_license")]

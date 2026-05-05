@@ -74,6 +74,9 @@ where
     /// # Returns
     /// SbomResponse containing enriched packages, optional dependency graph, and metadata
     pub async fn execute(&self, request: SbomRequest) -> Result<SbomResponse> {
+        // Acknowledge --check-abandoned flag; detection logic ships in a follow-up issue.
+        self.notify_abandoned_check_deferred_if_requested(&request);
+
         // Step 1: Read and parse lockfile
         let (packages, dependency_map) = self.read_and_report_lockfile(&request)?;
 
@@ -129,6 +132,23 @@ where
             license_compliance_result,
             upgrade_recommendations,
         ))
+    }
+
+    /// Emits a localised notice when `check_abandoned` is enabled.
+    /// Detection logic ships in a follow-up issue; this method is the current consumer of
+    /// `request.check_abandoned` and `request.abandoned_threshold_days`.
+    fn notify_abandoned_check_deferred_if_requested(&self, request: &SbomRequest) {
+        if !request.check_abandoned {
+            return;
+        }
+        let msgs = Messages::for_locale(self.locale);
+        eprintln!(
+            "{}",
+            Messages::format(
+                msgs.info_check_abandoned_deferred,
+                &[&request.abandoned_threshold_days.to_string()]
+            )
+        );
     }
 
     /// Reads and parses the lockfile, reporting progress

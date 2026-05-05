@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `--check-abandoned` and `--abandoned-threshold-days <DAYS>` CLI flags with TOML config file support (#554). Accepts the flags and emits a localised notice; full detection logic ships in a follow-up issue.
+
 ## [2.3.0] - 2026-05-02
 
 ### Added

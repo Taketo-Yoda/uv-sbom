@@ -244,6 +244,8 @@ async fn run(args: Args) -> Result<bool> {
         .check_license(merged.check_license)
         .license_policy(merged.license_policy)
         .suggest_fix(suggest_fix)
+        .check_abandoned(merged.check_abandoned)
+        .abandoned_threshold_days(merged.abandoned_threshold_days)
         .locale(locale)
         .build()?;
 
@@ -403,6 +405,8 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             .check_license(merged.check_license)
             .license_policy(merged.license_policy.clone())
             .suggest_fix(false)
+            .check_abandoned(merged.check_abandoned)
+            .abandoned_threshold_days(merged.abandoned_threshold_days)
             .locale(locale)
             .build()?;
 

@@ -702,4 +702,24 @@ mod tests_regression {
         let graph = response.dependency_graph.unwrap();
         assert_eq!(graph.direct_dependency_count(), 2);
     }
+
+    #[tokio::test]
+    async fn test_execute_with_check_abandoned_enabled_completes_successfully() {
+        // Exercises the check_abandoned=true path through execute().
+        // Detection is deferred; the use case must complete without error and
+        // consume both check_abandoned and abandoned_threshold_days.
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("certifi", "2024.8.30")])
+            .build();
+
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_abandoned(true)
+            .abandoned_threshold_days(365)
+            .build()
+            .unwrap();
+
+        let response = use_case.execute(request).await.unwrap();
+        assert_eq!(response.enriched_packages.len(), 1);
+    }
 }
