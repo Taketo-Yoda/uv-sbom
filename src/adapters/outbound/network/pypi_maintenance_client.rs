@@ -1,6 +1,3 @@
-// No binary consumer until Issue #555 wires this adapter into GenerateSbomUseCase.
-#![allow(dead_code)]
-
 use crate::ports::outbound::{MaintenanceInfo, MaintenanceRepository};
 use crate::shared::Result;
 use async_trait::async_trait;

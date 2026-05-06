@@ -9,9 +9,6 @@ use chrono::NaiveDate;
 ///
 /// All fields are pre-computed at construction time so consumers (formatters,
 /// presenters) do not need to perform date arithmetic or re-derive directness.
-// Consumed by the Markdown formatter (#556) and use case integration (#555).
-// Suppressed here because this is a foundational subtask with no binary consumer yet.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AbandonedPackageView {
     /// Package name as listed in the lockfile
@@ -38,7 +35,6 @@ pub struct AbandonedPackageView {
 /// Holds the pre-categorized list of abandoned packages along with the
 /// threshold used to classify them. The threshold is captured so downstream
 /// formatters can render messages like "abandoned (>730 days inactive)".
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AbandonedPackagesReport {
     /// Packages classified as abandoned
@@ -60,7 +56,6 @@ impl Default for AbandonedPackagesReport {
     }
 }
 
-#[allow(dead_code)]
 impl AbandonedPackagesReport {
     /// Returns the total number of abandoned packages.
     pub fn total_count(&self) -> usize {

@@ -1,5 +1,7 @@
 use super::*;
-use crate::application::use_cases::test_doubles::MockVulnerabilityRepository;
+use crate::application::use_cases::test_doubles::{
+    MockMaintenanceRepository, MockVulnerabilityRepository,
+};
 use crate::ports::outbound::{LockfileParseResult, PyPiMetadata};
 use crate::sbom_generation::domain::Package;
 use std::collections::HashMap;
@@ -76,6 +78,7 @@ mod test_helpers {
         MockLicenseRepository,
         MockProgressReporter,
         MockVulnerabilityRepository,
+        MockMaintenanceRepository,
     >;
 
     pub(super) struct UseCaseBuilder {
@@ -83,6 +86,7 @@ mod test_helpers {
         deps: HashMap<String, Vec<String>>,
         project_name: String,
         vuln: Option<MockVulnerabilityRepository>,
+        maint: Option<MockMaintenanceRepository>,
     }
 
     impl Default for UseCaseBuilder {
@@ -92,6 +96,7 @@ mod test_helpers {
                 deps: HashMap::new(),
                 project_name: "test-project".to_string(),
                 vuln: None,
+                maint: None,
             }
         }
     }
@@ -122,6 +127,11 @@ mod test_helpers {
             self
         }
 
+        pub(super) fn with_maintenance_repo(mut self, repo: MockMaintenanceRepository) -> Self {
+            self.maint = Some(repo);
+            self
+        }
+
         pub(super) fn build(self) -> TestUseCase {
             GenerateSbomUseCase::new(
                 MockLockfileReader {
@@ -134,6 +144,7 @@ mod test_helpers {
                 MockLicenseRepository,
                 MockProgressReporter,
                 self.vuln,
+                self.maint,
                 Locale::default(),
             )
         }
@@ -388,7 +399,7 @@ mod tests_response {
             Some("Test description".to_string()),
         )];
 
-        let response = use_case.build_response(enriched_packages, None, None, None, None);
+        let response = use_case.build_response(enriched_packages, None, None, None, None, None);
 
         assert_eq!(response.enriched_packages.len(), 1);
         assert!(response.dependency_graph.is_none());
@@ -426,8 +437,14 @@ mod tests_response {
             threshold_exceeded: true,
         };
 
-        let response =
-            use_case.build_response(enriched_packages, None, Some(check_result), None, None);
+        let response = use_case.build_response(
+            enriched_packages,
+            None,
+            Some(check_result),
+            None,
+            None,
+            None,
+        );
 
         assert!(response.has_vulnerabilities_above_threshold);
         assert!(
@@ -467,8 +484,14 @@ mod tests_response {
             threshold_exceeded: false,
         };
 
-        let response =
-            use_case.build_response(enriched_packages, None, Some(check_result), None, None);
+        let response = use_case.build_response(
+            enriched_packages,
+            None,
+            Some(check_result),
+            None,
+            None,
+            None,
+        );
 
         assert!(!response.has_vulnerabilities_above_threshold);
         assert!(
@@ -568,6 +591,173 @@ mod tests_vulnerabilities {
         let config = TestUseCase::build_threshold_config(&request);
 
         assert_eq!(config, ThresholdConfig::Cvss(7.0));
+    }
+}
+
+mod tests_abandoned {
+    use super::test_helpers::*;
+    use super::*;
+    use crate::application::use_cases::test_doubles::MockMaintenanceRepository;
+    use crate::ports::outbound::MaintenanceInfo;
+    use chrono::NaiveDate;
+
+    #[tokio::test]
+    async fn test_check_abandoned_disabled_returns_none() {
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+
+        let result = use_case
+            .check_abandoned_if_requested(&default_request(), &packages, None)
+            .await
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_check_abandoned_no_repo_returns_none() {
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_abandoned(true)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_abandoned_if_requested(&request, &packages, None)
+            .await
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_check_abandoned_with_old_package_returns_report() {
+        let old_date = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+        let maint_repo = MockMaintenanceRepository::with_responses([Ok(MaintenanceInfo {
+            last_release_date: Some(old_date),
+        })]);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .with_maintenance_repo(maint_repo)
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_abandoned(true)
+            .abandoned_threshold_days(365)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_abandoned_if_requested(&request, &packages, None)
+            .await
+            .unwrap();
+
+        assert!(result.is_some());
+        let report = result.unwrap();
+        assert_eq!(report.total_count(), 1);
+        assert_eq!(report.packages[0].name, "requests");
+        assert!(report.packages[0].days_inactive >= 365);
+        assert_eq!(report.threshold_days, 365);
+        assert_eq!(report.direct_count(), 0); // no graph supplied → all non-direct
+        assert_eq!(report.transitive_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_check_abandoned_recent_package_produces_empty_report() {
+        use chrono::Utc;
+        let recent_date = Utc::now().date_naive();
+        let maint_repo = MockMaintenanceRepository::with_responses([Ok(MaintenanceInfo {
+            last_release_date: Some(recent_date),
+        })]);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .with_maintenance_repo(maint_repo)
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_abandoned(true)
+            .abandoned_threshold_days(365)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_abandoned_if_requested(&request, &packages, None)
+            .await
+            .unwrap();
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_check_abandoned_unknown_release_date_excluded() {
+        let maint_repo = MockMaintenanceRepository::with_responses([Ok(MaintenanceInfo {
+            last_release_date: None,
+        })]);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("old-pkg", "1.0.0")])
+            .with_maintenance_repo(maint_repo)
+            .build();
+        let packages = [pkg("old-pkg", "1.0.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_abandoned(true)
+            .abandoned_threshold_days(1)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_abandoned_if_requested(&request, &packages, None)
+            .await
+            .unwrap();
+
+        // Package with unknown release date is excluded from the report
+        assert!(result.is_some());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_check_abandoned_sorted_by_days_inactive_descending() {
+        let older_date = NaiveDate::from_ymd_opt(2018, 1, 1).unwrap();
+        let newer_date = NaiveDate::from_ymd_opt(2021, 1, 1).unwrap();
+        let maint_repo = MockMaintenanceRepository::with_responses([
+            Ok(MaintenanceInfo {
+                last_release_date: Some(newer_date),
+            }),
+            Ok(MaintenanceInfo {
+                last_release_date: Some(older_date),
+            }),
+        ]);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("newer-pkg", "1.0.0"), pkg("older-pkg", "1.0.0")])
+            .with_maintenance_repo(maint_repo)
+            .build();
+        let packages = [pkg("newer-pkg", "1.0.0"), pkg("older-pkg", "1.0.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_abandoned(true)
+            .abandoned_threshold_days(365)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_abandoned_if_requested(&request, &packages, None)
+            .await
+            .unwrap();
+
+        assert!(result.is_some());
+        let report = result.unwrap();
+        assert_eq!(report.total_count(), 2);
+        // Sorted descending: older-pkg (more days inactive) should be first
+        assert!(report.packages[0].days_inactive >= report.packages[1].days_inactive);
     }
 }
 

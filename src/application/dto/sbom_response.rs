@@ -1,3 +1,4 @@
+use crate::application::read_models::abandoned_package::AbandonedPackagesReport;
 use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
@@ -29,6 +30,9 @@ pub struct SbomResponse {
     /// Upgrade recommendations for vulnerable transitive dependencies.
     /// Populated only when `suggest_fix` was true in the request.
     pub upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
+    /// Abandoned packages report.
+    /// Populated only when `check_abandoned` was true in the request.
+    pub abandoned_packages_report: Option<AbandonedPackagesReport>,
 }
 
 impl SbomResponse {
@@ -46,6 +50,7 @@ pub struct SbomResponseBuilder {
     license_compliance_result: Option<LicenseComplianceResult>,
     has_license_violations: bool,
     upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
+    abandoned_packages_report: Option<AbandonedPackagesReport>,
 }
 
 impl SbomResponseBuilder {
@@ -59,6 +64,7 @@ impl SbomResponseBuilder {
             license_compliance_result: None,
             has_license_violations: false,
             upgrade_recommendations: None,
+            abandoned_packages_report: None,
         }
     }
 
@@ -108,6 +114,11 @@ impl SbomResponseBuilder {
         self
     }
 
+    pub fn abandoned_packages_report(mut self, report: AbandonedPackagesReport) -> Self {
+        self.abandoned_packages_report = Some(report);
+        self
+    }
+
     pub fn build(self) -> Result<SbomResponse, SbomError> {
         let metadata = self.metadata.ok_or_else(|| SbomError::Validation {
             message: "metadata is required".into(),
@@ -122,6 +133,7 @@ impl SbomResponseBuilder {
             license_compliance_result: self.license_compliance_result,
             has_license_violations: self.has_license_violations,
             upgrade_recommendations: self.upgrade_recommendations,
+            abandoned_packages_report: self.abandoned_packages_report,
         })
     }
 }

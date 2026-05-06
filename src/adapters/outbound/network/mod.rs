@@ -5,7 +5,6 @@ mod pypi_client;
 mod pypi_maintenance_client;
 
 pub use caching_pypi_client::CachingPyPiLicenseRepository;
-// Note: This will be used in subsequent subtasks for CVE check feature
-#[allow(unused_imports)]
 pub use osv_client::OsvClient;
 pub use pypi_client::PyPiLicenseRepository;
+pub use pypi_maintenance_client::PyPiMaintenanceRepository;

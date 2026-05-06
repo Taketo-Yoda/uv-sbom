@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added `--check-abandoned` and `--abandoned-threshold-days <DAYS>` CLI flags with TOML config file support (#554). Accepts the flags and emits a localised notice; full detection logic ships in a follow-up issue.
+- **Abandoned package detection**: When `--check-abandoned` is set, uv-sbom now fetches maintenance metadata from PyPI for every package, classifies inactive packages by threshold, and reports a summary of abandoned direct and transitive dependencies. Non-empty results contribute to a non-zero exit code (#555).
 
 ## [2.3.0] - 2026-05-02
 
