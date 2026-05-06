@@ -89,7 +89,10 @@ pub struct Messages {
     pub warn_check_cve_no_effect: &'static str,
     pub warn_check_license_no_effect: &'static str,
     pub warn_verify_links_no_effect: &'static str,
-    pub info_check_abandoned_deferred: &'static str,
+    pub warn_abandoned_fetch_failed: &'static str,
+    pub progress_fetching_abandoned: &'static str,
+    pub progress_abandoned_found: &'static str,
+    pub progress_abandoned_none: &'static str,
 
     // Section description paragraphs
     pub desc_sbom_report: &'static str,
@@ -260,7 +263,10 @@ static EN_MESSAGES: Messages = Messages {
     warn_check_cve_no_effect: "⚠️  Warning: --check-cve has no effect with JSON format.",
     warn_check_license_no_effect: "⚠️  Warning: --check-license has no effect with JSON format.",
     warn_verify_links_no_effect: "⚠️  Warning: --verify-links has no effect with JSON format.",
-    info_check_abandoned_deferred: "ℹ️  --check-abandoned acknowledged (threshold: {} days). Detection arrives in a future release.",
+    warn_abandoned_fetch_failed: "⚠️  Warning: Failed to fetch maintenance info for {}: {}",
+    progress_fetching_abandoned: "🔍 Fetching package maintenance information...",
+    progress_abandoned_found: "✅ Abandoned check complete: {} package(s) abandoned ({} direct, {} transitive), threshold: {} days",
+    progress_abandoned_none: "✅ Abandoned check complete: No packages exceed {} day threshold",
 
     // Section description paragraphs
     desc_sbom_report: "A comprehensive list of all software components and libraries included in this project.",
@@ -399,7 +405,10 @@ static JA_MESSAGES: Messages = Messages {
     warn_check_cve_no_effect: "⚠️  警告: JSON形式では --check-cve は効果がありません。",
     warn_check_license_no_effect: "⚠️  警告: JSON形式では --check-license は効果がありません。",
     warn_verify_links_no_effect: "⚠️  警告: JSON形式では --verify-links は効果がありません。",
-    info_check_abandoned_deferred: "ℹ️  --check-abandoned を確認しました（閾値: {} 日）。検出機能は今後のリリースで追加されます。",
+    warn_abandoned_fetch_failed: "⚠️  警告: {}のメンテナンス情報の取得に失敗: {}",
+    progress_fetching_abandoned: "🔍 パッケージのメンテナンス情報を取得中...",
+    progress_abandoned_found: "✅ 廃止パッケージチェック完了: {}件廃止（直接: {}件、間接: {}件）、閾値: {}日",
+    progress_abandoned_none: "✅ 廃止パッケージチェック完了: {}日以上更新のないパッケージはありません",
 
     // Section description paragraphs
     desc_sbom_report: "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。",

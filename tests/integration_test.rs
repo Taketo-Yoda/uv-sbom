@@ -32,11 +32,12 @@ source = { registry = "https://pypi.org/simple" }
         .with_license("urllib3", "1.26.0", "MIT", "HTTP library");
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -85,11 +86,12 @@ source = { registry = "https://pypi.org/simple" }
         .with_license("urllib3", "1.26.0", "MIT", "HTTP library");
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -119,11 +121,12 @@ async fn test_generate_sbom_lockfile_read_failure() {
     let license_repository = MockLicenseRepository::new();
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -152,11 +155,12 @@ source = { registry = "https://pypi.org/simple" }
     let license_repository = MockLicenseRepository::new();
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -189,11 +193,12 @@ source = { registry = "https://pypi.org/simple" }
     let license_repository = MockLicenseRepository::with_failure();
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter.clone(),
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -224,11 +229,12 @@ async fn test_generate_sbom_invalid_toml() {
     let license_repository = MockLicenseRepository::new();
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -261,11 +267,12 @@ source = { registry = "https://pypi.org/simple" }
     );
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter.clone(),
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -310,11 +317,12 @@ source = { registry = "https://pypi.org/simple" }
         .with_license("certifi", "2023.11.17", "MPL-2.0", "CA Bundle");
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -382,11 +390,12 @@ source = { registry = "https://pypi.org/simple" }
     );
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -439,11 +448,12 @@ source = { registry = "https://pypi.org/simple" }
     );
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -481,11 +491,12 @@ source = { registry = "https://pypi.org/simple" }
     let license_repository = MockLicenseRepository::new();
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -543,11 +554,12 @@ source = { registry = "https://pypi.org/simple" }
     );
     let progress_reporter = MockProgressReporter::new();
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );

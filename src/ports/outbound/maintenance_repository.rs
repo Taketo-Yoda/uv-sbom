@@ -11,9 +11,6 @@ use chrono::NaiveDate;
 /// - `last_release_date` is `None` when the package has no published releases
 ///   on the upstream registry (extremely rare for installed packages, but
 ///   possible for yanked-only or pre-release-only packages).
-// Consumed by the PyPI maintenance adapter (#553) and use case integration (#555).
-// Suppressed here because this is a foundational subtask with no binary consumer yet.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaintenanceInfo {
     /// Date of the most recent release on the upstream registry (UTC).
@@ -60,8 +57,6 @@ pub struct MaintenanceInfo {
 /// # Ok(())
 /// # }
 /// ```
-// Implemented by PyPiMaintenanceRepository in #553; used in GenerateSbomUseCase in #555.
-#[allow(dead_code)]
 #[async_trait]
 pub trait MaintenanceRepository: Send + Sync {
     /// Fetches maintenance information for a single package

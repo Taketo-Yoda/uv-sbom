@@ -8,7 +8,9 @@ mod shared;
 
 use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::FileSystemReader;
-use adapters::outbound::network::{CachingPyPiLicenseRepository, OsvClient, PyPiLicenseRepository};
+use adapters::outbound::network::{
+    CachingPyPiLicenseRepository, OsvClient, PyPiLicenseRepository, PyPiMaintenanceRepository,
+};
 use adapters::outbound::uv::UvWorkspaceReader;
 use application::dto::{OutputFormat, SbomRequest};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
@@ -217,6 +219,13 @@ async fn run(args: Args) -> Result<bool> {
         None
     };
 
+    // Create maintenance repository if abandoned check is requested
+    let maintenance_repository = if merged.check_abandoned {
+        Some(PyPiMaintenanceRepository::new()?)
+    } else {
+        None
+    };
+
     // Create use case with injected dependencies
     let use_case = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -224,6 +233,7 @@ async fn run(args: Args) -> Result<bool> {
         license_repository,
         progress_reporter,
         vulnerability_repository,
+        maintenance_repository,
         locale,
     );
 
@@ -321,9 +331,15 @@ async fn run(args: Args) -> Result<bool> {
     let presenter = PresenterFactory::create(presenter_type, locale);
     presenter.present(&formatted_output)?;
 
-    // Determine if vulnerabilities or license violations were detected
-    let has_issues =
-        response.has_vulnerabilities_above_threshold || response.has_license_violations;
+    // Determine if vulnerabilities, license violations, or abandoned packages were detected
+    let has_abandoned = response
+        .abandoned_packages_report
+        .as_ref()
+        .map(|r| !r.is_empty())
+        .unwrap_or(false);
+    let has_issues = response.has_vulnerabilities_above_threshold
+        || response.has_license_violations
+        || has_abandoned;
 
     Ok(has_issues)
 }
@@ -384,12 +400,19 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             None
         };
 
+        let maintenance_repository = if merged.check_abandoned {
+            Some(PyPiMaintenanceRepository::new()?)
+        } else {
+            None
+        };
+
         let use_case = GenerateSbomUseCase::new(
             lockfile_reader,
             project_config_reader,
             license_repository,
             progress_reporter,
             vulnerability_repository,
+            maintenance_repository,
             locale,
         );
 

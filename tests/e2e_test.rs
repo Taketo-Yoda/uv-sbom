@@ -76,11 +76,12 @@ async fn test_e2e_json_format() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -126,11 +127,12 @@ async fn test_e2e_markdown_format() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -178,11 +180,12 @@ async fn test_e2e_nonexistent_project() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -205,11 +208,12 @@ async fn test_e2e_package_count() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -244,11 +248,12 @@ async fn test_e2e_exclude_single_package() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -283,11 +288,12 @@ async fn test_e2e_exclude_multiple_packages() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -326,11 +332,12 @@ async fn test_e2e_exclude_with_wildcard() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -365,11 +372,12 @@ async fn test_e2e_exclude_all_packages_error() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -410,11 +418,12 @@ async fn test_e2e_exclude_root_project_preserves_dependency_classification() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
@@ -463,11 +472,12 @@ async fn test_e2e_exclude_root_project_markdown_output() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         uv_sbom::i18n::Locale::En,
     );
