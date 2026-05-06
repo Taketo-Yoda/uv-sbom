@@ -22,6 +22,7 @@ use crate::sbom_generation::domain::{
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
 use crate::shared::Result;
 use chrono::Utc;
+use std::cmp::Reverse;
 use std::collections::HashSet;
 
 /// Type alias for package list with dependency map
@@ -212,7 +213,7 @@ where
             })
             .collect();
 
-        abandoned_packages.sort_by(|a, b| b.days_inactive.cmp(&a.days_inactive));
+        abandoned_packages.sort_by_key(|p| Reverse(p.days_inactive));
 
         let report = AbandonedPackagesReport {
             packages: abandoned_packages,
