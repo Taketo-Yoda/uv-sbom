@@ -198,6 +198,9 @@ where
         let mut abandoned_packages: Vec<AbandonedPackageView> = results
             .into_iter()
             .filter_map(|(pkg, info)| {
+                // Packages with no recorded release date are excluded: their
+                // maintenance status cannot be determined, so we do not classify
+                // them as abandoned.
                 let release_date = info.last_release_date?;
                 let days_inactive = (today - release_date).num_days();
                 if days_inactive < threshold {
