@@ -197,7 +197,13 @@ mod tests {
         vulnerabilities: Option<&VulnerabilityReportView>,
         license_compliance: Option<&LicenseComplianceView>,
     ) -> String {
-        render_summary_with_abandoned(locale, components, vulnerabilities, license_compliance, None)
+        render_summary_with_abandoned(
+            locale,
+            components,
+            vulnerabilities,
+            license_compliance,
+            None,
+        )
     }
 
     fn render_summary_with_abandoned(
@@ -428,8 +434,7 @@ mod tests {
     #[test]
     fn test_abandoned_zero_shows_ok_en() {
         let report = make_abandoned_report(0);
-        let output =
-            render_summary_with_abandoned(Locale::En, &[], None, None, Some(&report));
+        let output = render_summary_with_abandoned(Locale::En, &[], None, None, Some(&report));
         assert!(output.contains("| Abandoned packages | 0 | ✅ |"));
         assert!(!output.contains("_Abandoned package check skipped._"));
     }
@@ -437,8 +442,7 @@ mod tests {
     #[test]
     fn test_abandoned_nonzero_shows_warning_en() {
         let report = make_abandoned_report(3);
-        let output =
-            render_summary_with_abandoned(Locale::En, &[], None, None, Some(&report));
+        let output = render_summary_with_abandoned(Locale::En, &[], None, None, Some(&report));
         assert!(output.contains("| Abandoned packages | 3 | ⚠️ |"));
         assert!(output.contains("**Overall: Attention recommended**"));
     }
@@ -446,8 +450,7 @@ mod tests {
     #[test]
     fn test_abandoned_nonzero_shows_warning_ja() {
         let report = make_abandoned_report(2);
-        let output =
-            render_summary_with_abandoned(Locale::Ja, &[], None, None, Some(&report));
+        let output = render_summary_with_abandoned(Locale::Ja, &[], None, None, Some(&report));
         assert!(output.contains("| 廃止パッケージ | 2 | ⚠️ |"));
         assert!(output.contains("**総合判定: 注意が必要です**"));
     }

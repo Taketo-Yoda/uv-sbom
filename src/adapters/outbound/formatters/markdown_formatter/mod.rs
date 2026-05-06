@@ -832,8 +832,9 @@ mod tests {
     #[test]
     fn test_abandoned_section_order_after_license_before_resolution_guide() {
         use crate::application::read_models::{
-            AbandonedPackageView, AbandonedPackagesReport, IntroducedByView, LicenseComplianceView,
-            LicenseComplianceSummary, ResolutionEntryView, ResolutionGuideView,
+            AbandonedPackageView, AbandonedPackagesReport, IntroducedByView,
+            LicenseComplianceSummary, LicenseComplianceView, ResolutionEntryView,
+            ResolutionGuideView,
         };
         use chrono::NaiveDate;
 

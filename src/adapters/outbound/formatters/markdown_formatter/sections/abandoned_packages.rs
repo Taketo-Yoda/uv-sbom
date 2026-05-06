@@ -120,8 +120,9 @@ mod tests {
         };
         let output = render_ja(&report);
         assert!(output.contains("## 廃止パッケージ"));
-        assert!(output
-            .contains("| パッケージ | バージョン | 最終リリース | 非アクティブ日数 | 種別 |"));
+        assert!(
+            output.contains("| パッケージ | バージョン | 最終リリース | 非アクティブ日数 | 種別 |")
+        );
         assert!(output.contains("| requests | 1.0.0 | 2022-06-15 | 800 | 直接依存パッケージ |"));
     }
 
