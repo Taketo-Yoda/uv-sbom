@@ -54,6 +54,7 @@ impl MarkdownFormatter {
             &model.components,
             model.vulnerabilities.as_ref(),
             model.license_compliance.as_ref(),
+            model.abandoned_packages.as_ref(),
         );
         sections::header::render(self.messages, output);
         sections::components::render(
@@ -64,8 +65,8 @@ impl MarkdownFormatter {
         );
     }
 
-    /// Renders the four conditional sections when present: dependencies, vulnerabilities,
-    /// resolution guide, and license compliance.
+    /// Renders the five conditional sections when present: dependencies, vulnerabilities,
+    /// license compliance, abandoned packages, and resolution guide.
     fn render_optional_sections(&self, output: &mut String, model: &SbomReadModel) {
         if let Some(deps) = &model.dependencies {
             sections::dependencies::render(
@@ -84,6 +85,12 @@ impl MarkdownFormatter {
                 vulns,
             );
         }
+        if let Some(compliance) = &model.license_compliance {
+            sections::license_compliance::render(self.messages, output, compliance);
+        }
+        if let Some(report) = &model.abandoned_packages {
+            sections::abandoned_packages::render(self.messages, output, report);
+        }
         if let Some(guide) = &model.resolution_guide {
             if !guide.entries.is_empty() {
                 sections::resolution_guide::render(
@@ -93,9 +100,6 @@ impl MarkdownFormatter {
                     model.upgrade_recommendations.as_ref(),
                 );
             }
-        }
-        if let Some(compliance) = &model.license_compliance {
-            sections::license_compliance::render(self.messages, output, compliance);
         }
     }
 }
@@ -120,9 +124,11 @@ mod tests {
 
     mod test_fixtures {
         use crate::application::read_models::{
-            ComponentView, LicenseView, SbomMetadataView, SbomReadModel, SeverityView,
-            VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
+            AbandonedPackageView, AbandonedPackagesReport, ComponentView, LicenseView,
+            SbomMetadataView, SbomReadModel, SeverityView, VulnerabilityReportView,
+            VulnerabilitySummary, VulnerabilityView,
         };
+        use chrono::NaiveDate;
 
         pub(super) fn base_model() -> SbomReadModel {
             SbomReadModel {
@@ -166,6 +172,7 @@ mod tests {
                 license_compliance: None,
                 resolution_guide: None,
                 upgrade_recommendations: None,
+                abandoned_packages: None,
             }
         }
 
@@ -283,6 +290,24 @@ mod tests {
                     total_count: 2,
                     affected_package_count: 2,
                 },
+            });
+            model
+        }
+
+        pub(super) fn with_abandoned_packages(count: usize) -> SbomReadModel {
+            let mut model = base_model();
+            let packages = (0..count)
+                .map(|i| AbandonedPackageView {
+                    name: format!("old-pkg-{i}"),
+                    version: "0.1.0".to_string(),
+                    last_release_date: NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+                    days_inactive: 800 + i as i64,
+                    is_direct: i % 2 == 0,
+                })
+                .collect();
+            model.abandoned_packages = Some(AbandonedPackagesReport {
+                packages,
+                threshold_days: 730,
             });
             model
         }
@@ -771,5 +796,113 @@ mod tests {
         let markdown = formatter.format(&model).unwrap();
 
         assert!(markdown.contains("Some Custom License"));
+    }
+
+    // ===== Abandoned packages section tests =====
+
+    #[test]
+    fn test_abandoned_section_present_when_report_provided() {
+        let model = test_fixtures::with_abandoned_packages(2);
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(markdown.contains("## Abandoned Packages"));
+        assert!(markdown.contains("old-pkg-0"));
+        assert!(markdown.contains("old-pkg-1"));
+    }
+
+    #[test]
+    fn test_abandoned_section_absent_when_none() {
+        let model = test_fixtures::base_model(); // abandoned_packages: None
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(!markdown.contains("## Abandoned Packages"));
+    }
+
+    #[test]
+    fn test_abandoned_empty_report_renders_no_packages_message() {
+        let mut model = test_fixtures::base_model();
+        model.abandoned_packages = Some(crate::application::read_models::AbandonedPackagesReport {
+            packages: vec![],
+            threshold_days: 730,
+        });
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(markdown.contains("## Abandoned Packages"));
+        assert!(markdown.contains("No abandoned packages detected."));
+        assert!(!markdown.contains("| Package | Version | Last Release |"));
+    }
+
+    #[test]
+    fn test_abandoned_section_order_after_license_before_resolution_guide() {
+        use crate::application::read_models::{
+            AbandonedPackageView, AbandonedPackagesReport, IntroducedByView, LicenseComplianceView,
+            LicenseComplianceSummary, ResolutionEntryView, ResolutionGuideView,
+        };
+        use chrono::NaiveDate;
+
+        let mut model = test_fixtures::base_model();
+        model.license_compliance = Some(LicenseComplianceView {
+            has_violations: false,
+            violations: vec![],
+            warnings: vec![],
+            summary: LicenseComplianceSummary {
+                violation_count: 0,
+                warning_count: 0,
+            },
+        });
+        model.abandoned_packages = Some(AbandonedPackagesReport {
+            packages: vec![AbandonedPackageView {
+                name: "stale-lib".to_string(),
+                version: "1.0.0".to_string(),
+                last_release_date: NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+                days_inactive: 900,
+                is_direct: true,
+            }],
+            threshold_days: 730,
+        });
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "requests".to_string(),
+                current_version: "2.31.0".to_string(),
+                fixed_version: Some("2.32.0".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-0001".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+                dependency_chains: vec![],
+            }],
+        });
+
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert_section_order(
+            &markdown,
+            &[
+                "## License Compliance Report",
+                "## Abandoned Packages",
+                "## Vulnerability Resolution Guide",
+            ],
+        );
+    }
+
+    #[test]
+    fn test_abandoned_section_ja_locale() {
+        let model = test_fixtures::with_abandoned_packages(1);
+        let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
+        assert!(markdown.contains("## 廃止パッケージ"));
+        assert!(markdown.contains("old-pkg-0"));
+    }
+
+    #[test]
+    fn test_summary_shows_abandoned_skipped_when_none() {
+        let model = test_fixtures::base_model();
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(markdown.contains("_Abandoned package check skipped._"));
+    }
+
+    #[test]
+    fn test_summary_shows_abandoned_row_when_report_present() {
+        let model = test_fixtures::with_abandoned_packages(2);
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(markdown.contains("| Abandoned packages | 2 | ⚠️ |"));
+        assert!(!markdown.contains("_Abandoned package check skipped._"));
     }
 }

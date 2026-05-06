@@ -301,6 +301,7 @@ async fn run(args: Args) -> Result<bool> {
             .as_ref()
             .map(|(n, v)| (n.as_str(), v.as_str())),
         response.upgrade_recommendations.as_deref(),
+        response.abandoned_packages_report.as_ref(),
     );
 
     // Verify PyPI links if requested
@@ -443,6 +444,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             response.license_compliance_result.as_ref(),
             None,
             response.upgrade_recommendations.as_deref(),
+            response.abandoned_packages_report.as_ref(),
         );
 
         let formatter = FormatterFactory::create(merged.format, None, locale);

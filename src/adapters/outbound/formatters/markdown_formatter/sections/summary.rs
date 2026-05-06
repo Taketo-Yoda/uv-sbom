@@ -1,5 +1,5 @@
 use crate::application::read_models::{
-    ComponentView, LicenseComplianceView, VulnerabilityReportView,
+    AbandonedPackagesReport, ComponentView, LicenseComplianceView, VulnerabilityReportView,
 };
 use crate::i18n::Messages;
 
@@ -10,6 +10,7 @@ pub(in super::super) fn render(
     components: &[ComponentView],
     vulnerabilities: Option<&VulnerabilityReportView>,
     license_compliance: Option<&LicenseComplianceView>,
+    abandoned_packages: Option<&AbandonedPackagesReport>,
 ) {
     output.push_str(messages.section_summary);
     output.push_str("\n\n");
@@ -104,6 +105,28 @@ pub(in super::super) fn render(
         messages.label_license_violations, violation_count, license_status
     ));
 
+    // Abandoned packages row
+    match abandoned_packages {
+        Some(report) => {
+            let n = report.total_count();
+            let abandoned_status = if n > 0 {
+                has_warning = true;
+                "⚠️"
+            } else {
+                "✅"
+            };
+            output.push_str(&format!(
+                "| {} | {} | {} |\n",
+                messages.label_abandoned_packages, n, abandoned_status
+            ));
+        }
+        None => {
+            output.push('\n');
+            output.push_str(messages.label_abandoned_check_skipped);
+            output.push('\n');
+        }
+    }
+
     // Overall line
     output.push('\n');
     let overall = if has_critical {
@@ -121,10 +144,11 @@ pub(in super::super) fn render(
 mod tests {
     use super::*;
     use crate::application::read_models::{
-        LicenseComplianceSummary, LicenseComplianceView, SeverityView, VulnerabilityReportView,
-        VulnerabilityView,
+        AbandonedPackageView, AbandonedPackagesReport, LicenseComplianceSummary,
+        LicenseComplianceView, SeverityView, VulnerabilityReportView, VulnerabilityView,
     };
     use crate::i18n::{Locale, Messages};
+    use chrono::NaiveDate;
 
     fn make_component(is_direct: bool) -> ComponentView {
         ComponentView {
@@ -173,6 +197,16 @@ mod tests {
         vulnerabilities: Option<&VulnerabilityReportView>,
         license_compliance: Option<&LicenseComplianceView>,
     ) -> String {
+        render_summary_with_abandoned(locale, components, vulnerabilities, license_compliance, None)
+    }
+
+    fn render_summary_with_abandoned(
+        locale: Locale,
+        components: &[ComponentView],
+        vulnerabilities: Option<&VulnerabilityReportView>,
+        license_compliance: Option<&LicenseComplianceView>,
+        abandoned_packages: Option<&AbandonedPackagesReport>,
+    ) -> String {
         let messages = Messages::for_locale(locale);
         let mut output = String::new();
         render(
@@ -181,6 +215,7 @@ mod tests {
             components,
             vulnerabilities,
             license_compliance,
+            abandoned_packages,
         );
         output
     }
@@ -357,6 +392,80 @@ mod tests {
             ..Default::default()
         };
         let output = render_summary(Locale::En, &[], Some(&report), None);
+        assert!(output.contains("**Overall: Action required**"));
+        assert!(!output.contains("**Overall: Attention recommended**"));
+    }
+
+    fn make_abandoned_report(count: usize) -> AbandonedPackagesReport {
+        let packages = (0..count)
+            .map(|i| AbandonedPackageView {
+                name: format!("pkg-{i}"),
+                version: "1.0.0".to_string(),
+                last_release_date: NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+                days_inactive: 800,
+                is_direct: true,
+            })
+            .collect();
+        AbandonedPackagesReport {
+            packages,
+            threshold_days: 730,
+        }
+    }
+
+    #[test]
+    fn test_abandoned_check_skipped_en() {
+        let output = render_summary(Locale::En, &[], None, None);
+        assert!(output.contains("_Abandoned package check skipped._"));
+        assert!(!output.contains("Abandoned packages"));
+    }
+
+    #[test]
+    fn test_abandoned_check_skipped_ja() {
+        let output = render_summary(Locale::Ja, &[], None, None);
+        assert!(output.contains("_廃止パッケージチェックはスキップされました。_"));
+    }
+
+    #[test]
+    fn test_abandoned_zero_shows_ok_en() {
+        let report = make_abandoned_report(0);
+        let output =
+            render_summary_with_abandoned(Locale::En, &[], None, None, Some(&report));
+        assert!(output.contains("| Abandoned packages | 0 | ✅ |"));
+        assert!(!output.contains("_Abandoned package check skipped._"));
+    }
+
+    #[test]
+    fn test_abandoned_nonzero_shows_warning_en() {
+        let report = make_abandoned_report(3);
+        let output =
+            render_summary_with_abandoned(Locale::En, &[], None, None, Some(&report));
+        assert!(output.contains("| Abandoned packages | 3 | ⚠️ |"));
+        assert!(output.contains("**Overall: Attention recommended**"));
+    }
+
+    #[test]
+    fn test_abandoned_nonzero_shows_warning_ja() {
+        let report = make_abandoned_report(2);
+        let output =
+            render_summary_with_abandoned(Locale::Ja, &[], None, None, Some(&report));
+        assert!(output.contains("| 廃止パッケージ | 2 | ⚠️ |"));
+        assert!(output.contains("**総合判定: 注意が必要です**"));
+    }
+
+    #[test]
+    fn test_abandoned_warning_does_not_override_critical() {
+        let vuln_report = VulnerabilityReportView {
+            actionable: vec![make_vuln(SeverityView::Critical)],
+            ..Default::default()
+        };
+        let abandoned = make_abandoned_report(1);
+        let output = render_summary_with_abandoned(
+            Locale::En,
+            &[],
+            Some(&vuln_report),
+            None,
+            Some(&abandoned),
+        );
         assert!(output.contains("**Overall: Action required**"));
         assert!(!output.contains("**Overall: Attention recommended**"));
     }

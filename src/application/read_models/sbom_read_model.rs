@@ -3,6 +3,7 @@
 //! This module provides the main read model struct that aggregates
 //! all SBOM data in a query-optimized format.
 
+use super::abandoned_package::AbandonedPackagesReport;
 use super::component_view::ComponentView;
 use super::dependency_view::DependencyView;
 use super::license_compliance_view::LicenseComplianceView;
@@ -31,6 +32,9 @@ pub struct SbomReadModel {
     /// Upgrade recommendations for vulnerable transitive dependencies.
     /// Populated only when `suggest_fix` was true in the request.
     pub upgrade_recommendations: Option<UpgradeRecommendationView>,
+    /// Abandoned packages report.
+    /// Populated only when `check_abandoned` was true in the request.
+    pub abandoned_packages: Option<AbandonedPackagesReport>,
 }
 
 /// View representation of SBOM metadata
