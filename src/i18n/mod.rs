@@ -170,6 +170,16 @@ pub struct Messages {
     pub overall_action_required: &'static str,
     pub overall_attention_recommended: &'static str,
     pub overall_no_issues: &'static str,
+
+    // Abandoned packages section
+    pub section_abandoned_packages: &'static str,
+    pub desc_abandoned_packages: &'static str,
+    pub label_abandoned_packages: &'static str,
+    pub label_abandoned_check_skipped: &'static str,
+    pub label_no_abandoned_packages: &'static str,
+    pub col_last_release: &'static str,
+    pub col_days_inactive: &'static str,
+    pub col_type: &'static str,
 }
 
 impl Messages {
@@ -343,6 +353,16 @@ static EN_MESSAGES: Messages = Messages {
     overall_action_required: "**Overall: Action required**",
     overall_attention_recommended: "**Overall: Attention recommended**",
     overall_no_issues: "**Overall: No issues found** ✅",
+
+    // Abandoned packages section
+    section_abandoned_packages: "## Abandoned Packages",
+    desc_abandoned_packages: "Packages whose most recent upstream release exceeds the configured inactivity threshold. Inactive projects may carry unpatched vulnerabilities and pose long-term maintenance risk.",
+    label_abandoned_packages: "Abandoned packages",
+    label_abandoned_check_skipped: "_Abandoned package check skipped._",
+    label_no_abandoned_packages: "No abandoned packages detected.",
+    col_last_release: "Last Release",
+    col_days_inactive: "Days Inactive",
+    col_type: "Type",
 };
 
 static JA_MESSAGES: Messages = Messages {
@@ -487,6 +507,16 @@ static JA_MESSAGES: Messages = Messages {
     overall_action_required: "**総合判定: 対応が必要です**",
     overall_attention_recommended: "**総合判定: 注意が必要です**",
     overall_no_issues: "**総合判定: 問題なし** ✅",
+
+    // Abandoned packages section
+    section_abandoned_packages: "## 廃止パッケージ",
+    desc_abandoned_packages: "設定された非アクティブ閾値を超えて更新されていないパッケージです。メンテナンスが停止しているプロジェクトは未修正の脆弱性を含む可能性があり、長期的な保守リスクとなります。",
+    label_abandoned_packages: "廃止パッケージ",
+    label_abandoned_check_skipped: "_廃止パッケージチェックはスキップされました。_",
+    label_no_abandoned_packages: "廃止パッケージは検出されませんでした。",
+    col_last_release: "最終リリース",
+    col_days_inactive: "非アクティブ日数",
+    col_type: "種別",
 };
 
 #[cfg(test)]
@@ -926,5 +956,41 @@ mod tests {
             result,
             "### ⚠️警告 2件の脆弱性が1個のパッケージで見つかりました。"
         );
+    }
+
+    #[test]
+    fn test_messages_abandoned_section_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(msgs.section_abandoned_packages, "## Abandoned Packages");
+        assert_eq!(msgs.label_abandoned_packages, "Abandoned packages");
+        assert_eq!(
+            msgs.label_abandoned_check_skipped,
+            "_Abandoned package check skipped._"
+        );
+        assert_eq!(
+            msgs.label_no_abandoned_packages,
+            "No abandoned packages detected."
+        );
+        assert_eq!(msgs.col_last_release, "Last Release");
+        assert_eq!(msgs.col_days_inactive, "Days Inactive");
+        assert_eq!(msgs.col_type, "Type");
+    }
+
+    #[test]
+    fn test_messages_abandoned_section_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(msgs.section_abandoned_packages, "## 廃止パッケージ");
+        assert_eq!(msgs.label_abandoned_packages, "廃止パッケージ");
+        assert_eq!(
+            msgs.label_abandoned_check_skipped,
+            "_廃止パッケージチェックはスキップされました。_"
+        );
+        assert_eq!(
+            msgs.label_no_abandoned_packages,
+            "廃止パッケージは検出されませんでした。"
+        );
+        assert_eq!(msgs.col_last_release, "最終リリース");
+        assert_eq!(msgs.col_days_inactive, "非アクティブ日数");
+        assert_eq!(msgs.col_type, "種別");
     }
 }

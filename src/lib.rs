@@ -53,6 +53,7 @@
 //!     None,
 //!     None,
 //!     None,
+//!     None, // No abandoned-package report in this example
 //! );
 //! let formatter = CycloneDxFormatter::new();
 //! let output = formatter.format(&read_model)?;

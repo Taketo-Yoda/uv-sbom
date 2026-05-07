@@ -106,6 +106,7 @@ mod tests {
             license_compliance: None,
             resolution_guide: None,
             upgrade_recommendations: None,
+            abandoned_packages: None,
         }
     }
 

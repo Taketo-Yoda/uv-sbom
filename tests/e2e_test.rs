@@ -104,6 +104,7 @@ async fn test_e2e_json_format() {
         response.license_compliance_result.as_ref(),
         None,
         None,
+        None,
     );
     let formatter = CycloneDxFormatter::new();
     let json_output = formatter.format(&read_model);
@@ -154,6 +155,7 @@ async fn test_e2e_markdown_format() {
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
         None,
         None,
     );
@@ -501,6 +503,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
         None,
         None,
     );
