@@ -439,6 +439,14 @@ abandoned_threshold_days: 365  # オプション、デフォルト: 730
 
 > **注:** 廃止パッケージデータは現在Markdownのみで利用可能です。CycloneDX JSON出力は影響を受けません。
 
+確実に出力が得られるデモを実行するには：
+
+```bash
+uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
+```
+
+詳細は [`examples/abandoned-packages-project/README-JP.md`](examples/abandoned-packages-project/README-JP.md) を参照してください。
+
 ### 脆弱性しきい値オプション
 
 しきい値オプションを使用して、どの脆弱性が終了コード1をトリガーするかを制御できます：

@@ -112,14 +112,15 @@ uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix \
 | urllib3 | 2.0.4 | 2.6.0 | 🟠 HIGH | requests (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 which does not satisfy >= 2.6.0 | GHSA-2xpw-w6gg-jr37 |
 ```
 
-## Contrast with `sample-project`
+## Contrast with other examples
 
-| | `examples/sample-project` | `examples/suggest-fix-project` |
-|---|---|---|
-| Vulnerable packages | All **direct** dependencies | All **transitive** dependencies |
-| Resolution Guide | Not shown (no transitive CVEs) | Shown with Recommended Action |
-| `--suggest-fix` output | No upgrade advice | Upgradable + Unresolvable cases |
-| `--check-abandoned` demo | ✅ See sample-project README | ❌ Not focused |
+| | `examples/sample-project` | `examples/suggest-fix-project` | `examples/abandoned-packages-project` |
+|---|---|---|---|
+| Vulnerable packages | All **direct** dependencies | All **transitive** dependencies | None (focused on abandonment) |
+| Resolution Guide | Not shown (no transitive CVEs) | Shown with Recommended Action | Not shown |
+| `--suggest-fix` output | No upgrade advice | Upgradable + Unresolvable cases | Not focused |
+| `--check-abandoned` demo | Partial | ❌ Not focused | ✅ Yes (4 packages, always flagged) |
 
-Use `sample-project` to explore the basic CVE check, `--check-license`, and `--check-abandoned` features.
+Use `sample-project` to explore the basic CVE check and `--check-license` features.
 Use this project to explore the `--suggest-fix` Upgrade Advisor feature.
+Use `abandoned-packages-project` to explore `--check-abandoned` in isolation with guaranteed output.

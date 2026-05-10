@@ -443,6 +443,14 @@ abandoned_threshold_days: 365  # optional, default: 730
 
 > **Note:** Abandoned package data is currently Markdown-only. CycloneDX JSON output is not affected.
 
+For a demo with guaranteed output, run:
+
+```bash
+uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
+```
+
+See [`examples/abandoned-packages-project/README.md`](examples/abandoned-packages-project/README.md) for a full walkthrough.
+
 ### Vulnerability Threshold Options
 
 You can control which vulnerabilities trigger a non-zero exit code using threshold options:

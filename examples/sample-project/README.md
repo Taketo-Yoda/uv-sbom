@@ -12,7 +12,7 @@ realistic uv-sbom output for all three major opt-in analysis features:
 |---------|----------|------------------------|
 | CVE detection | `--check-cve` (default on) | Multiple known vulnerabilities in locked packages |
 | License compliance | `--check-license` | `chardet 3.0.4` uses LGPL-2.1-only (denied) |
-| Abandoned package detection | `--check-abandoned` | Several packages with no upstream release ≥ 730 days |
+| Abandoned package detection | `--check-abandoned` | Some packages may be flagged depending on PyPI state; see `examples/abandoned-packages-project/` for a focused demo |
 
 > ⚠️ **Do not use these package versions in production.** They are intentionally
 > outdated for demonstration purposes.
@@ -67,14 +67,15 @@ uv-sbom -p examples/sample-project -f markdown \
   -c examples/sample-project/config/uv-sbom.config.yml
 ```
 
-This exercises CVE, license, and abandoned detection in a single run
-(once Issue #565 adds `check_abandoned: true` to the config file).
+This exercises CVE, license, and abandoned detection in a single run.
 
 ## Contrast with other examples
 
-| | `examples/sample-project` | `examples/suggest-fix-project` | `examples/workspace` |
-|---|---|---|---|
-| Primary feature | CVE + license + abandoned | `--suggest-fix` Upgrade Advisor | `--workspace` mode |
-| Vulnerable packages | Direct dependencies | Transitive dependencies | N/A |
-| Abandoned demo | ✅ Yes | ❌ Not focused | ❌ Not focused |
-| Config file | ✅ Yes (`config/`) | ❌ No | ❌ No |
+| | `examples/sample-project` | `examples/abandoned-packages-project` | `examples/suggest-fix-project` | `examples/workspace` |
+|---|---|---|---|---|
+| Primary feature | CVE + license + abandoned | `--check-abandoned` (focused) | `--suggest-fix` Upgrade Advisor | `--workspace` mode |
+| Vulnerable packages | Direct dependencies | None | Transitive dependencies | N/A |
+| Abandoned demo | Partial (depends on PyPI state) | ✅ Yes (4 packages, always flagged) | ❌ Not focused | ❌ Not focused |
+| Config file | ✅ Yes (`config/`) | ❌ No | ❌ No | ❌ No |
+
+Use `abandoned-packages-project` to explore `--check-abandoned` in isolation with guaranteed output.
