@@ -62,7 +62,7 @@ Skills contain mandatory pre-flight checks and language requirements that preven
 - **PR #121**: Created in Japanese, `cargo fmt --all -- --check` failed in CI
 - **Issue #59**: `cargo clippy` was run without `-D warnings`, causing CI failure after push
 - **2026-04-18**: v2.2.0 release promoted an empty `[Unreleased]` section. Features added in PRs #441–#483 were never recorded in CHANGELOG. Fixed by Issue #491 (added gate in `/release` Step 3.6 and `/pr` Step 4.5).
-- **2026-05-09 (Issue #511)**: `--check-abandoned` CLI flag was added without updating README.md, README-JP.md, `examples/sample-project/config/uv-sbom.config.yml`, or any example project README. Fixed by Issue #568 (added CLI Flag Documentation Gate in `/implement` Step 4.3 and expanded README Update Checklist trigger).
+- **2026-05-09 (Issue #511)**: `--check-abandoned` CLI flag was added without updating README.md, README-JP.md, `examples/sample-project/config/uv-sbom.config.yml`, or any example project README. Root cause: `/implement` Step 4 said "update docs as needed" without a concrete gate; `/pr` had no documentation backstop. Fixed by Issue #568 (`/implement` Step 4.3 CLI Flag Documentation Gate) and Issue #569 (`/pr` Step 4.6 CLI Flag Documentation Backstop).
 
 ### Enforcement
 

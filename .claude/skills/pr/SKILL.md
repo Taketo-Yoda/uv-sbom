@@ -173,6 +173,65 @@ If user-facing changes are detected and CHANGELOG.md was **not** updated, output
 > **Note**: This gate complements `/release` Step 3.6 — catching missing entries at PR
 > time prevents the empty `[Unreleased]` scenario that caused the v2.2.0 incident (Issue #491).
 
+### Step 4.6: CLI Flag Documentation Backstop (conditional)
+
+**Trigger**: Run this gate if the current branch added, removed, or renamed
+any CLI flag (i.e., any `#[arg(` or `#[clap(` annotation was added/changed in `src/cli/`).
+
+Detect via:
+```bash
+git diff origin/develop...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
+```
+
+If the diff is **non-empty**, verify ALL of the following before proceeding to Step 5:
+
+#### A. README.md usage section
+
+- [ ] A new `###` subsection exists for the feature (or an existing section is updated)
+- [ ] At least one ` ```bash ` command example demonstrates the new flag
+- [ ] The Config File Schema Reference table includes the corresponding config key(s)
+- [ ] The Priority and Merge Rules section is updated if the resolution order changed
+
+#### B. README-JP.md
+
+- [ ] All changes from A are translated into Japanese and applied
+
+#### C. Example project config file
+
+- [ ] `examples/sample-project/config/uv-sbom.config.yml` includes the new config key
+  (commented out with the default value, matching the style of existing entries)
+
+#### D. Example project documentation
+
+- [ ] At least one example project README demonstrates the new flag
+
+**If any checkbox is unchecked**, output:
+
+> ⚠️ CLI documentation gap detected. The following items are missing for the new
+> flag `--<flag-name>`:
+>
+> - [ ] README.md usage section
+> - [ ] README-JP.md (Japanese translation)
+> - [ ] Example config file entry
+> - [ ] Example project README
+>
+> Please update the missing documentation and commit the changes before creating the PR.
+> Type **yes** to proceed anyway (only if all gaps are intentionally deferred with a
+> tracking Issue linked in the PR body), or **no** to abort.
+
+- **yes** (with tracking Issues linked): Proceed, add a note to PR body listing the deferred Issues.
+- **no** (or no response): **STOP**. Do not push or create the PR.
+
+**Do NOT skip this gate** even if the implementation plan did not list documentation files.
+
+### Relationship to /implement Step 4.3
+
+| | `/implement` Step 4.3 | `/pr` Step 4.6 |
+|---|---|---|
+| When it runs | During implementation, before code review | Before PR creation |
+| Purpose | Catch gaps early, prompt immediate fix | Backstop if Step 4.3 was skipped or incomplete |
+| On failure | Fix now, continue | Block or defer with linked Issue |
+
 ### Step 5: Push to Remote
 
 ```bash
