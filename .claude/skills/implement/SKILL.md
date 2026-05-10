@@ -107,6 +107,43 @@ Accepted responses:
   MUST be added as a named key in both `EN_MESSAGES` and `JA_MESSAGES` in
   `src/i18n/mod.rs`. Never hardcode English text in output paths.
 
+### Step 4.3: CLI Flag Documentation Gate (conditional)
+
+**Trigger**: Run this gate if the current implementation added, removed, or renamed
+any CLI flag (i.e., any `#[arg(` or `#[clap(` annotation was added/changed in `src/cli/`).
+
+Detect via:
+```bash
+git diff origin/develop...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
+```
+
+If the diff is **non-empty**, verify ALL of the following before proceeding to Step 4.5:
+
+#### A. README.md usage section
+
+- [ ] A new `###` subsection exists for the feature (or an existing section is updated)
+- [ ] At least one ` ```bash ` command example demonstrates the new flag
+- [ ] The Config File Schema Reference table includes the corresponding config key(s)
+- [ ] The Priority and Merge Rules section is updated if the resolution order changed
+
+#### B. README-JP.md
+
+- [ ] All changes from A are translated into Japanese and applied
+
+#### C. Example project config file
+
+- [ ] `examples/sample-project/config/uv-sbom.config.yml` includes the new config key
+  (commented out with the default value, matching the style of existing entries)
+
+#### D. Example project documentation
+
+- [ ] At least one example project README demonstrates the new flag
+  (use `examples/sample-project/README.md` if it exists, otherwise note this as a gap)
+
+**If any checkbox is unchecked**: implement the missing documentation now, before invoking `/code-review`.
+
+**Do NOT skip this gate** even if the implementation plan did not explicitly list documentation files. Every new CLI flag requires all four checks.
+
 ### Step 4.5: Code Review (MANDATORY)
 
 Invoke `/code-review` skill.

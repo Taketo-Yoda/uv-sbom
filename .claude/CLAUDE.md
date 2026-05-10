@@ -62,6 +62,7 @@ Skills contain mandatory pre-flight checks and language requirements that preven
 - **PR #121**: Created in Japanese, `cargo fmt --all -- --check` failed in CI
 - **Issue #59**: `cargo clippy` was run without `-D warnings`, causing CI failure after push
 - **2026-04-18**: v2.2.0 release promoted an empty `[Unreleased]` section. Features added in PRs #441–#483 were never recorded in CHANGELOG. Fixed by Issue #491 (added gate in `/release` Step 3.6 and `/pr` Step 4.5).
+- **2026-05-09 (Issue #511)**: `--check-abandoned` CLI flag was added without updating README.md, README-JP.md, `examples/sample-project/config/uv-sbom.config.yml`, or any example project README. Fixed by Issue #568 (added CLI Flag Documentation Gate in `/implement` Step 4.3 and expanded README Update Checklist trigger).
 
 ### Enforcement
 
@@ -147,7 +148,12 @@ Agents complement skills: the Release Manager agent judges readiness; the `/rele
 
 ## README Update Checklist
 
-When updating README.md, check if the following files also need updates:
+Trigger this checklist when **any** of the following is true:
+- README.md content is being changed directly
+- A new CLI flag or config key was added (see also: /implement Step 4.3)
+- A new user-facing feature was implemented
+
+When triggered, check if the following files also need updates:
 
 | File | Action Required | Notes |
 |------|-----------------|-------|
