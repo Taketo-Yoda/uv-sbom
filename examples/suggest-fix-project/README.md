@@ -119,6 +119,7 @@ uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix \
 | Vulnerable packages | All **direct** dependencies | All **transitive** dependencies |
 | Resolution Guide | Not shown (no transitive CVEs) | Shown with Recommended Action |
 | `--suggest-fix` output | No upgrade advice | Upgradable + Unresolvable cases |
+| `--check-abandoned` demo | ✅ See sample-project README | ❌ Not focused |
 
-Use `sample-project` to explore the basic CVE check and `--check-license` features.
+Use `sample-project` to explore the basic CVE check, `--check-license`, and `--check-abandoned` features.
 Use this project to explore the `--suggest-fix` Upgrade Advisor feature.
