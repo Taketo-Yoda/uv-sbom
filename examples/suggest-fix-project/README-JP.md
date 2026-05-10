@@ -104,13 +104,15 @@ uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix \
 | urllib3 | 2.0.4 | 2.6.0 | 🟠 HIGH | requests (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 which does not satisfy >= 2.6.0 | GHSA-2xpw-w6gg-jr37 |
 ```
 
-## `sample-project` との比較
+## 他のサンプルとの比較
 
-| | `examples/sample-project` | `examples/suggest-fix-project` |
-|---|---|---|
-| 脆弱なパッケージ | すべて**直接**依存関係 | すべて**推移的**依存関係 |
-| Resolution Guide | 非表示（推移的 CVE なし） | Recommended Action 付きで表示 |
-| `--suggest-fix` の出力 | アップグレード提案なし | Upgradable + Unresolvable のケース |
+| | `examples/sample-project` | `examples/suggest-fix-project` | `examples/abandoned-packages-project` |
+|---|---|---|---|
+| 脆弱なパッケージ | すべて**直接**依存関係 | すべて**推移的**依存関係 | なし（放棄チェックに特化） |
+| Resolution Guide | 非表示（推移的 CVE なし） | Recommended Action 付きで表示 | 非表示 |
+| `--suggest-fix` の出力 | アップグレード提案なし | Upgradable + Unresolvable のケース | 対象外 |
+| `--check-abandoned` デモ | 一部 | ❌ 対象外 | ✅ あり（4パッケージ、常にフラグ） |
 
 基本的な CVE チェックや `--check-license` 機能を試す場合は `sample-project` を使用してください。
 `--suggest-fix` アップグレードアドバイザー機能を試す場合はこのプロジェクトを使用してください。
+`--check-abandoned` 機能を確実な出力で試す場合は `abandoned-packages-project` を使用してください。
