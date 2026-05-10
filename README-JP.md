@@ -20,6 +20,7 @@
 - 📊 複数のフォーマットに対応:
   - **CycloneDX 1.6** JSON形式（標準SBOM形式）
   - **Markdown**形式（直接依存と推移的依存を明確に分離）
+- 🔍 **廃止パッケージ検出** - 設定可能な日数（デフォルト: 730日）以内にPyPI上で新しいリリースがないパッケージを特定し、セキュリティパッチが行われていないメンテナンス停止の依存関係を把握できます
 - 🚀 高速でスタンドアロン - Rustで実装
 - 💾 標準出力またはファイルへ出力
 - 🛡️ 堅牢なエラーハンドリングと親切なエラーメッセージ・提案
@@ -315,6 +316,8 @@ license_policy:
 | `license_policy.allow` | string[] | No | 許可するライセンスパターン（ワイルドカード対応） |
 | `license_policy.deny` | string[] | No | 拒否するライセンスパターン（ワイルドカード対応） |
 | `license_policy.unknown` | string | No | 不明ライセンスの処理（`warn` / `deny` / `allow`） |
+| `check_abandoned` | bool | No | 廃止パッケージ検出を有効化（オプトイン、デフォルト: false） |
+| `abandoned_threshold_days` | integer | No | 廃止パッケージ検出の非アクティブ期間しきい値（日数、デフォルト: 730） |
 
 #### 優先度とマージルール
 
@@ -324,6 +327,7 @@ license_policy:
 - **`ignore_cves`** はCLI（`--ignore-cve`）と設定ファイルの両方から**マージ**され、IDで重複が除去されます（重複時はCLIの指定が優先）
 - **`check_license`** はCLIフラグまたは設定ファイルのいずれかで設定されていれば有効化（論理OR、`check_cve`と同様）
 - **`--license-allow`** と **`--license-deny`** CLIオプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を**完全に上書き**します（マージされません）
+- **`check_abandoned`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-abandoned` または設定ファイルの `check_abandoned: true` で有効化できます。`abandoned_threshold_days` の値はCLI > 設定ファイル > デフォルト（730）の順に解決されます。
 
 ### 特定のCVEを無視する
 
@@ -392,6 +396,48 @@ uv-sbom --check-license --severity-threshold high
   - `deny`: 不明ライセンスをポリシー違反として扱う
   - `allow`: 不明ライセンスを黙って許可
 - **終了コード**: ポリシー違反が検出された場合、終了コード1を返す
+
+### 廃止パッケージ検出
+
+`--check-abandoned` オプションを使用して、設定可能な日数以内にPyPI上で新しいリリースがないパッケージを特定できます。これにより、CVEが報告されていなくても長期的なリスクをもたらす可能性のあるメンテナンス停止の依存関係を把握できます。
+
+```bash
+# 廃止パッケージ検出を有効化（デフォルトしきい値: 730日 / 約2年）
+uv-sbom --check-abandoned --format markdown
+
+# カスタム非アクティブしきい値を使用（例: 365日 / 1年）
+uv-sbom --check-abandoned --abandoned-threshold-days 365
+
+# 脆弱性チェックとライセンスチェックと組み合わせ
+uv-sbom --check-abandoned --check-license --severity-threshold high
+```
+
+**動作の仕組み:**
+- パッケージごとにPyPIパッケージレベルエンドポイント（`https://pypi.org/pypi/{name}/json`）を照会します
+- 最新リリース日を設定されたしきい値を引いた今日の日付と比較します
+- しきい値を超えたパッケージはMarkdown出力の**Abandoned Packages**セクションに表示されます
+- パッケージのPyPIメタデータが取得できない場合、実行を中断せずにスキップします
+- ネットワークアクセスが必要で、パッケージごとに1回のAPIコールが追加されます
+
+**出力:**
+- **サマリーテーブル行**: カウント > 0 の場合 `| Abandoned packages | N | ⚠️ |`、0の場合 `✅`
+- **Abandoned Packagesセクション**: パッケージ名、バージョン、最終リリース日、非アクティブ日数、種別（Direct / Transitive）のテーブル
+- `--check-abandoned` を指定しない場合、セクションは完全に省略され、サマリー行には `_Abandoned package check skipped._` と表示されます
+
+**設定ファイル相当:**
+```yaml
+check_abandoned: true
+abandoned_threshold_days: 365  # オプション、デフォルト: 730
+```
+
+**CI統合例:**
+```yaml
+# GitHub Actions - 廃止パッケージ検出
+- name: Abandoned Package Detection
+  run: uv-sbom --check-abandoned --abandoned-threshold-days 730 --format markdown
+```
+
+> **注:** 廃止パッケージデータは現在Markdownのみで利用可能です。CycloneDX JSON出力は影響を受けません。
 
 ### 脆弱性しきい値オプション
 
@@ -465,6 +511,12 @@ CI/CDパイプライン統合には脆弱性しきい値を使用します：
 
 - name: Combined Security and License Check
   run: uv-sbom --check-license --severity-threshold high
+```
+
+```yaml
+# GitHub Actions - 廃止パッケージ検出
+- name: Abandoned Package Detection
+  run: uv-sbom --check-abandoned --format markdown
 ```
 
 ```yaml
