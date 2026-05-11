@@ -21,10 +21,8 @@ impl DependencyDiffAnalyzer {
     /// Compare two flat lists of packages and produce a fully populated `DependencyDiff`.
     #[allow(dead_code)]
     pub fn analyze(base: &[Package], current: &[Package]) -> DependencyDiff {
-        let base_map: HashMap<&str, &Package> =
-            base.iter().map(|p| (p.name(), p)).collect();
-        let current_map: HashMap<&str, &Package> =
-            current.iter().map(|p| (p.name(), p)).collect();
+        let base_map: HashMap<&str, &Package> = base.iter().map(|p| (p.name(), p)).collect();
+        let current_map: HashMap<&str, &Package> = current.iter().map(|p| (p.name(), p)).collect();
 
         let mut changes: Vec<PackageChange> = Vec::new();
 
@@ -125,9 +123,8 @@ fn version_jump(old: Option<&str>, new: Option<&str>) -> u64 {
         (Some(o), Some(n)) => (o, n),
         _ => return 0,
     };
-    let parse = |v: &str| -> Vec<u64> {
-        v.split('.').filter_map(|s| s.parse::<u64>().ok()).collect()
-    };
+    let parse =
+        |v: &str| -> Vec<u64> { v.split('.').filter_map(|s| s.parse::<u64>().ok()).collect() };
     let o = parse(old);
     let n = parse(new);
     if o.is_empty() || n.is_empty() {
@@ -162,10 +159,7 @@ mod tests {
         assert_eq!(diff.changes[0].change_type, ChangeType::Added);
         assert_eq!(diff.changes[0].package_name, "requests");
         assert_eq!(diff.changes[0].old_version, None);
-        assert_eq!(
-            diff.changes[0].new_version,
-            Some("2.31.0".to_string())
-        );
+        assert_eq!(diff.changes[0].new_version, Some("2.31.0".to_string()));
         assert_eq!(diff.summary.added, 1);
         assert_eq!(diff.summary.removed, 0);
         assert_eq!(diff.summary.updated, 0);
@@ -191,14 +185,8 @@ mod tests {
         let diff = DependencyDiffAnalyzer::analyze(&base, &current);
         assert_eq!(diff.changes.len(), 1);
         assert_eq!(diff.changes[0].change_type, ChangeType::Updated);
-        assert_eq!(
-            diff.changes[0].old_version,
-            Some("1.26.5".to_string())
-        );
-        assert_eq!(
-            diff.changes[0].new_version,
-            Some("2.0.7".to_string())
-        );
+        assert_eq!(diff.changes[0].old_version, Some("1.26.5".to_string()));
+        assert_eq!(diff.changes[0].new_version, Some("2.0.7".to_string()));
         assert_eq!(diff.summary.updated, 1);
     }
 
@@ -209,14 +197,8 @@ mod tests {
         let diff = DependencyDiffAnalyzer::analyze(&base, &current);
         assert_eq!(diff.changes.len(), 1);
         assert_eq!(diff.changes[0].change_type, ChangeType::Unchanged);
-        assert_eq!(
-            diff.changes[0].old_version,
-            Some("2024.2.2".to_string())
-        );
-        assert_eq!(
-            diff.changes[0].new_version,
-            Some("2024.2.2".to_string())
-        );
+        assert_eq!(diff.changes[0].old_version, Some("2024.2.2".to_string()));
+        assert_eq!(diff.changes[0].new_version, Some("2024.2.2".to_string()));
         assert_eq!(diff.summary.unchanged, 1);
     }
 
@@ -239,7 +221,11 @@ mod tests {
         assert_eq!(diff.summary.updated, 1);
         assert_eq!(diff.summary.removed, 1);
         assert_eq!(diff.summary.unchanged, 2);
-        let names: Vec<&str> = diff.changes.iter().map(|c| c.package_name.as_str()).collect();
+        let names: Vec<&str> = diff
+            .changes
+            .iter()
+            .map(|c| c.package_name.as_str())
+            .collect();
         assert_eq!(names, vec!["e", "b", "c", "a", "d"]);
         assert_eq!(diff.changes[0].change_type, ChangeType::Added);
         assert_eq!(diff.changes[1].change_type, ChangeType::Updated);
@@ -262,7 +248,11 @@ mod tests {
         ];
         let diff = DependencyDiffAnalyzer::analyze(&base, &current);
         assert_eq!(diff.summary.updated, 3);
-        let names: Vec<&str> = diff.changes.iter().map(|c| c.package_name.as_str()).collect();
+        let names: Vec<&str> = diff
+            .changes
+            .iter()
+            .map(|c| c.package_name.as_str())
+            .collect();
         assert_eq!(names, vec!["major-bump", "minor-bump", "patch-bump"]);
     }
 
