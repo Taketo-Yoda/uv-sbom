@@ -53,11 +53,10 @@ pub fn parse_lockfile_content(content: &str, project_path: &Path) -> Result<Lock
         package: Vec<UvPackage>,
     }
 
-    let lockfile: UvLock =
-        toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
-            path: project_path.join("uv.lock"),
-            details: e.to_string(),
-        })?;
+    let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
+        path: project_path.join("uv.lock"),
+        details: e.to_string(),
+    })?;
 
     let mut packages = Vec::new();
     let mut dependency_map = HashMap::new();
@@ -109,24 +108,20 @@ pub fn parse_lockfile_content_for_member(
         package: Vec<UvPackage>,
     }
 
-    let lockfile: UvLock =
-        toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
-            path: project_path.join("uv.lock"),
-            details: e.to_string(),
-        })?;
+    let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
+        path: project_path.join("uv.lock"),
+        details: e.to_string(),
+    })?;
 
     let mut full_dep_map: HashMap<String, Vec<String>> = HashMap::new();
     let mut pkg_lookup: HashMap<String, (String, String)> = HashMap::new();
     let mut member_direct_deps: Option<Vec<String>> = None;
 
     for pkg in &lockfile.package {
-        let deps = collect_all_deps(
-            &pkg.dependencies,
-            pkg.dev_dependencies.as_ref(),
-        );
+        let deps = collect_all_deps(&pkg.dependencies, pkg.dev_dependencies.as_ref());
 
-        let is_member_root = pkg.name == member_name
-            && pkg.source.as_ref().map(|s| s.is_local()).unwrap_or(false);
+        let is_member_root =
+            pkg.name == member_name && pkg.source.as_ref().map(|s| s.is_local()).unwrap_or(false);
 
         if is_member_root {
             member_direct_deps = Some(deps.clone());

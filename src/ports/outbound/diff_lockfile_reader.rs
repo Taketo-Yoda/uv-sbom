@@ -27,9 +27,5 @@ pub trait DiffLockfileReader {
     /// # Errors
     /// Returns an error if the source cannot be resolved, the lockfile cannot
     /// be read, or TOML parsing fails.
-    fn read_base_packages(
-        &self,
-        source: &DiffSource,
-        project_path: &Path,
-    ) -> Result<Vec<Package>>;
+    fn read_base_packages(&self, source: &DiffSource, project_path: &Path) -> Result<Vec<Package>>;
 }
