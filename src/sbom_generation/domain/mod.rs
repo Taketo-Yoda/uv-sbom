@@ -1,3 +1,4 @@
+pub mod dependency_diff;
 pub mod dependency_graph;
 pub mod license_info;
 pub mod license_policy;
@@ -8,6 +9,9 @@ pub mod services;
 pub mod upgrade_recommendation;
 pub mod vulnerability;
 
+// Note: These will be used in subsequent subtasks of the dependency-diff feature (#224)
+#[allow(unused_imports)]
+pub use dependency_diff::{ChangeType, DependencyDiff, DiffSummary, PackageChange};
 pub use dependency_graph::DependencyGraph;
 pub use license_info::LicenseInfo;
 // Note: These types are used within the application layer via full paths
@@ -24,6 +28,9 @@ pub use sbom_metadata::SbomMetadata;
 // Note: ResolutionAnalyzer will be used in subsequent subtasks (Issue #221 sub-tasks 3-4)
 #[allow(unused_imports)]
 pub use services::ResolutionAnalyzer;
+// Note: These will be used in subsequent subtasks of the dependency-diff feature (#224)
+#[allow(unused_imports)]
+pub use services::DependencyDiffAnalyzer;
 // Note: These will be used in subsequent subtasks (Issue #94, #95)
 #[allow(unused_imports)]
 pub use services::{ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker};
