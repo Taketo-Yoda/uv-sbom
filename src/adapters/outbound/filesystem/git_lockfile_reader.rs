@@ -43,11 +43,7 @@ impl DiffLockfileReader for GitLockfileReader {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     return Err(SbomError::FileReadError {
                         path: project_path.join("uv.lock"),
-                        details: format!(
-                            "git show {}:uv.lock failed: {}",
-                            ref_name,
-                            stderr.trim()
-                        ),
+                        details: format!("git show {}:uv.lock failed: {}", ref_name, stderr.trim()),
                     }
                     .into());
                 }
@@ -63,8 +59,7 @@ impl DiffLockfileReader for GitLockfileReader {
                 Ok(packages)
             }
             DiffSource::FilePath(path) => {
-                let content =
-                    read_file_with_security(path, "uv.lock (diff base)", MAX_FILE_SIZE)?;
+                let content = read_file_with_security(path, "uv.lock (diff base)", MAX_FILE_SIZE)?;
                 let (packages, _) = parse_lockfile_content(&content, project_path)?;
                 Ok(packages)
             }
@@ -101,10 +96,7 @@ fn validate_git_ref(ref_name: &str) -> Result<()> {
     {
         return Err(SbomError::SecurityError {
             path: PathBuf::from(ref_name),
-            reason: format!(
-                "Git ref '{}' contains invalid character '{}'",
-                ref_name, c
-            ),
+            reason: format!("Git ref '{}' contains invalid character '{}'", ref_name, c),
             hint: "Only alphanumeric characters and '.', '_', '/', '-' are allowed in git refs."
                 .to_string(),
         }
@@ -169,7 +161,10 @@ mod tests {
     fn test_validate_git_ref_rejects_empty_string() {
         let result = validate_git_ref("");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("must not be empty"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must not be empty"));
     }
 
     #[test]
