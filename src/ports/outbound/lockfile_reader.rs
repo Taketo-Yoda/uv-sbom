@@ -48,9 +48,9 @@ pub trait LockfileReader {
     /// Parse the lockfile and return only packages reachable from the given member.
     ///
     /// Performs a BFS traversal starting from the `[[package]]` entry whose
-    /// `name == member_name` and `source.editable` is set, collecting all
-    /// transitively reachable packages. The member package itself is excluded
-    /// from the result.
+    /// `name == member_name` and `source.editable` (uv < 0.5) or `source.virtual`
+    /// (uv >= 0.5) is set, collecting all transitively reachable packages. The member
+    /// package itself is excluded from the result.
     ///
     /// # Arguments
     /// * `project_path` - Path to the project directory containing uv.lock
@@ -64,7 +64,7 @@ pub trait LockfileReader {
     /// Returns an error if:
     /// - The uv.lock file does not exist or cannot be read
     /// - The TOML parsing fails
-    /// - No package with `name == member_name` and `source.editable` set is found
+    /// - No package with `name == member_name` and `source.editable` or `source.virtual` set is found
     fn read_and_parse_lockfile_for_member(
         &self,
         project_path: &Path,

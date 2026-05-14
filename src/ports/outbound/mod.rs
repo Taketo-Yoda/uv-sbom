@@ -2,6 +2,7 @@
 ///
 /// These ports define the interfaces that the application core uses
 /// to interact with external systems (file system, network, console, etc.).
+pub mod diff_lockfile_reader;
 pub mod enriched_package;
 pub mod formatter;
 pub mod license_repository;
@@ -14,6 +15,9 @@ pub mod uv_lock_simulator;
 pub mod vulnerability_repository;
 pub mod workspace_reader;
 
+// Note: Will be used in a subsequent subtask of the dependency-diff feature (#224)
+#[allow(unused_imports)]
+pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
 pub use enriched_package::EnrichedPackage;
 pub use formatter::SbomFormatter;
 pub use license_repository::{LicenseRepository, PyPiMetadata};
