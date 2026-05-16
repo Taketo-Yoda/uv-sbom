@@ -26,12 +26,7 @@ impl DiffMarkdownFormatter {
 
         writeln!(out, "## Dependency Diff Report").unwrap();
         writeln!(out).unwrap();
-        writeln!(
-            out,
-            "Compared: `{}` vs current `uv.lock`",
-            diff.base_ref
-        )
-        .unwrap();
+        writeln!(out, "Compared: `{}` vs current `uv.lock`", diff.base_ref).unwrap();
         writeln!(out).unwrap();
 
         writeln!(out, "### Summary").unwrap();
