@@ -15,7 +15,7 @@ pub mod uv_lock_simulator;
 pub mod vulnerability_repository;
 pub mod workspace_reader;
 
-// Note: Will be used in a subsequent subtask of the dependency-diff feature (#224)
+// Note: Will be wired to the binary in a subsequent CLI integration subtask of #224.
 #[allow(unused_imports)]
 pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
 pub use enriched_package::EnrichedPackage;

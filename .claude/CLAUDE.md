@@ -187,7 +187,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `src/ports/outbound/` | Outbound port traits (e.g. repository, network interfaces) |
 | `src/adapters/inbound/` | Inbound adapter implementations |
 | `src/adapters/outbound/network/` | PyPI and OSV HTTP clients |
-| `src/adapters/outbound/formatters/` | CycloneDX and Markdown output formatters |
+| `src/adapters/outbound/formatters/` | CycloneDX, Markdown, and Diff (Markdown/JSON) output formatters |
 | `src/adapters/outbound/filesystem/` | File read/write adapters |
 | `src/adapters/outbound/uv/` | uv.lock file parsing |
 | `src/adapters/outbound/console/` | Console/progress reporter adapter |
@@ -204,6 +204,8 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `SbomRequest` / `SbomResponse` | `src/application/dto/` | Input/output for the main use case |
 | `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555 |
 | `CheckAbandonedPackagesUseCase` | `src/application/use_cases/check_abandoned_packages.rs` | Fetches PyPI maintenance info for all packages with progress bar and soft-fail per package |
+| `DiffRequest` | `src/application/dto/diff_request.rs` | Input DTO for the diff use case (source, project_path, format, check_cve) |
+| `GenerateDiffUseCase<LR,DLR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer; CLI integration pending |
 | `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
 
 ### Important Invariants
