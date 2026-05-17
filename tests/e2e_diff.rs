@@ -9,8 +9,9 @@ mod diff_tests {
     fn setup_diff_temp() -> (TempDir, std::path::PathBuf) {
         let temp = TempDir::new().expect("failed to create temp dir");
         let after_lock = std::path::Path::new("tests/fixtures/sample_uv_lock_after.lock");
-        let before_lock =
-            std::path::Path::new("tests/fixtures/sample_uv_lock_before.lock").canonicalize().expect("before lock must exist");
+        let before_lock = std::path::Path::new("tests/fixtures/sample_uv_lock_before.lock")
+            .canonicalize()
+            .expect("before lock must exist");
 
         fs::copy(after_lock, temp.path().join("uv.lock")).unwrap();
 
