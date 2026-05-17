@@ -60,7 +60,20 @@ uv-sbom -p examples/sample-project --check-abandoned \
   --abandoned-threshold-days 365 -f markdown
 ```
 
-### Step 4: All checks via config file
+### Step 4: Dependency diff against a git ref
+
+```bash
+# Compare the sample-project lockfile against the main branch
+uv-sbom --diff main -p examples/sample-project -f markdown
+
+# Compare against a file (e.g., a saved snapshot of uv.lock)
+uv-sbom --diff /path/to/old/uv.lock -p examples/sample-project -f json
+```
+
+**What you will see:** A diff report listing Added, Removed, Updated, and
+Unchanged packages between the base ref and the current lockfile.
+
+### Step 5: All checks via config file
 
 ```bash
 uv-sbom -p examples/sample-project -f markdown \
