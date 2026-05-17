@@ -111,10 +111,6 @@ fn validate_git_ref(ref_name: &str) -> Result<()> {
 /// If `arg` resolves to an existing regular file, returns `DiffSource::FilePath`.
 /// Otherwise returns `DiffSource::GitRef`. Note: relative paths are resolved
 /// against the process working directory, not the project path.
-// Dead in the bin target until wired to CLI in a subsequent subtask of #224.
-// #[expect(dead_code)] cannot be used: the lib target does not see this as dead code
-// (pub fn is reachable by library consumers), making the expectation unfulfilled there.
-#[allow(dead_code)]
 pub fn determine_diff_source(arg: &str) -> DiffSource {
     let path = Path::new(arg);
     if path.exists() && path.is_file() {

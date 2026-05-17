@@ -500,6 +500,40 @@ uv-sbom --format markdown --verify-links --output SBOM.md
 - Network errors gracefully fall back to plain text (no crash)
 - Requests are executed in parallel (max 10 concurrent) for performance
 
+### Dependency Diff
+
+Use the `--diff` option to compare the current `uv.lock` against a previous version. This is useful for reviewing what changed between branches, tags, or arbitrary lockfile snapshots before merging.
+
+```bash
+# Compare against a git branch or tag
+uv-sbom --diff main
+uv-sbom --diff v1.2.0
+uv-sbom --diff abc1234    # abbreviated commit SHA
+
+# Compare against a file path (absolute or relative to CWD)
+uv-sbom --diff /path/to/old/uv.lock
+
+# Output as Markdown report
+uv-sbom --diff main --format markdown --output diff.md
+
+# Output as JSON
+uv-sbom --diff main --format json
+```
+
+**Auto-detection:** If the argument resolves to an existing file on disk it is treated as a file path; otherwise it is treated as a git ref. Relative paths are resolved against the process working directory (not `--path`).
+
+**Git ref validation:** Only `[a-zA-Z0-9._/-]` characters are allowed in git refs. Refs starting with `-` are also rejected. This prevents command injection.
+
+**Mutual exclusion:** `--diff` cannot be combined with `--workspace` or `--init`.
+
+**CVE check:** By default CVE checking is enabled for added and updated packages (use `--no-check-cve` to disable). When a vulnerability is found, the process exits with code `1`.
+
+**CI example:**
+```bash
+# Fail the build if new dependencies introduced by this PR have known CVEs
+uv-sbom --diff origin/main --format markdown --output diff.md
+```
+
 ### CI Integration
 
 Use vulnerability thresholds for CI/CD pipeline integration:

@@ -1,8 +1,3 @@
-// Dead in the bin target until wired to CLI in a subsequent subtask of #224.
-// #[expect(dead_code)] cannot be used: the lib target does not see this as dead code
-// (pub items are reachable by library consumers), making the expectation unfulfilled there.
-#![allow(dead_code)]
-
 use serde::Serialize;
 
 use crate::sbom_generation::domain::dependency_diff::{ChangeType, DependencyDiff};
