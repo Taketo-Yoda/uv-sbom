@@ -4,8 +4,6 @@ use crate::sbom_generation::domain::dependency_diff::DependencyDiff;
 use crate::sbom_generation::domain::services::DependencyDiffAnalyzer;
 use crate::shared::Result;
 
-// Wired to the binary in a subsequent CLI integration subtask of #224.
-#[allow(dead_code)]
 pub struct GenerateDiffUseCase<LR, DLR>
 where
     LR: LockfileReader,
@@ -15,7 +13,6 @@ where
     diff_reader: DLR,
 }
 
-#[allow(dead_code)]
 impl<LR, DLR> GenerateDiffUseCase<LR, DLR>
 where
     LR: LockfileReader,
@@ -123,7 +120,6 @@ mod tests {
         DiffRequest {
             source: DiffSource::GitRef(ref_name.to_string()),
             project_path: PathBuf::from("/project"),
-            format: crate::application::dto::OutputFormat::Json,
             check_cve: false,
         }
     }
@@ -186,7 +182,6 @@ mod tests {
         let req = DiffRequest {
             source: DiffSource::FilePath(PathBuf::from("/tmp/uv.lock")),
             project_path: PathBuf::from("/project"),
-            format: crate::application::dto::OutputFormat::Json,
             check_cve: false,
         };
         let diff = uc.execute(req).unwrap();

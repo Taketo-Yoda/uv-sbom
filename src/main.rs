@@ -7,21 +7,24 @@ mod sbom_generation;
 mod shared;
 
 use adapters::outbound::console::StderrProgressReporter;
-use adapters::outbound::filesystem::FileSystemReader;
+use adapters::outbound::filesystem::{determine_diff_source, FileSystemReader, GitLockfileReader};
+use adapters::outbound::formatters::{DiffJsonFormatter, DiffMarkdownFormatter};
 use adapters::outbound::network::{
     CachingPyPiLicenseRepository, OsvClient, PyPiLicenseRepository, PyPiMaintenanceRepository,
 };
 use adapters::outbound::uv::UvWorkspaceReader;
-use application::dto::{OutputFormat, SbomRequest};
+use application::dto::{DiffRequest, OutputFormat, SbomRequest};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::read_models::SbomReadModelBuilder;
-use application::use_cases::GenerateSbomUseCase;
+use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase};
 use clap::Parser;
 use cli::config_resolver::{load_config, merge_config};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::Args;
 use i18n::Messages;
-use ports::outbound::{LockfileParseResult, LockfileReader, ProjectConfigReader, WorkspaceReader};
+use ports::outbound::{
+    DiffSource, LockfileParseResult, LockfileReader, ProjectConfigReader, WorkspaceReader,
+};
 use shared::error::ExitCode;
 use shared::Result;
 use std::path::{Path, PathBuf};
@@ -122,6 +125,30 @@ async fn main() {
             }
             Err(e) => {
                 eprintln!("Error: {}", e);
+                process::exit(ExitCode::ApplicationError.as_i32());
+            }
+        }
+    }
+
+    // Handle --diff before normal flow
+    if let Some(ref diff_arg) = args.diff {
+        let source = determine_diff_source(diff_arg);
+        match run_diff(args, source).await {
+            Ok(has_vulnerabilities) => {
+                if has_vulnerabilities {
+                    process::exit(ExitCode::VulnerabilitiesDetected.as_i32());
+                }
+                process::exit(ExitCode::Success.as_i32());
+            }
+            Err(e) => {
+                eprintln!("\n❌ An error occurred:\n");
+                eprintln!("{}", e);
+                let mut source = e.source();
+                while let Some(err) = source {
+                    eprintln!("\nCaused by: {}", err);
+                    source = err.source();
+                }
+                eprintln!();
                 process::exit(ExitCode::ApplicationError.as_i32());
             }
         }
@@ -471,4 +498,49 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     eprintln!("{}", "─".repeat(60));
 
     Ok(())
+}
+
+/// Runs --diff mode: compares the current uv.lock against a base source.
+///
+/// Returns `Ok(true)` if vulnerabilities were detected in new/updated packages
+/// and CVE checking is enabled, `Ok(false)` otherwise.
+///
+/// Note: CVE enrichment is currently a no-op in `GenerateDiffUseCase::execute`,
+/// so this will always return `Ok(false)` until a follow-up issue wires it in.
+async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
+    display_banner();
+
+    let locale = args.lang;
+    let project_dir = args.path.as_deref().unwrap_or(".");
+    let project_path = PathBuf::from(project_dir);
+    validate_project_path(&project_path)?;
+
+    let config = load_config(&args, &project_path)?;
+    let merged = merge_config(&args, &config);
+
+    let check_cve = merged.check_cve;
+    let request = DiffRequest {
+        source,
+        project_path: project_path.clone(),
+        check_cve,
+    };
+
+    // execute() is synchronous — call directly without .await
+    let use_case = GenerateDiffUseCase::new(FileSystemReader::new(), GitLockfileReader::new());
+    let diff = use_case.execute(request)?;
+
+    let formatted = match merged.format {
+        OutputFormat::Markdown => DiffMarkdownFormatter::new().format(&diff),
+        OutputFormat::Json => DiffJsonFormatter::new().format(&diff)?,
+    };
+
+    let presenter_type = if let Some(output_path) = args.output {
+        PresenterType::File(PathBuf::from(output_path))
+    } else {
+        PresenterType::Stdout
+    };
+    let presenter = PresenterFactory::create(presenter_type, locale);
+    presenter.present(&formatted)?;
+
+    Ok(diff.changes.iter().any(|c| c.vulnerability_count > 0) && check_cve)
 }

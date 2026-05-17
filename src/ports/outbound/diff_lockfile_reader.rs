@@ -3,8 +3,6 @@ use crate::shared::Result;
 use std::path::{Path, PathBuf};
 
 /// Identifies where a base `uv.lock` should be read from for diff comparison.
-// Wired to the binary in a subsequent CLI integration subtask of #224.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiffSource {
     /// A git ref (branch, tag, or commit SHA). The lockfile is read from
@@ -16,12 +14,6 @@ pub enum DiffSource {
 
 /// Outbound port for retrieving a "base" set of packages to diff against
 /// the current project's `uv.lock`.
-///
-/// Implementations:
-/// - `GitLockfileReader` (future, Issue #224) for `DiffSource::GitRef`
-/// - A filesystem-backed reader (future) for `DiffSource::FilePath`
-// Wired to the binary in a subsequent CLI integration subtask of #224.
-#[allow(dead_code)]
 pub trait DiffLockfileReader {
     /// Read the lockfile identified by `source` (interpreted relative to
     /// `project_path` when applicable) and return its packages.

@@ -496,6 +496,40 @@ uv-sbom --format markdown --verify-links --output SBOM.md
 - ネットワークエラー時はプレーンテキストにフォールバック（クラッシュなし）
 - リクエストは並列実行（最大10同時接続）でパフォーマンスを確保
 
+### 依存関係Diff
+
+`--diff` オプションを使用して、現在の `uv.lock` を過去のバージョンと比較します。ブランチ、タグ、任意のロックファイルスナップショットとの差分をマージ前に確認するのに便利です。
+
+```bash
+# Gitブランチやタグと比較
+uv-sbom --diff main
+uv-sbom --diff v1.2.0
+uv-sbom --diff abc1234    # 短縮コミットSHA
+
+# ファイルパスとの比較（CWDからの絶対または相対パス）
+uv-sbom --diff /path/to/old/uv.lock
+
+# Markdownレポートとして出力
+uv-sbom --diff main --format markdown --output diff.md
+
+# JSONとして出力
+uv-sbom --diff main --format json
+```
+
+**自動判別:** 引数がディスク上の既存ファイルとして解決される場合はファイルパスとして扱い、そうでない場合はgit refとして扱います。相対パスはプロセスのワーキングディレクトリ（`--path` ではなく）から解決されます。
+
+**git ref検証:** git refに使用できる文字は `[a-zA-Z0-9._/-]` のみです。`-` で始まるrefも拒否されます。これによりコマンドインジェクションを防止します。
+
+**排他制約:** `--diff` は `--workspace` または `--init` と同時に使用できません。
+
+**CVEチェック:** デフォルトでは追加・更新されたパッケージのCVEチェックが有効です（`--no-check-cve` で無効化）。脆弱性が見つかった場合、プロセスはコード `1` で終了します。
+
+**CI例:**
+```bash
+# このPRで新規追加された依存関係に既知のCVEがある場合にビルドを失敗させる
+uv-sbom --diff origin/main --format markdown --output diff.md
+```
+
 ### CI統合
 
 CI/CDパイプライン統合には脆弱性しきい値を使用します：

@@ -98,6 +98,10 @@ pub struct Args {
     #[arg(long, conflicts_with = "output")]
     pub workspace: bool,
 
+    /// Compare current uv.lock against a base (git ref, tag, commit SHA, or path to a uv.lock file)
+    #[arg(long, value_name = "REF_OR_PATH", conflicts_with_all = ["workspace", "init"])]
+    pub diff: Option<String>,
+
     /// Output language for human-readable formats: en (default) or ja
     #[arg(long, default_value = "en", value_parser = parse_lang)]
     pub lang: Locale,
