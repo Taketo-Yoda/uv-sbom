@@ -204,6 +204,8 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `SbomRequest` / `SbomResponse` | `src/application/dto/` | Input/output for the main use case |
 | `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555 |
 | `CheckAbandonedPackagesUseCase` | `src/application/use_cases/check_abandoned_packages.rs` | Fetches PyPI maintenance info for all packages with progress bar and soft-fail per package |
+| `DiffRequest` | `src/application/dto/diff_request.rs` | Input DTO for the diff use case (source, project_path, format, check_cve) |
+| `GenerateDiffUseCase<LR,DLR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer; CLI integration pending |
 | `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
 
 ### Important Invariants
