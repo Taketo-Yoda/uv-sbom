@@ -10,10 +10,10 @@ use crate::sbom_generation::domain::package::Package;
 ///
 /// All inputs and outputs are pure value objects — no I/O is performed.
 ///
-/// Note: `base_ref` is set to `"base"` in this implementation. Subsequent
-/// subtasks of the dependency-diff feature (#224) will introduce an entry
-/// point that accepts the actual git ref.
-// Foundation service for the dependency-diff feature; used by subsequent subtasks of #224.
+/// Note: `base_ref` is set to `"base"` in this implementation. Callers
+/// (e.g., `GenerateDiffUseCase`) override `base_ref` after calling `analyze`
+/// to reflect the actual `DiffSource` label.
+// Wired to the binary in a subsequent CLI integration subtask of #224.
 #[allow(dead_code)]
 pub struct DependencyDiffAnalyzer;
 

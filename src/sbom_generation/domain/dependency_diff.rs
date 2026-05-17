@@ -1,4 +1,4 @@
-// Foundation types for the dependency-diff feature; used by subsequent subtasks of #224.
+// Types for the dependency-diff feature; wired to the binary in a subsequent CLI integration subtask of #224.
 #![allow(dead_code)]
 
 /// Classification of how a package changed between two dependency snapshots.

@@ -187,7 +187,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `src/ports/outbound/` | Outbound port traits (e.g. repository, network interfaces) |
 | `src/adapters/inbound/` | Inbound adapter implementations |
 | `src/adapters/outbound/network/` | PyPI and OSV HTTP clients |
-| `src/adapters/outbound/formatters/` | CycloneDX and Markdown output formatters |
+| `src/adapters/outbound/formatters/` | CycloneDX, Markdown, and Diff (Markdown/JSON) output formatters |
 | `src/adapters/outbound/filesystem/` | File read/write adapters |
 | `src/adapters/outbound/uv/` | uv.lock file parsing |
 | `src/adapters/outbound/console/` | Console/progress reporter adapter |

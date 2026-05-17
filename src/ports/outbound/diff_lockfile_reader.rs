@@ -3,6 +3,7 @@ use crate::shared::Result;
 use std::path::{Path, PathBuf};
 
 /// Identifies where a base `uv.lock` should be read from for diff comparison.
+// Wired to the binary in a subsequent CLI integration subtask of #224.
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiffSource {
@@ -19,6 +20,7 @@ pub enum DiffSource {
 /// Implementations:
 /// - `GitLockfileReader` (future, Issue #224) for `DiffSource::GitRef`
 /// - A filesystem-backed reader (future) for `DiffSource::FilePath`
+// Wired to the binary in a subsequent CLI integration subtask of #224.
 #[allow(dead_code)]
 pub trait DiffLockfileReader {
     /// Read the lockfile identified by `source` (interpreted relative to
