@@ -334,7 +334,8 @@ mod tests {
 
         assert_eq!(packages.len(), 1);
         assert_eq!(
-            packages[0].name(), "sub-pkg",
+            packages[0].name(),
+            "sub-pkg",
             "expected the subdirectory lockfile to be read, not the repo-root lockfile"
         );
     }
@@ -356,10 +357,7 @@ mod tests {
 
         let reader = GitLockfileReader::new();
         let packages = reader
-            .read_base_packages(
-                &DiffSource::GitRef("v-root".to_string()),
-                repo.path(),
-            )
+            .read_base_packages(&DiffSource::GitRef("v-root".to_string()), repo.path())
             .expect("repo-root project should still work");
         assert_eq!(packages[0].name(), "certifi");
     }
