@@ -28,7 +28,7 @@ impl DiffLockfileReader for GitLockfileReader {
                 validate_git_ref(ref_name)?;
 
                 let output = Command::new("git")
-                    .args(["show", &format!("{}:uv.lock", ref_name)])
+                    .args(["show", &format!("{}:./uv.lock", ref_name)])
                     .current_dir(project_path)
                     .output()
                     .map_err(|e| SbomError::FileReadError {
@@ -43,7 +43,11 @@ impl DiffLockfileReader for GitLockfileReader {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     return Err(SbomError::FileReadError {
                         path: project_path.join("uv.lock"),
-                        details: format!("git show {}:uv.lock failed: {}", ref_name, stderr.trim()),
+                        details: format!(
+                            "git show {}:./uv.lock failed: {}",
+                            ref_name,
+                            stderr.trim()
+                        ),
                     }
                     .into());
                 }
@@ -125,6 +129,56 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
+
+    fn git_available() -> bool {
+        Command::new("git")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+
+    fn minimal_uv_lock() -> &'static str {
+        "version = 1\nrevision = 1\nrequires-python = \">=3.11\"\n\n\
+         [[package]]\nname = \"certifi\"\nversion = \"2024.8.30\"\n"
+    }
+
+    fn init_repo_with_lockfile_at(
+        repo_root: &Path,
+        relative_lock_path: &Path,
+        lock_content: &str,
+        tag: &str,
+    ) {
+        let abs_lock = repo_root.join(relative_lock_path);
+        if let Some(parent) = abs_lock.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(&abs_lock, lock_content).unwrap();
+
+        let run = |args: &[&str]| {
+            let status = Command::new("git")
+                .args(args)
+                .current_dir(repo_root)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .env("GIT_AUTHOR_NAME", "Test")
+                .env("GIT_AUTHOR_EMAIL", "test@example.com")
+                .env("GIT_COMMITTER_NAME", "Test")
+                .env("GIT_COMMITTER_EMAIL", "test@example.com")
+                .status()
+                .expect("git invocation failed");
+            assert!(status.success(), "git {:?} failed", args);
+        };
+
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "commit.gpgsign", "false"]);
+        run(&["config", "tag.gpgsign", "false"]);
+        run(&["config", "user.email", "test@example.com"]);
+        run(&["config", "user.name", "Test"]);
+        run(&["add", relative_lock_path.to_str().unwrap()]);
+        run(&["commit", "-q", "-m", "add lockfile"]);
+        run(&["tag", tag]);
+    }
 
     // --- validate_git_ref ---
 
@@ -224,6 +278,88 @@ mod tests {
             source,
             DiffSource::GitRef("/nonexistent/path/uv.lock".to_string())
         );
+    }
+
+    // --- read_base_packages (git ref resolution) ---
+
+    #[test]
+    fn test_read_base_packages_reads_subdirectory_lockfile_not_repo_root() {
+        if !git_available() {
+            eprintln!("skipping: git binary not available on PATH");
+            return;
+        }
+
+        let repo = TempDir::new().unwrap();
+        let sub_rel = Path::new("examples/sample-project");
+
+        let root_lock = "version = 1\nrevision = 1\nrequires-python = \">=3.11\"\n\n\
+                         [[package]]\nname = \"root-pkg\"\nversion = \"0.0.0\"\n";
+        let sub_lock = "version = 1\nrevision = 1\nrequires-python = \">=3.11\"\n\n\
+                        [[package]]\nname = \"sub-pkg\"\nversion = \"9.9.9\"\n";
+
+        fs::create_dir_all(repo.path().join(sub_rel)).unwrap();
+        fs::write(repo.path().join("uv.lock"), root_lock).unwrap();
+        fs::write(repo.path().join(sub_rel).join("uv.lock"), sub_lock).unwrap();
+
+        let run = |args: &[&str]| {
+            let status = Command::new("git")
+                .args(args)
+                .current_dir(repo.path())
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .env("GIT_AUTHOR_NAME", "Test")
+                .env("GIT_AUTHOR_EMAIL", "test@example.com")
+                .env("GIT_COMMITTER_NAME", "Test")
+                .env("GIT_COMMITTER_EMAIL", "test@example.com")
+                .status()
+                .expect("git failed");
+            assert!(status.success(), "git {:?} failed", args);
+        };
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "commit.gpgsign", "false"]);
+        run(&["config", "tag.gpgsign", "false"]);
+        run(&["config", "user.email", "test@example.com"]);
+        run(&["config", "user.name", "Test"]);
+        run(&["add", "."]);
+        run(&["commit", "-q", "-m", "init"]);
+        run(&["tag", "v-test"]);
+
+        let reader = GitLockfileReader::new();
+        let packages = reader
+            .read_base_packages(
+                &DiffSource::GitRef("v-test".to_string()),
+                &repo.path().join(sub_rel),
+            )
+            .expect("read_base_packages should succeed for subdirectory project");
+
+        assert_eq!(packages.len(), 1);
+        assert_eq!(
+            packages[0].name(),
+            "sub-pkg",
+            "expected the subdirectory lockfile to be read, not the repo-root lockfile"
+        );
+    }
+
+    #[test]
+    fn test_read_base_packages_still_works_at_repo_root() {
+        if !git_available() {
+            eprintln!("skipping: git binary not available on PATH");
+            return;
+        }
+
+        let repo = TempDir::new().unwrap();
+        init_repo_with_lockfile_at(
+            repo.path(),
+            Path::new("uv.lock"),
+            minimal_uv_lock(),
+            "v-root",
+        );
+
+        let reader = GitLockfileReader::new();
+        let packages = reader
+            .read_base_packages(&DiffSource::GitRef("v-root".to_string()), repo.path())
+            .expect("repo-root project should still work");
+        assert_eq!(packages[0].name(), "certifi");
     }
 
     #[test]
