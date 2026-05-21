@@ -28,12 +28,13 @@
 //! let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::default());
 //!
 //! // Create use case
-//! let use_case: GenerateSbomUseCase<_, _, _, _, ()> = GenerateSbomUseCase::new(
+//! let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
 //!     lockfile_reader,
 //!     project_config_reader,
 //!     license_repository,
 //!     progress_reporter,
 //!     None, // No vulnerability checking in this example
+//!     None, // No abandoned-package checking in this example
 //!     uv_sbom::i18n::Locale::default(),
 //! );
 //!
@@ -52,6 +53,7 @@
 //!     None,
 //!     None,
 //!     None,
+//!     None, // No abandoned-package report in this example
 //! );
 //! let formatter = CycloneDxFormatter::new();
 //! let output = formatter.format(&read_model)?;

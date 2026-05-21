@@ -72,6 +72,14 @@ pub struct Args {
     #[arg(long)]
     pub check_license: bool,
 
+    /// Check for abandoned/unmaintained packages (no upstream release within threshold days)
+    #[arg(long)]
+    pub check_abandoned: bool,
+
+    /// Inactivity threshold in days for abandoned-package detection (default: 730)
+    #[arg(long, value_name = "DAYS", requires = "check_abandoned")]
+    pub abandoned_threshold_days: Option<u64>,
+
     /// Allowed license patterns (comma-separated, requires --check-license)
     /// Supports wildcards: "MIT,Apache-2.0,BSD-*"
     #[arg(long, value_delimiter = ',', requires = "check_license")]
@@ -89,6 +97,10 @@ pub struct Args {
     /// Analyze all workspace members (requires a uv workspace root with [manifest] in uv.lock)
     #[arg(long, conflicts_with = "output")]
     pub workspace: bool,
+
+    /// Compare current uv.lock against a base (git ref, tag, commit SHA, or path to a uv.lock file)
+    #[arg(long, value_name = "REF_OR_PATH", conflicts_with_all = ["workspace", "init"])]
+    pub diff: Option<String>,
 
     /// Output language for human-readable formats: en (default) or ja
     #[arg(long, default_value = "en", value_parser = parse_lang)]

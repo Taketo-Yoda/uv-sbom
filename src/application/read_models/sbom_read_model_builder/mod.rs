@@ -11,6 +11,7 @@ mod resolution_guide_builder;
 mod upgrade_recommendation_builder;
 mod vulnerability_builder;
 
+use super::abandoned_package::AbandonedPackagesReport;
 use super::resolution_guide_view::ResolutionGuideView;
 use super::sbom_read_model::SbomReadModel;
 use crate::ports::outbound::EnrichedPackage;
@@ -28,6 +29,7 @@ pub struct SbomReadModelBuilder;
 
 impl SbomReadModelBuilder {
     /// Builds a SbomReadModel from domain objects with optional project metadata component
+    #[allow(clippy::too_many_arguments)]
     pub fn build_with_project(
         packages: Vec<EnrichedPackage>,
         metadata: &SbomMetadata,
@@ -36,6 +38,7 @@ impl SbomReadModelBuilder {
         license_compliance_result: Option<&LicenseComplianceResult>,
         project_component: Option<(&str, &str)>,
         upgrade_recommendations: Option<&[UpgradeRecommendation]>,
+        abandoned_packages_report: Option<&AbandonedPackagesReport>,
     ) -> SbomReadModel {
         let metadata_view = metadata_builder::build_metadata(metadata, project_component);
         let components = component_builder::build_components(&packages, dependency_graph);
@@ -56,6 +59,8 @@ impl SbomReadModelBuilder {
         let upgrade_recommendations = upgrade_recommendations
             .map(upgrade_recommendation_builder::build_upgrade_recommendations);
 
+        let abandoned_packages = abandoned_packages_report.cloned();
+
         SbomReadModel {
             metadata: metadata_view,
             components,
@@ -64,6 +69,7 @@ impl SbomReadModelBuilder {
             license_compliance,
             resolution_guide,
             upgrade_recommendations,
+            abandoned_packages,
         }
     }
 
@@ -200,6 +206,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
 
         assert_eq!(read_model.metadata.tool_name, "uv-sbom");
@@ -217,7 +224,7 @@ mod tests {
         let metadata = th::metadata();
 
         let read_model = SbomReadModelBuilder::build_with_project(
-            packages, &metadata, None, None, None, None, None,
+            packages, &metadata, None, None, None, None, None, None,
         );
 
         assert!(read_model.components.is_empty());
@@ -242,6 +249,7 @@ mod tests {
             &metadata,
             None,
             Some(&vuln_result),
+            None,
             None,
             None,
             None,
@@ -288,6 +296,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
 
         assert!(read_model.resolution_guide.is_some());
@@ -318,6 +327,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
 
         assert!(read_model.resolution_guide.is_none());
@@ -333,6 +343,7 @@ mod tests {
             packages,
             &metadata,
             Some(&graph),
+            None,
             None,
             None,
             None,
@@ -364,6 +375,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
 
         // requests is a direct dep, so ResolutionAnalyzer skips it → empty → None
@@ -382,6 +394,7 @@ mod tests {
             None,
             None,
             Some(("my-project", "1.0.0")),
+            None,
             None,
         );
 

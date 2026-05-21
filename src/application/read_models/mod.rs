@@ -3,6 +3,7 @@
 //! This module contains view-optimized structs that provide
 //! a denormalized representation of domain data for queries.
 
+pub mod abandoned_package;
 pub mod component_view;
 pub mod dependency_view;
 pub mod license_compliance_view;
@@ -12,6 +13,8 @@ pub mod sbom_read_model_builder;
 pub mod upgrade_recommendation_view;
 pub mod vulnerability_view;
 
+#[allow(unused_imports)]
+pub use abandoned_package::{AbandonedPackageView, AbandonedPackagesReport};
 #[allow(unused_imports)]
 pub use component_view::{ComponentView, LicenseView};
 #[allow(unused_imports)]

@@ -58,6 +58,12 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 
 # Enable workspace mode: generate per-member SBOMs for uv workspaces (equivalent to --workspace flag)
 # workspace: false
+
+# Enable abandoned/unmaintained package detection
+# check_abandoned: false
+
+# Inactivity threshold in days for abandoned-package detection (default: 730)
+# abandoned_threshold_days: 730
 "#;
 
 /// Generate a config template file in the specified directory.
@@ -101,6 +107,8 @@ pub struct ConfigFile {
     pub check_license: Option<bool>,
     pub license_policy: Option<LicensePolicyConfig>,
     pub suggest_fix: Option<bool>,
+    pub check_abandoned: Option<bool>,
+    pub abandoned_threshold_days: Option<u64>,
     /// Captures unknown fields for warnings.
     #[serde(flatten)]
     pub unknown_fields: HashMap<String, serde_yaml_ng::Value>,
@@ -365,6 +373,8 @@ another_unknown: value
         assert!(config.severity_threshold.is_none());
         assert!(config.cvss_threshold.is_none());
         assert!(config.ignore_cves.is_none());
+        assert!(config.check_abandoned.is_none());
+        assert!(config.abandoned_threshold_days.is_none());
         assert!(config.unknown_fields.is_empty());
     }
 

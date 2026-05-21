@@ -1,19 +1,29 @@
 use crate::adapters::outbound::uv::UvLockAdapter;
 use crate::application::dto::{SbomRequest, SbomResponse};
-use crate::application::use_cases::{CheckVulnerabilitiesUseCase, FetchLicensesUseCase};
+use crate::application::read_models::abandoned_package::{
+    AbandonedPackageView, AbandonedPackagesReport,
+};
+use crate::application::use_cases::{
+    CheckAbandonedPackagesUseCase, CheckVulnerabilitiesUseCase, FetchLicensesUseCase,
+};
 use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
-    EnrichedPackage, LicenseRepository, LockfileReader, ProgressReporter, ProjectConfigReader,
-    VulnerabilityRepository,
+    EnrichedPackage, LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
+    ProjectConfigReader, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::{
     LicenseComplianceChecker, ResolutionAnalyzer, ThresholdConfig, UpgradeAdvisor,
     VulnerabilityCheckResult, VulnerabilityChecker,
 };
-use crate::sbom_generation::domain::{Package, PackageName, UpgradeRecommendation};
+use crate::sbom_generation::domain::{
+    DependencyGraph, Package, PackageName, UpgradeRecommendation,
+};
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
 use crate::shared::Result;
+use chrono::Utc;
+use std::cmp::Reverse;
+use std::collections::HashSet;
 
 /// Type alias for package list with dependency map
 /// Used to simplify complex return types and satisfy clippy::type_complexity
@@ -30,22 +40,25 @@ type PackagesWithDependencyMap = (Vec<Package>, std::collections::HashMap<String
 /// * `LREPO` - LicenseRepository implementation
 /// * `PR` - ProgressReporter implementation
 /// * `VREPO` - VulnerabilityRepository implementation (optional)
-pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO> {
+/// * `MREPO` - MaintenanceRepository implementation (optional)
+pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO> {
     lockfile_reader: LR,
     project_config_reader: PCR,
     license_repository: LREPO,
     progress_reporter: PR,
     vulnerability_repository: Option<VREPO>,
+    maintenance_repository: Option<MREPO>,
     locale: Locale,
 }
 
-impl<LR, PCR, LREPO, PR, VREPO> GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO> GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
     LREPO: LicenseRepository + Clone,
     PR: ProgressReporter,
     VREPO: VulnerabilityRepository + Clone,
+    MREPO: MaintenanceRepository + Clone,
 {
     /// Creates a new GenerateSbomUseCase with injected dependencies
     pub fn new(
@@ -54,6 +67,7 @@ where
         license_repository: LREPO,
         progress_reporter: PR,
         vulnerability_repository: Option<VREPO>,
+        maintenance_repository: Option<MREPO>,
         locale: Locale,
     ) -> Self {
         Self {
@@ -62,6 +76,7 @@ where
             license_repository,
             progress_reporter,
             vulnerability_repository,
+            maintenance_repository,
             locale,
         }
     }
@@ -121,14 +136,111 @@ where
             )
             .await;
 
-        // Step 9: Build and return response
+        // Step 9: Abandoned package check if requested
+        let abandoned_packages_report = self
+            .check_abandoned_if_requested(&request, &filtered_packages, dependency_graph.as_ref())
+            .await?;
+
+        // Step 10: Build and return response
         Ok(self.build_response(
             enriched_packages,
             dependency_graph,
             vulnerability_check_result,
             license_compliance_result,
             upgrade_recommendations,
+            abandoned_packages_report,
         ))
+    }
+
+    /// Checks for abandoned packages if `check_abandoned` is enabled.
+    ///
+    /// Returns `None` when the check is disabled or no maintenance repository is configured.
+    /// When `dependency_graph` is `None` (e.g. JSON output without dep analysis),
+    /// `is_direct` defaults to `false` for all packages — consistent with the existing
+    /// pattern for the resolution guide.
+    async fn check_abandoned_if_requested(
+        &self,
+        request: &SbomRequest,
+        packages: &[Package],
+        dependency_graph: Option<&DependencyGraph>,
+    ) -> Result<Option<AbandonedPackagesReport>> {
+        if !request.check_abandoned {
+            return Ok(None);
+        }
+        let Some(repo) = &self.maintenance_repository else {
+            return Ok(None);
+        };
+
+        let msgs = Messages::for_locale(self.locale);
+        self.progress_reporter
+            .report(msgs.progress_fetching_abandoned);
+
+        let maint_use_case = CheckAbandonedPackagesUseCase::new(repo.clone());
+        let (results, errors) = maint_use_case
+            .fetch_with_progress(packages.to_vec())
+            .await?;
+
+        eprintln!(); // newline after progress bar
+
+        for (pkg_name, error_msg) in &errors {
+            self.progress_reporter.report_error(&Messages::format(
+                msgs.warn_abandoned_fetch_failed,
+                &[pkg_name, error_msg],
+            ));
+        }
+
+        let today = Utc::now().date_naive();
+        let direct_names: HashSet<&str> = dependency_graph
+            .map(|g| g.direct_dependencies().iter().map(|p| p.as_str()).collect())
+            .unwrap_or_default();
+
+        let threshold = request.abandoned_threshold_days as i64;
+        let mut abandoned_packages: Vec<AbandonedPackageView> = results
+            .into_iter()
+            .filter_map(|(pkg, info)| {
+                // Packages with no recorded release date are excluded: their
+                // maintenance status cannot be determined, so we do not classify
+                // them as abandoned.
+                let release_date = info.last_release_date?;
+                let days_inactive = (today - release_date).num_days();
+                if days_inactive < threshold {
+                    return None;
+                }
+                Some(AbandonedPackageView {
+                    name: pkg.name().to_string(),
+                    version: pkg.version().to_string(),
+                    last_release_date: release_date,
+                    days_inactive,
+                    is_direct: direct_names.contains(pkg.name()),
+                })
+            })
+            .collect();
+
+        abandoned_packages.sort_by_key(|p| Reverse(p.days_inactive));
+
+        let report = AbandonedPackagesReport {
+            packages: abandoned_packages,
+            threshold_days: request.abandoned_threshold_days,
+        };
+
+        if report.is_empty() {
+            self.progress_reporter.report(&Messages::format(
+                msgs.progress_abandoned_none,
+                &[&report.threshold_days.to_string()],
+            ));
+        } else {
+            self.progress_reporter.report(&Messages::format(
+                msgs.progress_abandoned_found,
+                &[
+                    &report.total_count().to_string(),
+                    &report.direct_count().to_string(),
+                    &report.transitive_count().to_string(),
+                    &report.threshold_days.to_string(),
+                ],
+            ));
+        }
+
+        Ok(Some(report))
     }
 
     /// Reads and parses the lockfile, reporting progress
@@ -513,10 +625,11 @@ where
     fn build_response(
         &self,
         enriched_packages: Vec<EnrichedPackage>,
-        dependency_graph: Option<crate::sbom_generation::domain::DependencyGraph>,
+        dependency_graph: Option<DependencyGraph>,
         vulnerability_check_result: Option<VulnerabilityCheckResult>,
         license_compliance_result: Option<LicenseComplianceResult>,
         upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
+        abandoned_packages_report: Option<AbandonedPackagesReport>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata();
 
@@ -548,6 +661,9 @@ where
         }
         if let Some(recommendations) = upgrade_recommendations {
             builder = builder.upgrade_recommendations(recommendations);
+        }
+        if let Some(report) = abandoned_packages_report {
+            builder = builder.abandoned_packages_report(report);
         }
 
         builder.build().expect("response build should not fail")

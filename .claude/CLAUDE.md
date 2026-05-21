@@ -62,6 +62,7 @@ Skills contain mandatory pre-flight checks and language requirements that preven
 - **PR #121**: Created in Japanese, `cargo fmt --all -- --check` failed in CI
 - **Issue #59**: `cargo clippy` was run without `-D warnings`, causing CI failure after push
 - **2026-04-18**: v2.2.0 release promoted an empty `[Unreleased]` section. Features added in PRs #441–#483 were never recorded in CHANGELOG. Fixed by Issue #491 (added gate in `/release` Step 3.6 and `/pr` Step 4.5).
+- **2026-05-09 (Issue #511)**: `--check-abandoned` CLI flag was added without updating README.md, README-JP.md, `examples/sample-project/config/uv-sbom.config.yml`, or any example project README. Root cause: `/implement` Step 4 said "update docs as needed" without a concrete gate; `/pr` had no documentation backstop. Fixed by Issue #568 (`/implement` Step 4.3 CLI Flag Documentation Gate) and Issue #569 (`/pr` Step 4.6 CLI Flag Documentation Backstop).
 
 ### Enforcement
 
@@ -147,7 +148,12 @@ Agents complement skills: the Release Manager agent judges readiness; the `/rele
 
 ## README Update Checklist
 
-When updating README.md, check if the following files also need updates:
+Trigger this checklist when **any** of the following is true:
+- README.md content is being changed directly
+- A new CLI flag or config key was added (see also: /implement Step 4.3)
+- A new user-facing feature was implemented
+
+When triggered, check if the following files also need updates:
 
 | File | Action Required | Notes |
 |------|-----------------|-------|
@@ -181,7 +187,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `src/ports/outbound/` | Outbound port traits (e.g. repository, network interfaces) |
 | `src/adapters/inbound/` | Inbound adapter implementations |
 | `src/adapters/outbound/network/` | PyPI and OSV HTTP clients |
-| `src/adapters/outbound/formatters/` | CycloneDX and Markdown output formatters |
+| `src/adapters/outbound/formatters/` | CycloneDX, Markdown, and Diff (Markdown/JSON) output formatters |
 | `src/adapters/outbound/filesystem/` | File read/write adapters |
 | `src/adapters/outbound/uv/` | uv.lock file parsing |
 | `src/adapters/outbound/console/` | Console/progress reporter adapter |
@@ -196,7 +202,10 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `MergedConfig` | `src/cli/config_resolver.rs` | Final resolved config (CLI > env > file > default) |
 | `ConfigFile` | `src/config.rs` | Raw deserialized config file struct |
 | `SbomRequest` / `SbomResponse` | `src/application/dto/` | Input/output for the main use case |
-| `GenerateSbomUseCase` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation |
+| `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555 |
+| `CheckAbandonedPackagesUseCase` | `src/application/use_cases/check_abandoned_packages.rs` | Fetches PyPI maintenance info for all packages with progress bar and soft-fail per package |
+| `DiffRequest` | `src/application/dto/diff_request.rs` | Input DTO for the diff use case (source, project_path, check_cve) |
+| `GenerateDiffUseCase<LR,DLR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer; wired to CLI via `--diff` flag (#581) |
 | `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
 
 ### Important Invariants

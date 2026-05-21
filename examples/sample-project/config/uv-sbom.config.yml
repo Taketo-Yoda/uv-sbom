@@ -1,7 +1,7 @@
 # Sample configuration file for uv-sbom
-# Demonstrates ignore_cves (CVE suppression) and license compliance checking
-# using real vulnerability IDs and license violations from sample-project
-# dependencies (detected by OSV API and PyPI).
+# Demonstrates ignore_cves (CVE suppression), license compliance checking,
+# and abandoned package detection using real vulnerability IDs and license
+# violations from sample-project dependencies (detected by OSV API and PyPI).
 #
 # License violation demo:
 #   chardet 3.0.4 (transitive dep of requests 2.25.0) uses LGPL-2.1-only,
@@ -10,11 +10,19 @@
 # Usage (CVE + license check):
 #   cargo run -- -p examples/sample-project --check-cve --check-license \
 #     -f markdown -c examples/sample-project/config/uv-sbom.config.yml
+#
+# Usage (all checks via config — CVE + license + abandoned package detection):
+#   cargo run -- -p examples/sample-project -f markdown \
+#     -c examples/sample-project/config/uv-sbom.config.yml
 
 check_cve: true
 severity_threshold: medium
 
 check_license: true
+
+# Abandoned package detection: flag packages with no PyPI release in 730+ days
+check_abandoned: true
+abandoned_threshold_days: 730
 
 license_policy:
   allow:

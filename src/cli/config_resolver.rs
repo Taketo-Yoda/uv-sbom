@@ -18,6 +18,8 @@ pub struct MergedConfig {
     pub check_license: bool,
     pub license_policy: Option<LicensePolicy>,
     pub suggest_fix: bool,
+    pub check_abandoned: bool,
+    pub abandoned_threshold_days: u64,
 }
 
 /// Load a config file from an explicit path or via auto-discovery.
@@ -129,6 +131,8 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
                 check_license: args.check_license,
                 license_policy,
                 suggest_fix: args.suggest_fix,
+                check_abandoned: args.check_abandoned,
+                abandoned_threshold_days: args.abandoned_threshold_days.unwrap_or(730),
             };
         }
     };
@@ -233,6 +237,17 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
     // suggest_fix: CLI flag takes priority over config value
     let suggest_fix = args.suggest_fix || config.suggest_fix.unwrap_or(false);
 
+    // check_abandoned: CLI flag || config value (mirrors check_license / suggest_fix)
+    let check_abandoned = args.check_abandoned || config.check_abandoned.unwrap_or(false);
+
+    // abandoned_threshold_days: CLI > config > default 730.
+    // args.abandoned_threshold_days is Option<u64>: None when the flag was not passed, Some when
+    // the user explicitly provided a value. This cleanly expresses "not provided" vs "provided."
+    let abandoned_threshold_days = args
+        .abandoned_threshold_days
+        .or(config.abandoned_threshold_days)
+        .unwrap_or(730);
+
     MergedConfig {
         format,
         exclude_patterns,
@@ -243,6 +258,8 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         check_license,
         license_policy,
         suggest_fix,
+        check_abandoned,
+        abandoned_threshold_days,
     }
 }
 
@@ -263,6 +280,8 @@ mod tests {
         assert!(result.severity_threshold.is_none());
         assert!(result.cvss_threshold.is_none());
         assert!(result.ignore_cves.is_empty());
+        assert!(!result.check_abandoned);
+        assert_eq!(result.abandoned_threshold_days, 730);
     }
 
     #[test]
@@ -288,6 +307,8 @@ mod tests {
         assert_eq!(result.cvss_threshold, Some(7.0));
         assert_eq!(result.ignore_cves.len(), 1);
         assert_eq!(result.ignore_cves[0].id, "CVE-2024-1");
+        assert!(!result.check_abandoned);
+        assert_eq!(result.abandoned_threshold_days, 730);
     }
 
     #[test]
@@ -543,5 +564,109 @@ mod tests {
         assert_eq!(result[0].id, "CVE-2024-1");
         assert_eq!(result[0].reason.as_deref(), Some("cli reason"));
         assert_eq!(result[1].id, "CVE-2024-2");
+    }
+
+    // --- check_abandoned / abandoned_threshold_days merge tests ---
+
+    #[test]
+    fn test_merge_config_check_abandoned_default_false() {
+        // No CLI flag, no config → defaults: check_abandoned=false, threshold=730
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(!result.check_abandoned);
+        assert_eq!(result.abandoned_threshold_days, 730);
+    }
+
+    #[test]
+    fn test_merge_config_check_abandoned_from_config() {
+        // config: true, no CLI flag → check_abandoned=true
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            check_abandoned: Some(true),
+            abandoned_threshold_days: Some(365),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.check_abandoned);
+        assert_eq!(result.abandoned_threshold_days, 365);
+    }
+
+    #[test]
+    fn test_merge_config_check_abandoned_cli_flag() {
+        // CLI: --check-abandoned, no config → check_abandoned=true, threshold=730 (default)
+        let args = Args::parse_from(["uv-sbom", "--check-abandoned"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.check_abandoned);
+        assert_eq!(result.abandoned_threshold_days, 730);
+    }
+
+    #[test]
+    fn test_merge_config_check_abandoned_cli_wins_over_config_false() {
+        // CLI flag + config: false → CLI wins, check_abandoned=true
+        let args = Args::parse_from(["uv-sbom", "--check-abandoned"]);
+        let config = Some(ConfigFile {
+            check_abandoned: Some(false),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.check_abandoned);
+    }
+
+    #[test]
+    fn test_merge_config_abandoned_threshold_from_config() {
+        // config: 365, no explicit CLI → uses config value
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            abandoned_threshold_days: Some(365),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert_eq!(result.abandoned_threshold_days, 365);
+    }
+
+    #[test]
+    fn test_merge_config_abandoned_threshold_cli_wins() {
+        // CLI: --abandoned-threshold-days 90 + config: 365 → CLI wins (Some(90) overrides config)
+        let args = Args::parse_from([
+            "uv-sbom",
+            "--check-abandoned",
+            "--abandoned-threshold-days",
+            "90",
+        ]);
+        let config = Some(ConfigFile {
+            check_abandoned: Some(true),
+            abandoned_threshold_days: Some(365),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert_eq!(result.abandoned_threshold_days, 90);
+    }
+
+    #[test]
+    fn test_merge_config_abandoned_threshold_default_when_neither() {
+        // No CLI, no config → default 730
+        let args = Args::parse_from(["uv-sbom"]);
+        let result = merge_config(&args, &None);
+        assert_eq!(result.abandoned_threshold_days, 730);
+    }
+
+    #[test]
+    fn test_merge_config_no_config_file_uses_cli_abandoned() {
+        // No config file; exercises the early-return branch
+        let args = Args::parse_from([
+            "uv-sbom",
+            "--check-abandoned",
+            "--abandoned-threshold-days",
+            "180",
+        ]);
+        let result = merge_config(&args, &None);
+        assert!(result.check_abandoned);
+        assert_eq!(result.abandoned_threshold_days, 180);
     }
 }

@@ -20,6 +20,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 📊 Outputs in multiple formats:
   - **CycloneDX 1.6** JSON format (standard SBOM format)
   - **Markdown** format with direct and transitive dependencies clearly separated
+- 🔍 **Abandoned Package Detection** - Identifies packages that have not received a new release on PyPI within a configurable number of days (default: 730), helping surface unmaintained dependencies with no active security patching
 - 🚀 Fast and standalone - written in Rust
 - 💾 Output to stdout or file
 - 🛡️ Robust error handling with helpful error messages and suggestions
@@ -316,6 +317,8 @@ license_policy:
 | `license_policy.allow` | string[] | No | Allowed license patterns (supports wildcards) |
 | `license_policy.deny` | string[] | No | Denied license patterns (supports wildcards) |
 | `license_policy.unknown` | string | No | Unknown license handling (`warn` / `deny` / `allow`) |
+| `check_abandoned` | bool | No | Enable abandoned package detection (opt-in, default: false) |
+| `abandoned_threshold_days` | integer | No | Inactivity threshold in days for abandoned package detection (default: 730) |
 
 #### Priority and Merge Rules
 
@@ -325,6 +328,7 @@ license_policy:
 - **`ignore_cves`** are **merged** from both CLI (`--ignore-cve`) and config file, deduplicated by ID (CLI entry takes precedence for duplicates)
 - **`check_license`** is enabled if set via CLI flag OR config file (logical OR, same as `check_cve`)
 - **`--license-allow`** and **`--license-deny`** CLI options **override** config file `license_policy.allow` / `license_policy.deny` entirely (not merged)
+- **`check_abandoned`** is opt-in (default: false). Enable via CLI flag `--check-abandoned` or config file `check_abandoned: true`. The `abandoned_threshold_days` value follows CLI > config file > default (730) resolution order.
 
 ### Ignoring specific CVEs
 
@@ -397,6 +401,56 @@ uv-sbom --check-license --severity-threshold high
   - `allow`: Silently allow unknown licenses
 - **Exit code**: Returns exit code 1 when policy violations are detected
 
+### Abandoned Package Detection
+
+Use the `--check-abandoned` option to identify packages that have not received a new release on PyPI within a configurable number of days. This surfaces unmaintained dependencies that may pose a long-term risk even when no CVE has been filed.
+
+```bash
+# Enable abandoned package detection (default threshold: 730 days / ~2 years)
+uv-sbom --check-abandoned --format markdown
+
+# Use a custom inactivity threshold (e.g., 365 days / 1 year)
+uv-sbom --check-abandoned --abandoned-threshold-days 365
+
+# Combined with vulnerability and license checks
+uv-sbom --check-abandoned --check-license --severity-threshold high
+```
+
+**How it works:**
+- Queries the PyPI package-level endpoint (`https://pypi.org/pypi/{name}/json`) for each package
+- Compares the latest release date against today minus the configured threshold
+- Packages exceeding the threshold appear in the **Abandoned Packages** section of the Markdown output
+- If a package's PyPI metadata cannot be fetched, it is skipped without aborting the run
+- Requires network access; adds one API call per package
+
+**Output:**
+- **Summary table row**: `| Abandoned packages | N | ⚠️ |` when count > 0, `✅` when count == 0
+- **Abandoned Packages section**: Table with Package, Version, Last Release date, Days Inactive, and Type (Direct / Transitive)
+- When `--check-abandoned` is not passed, the section is omitted entirely and the Summary row shows `_Abandoned package check skipped._`
+
+**Config file equivalent:**
+```yaml
+check_abandoned: true
+abandoned_threshold_days: 365  # optional, default: 730
+```
+
+**CI Integration example:**
+```yaml
+# GitHub Actions - Abandoned Package Check
+- name: Abandoned Package Detection
+  run: uv-sbom --check-abandoned --abandoned-threshold-days 730 --format markdown
+```
+
+> **Note:** Abandoned package data is currently Markdown-only. CycloneDX JSON output is not affected.
+
+For a demo with guaranteed output, run:
+
+```bash
+uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
+```
+
+See [`examples/abandoned-packages-project/README.md`](examples/abandoned-packages-project/README.md) for a full walkthrough.
+
 ### Vulnerability Threshold Options
 
 You can control which vulnerabilities trigger a non-zero exit code using threshold options:
@@ -446,6 +500,40 @@ uv-sbom --format markdown --verify-links --output SBOM.md
 - Network errors gracefully fall back to plain text (no crash)
 - Requests are executed in parallel (max 10 concurrent) for performance
 
+### Dependency Diff
+
+Use the `--diff` option to compare the current `uv.lock` against a previous version. This is useful for reviewing what changed between branches, tags, or arbitrary lockfile snapshots before merging.
+
+```bash
+# Compare against a git branch or tag
+uv-sbom --diff main
+uv-sbom --diff v1.2.0
+uv-sbom --diff abc1234    # abbreviated commit SHA
+
+# Compare against a file path (absolute or relative to CWD)
+uv-sbom --diff /path/to/old/uv.lock
+
+# Output as Markdown report
+uv-sbom --diff main --format markdown --output diff.md
+
+# Output as JSON
+uv-sbom --diff main --format json
+```
+
+**Auto-detection:** If the argument resolves to an existing file on disk it is treated as a file path; otherwise it is treated as a git ref. Relative paths are resolved against the process working directory (not `--path`).
+
+**Git ref validation:** Only `[a-zA-Z0-9._/-]` characters are allowed in git refs. Refs starting with `-` are also rejected. This prevents command injection.
+
+**Mutual exclusion:** `--diff` cannot be combined with `--workspace` or `--init`.
+
+**CVE check:** By default CVE checking is enabled for added and updated packages (use `--no-check-cve` to disable). When a vulnerability is found, the process exits with code `1`.
+
+**CI example:**
+```bash
+# Fail the build if new dependencies introduced by this PR have known CVEs
+uv-sbom --diff origin/main --format markdown --output diff.md
+```
+
 ### CI Integration
 
 Use vulnerability thresholds for CI/CD pipeline integration:
@@ -469,6 +557,12 @@ Use vulnerability thresholds for CI/CD pipeline integration:
 
 - name: Combined Security and License Check
   run: uv-sbom --check-license --severity-threshold high
+```
+
+```yaml
+# GitHub Actions - Abandoned Package Check
+- name: Abandoned Package Detection
+  run: uv-sbom --check-abandoned --format markdown
 ```
 
 ```yaml

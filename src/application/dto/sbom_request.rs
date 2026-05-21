@@ -35,6 +35,11 @@ pub struct SbomRequest {
     /// Whether to suggest direct dependency upgrade versions to fix transitive vulnerabilities.
     /// Only meaningful when `check_cve` is true.
     pub suggest_fix: bool,
+    /// Whether to check for abandoned/unmaintained packages.
+    pub check_abandoned: bool,
+    /// Inactivity threshold in days for abandoned-package detection.
+    /// Only meaningful when `check_abandoned` is true.
+    pub abandoned_threshold_days: u64,
     /// Output locale for human-readable formats
     pub locale: Locale,
 }
@@ -97,6 +102,8 @@ pub struct SbomRequestBuilder {
     check_license: bool,
     license_policy: Option<LicensePolicy>,
     suggest_fix: bool,
+    check_abandoned: bool,
+    abandoned_threshold_days: u64,
     locale: Locale,
 }
 
@@ -124,6 +131,8 @@ impl SbomRequestBuilder {
             check_license: false,
             license_policy: None,
             suggest_fix: false,
+            check_abandoned: false,
+            abandoned_threshold_days: 730,
             locale: Locale::default(),
         }
     }
@@ -202,6 +211,18 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets whether to check for abandoned/unmaintained packages.
+    pub fn check_abandoned(mut self, check: bool) -> Self {
+        self.check_abandoned = check;
+        self
+    }
+
+    /// Sets the inactivity threshold in days for abandoned-package detection.
+    pub fn abandoned_threshold_days(mut self, days: u64) -> Self {
+        self.abandoned_threshold_days = days;
+        self
+    }
+
     /// Sets the output locale for human-readable formats.
     pub fn locale(mut self, locale: Locale) -> Self {
         self.locale = locale;
@@ -230,6 +251,8 @@ impl SbomRequestBuilder {
             check_license: self.check_license,
             license_policy: self.license_policy,
             suggest_fix: self.suggest_fix,
+            check_abandoned: self.check_abandoned,
+            abandoned_threshold_days: self.abandoned_threshold_days,
             locale: self.locale,
         })
     }
