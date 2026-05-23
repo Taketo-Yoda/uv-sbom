@@ -78,6 +78,18 @@ When a user requests any operation listed above (even in Japanese), Claude MUST:
 When the user proposes, discusses, or asks Claude to evaluate a new feature idea,
 Claude MUST follow this process before responding with implementation suggestions.
 
+### Step 0: Check current implementation state (MANDATORY — run before Step 1)
+
+Before proposing or evaluating any feature, read these two files to build an exhaustive
+list of already-implemented capabilities:
+
+1. `src/cli/mod.rs` — all current CLI flags (e.g., `--severity-threshold`, `--license-allow`)
+2. `src/config.rs` — all current config keys (e.g., `severity_threshold`, `license_policy`)
+
+For each feature idea (your own or the user's), check whether it is already covered by an
+existing CLI flag or config key. If it is, do NOT propose it as a new feature — instead,
+state explicitly: "This is already implemented as `--flag-name` / config key `key_name`."
+
 ### Step 1: Read vision and triage files (MANDATORY)
 
 Before responding to any feature proposal, read these two files:
