@@ -7,7 +7,7 @@ use super::vulnerability_view::SeverityView;
 
 /// Container describing the change in CVE exposure between two SBOM snapshots.
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)] // Consumed by #599 (use case) and #600 (formatters); remove when wired
+#[allow(dead_code)] // WIRE(#599) WIRE(#600): remove when CveDeltaView is wired into GenerateDiffUseCase
 pub struct CveDeltaView {
     /// Newly introduced CVEs (present in the newer snapshot, absent from the baseline).
     pub new: Vec<CveDeltaEntry>,
@@ -17,7 +17,7 @@ pub struct CveDeltaView {
 
 /// Single CVE change entry for a specific package/version.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // Consumed by #599 (use case) and #600 (formatters); remove when wired
+#[allow(dead_code)] // WIRE(#599) WIRE(#600): remove when CveDeltaEntry is wired into GenerateDiffUseCase
 pub struct CveDeltaEntry {
     /// Name of the affected package.
     pub package_name: String,
@@ -32,7 +32,7 @@ pub struct CveDeltaEntry {
     pub summary: String,
 }
 
-#[allow(dead_code)] // Consumed by #599 (use case) and #600 (formatters); remove when wired
+#[allow(dead_code)] // WIRE(#599) WIRE(#600): remove when CveDeltaEntry::new is used in use case or formatter
 impl CveDeltaEntry {
     /// Creates a new [`CveDeltaEntry`].
     pub fn new(

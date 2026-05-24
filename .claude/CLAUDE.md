@@ -218,6 +218,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `CheckAbandonedPackagesUseCase` | `src/application/use_cases/check_abandoned_packages.rs` | Fetches PyPI maintenance info for all packages with progress bar and soft-fail per package |
 | `DiffRequest` | `src/application/dto/diff_request.rs` | Input DTO for the diff use case (source, project_path, check_cve) |
 | `GenerateDiffUseCase<LR,DLR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer; wired to CLI via `--diff` flag (#581) |
+| `CveDeltaView` / `CveDeltaEntry` | `src/application/read_models/cve_delta_view.rs` | Read model for CVE exposure diff between two lock file snapshots; `#[allow(dead_code)]` until wired by #599/#600 |
 | `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
 
 ### Important Invariants
@@ -257,13 +258,16 @@ Bulk removal is error-prone when multiple structs share field names.
 
 `#[allow(dead_code)]` is allowed ONLY for:
 
-| Use Case | Example |
-|----------|---------|
+| Use Case | Required Format |
+|----------|-----------------|
 | serde wire-format fields that are deserialized but not yet processed in Rust | `#[allow(dead_code)] pub experimental_flag: Option<bool>` on a `#[derive(Deserialize)]` struct |
 | `#[cfg(test)]`-bounded test helpers defined in a test module | Inside `#[cfg(test)] mod tests { ... }` only |
+| Foundational type/function in a sequential PR split whose consumer is a concrete tracked issue, not yet reachable from the binary | Must use the standardized format: `#[allow(dead_code)] // WIRE(#N): remove when <description>`. The attribute MUST be removed in Issue #N via the Step 4.0 cleanup gate. |
 
-In both cases, add a comment explaining WHY the field is intentionally unused in
-production code.
+In all cases, add a comment explaining WHY the field is intentionally unused in
+production code. For the WIRE case, the consuming issue number (#N) MUST exist as
+an open GitHub Issue, and the description after the colon MUST state the removal
+condition clearly.
 
 ### YAGNI Workflow
 
@@ -288,3 +292,10 @@ cargo clippy --lib -- -D warnings
 
 This is already enforced in `.claude/skills/commit/SKILL.md` and
 `.claude/skills/pr/SKILL.md`. Do not weaken this to `--lib` only.
+
+### Recent Incidents
+
+- **2026-05-24 (Issue #598)**: Added `CveDeltaView` and `CveDeltaEntry` read model
+  types with `#[allow(dead_code)]` in a standalone foundational PR. Free-form comment
+  was not machine-scannable, so removal in #599 was not enforced. Fixed by Issue #604
+  with the WIRE convention and the Step 4.0 cleanup gate.

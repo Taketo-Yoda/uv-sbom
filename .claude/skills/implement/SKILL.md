@@ -95,6 +95,28 @@ Accepted responses:
 - "Adjust X" → revise plan, re-present
 - "Cancel" → halt
 
+### Step 4.0: WIRE Annotation Cleanup Gate (MANDATORY)
+
+Scan the entire codebase for WIRE annotations that reference the current issue number:
+
+```bash
+git grep -rn "WIRE(#<issue-number>)" src/
+```
+
+**If matches are found**, each matched item MUST be cleaned up as part of this
+implementation:
+
+- [ ] Remove the `#[allow(dead_code)]` attribute
+- [ ] Remove the `// WIRE(#N): ...` comment line
+- [ ] Verify the item is now actually referenced in the production code added by
+  this issue (not just in `#[cfg(test)]`)
+- [ ] If the item is NOT yet referenced after your implementation, this is a scope
+  gap — pause and report to the user before proceeding
+
+**Do NOT proceed to Step 4 until every matched annotation has been addressed.**
+
+If no matches are found, continue to Step 4 without interruption.
+
 ### Step 4: Implement Changes
 
 - **Follow the confirmed plan from Step 3.5 exactly**
