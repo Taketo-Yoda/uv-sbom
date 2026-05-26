@@ -1,6 +1,7 @@
 use super::super::resolution_guide_view::{
     IntroducedByView, ResolutionEntryView, ResolutionGuideView,
 };
+use crate::application::read_models::vulnerability_view::SeverityView;
 use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
 
 /// Builds resolution guide view from domain resolution entries
@@ -33,7 +34,7 @@ fn build_resolution_entry_view(entry: &ResolutionEntry) -> ResolutionEntryView {
         vulnerable_package: entry.vulnerable_package().to_string(),
         current_version: entry.current_version().to_string(),
         fixed_version: entry.fixed_version().map(|v| v.to_string()),
-        severity: super::vulnerability_builder::map_severity(&entry.severity()),
+        severity: SeverityView::from(entry.severity()),
         vulnerability_id: entry.vulnerability_id().to_string(),
         introduced_by,
         dependency_chains,
