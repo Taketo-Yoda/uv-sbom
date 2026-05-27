@@ -7,6 +7,43 @@ use async_trait::async_trait;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+/// Mock VulnerabilityRepository that returns pre-configured responses in order.
+///
+/// Each call to `fetch_vulnerabilities` pops the next response from the queue.
+/// Designed for testing `GenerateDiffUseCase`'s CVE delta computation, where the
+/// use case calls `fetch_vulnerabilities` twice — once for base packages and once
+/// for current packages — in sequential order.
+#[derive(Clone, Default)]
+pub(crate) struct PairedMockVulnerabilityRepository {
+    queue: Arc<Mutex<VecDeque<Vec<PackageVulnerabilities>>>>,
+}
+
+impl PairedMockVulnerabilityRepository {
+    /// Creates a mock that returns `base_response` on the first call and
+    /// `current_response` on the second call.
+    pub fn new(
+        base_response: Vec<PackageVulnerabilities>,
+        current_response: Vec<PackageVulnerabilities>,
+    ) -> Self {
+        let mut queue = VecDeque::new();
+        queue.push_back(base_response);
+        queue.push_back(current_response);
+        Self {
+            queue: Arc::new(Mutex::new(queue)),
+        }
+    }
+}
+
+#[async_trait]
+impl VulnerabilityRepository for PairedMockVulnerabilityRepository {
+    async fn fetch_vulnerabilities(
+        &self,
+        _packages: Vec<Package>,
+    ) -> Result<Vec<PackageVulnerabilities>> {
+        Ok(self.queue.lock().unwrap().pop_front().unwrap_or_default())
+    }
+}
+
 /// Configurable in-memory mock implementing `MaintenanceRepository`.
 ///
 /// Each call to `fetch_maintenance_info` pops the next response from the queue.

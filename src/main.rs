@@ -504,9 +504,6 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
 ///
 /// Returns `Ok(true)` if vulnerabilities were detected in new/updated packages
 /// and CVE checking is enabled, `Ok(false)` otherwise.
-///
-/// Note: CVE enrichment is currently a no-op in `GenerateDiffUseCase::execute`,
-/// so this will always return `Ok(false)` until a follow-up issue wires it in.
 async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     display_banner();
 
@@ -525,13 +522,22 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
         check_cve,
     };
 
-    // execute() is synchronous — call directly without .await
-    let use_case = GenerateDiffUseCase::new(FileSystemReader::new(), GitLockfileReader::new());
-    let diff = use_case.execute(request)?;
+    let vulnerability_repository = if check_cve {
+        Some(OsvClient::new()?)
+    } else {
+        None
+    };
+    let use_case = GenerateDiffUseCase::new(
+        FileSystemReader::new(),
+        GitLockfileReader::new(),
+        vulnerability_repository,
+    );
+    let result = use_case.execute(request).await?;
+    let diff = &result.diff;
 
     let formatted = match merged.format {
-        OutputFormat::Markdown => DiffMarkdownFormatter::new().format(&diff),
-        OutputFormat::Json => DiffJsonFormatter::new().format(&diff)?,
+        OutputFormat::Markdown => DiffMarkdownFormatter::new().format(diff),
+        OutputFormat::Json => DiffJsonFormatter::new().format(diff)?,
     };
 
     let presenter_type = if let Some(output_path) = args.output {
@@ -542,5 +548,6 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     let presenter = PresenterFactory::create(presenter_type, locale);
     presenter.present(&formatted)?;
 
+    // TODO(#600): incorporate result.cve_delta into exit-code logic once formatter wires it in
     Ok(diff.changes.iter().any(|c| c.vulnerability_count > 0) && check_cve)
 }
