@@ -426,7 +426,9 @@ mod tests {
         let md = DiffMarkdownFormatter::new().format(&diff, Some(&delta));
 
         assert!(md.contains("### 🔴 New Vulnerabilities (1)"));
-        assert!(md.contains("| cryptography | 41.0.0 | CVE-2024-0727 | HIGH | Null pointer dereference |"));
+        assert!(md.contains(
+            "| cryptography | 41.0.0 | CVE-2024-0727 | HIGH | Null pointer dereference |"
+        ));
     }
 
     #[test]
