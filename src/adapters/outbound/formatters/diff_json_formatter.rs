@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::application::read_models::cve_delta_view::{CveDeltaEntry, CveDeltaView};
+use crate::application::read_models::vulnerability_view::SeverityView;
 use crate::sbom_generation::domain::dependency_diff::{ChangeType, DependencyDiff};
 use crate::shared::Result;
 
@@ -9,6 +11,7 @@ use crate::shared::Result;
 /// ```json
 /// { "diff": { "base": "<ref>", "summary": {...}, "changes": [...] } }
 /// ```
+/// When `cve_delta` is `Some`, a top-level `"cve_delta"` key is added alongside `"diff"`.
 /// Version fields are omitted when not applicable (e.g. `old_version` for Added packages).
 pub struct DiffJsonFormatter;
 
@@ -20,10 +23,13 @@ impl DiffJsonFormatter {
 
     /// Serializes `diff` to a pretty-printed JSON string.
     ///
+    /// When `cve_delta` is `Some`, includes a top-level `"cve_delta"` object with `"new"` and
+    /// `"resolved"` arrays. When `None`, the key is omitted entirely (backward-compatible output).
+    ///
     /// # Errors
     /// Returns an error if JSON serialization fails (in practice this cannot happen
     /// because all field types are serializable).
-    pub fn format(&self, diff: &DependencyDiff) -> Result<String> {
+    pub fn format(&self, diff: &DependencyDiff, cve_delta: Option<&CveDeltaView>) -> Result<String> {
         let changes: Vec<ChangeDto> = diff
             .changes
             .iter()
@@ -45,6 +51,8 @@ impl DiffJsonFormatter {
             })
             .collect();
 
+        let cve_delta_dto = cve_delta.map(map_cve_delta);
+
         let envelope = DiffEnvelope {
             diff: DiffBody {
                 base: &diff.base_ref,
@@ -56,6 +64,7 @@ impl DiffJsonFormatter {
                 },
                 changes,
             },
+            cve_delta: cve_delta_dto,
         };
 
         serde_json::to_string_pretty(&envelope).map_err(Into::into)
@@ -77,9 +86,28 @@ fn change_label(change_type: &ChangeType) -> &'static str {
     }
 }
 
+fn map_cve_delta(delta: &CveDeltaView) -> CveDeltaDto<'_> {
+    CveDeltaDto {
+        new: delta.new.iter().map(map_cve_entry).collect(),
+        resolved: delta.resolved.iter().map(map_cve_entry).collect(),
+    }
+}
+
+fn map_cve_entry(entry: &CveDeltaEntry) -> CveDeltaEntryDto<'_> {
+    CveDeltaEntryDto {
+        package: &entry.package_name,
+        version: &entry.version,
+        cve_id: &entry.cve_id,
+        severity: entry.severity.as_ref().map(SeverityView::as_str),
+        summary: &entry.summary,
+    }
+}
+
 #[derive(Serialize)]
 struct DiffEnvelope<'a> {
     diff: DiffBody<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cve_delta: Option<CveDeltaDto<'a>>,
 }
 
 #[derive(Serialize)]
@@ -109,9 +137,27 @@ struct ChangeDto<'a> {
     license: Option<&'a str>,
 }
 
+#[derive(Serialize)]
+struct CveDeltaDto<'a> {
+    new: Vec<CveDeltaEntryDto<'a>>,
+    resolved: Vec<CveDeltaEntryDto<'a>>,
+}
+
+#[derive(Serialize)]
+struct CveDeltaEntryDto<'a> {
+    package: &'a str,
+    version: &'a str,
+    cve_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    severity: Option<&'static str>,
+    summary: &'a str,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::read_models::cve_delta_view::{CveDeltaEntry, CveDeltaView};
+    use crate::application::read_models::vulnerability_view::SeverityView;
     use crate::sbom_generation::domain::dependency_diff::{
         ChangeType, DependencyDiff, DiffSummary, PackageChange,
     };
@@ -161,11 +207,27 @@ mod tests {
         }
     }
 
+    fn make_entry(
+        package: &str,
+        version: &str,
+        cve_id: &str,
+        severity: Option<SeverityView>,
+        summary: &str,
+    ) -> CveDeltaEntry {
+        CveDeltaEntry::new(
+            package.to_string(),
+            version.to_string(),
+            cve_id.to_string(),
+            severity,
+            summary.to_string(),
+        )
+    }
+
     #[test]
     fn test_top_level_shape_and_base_ref() {
         let diff = make_diff(vec![]);
         let formatter = DiffJsonFormatter::new();
-        let json: Value = serde_json::from_str(&formatter.format(&diff).unwrap()).unwrap();
+        let json: Value = serde_json::from_str(&formatter.format(&diff, None).unwrap()).unwrap();
 
         assert!(json["diff"].is_object());
         assert_eq!(json["diff"]["base"], "main");
@@ -177,7 +239,7 @@ mod tests {
     fn test_empty_diff() {
         let diff = make_diff(vec![]);
         let formatter = DiffJsonFormatter::new();
-        let json: Value = serde_json::from_str(&formatter.format(&diff).unwrap()).unwrap();
+        let json: Value = serde_json::from_str(&formatter.format(&diff, None).unwrap()).unwrap();
 
         assert_eq!(json["diff"]["summary"]["added"], 0);
         assert_eq!(json["diff"]["summary"]["removed"], 0);
@@ -197,7 +259,7 @@ mod tests {
             0,
         )]);
         let formatter = DiffJsonFormatter::new();
-        let json: Value = serde_json::from_str(&formatter.format(&diff).unwrap()).unwrap();
+        let json: Value = serde_json::from_str(&formatter.format(&diff, None).unwrap()).unwrap();
         let change = &json["diff"]["changes"][0];
 
         assert_eq!(change["change"], "added");
@@ -217,7 +279,7 @@ mod tests {
             0,
         )]);
         let formatter = DiffJsonFormatter::new();
-        let json: Value = serde_json::from_str(&formatter.format(&diff).unwrap()).unwrap();
+        let json: Value = serde_json::from_str(&formatter.format(&diff, None).unwrap()).unwrap();
         let change = &json["diff"]["changes"][0];
 
         assert_eq!(change["change"], "removed");
@@ -236,7 +298,7 @@ mod tests {
             0,
         )]);
         let formatter = DiffJsonFormatter::new();
-        let json: Value = serde_json::from_str(&formatter.format(&diff).unwrap()).unwrap();
+        let json: Value = serde_json::from_str(&formatter.format(&diff, None).unwrap()).unwrap();
         let change = &json["diff"]["changes"][0];
 
         assert_eq!(change["change"], "updated");
@@ -255,7 +317,7 @@ mod tests {
             0,
         )]);
         let formatter = DiffJsonFormatter::new();
-        let json: Value = serde_json::from_str(&formatter.format(&diff).unwrap()).unwrap();
+        let json: Value = serde_json::from_str(&formatter.format(&diff, None).unwrap()).unwrap();
         let change = &json["diff"]["changes"][0];
 
         assert_eq!(change["change"], "unchanged");
@@ -274,7 +336,7 @@ mod tests {
             0,
         )]);
         let formatter = DiffJsonFormatter::new();
-        let json_str = formatter.format(&diff).unwrap();
+        let json_str = formatter.format(&diff, None).unwrap();
         let json: Value = serde_json::from_str(&json_str).unwrap();
 
         assert!(json["diff"]["changes"][0]["license"].is_null());
@@ -311,12 +373,122 @@ mod tests {
             ),
         ]);
         let formatter = DiffJsonFormatter::new();
-        let json: Value = serde_json::from_str(&formatter.format(&diff).unwrap()).unwrap();
+        let json: Value = serde_json::from_str(&formatter.format(&diff, None).unwrap()).unwrap();
 
         assert_eq!(json["diff"]["summary"]["added"], 1);
         assert_eq!(json["diff"]["summary"]["removed"], 1);
         assert_eq!(json["diff"]["summary"]["updated"], 1);
         assert_eq!(json["diff"]["summary"]["unchanged"], 1);
         assert_eq!(json["diff"]["changes"].as_array().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn test_cve_delta_key_absent_when_none() {
+        let diff = make_diff(vec![]);
+        let json_str = DiffJsonFormatter::new().format(&diff, None).unwrap();
+        let json: Value = serde_json::from_str(&json_str).unwrap();
+
+        assert!(json["cve_delta"].is_null());
+        assert!(!json_str.contains("\"cve_delta\""));
+    }
+
+    #[test]
+    fn test_cve_delta_key_present_with_empty_lists() {
+        let diff = make_diff(vec![]);
+        let delta = CveDeltaView::default();
+        let json: Value =
+            serde_json::from_str(&DiffJsonFormatter::new().format(&diff, Some(&delta)).unwrap())
+                .unwrap();
+
+        assert!(json["cve_delta"].is_object());
+        assert_eq!(json["cve_delta"]["new"].as_array().unwrap().len(), 0);
+        assert_eq!(json["cve_delta"]["resolved"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_cve_delta_new_entry_serialized() {
+        let diff = make_diff(vec![]);
+        let delta = CveDeltaView {
+            new: vec![make_entry(
+                "cryptography",
+                "41.0.0",
+                "CVE-2024-0727",
+                Some(SeverityView::High),
+                "Null pointer dereference",
+            )],
+            resolved: vec![],
+        };
+        let json: Value =
+            serde_json::from_str(&DiffJsonFormatter::new().format(&diff, Some(&delta)).unwrap())
+                .unwrap();
+        let entry = &json["cve_delta"]["new"][0];
+
+        assert_eq!(entry["package"], "cryptography");
+        assert_eq!(entry["version"], "41.0.0");
+        assert_eq!(entry["cve_id"], "CVE-2024-0727");
+        assert_eq!(entry["severity"], "HIGH");
+        assert_eq!(entry["summary"], "Null pointer dereference");
+    }
+
+    #[test]
+    fn test_cve_delta_resolved_entry_serialized() {
+        let diff = make_diff(vec![]);
+        let delta = CveDeltaView {
+            new: vec![],
+            resolved: vec![make_entry(
+                "requests",
+                "2.28.0",
+                "CVE-2023-32681",
+                Some(SeverityView::Medium),
+                "Fixed in 2.31.0",
+            )],
+        };
+        let json: Value =
+            serde_json::from_str(&DiffJsonFormatter::new().format(&diff, Some(&delta)).unwrap())
+                .unwrap();
+        let entry = &json["cve_delta"]["resolved"][0];
+
+        assert_eq!(entry["package"], "requests");
+        assert_eq!(entry["cve_id"], "CVE-2023-32681");
+        assert_eq!(entry["severity"], "MEDIUM");
+    }
+
+    #[test]
+    fn test_cve_delta_severity_omitted_when_option_none() {
+        let diff = make_diff(vec![]);
+        let delta = CveDeltaView {
+            new: vec![make_entry("pkg", "1.0.0", "CVE-2024-0001", None, "desc")],
+            resolved: vec![],
+        };
+        let json_str = DiffJsonFormatter::new().format(&diff, Some(&delta)).unwrap();
+        let json: Value = serde_json::from_str(&json_str).unwrap();
+
+        assert!(json["cve_delta"]["new"][0]["severity"].is_null());
+        // severity key itself is omitted when None
+        assert!(
+            !json_str
+                .lines()
+                .any(|l| l.contains("\"severity\"") && !l.contains("HIGH") && !l.contains("MEDIUM") && !l.contains("LOW") && !l.contains("CRITICAL") && !l.contains("NONE"))
+        );
+    }
+
+    #[test]
+    fn test_cve_delta_severity_none_variant_renders_as_none_string() {
+        let diff = make_diff(vec![]);
+        let delta = CveDeltaView {
+            new: vec![make_entry(
+                "pkg",
+                "1.0.0",
+                "CVE-2024-0002",
+                Some(SeverityView::None),
+                "desc",
+            )],
+            resolved: vec![],
+        };
+        let json: Value =
+            serde_json::from_str(&DiffJsonFormatter::new().format(&diff, Some(&delta)).unwrap())
+                .unwrap();
+
+        assert_eq!(json["cve_delta"]["new"][0]["severity"], "NONE");
     }
 }

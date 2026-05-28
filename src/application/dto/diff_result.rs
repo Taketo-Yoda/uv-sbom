@@ -9,7 +9,6 @@ use crate::sbom_generation::domain::dependency_diff::DependencyDiff;
 #[derive(Debug, Clone)]
 pub struct DiffResult {
     pub diff: DependencyDiff,
-    #[allow(dead_code)] // WIRE(#600): remove when cve_delta is consumed by diff formatters
     pub cve_delta: Option<CveDeltaView>,
 }
 

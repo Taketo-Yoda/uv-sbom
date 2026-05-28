@@ -7,7 +7,6 @@ use super::vulnerability_view::SeverityView;
 
 /// Container describing the change in CVE exposure between two SBOM snapshots.
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)] // WIRE(#600): remove when CveDeltaView fields are consumed by diff formatters
 pub struct CveDeltaView {
     /// Newly introduced CVEs (present in the newer snapshot, absent from the baseline).
     pub new: Vec<CveDeltaEntry>,
@@ -17,7 +16,6 @@ pub struct CveDeltaView {
 
 /// Single CVE change entry for a specific package/version.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // WIRE(#600): remove when CveDeltaEntry fields are consumed by diff formatters
 pub struct CveDeltaEntry {
     /// Name of the affected package.
     pub package_name: String,

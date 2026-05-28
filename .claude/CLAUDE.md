@@ -217,8 +217,9 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555 |
 | `CheckAbandonedPackagesUseCase` | `src/application/use_cases/check_abandoned_packages.rs` | Fetches PyPI maintenance info for all packages with progress bar and soft-fail per package |
 | `DiffRequest` | `src/application/dto/diff_request.rs` | Input DTO for the diff use case (source, project_path, check_cve) |
-| `GenerateDiffUseCase<LR,DLR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer; wired to CLI via `--diff` flag (#581) |
-| `CveDeltaView` / `CveDeltaEntry` | `src/application/read_models/cve_delta_view.rs` | Read model for CVE exposure diff between two lock file snapshots; `#[allow(dead_code)]` until wired by #599/#600 |
+| `DiffResult` | `src/application/dto/diff_result.rs` | Output of `GenerateDiffUseCase::execute`; wraps domain `DependencyDiff` with `Option<CveDeltaView>` to keep domain layer free of read-model dependencies |
+| `GenerateDiffUseCase<LR,DLR,VR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer, optionally fetches CVE delta via VulnerabilityRepository; 3rd param `VR` (default `()`) added in #599 |
+| `CveDeltaView` / `CveDeltaEntry` | `src/application/read_models/cve_delta_view.rs` | Read model for CVE exposure diff between two lock file snapshots; wired into `GenerateDiffUseCase` in #599; consumed by diff formatters (Markdown/JSON) in #600 |
 | `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
 
 ### Important Invariants
