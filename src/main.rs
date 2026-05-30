@@ -534,10 +534,11 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     );
     let result = use_case.execute(request).await?;
     let diff = &result.diff;
+    let cve_delta = result.cve_delta.as_ref();
 
     let formatted = match merged.format {
-        OutputFormat::Markdown => DiffMarkdownFormatter::new().format(diff),
-        OutputFormat::Json => DiffJsonFormatter::new().format(diff)?,
+        OutputFormat::Markdown => DiffMarkdownFormatter::new().format(diff, cve_delta),
+        OutputFormat::Json => DiffJsonFormatter::new().format(diff, cve_delta)?,
     };
 
     let presenter_type = if let Some(output_path) = args.output {
@@ -548,6 +549,5 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     let presenter = PresenterFactory::create(presenter_type, locale);
     presenter.present(&formatted)?;
 
-    // TODO(#600): incorporate result.cve_delta into exit-code logic once formatter wires it in
     Ok(diff.changes.iter().any(|c| c.vulnerability_count > 0) && check_cve)
 }
