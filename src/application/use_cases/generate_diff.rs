@@ -4,7 +4,7 @@ use crate::application::read_models::vulnerability_view::SeverityView;
 use crate::ports::outbound::{
     DiffLockfileReader, DiffSource, LockfileReader, VulnerabilityRepository,
 };
-use crate::sbom_generation::domain::services::DependencyDiffAnalyzer;
+use crate::sbom_generation::domain::services::{DependencyDiffAnalyzer, ThresholdConfig};
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 use crate::sbom_generation::domain::Package;
 use crate::shared::Result;
@@ -72,9 +72,16 @@ where
             DiffSource::FilePath(p) => p.to_string_lossy().into_owned(),
         };
 
+        let threshold = match (request.severity_threshold, request.cvss_threshold) {
+            (Some(sev), None) => ThresholdConfig::Severity(sev),
+            (None, Some(cvss)) => ThresholdConfig::Cvss(cvss),
+            // Both None (no threshold) or unreachable (clap group prevents both being set)
+            _ => ThresholdConfig::None,
+        };
+
         let cve_delta = if request.check_cve {
             match &self.vulnerability_repository {
-                Some(repo) => Some(compute_cve_delta(repo, &base, &current).await?),
+                Some(repo) => Some(compute_cve_delta(repo, &base, &current, &threshold).await?),
                 None => None,
             }
         } else {
@@ -89,16 +96,20 @@ where
 /// then computes the set difference keyed on `(package_name, version, cve_id)`.
 /// Sequential fetching is intentional: OSV API rate limits make parallel calls
 /// counter-productive, and it simplifies mock ordering in tests.
+///
+/// Both base and current maps are filtered by `threshold` before the set difference
+/// is computed, so below-threshold CVEs never appear in either `new` or `resolved`.
 async fn compute_cve_delta<VR: VulnerabilityRepository>(
     repo: &VR,
     base: &[Package],
     current: &[Package],
+    threshold: &ThresholdConfig,
 ) -> Result<CveDeltaView> {
     let base_vulns = repo.fetch_vulnerabilities(base.to_vec()).await?;
     let current_vulns = repo.fetch_vulnerabilities(current.to_vec()).await?;
 
-    let base_map = flatten_to_entries(&base_vulns);
-    let current_map = flatten_to_entries(&current_vulns);
+    let base_map = flatten_to_entries(&base_vulns, threshold);
+    let current_map = flatten_to_entries(&current_vulns, threshold);
 
     let base_keys: HashSet<_> = base_map.keys().cloned().collect();
     let current_keys: HashSet<_> = current_map.keys().cloned().collect();
@@ -117,14 +128,21 @@ async fn compute_cve_delta<VR: VulnerabilityRepository>(
 }
 
 /// Converts a flat list of `PackageVulnerabilities` into a map keyed by
-/// `(package_name, version, cve_id)`. This three-part key ensures that the same
-/// CVE ID on different package versions is treated as distinct entries.
+/// `(package_name, version, cve_id)`, filtered by `threshold`.
+///
+/// Filtering happens here, at the `Vulnerability` level, because `CveDeltaEntry`
+/// does not store the raw CVSS score — filtering after entry construction would
+/// be unable to apply CVSS-based thresholds.
 fn flatten_to_entries(
     pkg_vulns: &[PackageVulnerabilities],
+    threshold: &ThresholdConfig,
 ) -> HashMap<(String, String, String), CveDeltaEntry> {
     let mut map = HashMap::new();
     for pv in pkg_vulns {
         for vuln in pv.vulnerabilities() {
+            if !threshold.is_above_threshold(vuln) {
+                continue;
+            }
             let key = (
                 pv.package_name().to_string(),
                 pv.current_version().to_string(),
@@ -238,6 +256,8 @@ mod tests {
             source: DiffSource::GitRef(ref_name.to_string()),
             project_path: PathBuf::from("/project"),
             check_cve: false,
+            severity_threshold: None,
+            cvss_threshold: None,
         }
     }
 
@@ -246,6 +266,8 @@ mod tests {
             source: DiffSource::GitRef(ref_name.to_string()),
             project_path: PathBuf::from("/project"),
             check_cve: true,
+            severity_threshold: None,
+            cvss_threshold: None,
         }
     }
 
@@ -314,6 +336,8 @@ mod tests {
             source: DiffSource::FilePath(PathBuf::from("/tmp/uv.lock")),
             project_path: PathBuf::from("/project"),
             check_cve: false,
+            severity_threshold: None,
+            cvss_threshold: None,
         };
         let result = uc.execute(req).await.unwrap();
         assert_eq!(result.diff.base_ref, "/tmp/uv.lock");
@@ -423,5 +447,151 @@ mod tests {
         assert_eq!(delta.resolved.len(), 1);
         assert_eq!(delta.new[0].version, "2.31.0");
         assert_eq!(delta.resolved[0].version, "2.30.0");
+    }
+
+    fn git_ref_request_with_severity(ref_name: &str, severity: Severity) -> DiffRequest {
+        DiffRequest {
+            source: DiffSource::GitRef(ref_name.to_string()),
+            project_path: PathBuf::from("/project"),
+            check_cve: true,
+            severity_threshold: Some(severity),
+            cvss_threshold: None,
+        }
+    }
+
+    fn git_ref_request_with_cvss(ref_name: &str, cvss: f32) -> DiffRequest {
+        DiffRequest {
+            source: DiffSource::GitRef(ref_name.to_string()),
+            project_path: PathBuf::from("/project"),
+            check_cve: true,
+            severity_threshold: None,
+            cvss_threshold: Some(cvss),
+        }
+    }
+
+    fn make_vuln_with_cvss(id: &str, severity: Severity, cvss: f32) -> Vulnerability {
+        use crate::sbom_generation::domain::vulnerability::CvssScore;
+        Vulnerability::new(
+            id.to_string(),
+            Some(CvssScore::new(cvss).unwrap()),
+            severity,
+            None,
+            None,
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_severity_threshold_filters_below_threshold_new_entries() {
+        // base: empty; current: high + low CVE → only high should appear in new
+        let repo = PairedMockVulnerabilityRepository::new(
+            vec![],
+            vec![make_pkg_vulns(
+                "requests",
+                "2.31.0",
+                vec![
+                    make_vuln("CVE-2024-HIGH", Severity::High),
+                    make_vuln("CVE-2024-LOW", Severity::Low),
+                ],
+            )],
+        );
+        let uc = make_use_case_with_vuln_repo(vec![pkg("requests", "2.31.0")], vec![], repo);
+        let result = uc
+            .execute(git_ref_request_with_severity("main", Severity::High))
+            .await
+            .unwrap();
+        let delta = result.cve_delta.unwrap();
+        assert_eq!(delta.new.len(), 1);
+        assert_eq!(delta.new[0].cve_id, "CVE-2024-HIGH");
+        assert!(delta.resolved.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cvss_threshold_filters_below_threshold_new_entries() {
+        // base: empty; current: 9.0 (above) + 3.0 (below) → only 9.0 appears
+        let repo = PairedMockVulnerabilityRepository::new(
+            vec![],
+            vec![make_pkg_vulns(
+                "requests",
+                "2.31.0",
+                vec![
+                    make_vuln_with_cvss("CVE-2024-CRITICAL", Severity::Critical, 9.0),
+                    make_vuln_with_cvss("CVE-2024-LOW", Severity::Low, 3.0),
+                ],
+            )],
+        );
+        let uc = make_use_case_with_vuln_repo(vec![pkg("requests", "2.31.0")], vec![], repo);
+        let result = uc
+            .execute(git_ref_request_with_cvss("main", 7.0))
+            .await
+            .unwrap();
+        let delta = result.cve_delta.unwrap();
+        assert_eq!(delta.new.len(), 1);
+        assert_eq!(delta.new[0].cve_id, "CVE-2024-CRITICAL");
+    }
+
+    #[tokio::test]
+    async fn test_cvss_threshold_excludes_cve_without_score() {
+        // A CVE with no CVSS score should be excluded when a CVSS threshold is set
+        let repo = PairedMockVulnerabilityRepository::new(
+            vec![],
+            vec![make_pkg_vulns(
+                "requests",
+                "2.31.0",
+                vec![make_vuln("CVE-2024-UNSCORED", Severity::High)],
+            )],
+        );
+        let uc = make_use_case_with_vuln_repo(vec![pkg("requests", "2.31.0")], vec![], repo);
+        let result = uc
+            .execute(git_ref_request_with_cvss("main", 7.0))
+            .await
+            .unwrap();
+        let delta = result.cve_delta.unwrap();
+        assert!(delta.new.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_no_threshold_passes_all_entries() {
+        // Without threshold, all CVEs should appear
+        let repo = PairedMockVulnerabilityRepository::new(
+            vec![],
+            vec![make_pkg_vulns(
+                "requests",
+                "2.31.0",
+                vec![
+                    make_vuln("CVE-2024-CRITICAL", Severity::Critical),
+                    make_vuln("CVE-2024-LOW", Severity::Low),
+                ],
+            )],
+        );
+        let uc = make_use_case_with_vuln_repo(vec![pkg("requests", "2.31.0")], vec![], repo);
+        let result = uc.execute(git_ref_request_with_cve("main")).await.unwrap();
+        let delta = result.cve_delta.unwrap();
+        assert_eq!(delta.new.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_severity_threshold_filters_resolved_entries_symmetrically() {
+        // Below-threshold CVEs in base should not appear in resolved either
+        let repo = PairedMockVulnerabilityRepository::new(
+            vec![make_pkg_vulns(
+                "requests",
+                "2.30.0",
+                vec![
+                    make_vuln("CVE-2023-HIGH", Severity::High),
+                    make_vuln("CVE-2023-LOW", Severity::Low),
+                ],
+            )],
+            vec![],
+        );
+        let uc = make_use_case_with_vuln_repo(vec![], vec![pkg("requests", "2.30.0")], repo);
+        let result = uc
+            .execute(git_ref_request_with_severity("main", Severity::High))
+            .await
+            .unwrap();
+        let delta = result.cve_delta.unwrap();
+        assert!(delta.new.is_empty());
+        assert_eq!(delta.resolved.len(), 1);
+        assert_eq!(delta.resolved[0].cve_id, "CVE-2023-HIGH");
     }
 }
