@@ -520,6 +520,8 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
         source,
         project_path: project_path.clone(),
         check_cve,
+        severity_threshold: merged.severity_threshold,
+        cvss_threshold: merged.cvss_threshold,
     };
 
     let vulnerability_repository = if check_cve {
@@ -549,5 +551,5 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     let presenter = PresenterFactory::create(presenter_type, locale);
     presenter.present(&formatted)?;
 
-    Ok(diff.changes.iter().any(|c| c.vulnerability_count > 0) && check_cve)
+    Ok(check_cve && cve_delta.is_some_and(|d| !d.new.is_empty()))
 }
