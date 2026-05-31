@@ -526,12 +526,37 @@ uv-sbom --diff main --format json
 
 **Mutual exclusion:** `--diff` cannot be combined with `--workspace` or `--init`.
 
-**CVE check:** By default CVE checking is enabled for added and updated packages (use `--no-check-cve` to disable). When a vulnerability is found, the process exits with code `1`.
+#### CVE Delta
+
+By default, `--diff` also runs vulnerability checks on both the base and current lock files and appends a **CVE Delta** section to the report showing which vulnerabilities were introduced or resolved:
+
+- **New vulnerabilities** — CVEs that affect packages in the current lock but were not present in the base.
+- **Resolved vulnerabilities** — CVEs that affected packages in the base lock but no longer apply.
+
+```bash
+# Diff with CVE delta (default — CVE checking is on)
+uv-sbom --diff main
+
+# Disable CVE checking in diff mode
+uv-sbom --diff main --no-check-cve
+```
+
+JSON output includes a top-level `cve_delta` key with `new` and `resolved` arrays. The key is omitted entirely when `--no-check-cve` is passed.
+
+**Severity and CVSS filtering:** `--severity-threshold` and `--cvss-threshold` apply to the CVE delta. Only entries at or above the threshold appear in the tables. The process exits with code `1` when new CVEs above the configured threshold are introduced.
+
+```bash
+# Show only HIGH and above CVE delta entries
+uv-sbom --diff main --severity-threshold high
+
+# Show only CVE delta entries with CVSS ≥ 7.0
+uv-sbom --diff main --cvss-threshold 7.0
+```
 
 **CI example:**
 ```bash
-# Fail the build if new dependencies introduced by this PR have known CVEs
-uv-sbom --diff origin/main --format markdown --output diff.md
+# Fail the build if new dependencies introduced by this PR have known HIGH+ CVEs
+uv-sbom --diff origin/main --format markdown --output diff.md --severity-threshold high
 ```
 
 ### CI Integration
