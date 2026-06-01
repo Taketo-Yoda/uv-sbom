@@ -522,12 +522,37 @@ uv-sbom --diff main --format json
 
 **排他制約:** `--diff` は `--workspace` または `--init` と同時に使用できません。
 
-**CVEチェック:** デフォルトでは追加・更新されたパッケージのCVEチェックが有効です（`--no-check-cve` で無効化）。脆弱性が見つかった場合、プロセスはコード `1` で終了します。
+#### CVEデルタ
+
+デフォルトでは、`--diff` はベースおよび現在のロックファイル両方に対して脆弱性チェックも実行し、導入または解消された脆弱性を示す **CVEデルタ** セクションをレポートに追加します：
+
+- **新規脆弱性** — 現在のロックファイルのパッケージに影響するが、ベースには存在しなかったCVE。
+- **解消済み脆弱性** — ベースのロックファイルのパッケージに影響していたが、現在は適用されなくなったCVE。
+
+```bash
+# CVEデルタ付きのDiff（デフォルト — CVEチェックは有効）
+uv-sbom --diff main
+
+# diffモードでCVEチェックを無効化
+uv-sbom --diff main --no-check-cve
+```
+
+JSON出力にはトップレベルの `cve_delta` キーが `new` と `resolved` 配列とともに追加されます。`--no-check-cve` を指定した場合、このキーは出力から省略されます。
+
+**重大度およびCVSSフィルタリング:** `--severity-threshold` と `--cvss-threshold` はCVEデルタにも適用されます。しきい値以上のエントリのみがテーブルに表示されます。設定したしきい値を超える新規CVEが導入された場合、プロセスはコード `1` で終了します。
+
+```bash
+# HIGH以上のCVEデルタエントリのみ表示
+uv-sbom --diff main --severity-threshold high
+
+# CVSS ≥ 7.0 のCVEデルタエントリのみ表示
+uv-sbom --diff main --cvss-threshold 7.0
+```
 
 **CI例:**
 ```bash
-# このPRで新規追加された依存関係に既知のCVEがある場合にビルドを失敗させる
-uv-sbom --diff origin/main --format markdown --output diff.md
+# このPRで新規追加された依存関係にHIGH以上の既知のCVEがある場合にビルドを失敗させる
+uv-sbom --diff origin/main --format markdown --output diff.md --severity-threshold high
 ```
 
 ### CI統合
