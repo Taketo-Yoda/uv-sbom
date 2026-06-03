@@ -1,6 +1,8 @@
 use crate::application::dto::{DiffRequest, DiffResult};
 use crate::application::read_models::cve_delta_view::{CveDeltaEntry, CveDeltaView};
 use crate::application::read_models::vulnerability_view::SeverityView;
+use crate::application::use_cases::CheckVulnerabilitiesUseCase;
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
     DiffLockfileReader, DiffSource, LockfileReader, VulnerabilityRepository,
 };
@@ -15,33 +17,38 @@ use std::collections::{HashMap, HashSet};
 /// `LR` reads the current `uv.lock`, `DLR` reads the base lockfile (git ref or
 /// file path), and `VR` fetches OSV vulnerability data. `VR` defaults to `()`
 /// (the Null Object implementation) when CVE checking is not needed.
+/// `VR` must be `Clone` because `compute_cve_delta` creates two
+/// `CheckVulnerabilitiesUseCase` instances (one for base, one for current).
 pub struct GenerateDiffUseCase<LR, DLR, VR = ()>
 where
     LR: LockfileReader,
     DLR: DiffLockfileReader,
-    VR: VulnerabilityRepository,
+    VR: VulnerabilityRepository + Clone,
 {
     lockfile_reader: LR,
     diff_reader: DLR,
     vulnerability_repository: Option<VR>,
+    locale: Locale,
 }
 
 impl<LR, DLR, VR> GenerateDiffUseCase<LR, DLR, VR>
 where
     LR: LockfileReader,
     DLR: DiffLockfileReader,
-    VR: VulnerabilityRepository,
+    VR: VulnerabilityRepository + Clone,
 {
-    /// Creates a new [`GenerateDiffUseCase`] with the given readers and optional vulnerability repository.
+    /// Creates a new [`GenerateDiffUseCase`] with the given readers, optional vulnerability repository, and locale.
     pub fn new(
         lockfile_reader: LR,
         diff_reader: DLR,
         vulnerability_repository: Option<VR>,
+        locale: Locale,
     ) -> Self {
         Self {
             lockfile_reader,
             diff_reader,
             vulnerability_repository,
+            locale,
         }
     }
 
@@ -81,7 +88,9 @@ where
 
         let cve_delta = if request.check_cve {
             match &self.vulnerability_repository {
-                Some(repo) => Some(compute_cve_delta(repo, &base, &current, &threshold).await?),
+                Some(repo) => {
+                    Some(compute_cve_delta(repo, &base, &current, &threshold, self.locale).await?)
+                }
                 None => None,
             }
         } else {
@@ -92,21 +101,32 @@ where
     }
 }
 
-/// Fetches OSV vulnerability data for `base` and `current` package sets sequentially,
-/// then computes the set difference keyed on `(package_name, version, cve_id)`.
-/// Sequential fetching is intentional: OSV API rate limits make parallel calls
-/// counter-productive, and it simplifies mock ordering in tests.
+/// Fetches OSV vulnerability data for `base` and `current` package sets sequentially
+/// using `CheckVulnerabilitiesUseCase::check_with_progress`, which displays an indicatif
+/// spinner/progress bar identical to SBOM mode. Sequential fetching is intentional:
+/// OSV API rate limits make parallel calls counter-productive, and it simplifies mock
+/// ordering in tests.
 ///
 /// Both base and current maps are filtered by `threshold` before the set difference
 /// is computed, so below-threshold CVEs never appear in either `new` or `resolved`.
-async fn compute_cve_delta<VR: VulnerabilityRepository>(
+async fn compute_cve_delta<VR: VulnerabilityRepository + Clone>(
     repo: &VR,
     base: &[Package],
     current: &[Package],
     threshold: &ThresholdConfig,
+    locale: Locale,
 ) -> Result<CveDeltaView> {
-    let base_vulns = repo.fetch_vulnerabilities(base.to_vec()).await?;
-    let current_vulns = repo.fetch_vulnerabilities(current.to_vec()).await?;
+    let msgs = Messages::for_locale(locale);
+
+    eprintln!("{}", msgs.progress_diff_checking_base);
+    let base_use_case = CheckVulnerabilitiesUseCase::new(repo.clone());
+    let base_vulns = base_use_case.check_with_progress(base.to_vec()).await?;
+    eprintln!();
+
+    eprintln!("{}", msgs.progress_diff_checking_current);
+    let current_use_case = CheckVulnerabilitiesUseCase::new(repo.clone());
+    let current_vulns = current_use_case.check_with_progress(current.to_vec()).await?;
+    eprintln!();
 
     let base_map = flatten_to_entries(&base_vulns, threshold);
     let current_map = flatten_to_entries(&current_vulns, threshold);
@@ -165,6 +185,7 @@ fn flatten_to_entries(
 mod tests {
     use super::*;
     use crate::application::use_cases::test_doubles::PairedMockVulnerabilityRepository;
+    use crate::i18n::Locale;
     use crate::ports::outbound::lockfile_reader::LockfileParseResult;
     use crate::sbom_generation::domain::dependency_diff::ChangeType;
     use crate::sbom_generation::domain::vulnerability::{Severity, Vulnerability};
@@ -232,6 +253,7 @@ mod tests {
             StubLockfileReader { packages: current },
             StubDiffLockfileReader { packages: base },
             None,
+            Locale::En,
         )
     }
 
@@ -248,6 +270,7 @@ mod tests {
             StubLockfileReader { packages: current },
             StubDiffLockfileReader { packages: base },
             Some(repo),
+            Locale::En,
         )
     }
 
