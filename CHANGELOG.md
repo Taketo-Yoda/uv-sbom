@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Progress indicator in `--diff` CVE lookup**: Running `uv-sbom --diff <ref>` now prints a progress message (`🔍 Fetching vulnerability information...`) to stderr before the OSV API calls begin, consistent with the UX in SBOM mode. No message is printed when `--no-check-cve` is passed (#611).
+- **indicatif progress bar during CVE lookup in `--diff` mode**: The OSV vulnerability lookup in `--diff` mode now displays an indicatif spinner and per-package progress bar (identical to SBOM mode) for both the base and current lockfile phases. Previously the lookup silently waited with no progress feedback after the initial message (#613).
 
 ## [2.4.0] - 2026-05-21
 
