@@ -125,7 +125,9 @@ async fn compute_cve_delta<VR: VulnerabilityRepository + Clone>(
 
     eprintln!("{}", msgs.progress_diff_checking_current);
     let current_use_case = CheckVulnerabilitiesUseCase::new(repo.clone());
-    let current_vulns = current_use_case.check_with_progress(current.to_vec()).await?;
+    let current_vulns = current_use_case
+        .check_with_progress(current.to_vec())
+        .await?;
     eprintln!();
 
     let base_map = flatten_to_entries(&base_vulns, threshold);
