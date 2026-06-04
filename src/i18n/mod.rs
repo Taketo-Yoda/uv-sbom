@@ -58,6 +58,8 @@ pub struct Messages {
     pub progress_verifying_links: &'static str,
     pub progress_fetching_license: &'static str,
     pub progress_fetching_vulns: &'static str,
+    pub progress_diff_checking_base: &'static str,
+    pub progress_diff_checking_current: &'static str,
 
     // Progress messages (use case layer)
     pub progress_loading_lockfile: &'static str,
@@ -241,6 +243,8 @@ static EN_MESSAGES: Messages = Messages {
     progress_verifying_links: "🔗 Verifying PyPI links...",
     progress_fetching_license: "🔍 Fetching license information...",
     progress_fetching_vulns: "🔍 Fetching vulnerability information...",
+    progress_diff_checking_base: "🔍 Checking vulnerabilities in base lockfile...",
+    progress_diff_checking_current: "🔍 Checking vulnerabilities in current lockfile...",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
@@ -393,6 +397,8 @@ static JA_MESSAGES: Messages = Messages {
     progress_verifying_links: "🔗 PyPIリンクを検証中...",
     progress_fetching_license: "🔍 ライセンス情報を取得中...",
     progress_fetching_vulns: "🔍 脆弱性情報を取得中...",
+    progress_diff_checking_base: "🔍 ベースロックファイルの脆弱性をチェック中...",
+    progress_diff_checking_current: "🔍 現在のロックファイルの脆弱性をチェック中...",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -645,6 +651,32 @@ mod tests {
         assert_eq!(
             msgs.progress_license_unknown_packages,
             "⚠️  ライセンスコンプライアンス: ライセンス不明のパッケージが{}件あります"
+        );
+    }
+
+    #[test]
+    fn test_diff_progress_messages_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.progress_diff_checking_base,
+            "🔍 Checking vulnerabilities in base lockfile..."
+        );
+        assert_eq!(
+            msgs.progress_diff_checking_current,
+            "🔍 Checking vulnerabilities in current lockfile..."
+        );
+    }
+
+    #[test]
+    fn test_diff_progress_messages_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.progress_diff_checking_base,
+            "🔍 ベースロックファイルの脆弱性をチェック中..."
+        );
+        assert_eq!(
+            msgs.progress_diff_checking_current,
+            "🔍 現在のロックファイルの脆弱性をチェック中..."
         );
     }
 

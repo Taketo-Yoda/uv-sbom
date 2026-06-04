@@ -533,11 +533,8 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
         FileSystemReader::new(),
         GitLockfileReader::new(),
         vulnerability_repository,
+        locale,
     );
-    if check_cve {
-        let msgs = Messages::for_locale(locale);
-        eprintln!("{}", msgs.progress_fetching_vulns);
-    }
     let result = use_case.execute(request).await?;
     let diff = &result.diff;
     let cve_delta = result.cve_delta.as_ref();
