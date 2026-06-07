@@ -540,7 +540,7 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     let cve_delta = result.cve_delta.as_ref();
 
     let formatted = match merged.format {
-        OutputFormat::Markdown => DiffMarkdownFormatter::new().format(diff, cve_delta),
+        OutputFormat::Markdown => DiffMarkdownFormatter::new(locale).format(diff, cve_delta),
         OutputFormat::Json => DiffJsonFormatter::new().format(diff, cve_delta)?,
     };
 
