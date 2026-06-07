@@ -43,9 +43,19 @@ impl DiffMarkdownFormatter {
 
         writeln!(out, "{}", msgs.diff_section_summary).unwrap();
         writeln!(out).unwrap();
-        writeln!(out, "| {} | {} |", msgs.diff_col_metric, msgs.diff_col_count).unwrap();
+        writeln!(
+            out,
+            "| {} | {} |",
+            msgs.diff_col_metric, msgs.diff_col_count
+        )
+        .unwrap();
         writeln!(out, "|--------|-------|").unwrap();
-        writeln!(out, "| {} | {} |", msgs.diff_label_added, diff.summary.added).unwrap();
+        writeln!(
+            out,
+            "| {} | {} |",
+            msgs.diff_label_added, diff.summary.added
+        )
+        .unwrap();
         writeln!(
             out,
             "| {} | {} |",
@@ -593,14 +603,7 @@ mod tests {
     fn test_ja_change_type_labels() {
         let diff = make_diff(vec![
             make_change("pkg-a", ChangeType::Added, None, Some("1.0.0"), None, 0),
-            make_change(
-                "pkg-b",
-                ChangeType::Removed,
-                Some("1.0.0"),
-                None,
-                None,
-                0,
-            ),
+            make_change("pkg-b", ChangeType::Removed, Some("1.0.0"), None, None, 0),
             make_change(
                 "pkg-c",
                 ChangeType::Updated,

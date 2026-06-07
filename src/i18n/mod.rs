@@ -1130,10 +1130,7 @@ mod tests {
     fn test_messages_diff_fields_ja() {
         let msgs = Messages::for_locale(Locale::Ja);
         assert_eq!(msgs.diff_section_title, "## 依存関係差分レポート");
-        assert_eq!(
-            msgs.diff_compared_line,
-            "比較: `{}` と現在の `uv.lock`"
-        );
+        assert_eq!(msgs.diff_compared_line, "比較: `{}` と現在の `uv.lock`");
         assert_eq!(msgs.diff_section_summary, "### サマリー");
         assert_eq!(msgs.diff_col_metric, "指標");
         assert_eq!(msgs.diff_col_count, "件数");
@@ -1148,10 +1145,7 @@ mod tests {
         assert_eq!(msgs.diff_col_vulnerabilities, "脆弱性");
         assert_eq!(msgs.diff_vuln_none, "なし");
         assert_eq!(msgs.diff_section_cve_delta, "## CVE デルタ");
-        assert_eq!(
-            msgs.diff_new_vulns_header,
-            "### 🔴 新たな脆弱性 ({})"
-        );
+        assert_eq!(msgs.diff_new_vulns_header, "### 🔴 新たな脆弱性 ({})");
         assert_eq!(
             msgs.diff_resolved_vulns_header,
             "### ✅ 解消された脆弱性 ({})"
