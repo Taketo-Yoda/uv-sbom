@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-06-08
+
 ### Added
 - **CVE Delta section in `--diff` output**: When `--diff` is used with CVE checking enabled, the Markdown output now includes a `## CVE Delta` section with separate tables for newly introduced and resolved vulnerabilities. The JSON output gains a top-level `cve_delta` key with `new` and `resolved` arrays. Both formatters omit the section when `--no-check-cve` is passed, preserving backward-compatible output (#600).
 - **Severity and CVSS thresholds for `--diff` mode**: `--severity-threshold` and `--cvss-threshold` now filter CVE delta entries in `--diff` output. Only entries at or above the threshold appear in the `new` and `resolved` tables. A non-zero exit code is returned when new CVEs above threshold are introduced (#601).
