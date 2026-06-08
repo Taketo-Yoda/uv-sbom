@@ -58,6 +58,8 @@ pub struct Messages {
     pub progress_verifying_links: &'static str,
     pub progress_fetching_license: &'static str,
     pub progress_fetching_vulns: &'static str,
+    pub progress_diff_checking_base: &'static str,
+    pub progress_diff_checking_current: &'static str,
 
     // Progress messages (use case layer)
     pub progress_loading_lockfile: &'static str,
@@ -180,6 +182,28 @@ pub struct Messages {
     pub col_last_release: &'static str,
     pub col_days_inactive: &'static str,
     pub col_type: &'static str,
+
+    // Diff Markdown formatter strings
+    pub diff_section_title: &'static str,
+    pub diff_compared_line: &'static str,
+    pub diff_section_summary: &'static str,
+    pub diff_col_metric: &'static str,
+    pub diff_col_count: &'static str,
+    pub diff_label_added: &'static str,
+    pub diff_label_removed: &'static str,
+    pub diff_label_updated: &'static str,
+    pub diff_label_unchanged: &'static str,
+    pub diff_section_changes: &'static str,
+    pub diff_col_change: &'static str,
+    pub diff_col_old_version: &'static str,
+    pub diff_col_new_version: &'static str,
+    pub diff_col_vulnerabilities: &'static str,
+    pub diff_vuln_none: &'static str,
+    pub diff_section_cve_delta: &'static str,
+    pub diff_new_vulns_header: &'static str,
+    pub diff_resolved_vulns_header: &'static str,
+    pub diff_no_new_vulns: &'static str,
+    pub diff_no_resolved_vulns: &'static str,
 }
 
 impl Messages {
@@ -241,6 +265,8 @@ static EN_MESSAGES: Messages = Messages {
     progress_verifying_links: "🔗 Verifying PyPI links...",
     progress_fetching_license: "🔍 Fetching license information...",
     progress_fetching_vulns: "🔍 Fetching vulnerability information...",
+    progress_diff_checking_base: "🔍 Checking vulnerabilities in base lockfile...",
+    progress_diff_checking_current: "🔍 Checking vulnerabilities in current lockfile...",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
@@ -363,6 +389,28 @@ static EN_MESSAGES: Messages = Messages {
     col_last_release: "Last Release",
     col_days_inactive: "Days Inactive",
     col_type: "Type",
+
+    // Diff Markdown formatter strings
+    diff_section_title: "## Dependency Diff Report",
+    diff_compared_line: "Compared: `{}` vs current `uv.lock`",
+    diff_section_summary: "### Summary",
+    diff_col_metric: "Metric",
+    diff_col_count: "Count",
+    diff_label_added: "Added",
+    diff_label_removed: "Removed",
+    diff_label_updated: "Updated",
+    diff_label_unchanged: "Unchanged",
+    diff_section_changes: "### Changes",
+    diff_col_change: "Change",
+    diff_col_old_version: "Old Version",
+    diff_col_new_version: "New Version",
+    diff_col_vulnerabilities: "Vulnerabilities",
+    diff_vuln_none: "None",
+    diff_section_cve_delta: "## CVE Delta",
+    diff_new_vulns_header: "### 🔴 New Vulnerabilities ({})",
+    diff_resolved_vulns_header: "### ✅ Resolved Vulnerabilities ({})",
+    diff_no_new_vulns: "No new vulnerabilities",
+    diff_no_resolved_vulns: "No resolved vulnerabilities",
 };
 
 static JA_MESSAGES: Messages = Messages {
@@ -393,6 +441,8 @@ static JA_MESSAGES: Messages = Messages {
     progress_verifying_links: "🔗 PyPIリンクを検証中...",
     progress_fetching_license: "🔍 ライセンス情報を取得中...",
     progress_fetching_vulns: "🔍 脆弱性情報を取得中...",
+    progress_diff_checking_base: "🔍 ベースロックファイルの脆弱性をチェック中...",
+    progress_diff_checking_current: "🔍 現在のロックファイルの脆弱性をチェック中...",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -517,6 +567,28 @@ static JA_MESSAGES: Messages = Messages {
     col_last_release: "最終リリース",
     col_days_inactive: "非アクティブ日数",
     col_type: "種別",
+
+    // Diff Markdown formatter strings
+    diff_section_title: "## 依存関係差分レポート",
+    diff_compared_line: "比較: `{}` と現在の `uv.lock`",
+    diff_section_summary: "### サマリー",
+    diff_col_metric: "指標",
+    diff_col_count: "件数",
+    diff_label_added: "追加",
+    diff_label_removed: "削除",
+    diff_label_updated: "更新",
+    diff_label_unchanged: "変更なし",
+    diff_section_changes: "### 変更一覧",
+    diff_col_change: "変更種別",
+    diff_col_old_version: "旧バージョン",
+    diff_col_new_version: "新バージョン",
+    diff_col_vulnerabilities: "脆弱性",
+    diff_vuln_none: "なし",
+    diff_section_cve_delta: "## CVE デルタ",
+    diff_new_vulns_header: "### 🔴 新たな脆弱性 ({})",
+    diff_resolved_vulns_header: "### ✅ 解消された脆弱性 ({})",
+    diff_no_new_vulns: "新たな脆弱性はありません",
+    diff_no_resolved_vulns: "解消された脆弱性はありません",
 };
 
 #[cfg(test)]
@@ -645,6 +717,32 @@ mod tests {
         assert_eq!(
             msgs.progress_license_unknown_packages,
             "⚠️  ライセンスコンプライアンス: ライセンス不明のパッケージが{}件あります"
+        );
+    }
+
+    #[test]
+    fn test_diff_progress_messages_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.progress_diff_checking_base,
+            "🔍 Checking vulnerabilities in base lockfile..."
+        );
+        assert_eq!(
+            msgs.progress_diff_checking_current,
+            "🔍 Checking vulnerabilities in current lockfile..."
+        );
+    }
+
+    #[test]
+    fn test_diff_progress_messages_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.progress_diff_checking_base,
+            "🔍 ベースロックファイルの脆弱性をチェック中..."
+        );
+        assert_eq!(
+            msgs.progress_diff_checking_current,
+            "🔍 現在のロックファイルの脆弱性をチェック中..."
         );
     }
 
@@ -992,5 +1090,67 @@ mod tests {
         assert_eq!(msgs.col_last_release, "最終リリース");
         assert_eq!(msgs.col_days_inactive, "非アクティブ日数");
         assert_eq!(msgs.col_type, "種別");
+    }
+
+    #[test]
+    fn test_messages_diff_fields_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(msgs.diff_section_title, "## Dependency Diff Report");
+        assert_eq!(
+            msgs.diff_compared_line,
+            "Compared: `{}` vs current `uv.lock`"
+        );
+        assert_eq!(msgs.diff_section_summary, "### Summary");
+        assert_eq!(msgs.diff_col_metric, "Metric");
+        assert_eq!(msgs.diff_col_count, "Count");
+        assert_eq!(msgs.diff_label_added, "Added");
+        assert_eq!(msgs.diff_label_removed, "Removed");
+        assert_eq!(msgs.diff_label_updated, "Updated");
+        assert_eq!(msgs.diff_label_unchanged, "Unchanged");
+        assert_eq!(msgs.diff_section_changes, "### Changes");
+        assert_eq!(msgs.diff_col_change, "Change");
+        assert_eq!(msgs.diff_col_old_version, "Old Version");
+        assert_eq!(msgs.diff_col_new_version, "New Version");
+        assert_eq!(msgs.diff_col_vulnerabilities, "Vulnerabilities");
+        assert_eq!(msgs.diff_vuln_none, "None");
+        assert_eq!(msgs.diff_section_cve_delta, "## CVE Delta");
+        assert_eq!(
+            msgs.diff_new_vulns_header,
+            "### 🔴 New Vulnerabilities ({})"
+        );
+        assert_eq!(
+            msgs.diff_resolved_vulns_header,
+            "### ✅ Resolved Vulnerabilities ({})"
+        );
+        assert_eq!(msgs.diff_no_new_vulns, "No new vulnerabilities");
+        assert_eq!(msgs.diff_no_resolved_vulns, "No resolved vulnerabilities");
+    }
+
+    #[test]
+    fn test_messages_diff_fields_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(msgs.diff_section_title, "## 依存関係差分レポート");
+        assert_eq!(msgs.diff_compared_line, "比較: `{}` と現在の `uv.lock`");
+        assert_eq!(msgs.diff_section_summary, "### サマリー");
+        assert_eq!(msgs.diff_col_metric, "指標");
+        assert_eq!(msgs.diff_col_count, "件数");
+        assert_eq!(msgs.diff_label_added, "追加");
+        assert_eq!(msgs.diff_label_removed, "削除");
+        assert_eq!(msgs.diff_label_updated, "更新");
+        assert_eq!(msgs.diff_label_unchanged, "変更なし");
+        assert_eq!(msgs.diff_section_changes, "### 変更一覧");
+        assert_eq!(msgs.diff_col_change, "変更種別");
+        assert_eq!(msgs.diff_col_old_version, "旧バージョン");
+        assert_eq!(msgs.diff_col_new_version, "新バージョン");
+        assert_eq!(msgs.diff_col_vulnerabilities, "脆弱性");
+        assert_eq!(msgs.diff_vuln_none, "なし");
+        assert_eq!(msgs.diff_section_cve_delta, "## CVE デルタ");
+        assert_eq!(msgs.diff_new_vulns_header, "### 🔴 新たな脆弱性 ({})");
+        assert_eq!(
+            msgs.diff_resolved_vulns_header,
+            "### ✅ 解消された脆弱性 ({})"
+        );
+        assert_eq!(msgs.diff_no_new_vulns, "新たな脆弱性はありません");
+        assert_eq!(msgs.diff_no_resolved_vulns, "解消された脆弱性はありません");
     }
 }

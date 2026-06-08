@@ -53,6 +53,20 @@ Execute all three checks above. If any fail:
 2. Commit the fixes using `/commit` skill
 3. Re-run the checks until all pass
 
+#### WIRE Annotation Notice (informational — does not block)
+
+```bash
+git diff origin/develop...HEAD | grep -E '^\+.*WIRE\(#[0-9]+\)' | grep -v '^+++'
+```
+
+If the output is non-empty, print:
+
+> ⚠️ This PR introduces WIRE(#N) annotation(s). Verify that Issue #N is open and
+> will consume these items. The annotation will be auto-detected by /implement Step 4.0
+> when Issue #N is implemented.
+
+This check is informational only and does not block PR creation.
+
 ### Step 2: Verify Branch Status
 
 ```bash

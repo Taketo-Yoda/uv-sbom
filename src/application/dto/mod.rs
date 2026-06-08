@@ -3,11 +3,13 @@
 /// DTOs are used to transfer data between the application layer
 /// and adapters, keeping the domain layer isolated.
 mod diff_request;
+mod diff_result;
 mod output_format;
 mod sbom_request;
 mod sbom_response;
 
 pub use diff_request::DiffRequest;
+pub use diff_result::DiffResult;
 pub use output_format::OutputFormat;
 pub use sbom_request::SbomRequest;
 #[allow(unused_imports)]

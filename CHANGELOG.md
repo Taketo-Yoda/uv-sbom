@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-06-08
+
+### Added
+- **CVE Delta section in `--diff` output**: When `--diff` is used with CVE checking enabled, the Markdown output now includes a `## CVE Delta` section with separate tables for newly introduced and resolved vulnerabilities. The JSON output gains a top-level `cve_delta` key with `new` and `resolved` arrays. Both formatters omit the section when `--no-check-cve` is passed, preserving backward-compatible output (#600).
+- **Severity and CVSS thresholds for `--diff` mode**: `--severity-threshold` and `--cvss-threshold` now filter CVE delta entries in `--diff` output. Only entries at or above the threshold appear in the `new` and `resolved` tables. A non-zero exit code is returned when new CVEs above threshold are introduced (#601).
+
+### Fixed
+- **`--lang` flag now applies to `--diff -f markdown` output**: Section headings, column headers, change-type labels, and CVE Delta labels are now rendered in the selected locale. Previously all strings were hardcoded English regardless of `--lang ja` (#615).
+- **Progress indicator in `--diff` CVE lookup**: Running `uv-sbom --diff <ref>` now prints a progress message (`🔍 Fetching vulnerability information...`) to stderr before the OSV API calls begin, consistent with the UX in SBOM mode. No message is printed when `--no-check-cve` is passed (#611).
+- **indicatif progress bar during CVE lookup in `--diff` mode**: The OSV vulnerability lookup in `--diff` mode now displays an indicatif spinner and per-package progress bar (identical to SBOM mode) for both the base and current lockfile phases. Previously the lookup silently waited with no progress feedback after the initial message (#613).
+
 ## [2.4.0] - 2026-05-21
 
 ### Added

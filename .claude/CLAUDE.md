@@ -78,6 +78,18 @@ When a user requests any operation listed above (even in Japanese), Claude MUST:
 When the user proposes, discusses, or asks Claude to evaluate a new feature idea,
 Claude MUST follow this process before responding with implementation suggestions.
 
+### Step 0: Check current implementation state (MANDATORY — run before Step 1)
+
+Before proposing or evaluating any feature, read these two files to build an exhaustive
+list of already-implemented capabilities:
+
+1. `src/cli/mod.rs` — all current CLI flags (e.g., `--severity-threshold`, `--license-allow`)
+2. `src/config.rs` — all current config keys (e.g., `severity_threshold`, `license_policy`)
+
+For each feature idea (your own or the user's), check whether it is already covered by an
+existing CLI flag or config key. If it is, do NOT propose it as a new feature — instead,
+state explicitly: "This is already implemented as `--flag-name` / config key `key_name`."
+
 ### Step 1: Read vision and triage files (MANDATORY)
 
 Before responding to any feature proposal, read these two files:
@@ -205,7 +217,9 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555 |
 | `CheckAbandonedPackagesUseCase` | `src/application/use_cases/check_abandoned_packages.rs` | Fetches PyPI maintenance info for all packages with progress bar and soft-fail per package |
 | `DiffRequest` | `src/application/dto/diff_request.rs` | Input DTO for the diff use case (source, project_path, check_cve) |
-| `GenerateDiffUseCase<LR,DLR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer; wired to CLI via `--diff` flag (#581) |
+| `DiffResult` | `src/application/dto/diff_result.rs` | Output of `GenerateDiffUseCase::execute`; wraps domain `DependencyDiff` with `Option<CveDeltaView>` to keep domain layer free of read-model dependencies |
+| `GenerateDiffUseCase<LR,DLR,VR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer, optionally fetches CVE delta via VulnerabilityRepository; 3rd param `VR` (default `()`) added in #599 |
+| `CveDeltaView` / `CveDeltaEntry` | `src/application/read_models/cve_delta_view.rs` | Read model for CVE exposure diff between two lock file snapshots; wired into `GenerateDiffUseCase` in #599; consumed by diff formatters (Markdown/JSON) in #600 |
 | `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
 
 ### Important Invariants
@@ -245,13 +259,16 @@ Bulk removal is error-prone when multiple structs share field names.
 
 `#[allow(dead_code)]` is allowed ONLY for:
 
-| Use Case | Example |
-|----------|---------|
+| Use Case | Required Format |
+|----------|-----------------|
 | serde wire-format fields that are deserialized but not yet processed in Rust | `#[allow(dead_code)] pub experimental_flag: Option<bool>` on a `#[derive(Deserialize)]` struct |
 | `#[cfg(test)]`-bounded test helpers defined in a test module | Inside `#[cfg(test)] mod tests { ... }` only |
+| Foundational type/function in a sequential PR split whose consumer is a concrete tracked issue, not yet reachable from the binary | Must use the standardized format: `#[allow(dead_code)] // WIRE(#N): remove when <description>`. The attribute MUST be removed in Issue #N via the Step 4.0 cleanup gate. |
 
-In both cases, add a comment explaining WHY the field is intentionally unused in
-production code.
+In all cases, add a comment explaining WHY the field is intentionally unused in
+production code. For the WIRE case, the consuming issue number (#N) MUST exist as
+an open GitHub Issue, and the description after the colon MUST state the removal
+condition clearly.
 
 ### YAGNI Workflow
 
@@ -276,3 +293,10 @@ cargo clippy --lib -- -D warnings
 
 This is already enforced in `.claude/skills/commit/SKILL.md` and
 `.claude/skills/pr/SKILL.md`. Do not weaken this to `--lib` only.
+
+### Recent Incidents
+
+- **2026-05-24 (Issue #598)**: Added `CveDeltaView` and `CveDeltaEntry` read model
+  types with `#[allow(dead_code)]` in a standalone foundational PR. Free-form comment
+  was not machine-scannable, so removal in #599 was not enforced. Fixed by Issue #604
+  with the WIRE convention and the Step 4.0 cleanup gate.
