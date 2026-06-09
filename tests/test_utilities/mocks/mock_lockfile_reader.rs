@@ -96,4 +96,8 @@ impl LockfileReader for MockLockfileReader {
     ) -> Result<LockfileParseResult> {
         unimplemented!("not needed for current mock usage")
     }
+
+    fn read_and_parse_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
+        Ok(HashMap::new())
+    }
 }

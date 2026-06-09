@@ -2,7 +2,7 @@ use super::*;
 use crate::application::use_cases::test_doubles::{
     MockMaintenanceRepository, MockVulnerabilityRepository,
 };
-use crate::ports::outbound::{LockfileParseResult, PyPiMetadata};
+use crate::ports::outbound::{GroupRoots, LockfileParseResult, PyPiMetadata};
 use crate::sbom_generation::domain::Package;
 use std::collections::HashMap;
 use std::path::Path;
@@ -27,6 +27,10 @@ impl LockfileReader for MockLockfileReader {
         _member_name: &str,
     ) -> Result<LockfileParseResult> {
         Ok((self.packages.clone(), self.deps.clone()))
+    }
+
+    fn read_and_parse_group_roots(&self, _path: &Path) -> Result<GroupRoots> {
+        Ok(HashMap::new())
     }
 }
 

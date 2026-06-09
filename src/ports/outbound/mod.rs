@@ -19,7 +19,7 @@ pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
 pub use enriched_package::EnrichedPackage;
 pub use formatter::SbomFormatter;
 pub use license_repository::{LicenseRepository, PyPiMetadata};
-pub use lockfile_reader::{LockfileParseResult, LockfileReader};
+pub use lockfile_reader::{GroupRoots, LockfileParseResult, LockfileReader};
 // Note: Will be used in subsequent subtasks (abandoned package detection)
 #[allow(unused_imports)]
 pub use maintenance_repository::{MaintenanceInfo, MaintenanceRepository};
