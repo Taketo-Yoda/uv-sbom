@@ -180,11 +180,10 @@ pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoot
         dependency_groups: HashMap<String, Vec<UvDependency>>,
     }
 
-    let lockfile: UvLock =
-        toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
-            path: project_path.join("uv.lock"),
-            details: e.to_string(),
-        })?;
+    let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
+        path: project_path.join("uv.lock"),
+        details: e.to_string(),
+    })?;
 
     let group_roots = match lockfile.manifest {
         None => HashMap::new(),
@@ -571,8 +570,7 @@ source = { registry = "https://pypi.org/simple" }
 
     #[test]
     fn test_parse_group_roots_returns_empty_when_manifest_has_no_groups() {
-        let roots =
-            parse_group_roots(LOCK_WITH_MANIFEST_NO_GROUPS, Path::new("/project")).unwrap();
+        let roots = parse_group_roots(LOCK_WITH_MANIFEST_NO_GROUPS, Path::new("/project")).unwrap();
         assert!(roots.is_empty());
     }
 

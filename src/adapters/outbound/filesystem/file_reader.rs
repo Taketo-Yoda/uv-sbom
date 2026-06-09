@@ -1,5 +1,9 @@
-use super::lockfile_parser::{parse_group_roots, parse_lockfile_content, parse_lockfile_content_for_member};
-use crate::ports::outbound::{GroupRoots, LockfileParseResult, LockfileReader, ProjectConfigReader};
+use super::lockfile_parser::{
+    parse_group_roots, parse_lockfile_content, parse_lockfile_content_for_member,
+};
+use crate::ports::outbound::{
+    GroupRoots, LockfileParseResult, LockfileReader, ProjectConfigReader,
+};
 use crate::shared::error::SbomError;
 use crate::shared::security::{read_file_with_security, MAX_FILE_SIZE};
 use crate::shared::Result;
