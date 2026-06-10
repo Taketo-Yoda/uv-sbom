@@ -18,6 +18,13 @@ on:
     paths-ignore:
       - '**.md'
       - '.gitignore'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
 
 permissions:
   contents: read
