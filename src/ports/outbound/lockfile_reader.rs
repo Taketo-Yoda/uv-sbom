@@ -9,6 +9,13 @@ pub type DependencyMap = HashMap<String, Vec<String>>;
 /// Type alias for lockfile parsing result: (packages, dependency map)
 pub type LockfileParseResult = (Vec<Package>, DependencyMap);
 
+#[allow(dead_code)] // WIRE(#622): remove when group reachability traversal consumes GroupRoots
+/// Group name -> list of root package names declared for that dependency group.
+///
+/// Extracted from `[manifest.dependency-groups]` in `uv.lock`.
+/// Empty map when no `[manifest.dependency-groups]` section is present.
+pub type GroupRoots = HashMap<String, Vec<String>>;
+
 /// LockfileReader port for reading and parsing lockfile contents
 ///
 /// This port abstracts the file system operations and TOML parsing
@@ -70,4 +77,11 @@ pub trait LockfileReader {
         project_path: &Path,
         member_name: &str,
     ) -> Result<LockfileParseResult>;
+
+    #[allow(dead_code)] // WIRE(#622): remove when group reachability traversal calls read_and_parse_group_roots
+    /// Extract dependency-group roots from `[manifest.dependency-groups]` in `uv.lock`.
+    ///
+    /// Returns an empty map when no `[manifest.dependency-groups]` section is present,
+    /// preserving backward compatibility with lock files that have no groups.
+    fn read_and_parse_group_roots(&self, project_path: &Path) -> Result<GroupRoots>;
 }

@@ -1,5 +1,9 @@
-use super::lockfile_parser::{parse_lockfile_content, parse_lockfile_content_for_member};
-use crate::ports::outbound::{LockfileParseResult, LockfileReader, ProjectConfigReader};
+use super::lockfile_parser::{
+    parse_group_roots, parse_lockfile_content, parse_lockfile_content_for_member,
+};
+use crate::ports::outbound::{
+    GroupRoots, LockfileParseResult, LockfileReader, ProjectConfigReader,
+};
 use crate::shared::error::SbomError;
 use crate::shared::security::{read_file_with_security, MAX_FILE_SIZE};
 use crate::shared::Result;
@@ -76,6 +80,11 @@ impl LockfileReader for FileSystemReader {
     fn read_and_parse_lockfile(&self, project_path: &Path) -> Result<LockfileParseResult> {
         let lockfile_content = self.read_lockfile(project_path)?;
         parse_lockfile_content(&lockfile_content, project_path)
+    }
+
+    fn read_and_parse_group_roots(&self, project_path: &Path) -> Result<GroupRoots> {
+        let lockfile_content = self.read_lockfile(project_path)?;
+        parse_group_roots(&lockfile_content, project_path)
     }
 }
 
@@ -199,6 +208,46 @@ version = "1.0.0"
         assert!(result.is_err());
         let err_string = format!("{}", result.unwrap_err());
         assert!(err_string.contains("Project name not found"));
+    }
+
+    const LOCK_WITH_GROUPS: &str = r#"
+version = 1
+requires-python = ">=3.11"
+
+[manifest]
+members = ["my-app"]
+
+[manifest.dependency-groups]
+dev = [{ name = "pytest" }, { name = "mypy" }]
+lint = [{ name = "ruff" }]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+"#;
+
+    #[test]
+    fn test_read_and_parse_group_roots_reads_from_file() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("uv.lock"), LOCK_WITH_GROUPS).unwrap();
+
+        let reader = FileSystemReader::new();
+        let roots = reader.read_and_parse_group_roots(temp_dir.path()).unwrap();
+
+        assert_eq!(roots.len(), 2);
+        assert!(roots["dev"].contains(&"pytest".to_string()));
+        assert!(roots["dev"].contains(&"mypy".to_string()));
+        assert_eq!(roots["lint"], vec!["ruff"]);
+    }
+
+    #[test]
+    fn test_read_and_parse_group_roots_returns_error_when_lockfile_missing() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let reader = FileSystemReader::new();
+        let result = reader.read_and_parse_group_roots(temp_dir.path());
+        assert!(result.is_err());
     }
 
     // Integration test: verifies FileSystemReader reads from disk and delegates

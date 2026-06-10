@@ -1,4 +1,4 @@
-use crate::ports::outbound::LockfileParseResult;
+use crate::ports::outbound::{GroupRoots, LockfileParseResult};
 use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
@@ -153,6 +153,48 @@ pub fn parse_lockfile_content_for_member(
     }
 
     Ok((packages, dependency_map))
+}
+
+#[allow(dead_code)] // WIRE(#622): remove when group reachability traversal calls parse_group_roots
+/// Parse `[manifest.dependency-groups]` from uv.lock content.
+///
+/// Returns a map of group name → list of root package names.
+/// Returns an empty map when no `[manifest.dependency-groups]` section is present.
+///
+/// The uv.lock format (not pyproject.toml) encodes dependency groups as a flat map:
+/// ```toml
+/// [manifest.dependency-groups]
+/// dev = [{ name = "pytest" }, { name = "mypy" }]
+/// lint = [{ name = "ruff" }]
+/// ```
+pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoots> {
+    #[derive(Debug, Deserialize)]
+    struct UvLock {
+        #[serde(default)]
+        manifest: Option<Manifest>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Manifest {
+        #[serde(default, rename = "dependency-groups")]
+        dependency_groups: HashMap<String, Vec<UvDependency>>,
+    }
+
+    let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
+        path: project_path.join("uv.lock"),
+        details: e.to_string(),
+    })?;
+
+    let group_roots = match lockfile.manifest {
+        None => HashMap::new(),
+        Some(manifest) => manifest
+            .dependency_groups
+            .into_iter()
+            .map(|(group, deps)| (group, deps.into_iter().map(|d| d.name).collect()))
+            .collect(),
+    };
+
+    Ok(group_roots)
 }
 
 /// Collect all dependency names from a package (runtime + dev).
@@ -469,5 +511,78 @@ dependencies = [
         assert!(names.contains("celery"));
         assert!(!names.contains("requests"), "unreachable from worker");
         assert!(!names.contains("fastapi"), "unreachable from worker");
+    }
+
+    // --- parse_group_roots tests ---
+
+    const LOCK_WITH_GROUPS: &str = r#"
+version = 1
+requires-python = ">=3.11"
+
+[manifest]
+members = ["my-app"]
+
+[manifest.dependency-groups]
+dev = [{ name = "pytest" }, { name = "mypy" }]
+lint = [{ name = "ruff" }]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+"#;
+
+    const LOCK_WITH_MANIFEST_NO_GROUPS: &str = r#"
+version = 1
+requires-python = ">=3.11"
+
+[manifest]
+members = ["my-app"]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+"#;
+
+    const LOCK_WITHOUT_MANIFEST: &str = r#"
+version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_group_roots_extracts_multiple_groups() {
+        let roots = parse_group_roots(LOCK_WITH_GROUPS, Path::new("/project")).unwrap();
+
+        assert_eq!(roots.len(), 2);
+
+        let mut dev = roots["dev"].clone();
+        dev.sort();
+        assert_eq!(dev, vec!["mypy", "pytest"]);
+
+        assert_eq!(roots["lint"], vec!["ruff"]);
+    }
+
+    #[test]
+    fn test_parse_group_roots_returns_empty_when_manifest_has_no_groups() {
+        let roots = parse_group_roots(LOCK_WITH_MANIFEST_NO_GROUPS, Path::new("/project")).unwrap();
+        assert!(roots.is_empty());
+    }
+
+    #[test]
+    fn test_parse_group_roots_returns_empty_when_no_manifest_section() {
+        let roots = parse_group_roots(LOCK_WITHOUT_MANIFEST, Path::new("/project")).unwrap();
+        assert!(roots.is_empty());
+    }
+
+    #[test]
+    fn test_parse_group_roots_returns_error_on_invalid_toml() {
+        let result = parse_group_roots("invalid [[[ toml", Path::new("/project"));
+        assert!(result.is_err());
     }
 }

@@ -188,7 +188,7 @@ mod tests {
     use super::*;
     use crate::application::use_cases::test_doubles::PairedMockVulnerabilityRepository;
     use crate::i18n::Locale;
-    use crate::ports::outbound::lockfile_reader::LockfileParseResult;
+    use crate::ports::outbound::lockfile_reader::{GroupRoots, LockfileParseResult};
     use crate::sbom_generation::domain::dependency_diff::ChangeType;
     use crate::sbom_generation::domain::vulnerability::{Severity, Vulnerability};
     use crate::sbom_generation::domain::Package;
@@ -230,6 +230,10 @@ mod tests {
             _member_name: &str,
         ) -> Result<LockfileParseResult> {
             Ok((self.packages.clone(), HashMap::new()))
+        }
+
+        fn read_and_parse_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
+            Ok(HashMap::new())
         }
     }
 
