@@ -34,10 +34,13 @@ impl GroupReachabilityAnalyzer {
         }
 
         let excluded_root_names = collect_excluded_root_names(group_roots, groups_to_exclude);
-        let production_reachable =
-            compute_production_reachable(dep_graph, &excluded_root_names);
-        let exclude_set =
-            compute_exclude_set(dep_graph, group_roots, groups_to_exclude, &production_reachable);
+        let production_reachable = compute_production_reachable(dep_graph, &excluded_root_names);
+        let exclude_set = compute_exclude_set(
+            dep_graph,
+            group_roots,
+            groups_to_exclude,
+            &production_reachable,
+        );
 
         all_packages
             .iter()
@@ -154,12 +157,7 @@ mod tests {
     fn make_group_roots(groups: &[(&str, &[&str])]) -> HashMap<String, Vec<String>> {
         groups
             .iter()
-            .map(|&(g, roots)| {
-                (
-                    g.to_string(),
-                    roots.iter().map(|s| s.to_string()).collect(),
-                )
-            })
+            .map(|&(g, roots)| (g.to_string(), roots.iter().map(|s| s.to_string()).collect()))
             .collect()
     }
 
@@ -210,7 +208,10 @@ mod tests {
 
         let names: Vec<&str> = result.iter().map(|p| p.name()).collect();
         assert!(!names.contains(&"pytest"), "dev root must be excluded");
-        assert!(!names.contains(&"iniconfig"), "dev transitive must be excluded");
+        assert!(
+            !names.contains(&"iniconfig"),
+            "dev transitive must be excluded"
+        );
         assert!(names.contains(&"requests"));
         assert!(names.contains(&"myapp"));
     }
@@ -218,12 +219,7 @@ mod tests {
     #[test]
     fn test_shared_package_retained() {
         // certifi is reachable from both production (requests) and dev (pytest)
-        let all_packages = vec![
-            pkg("myapp"),
-            pkg("requests"),
-            pkg("certifi"),
-            pkg("pytest"),
-        ];
+        let all_packages = vec![pkg("myapp"), pkg("requests"), pkg("certifi"), pkg("pytest")];
         let dep_graph = make_dep_graph(&[
             ("myapp", &["requests"]),
             ("requests", &["certifi"]),
@@ -240,7 +236,10 @@ mod tests {
         );
 
         let names: Vec<&str> = result.iter().map(|p| p.name()).collect();
-        assert!(names.contains(&"certifi"), "shared package must be retained");
+        assert!(
+            names.contains(&"certifi"),
+            "shared package must be retained"
+        );
         assert!(!names.contains(&"pytest"), "dev-only root must be excluded");
     }
 
@@ -263,8 +262,11 @@ mod tests {
     #[test]
     fn test_empty_groups_to_exclude_returns_all() {
         let all_packages = vec![pkg("requests"), pkg("urllib3"), pkg("pytest")];
-        let dep_graph =
-            make_dep_graph(&[("requests", &["urllib3"]), ("urllib3", &[]), ("pytest", &[])]);
+        let dep_graph = make_dep_graph(&[
+            ("requests", &["urllib3"]),
+            ("urllib3", &[]),
+            ("pytest", &[]),
+        ]);
         let group_roots = make_group_roots(&[("dev", &["pytest"])]);
 
         let result = GroupReachabilityAnalyzer::filter_excluded_groups(
@@ -293,8 +295,7 @@ mod tests {
             ("iniconfig", &[]),
             ("ruff", &[]),
         ]);
-        let group_roots =
-            make_group_roots(&[("dev", &["pytest"]), ("lint", &["ruff"])]);
+        let group_roots = make_group_roots(&[("dev", &["pytest"]), ("lint", &["ruff"])]);
 
         let result = GroupReachabilityAnalyzer::filter_excluded_groups(
             &all_packages,
