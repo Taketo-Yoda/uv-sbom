@@ -221,6 +221,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `GenerateDiffUseCase<LR,DLR,VR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer, optionally fetches CVE delta via VulnerabilityRepository; 3rd param `VR` (default `()`) added in #599 |
 | `CveDeltaView` / `CveDeltaEntry` | `src/application/read_models/cve_delta_view.rs` | Read model for CVE exposure diff between two lock file snapshots; wired into `GenerateDiffUseCase` in #599; consumed by diff formatters (Markdown/JSON) in #600 |
 | `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
+| `GroupReachabilityAnalyzer` | `src/sbom_generation/domain/services/group_reachability_analyzer.rs` | Pure domain service for BFS-based group reachability traversal; determines which packages are exclusively reachable from excluded dependency groups (WIRE(#629)) |
 
 ### Important Invariants
 
