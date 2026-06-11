@@ -1,7 +1,7 @@
 name: CI
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 on:
@@ -18,6 +18,8 @@ on:
     paths-ignore:
       - '**.md'
       - '.gitignore'
+      - 'examples/**'
+      - '.claude/**'
   pull_request:
     branches:
       - main
@@ -25,6 +27,8 @@ on:
     paths-ignore:
       - '**.md'
       - '.gitignore'
+      - 'examples/**'
+      - '.claude/**'
 
 permissions:
   contents: read
