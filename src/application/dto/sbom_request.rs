@@ -40,6 +40,9 @@ pub struct SbomRequest {
     /// Inactivity threshold in days for abandoned-package detection.
     /// Only meaningful when `check_abandoned` is true.
     pub abandoned_threshold_days: u64,
+    /// Dependency group names to exclude from the SBOM (e.g. ["dev", "lint"]).
+    /// Empty = no group filtering.
+    pub exclude_groups: Vec<String>,
     /// Output locale for human-readable formats
     pub locale: Locale,
 }
@@ -104,6 +107,7 @@ pub struct SbomRequestBuilder {
     suggest_fix: bool,
     check_abandoned: bool,
     abandoned_threshold_days: u64,
+    exclude_groups: Vec<String>,
     locale: Locale,
 }
 
@@ -133,6 +137,7 @@ impl SbomRequestBuilder {
             suggest_fix: false,
             check_abandoned: false,
             abandoned_threshold_days: 730,
+            exclude_groups: Vec::new(),
             locale: Locale::default(),
         }
     }
@@ -223,6 +228,13 @@ impl SbomRequestBuilder {
         self
     }
 
+    #[allow(dead_code)] // WIRE(#624): remove when --exclude-groups CLI flag calls this method
+    /// Sets dependency group names to exclude from the SBOM (e.g. `["dev", "lint"]`).
+    pub fn exclude_groups(mut self, groups: Vec<String>) -> Self {
+        self.exclude_groups = groups;
+        self
+    }
+
     /// Sets the output locale for human-readable formats.
     pub fn locale(mut self, locale: Locale) -> Self {
         self.locale = locale;
@@ -253,6 +265,7 @@ impl SbomRequestBuilder {
             suggest_fix: self.suggest_fix,
             check_abandoned: self.check_abandoned,
             abandoned_threshold_days: self.abandoned_threshold_days,
+            exclude_groups: self.exclude_groups,
             locale: self.locale,
         })
     }
@@ -284,6 +297,21 @@ mod tests {
         assert!(request.severity_threshold.is_none());
         assert!(request.cvss_threshold.is_none());
         assert!(request.ignore_cves.is_empty());
+        assert!(request.exclude_groups.is_empty());
+    }
+
+    #[test]
+    fn test_exclude_groups_builder() {
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .exclude_groups(vec!["dev".to_string(), "lint".to_string()])
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            request.exclude_groups,
+            vec!["dev".to_string(), "lint".to_string()]
+        );
     }
 
     #[test]

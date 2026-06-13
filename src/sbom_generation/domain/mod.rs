@@ -25,7 +25,6 @@ pub use package::{Package, PackageName};
 #[allow(unused_imports)]
 pub use resolution_guide::{IntroducedBy, ResolutionEntry};
 pub use sbom_metadata::SbomMetadata;
-// Note: GroupReachabilityAnalyzer will be wired into the use case in #629
 #[allow(unused_imports)]
 pub use services::GroupReachabilityAnalyzer;
 // Note: ResolutionAnalyzer will be used in subsequent subtasks (Issue #221 sub-tasks 3-4)
