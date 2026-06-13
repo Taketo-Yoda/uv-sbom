@@ -959,11 +959,7 @@ mod tests_group_exclusion {
             pkg("requests", "2.0.0"),
             pkg("pytest", "7.0.0"),
         ];
-        let deps = make_dep_graph(&[
-            ("myapp", &["requests"]),
-            ("requests", &[]),
-            ("pytest", &[]),
-        ]);
+        let deps = make_dep_graph(&[("myapp", &["requests"]), ("requests", &[]), ("pytest", &[])]);
         let group_roots = make_group_roots(&[("dev", &["pytest"])]);
 
         let use_case = UseCaseBuilder::default()
@@ -1053,7 +1049,10 @@ mod tests_group_exclusion {
             .iter()
             .map(|ep| ep.package.name())
             .collect();
-        assert!(names.contains(&"certifi"), "shared package must be retained");
+        assert!(
+            names.contains(&"certifi"),
+            "shared package must be retained"
+        );
         assert!(!names.contains(&"pytest"), "dev-only root must be excluded");
     }
 
