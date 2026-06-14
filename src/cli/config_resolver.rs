@@ -20,6 +20,11 @@ pub struct MergedConfig {
     pub suggest_fix: bool,
     pub check_abandoned: bool,
     pub abandoned_threshold_days: u64,
+    /// Dependency groups whose exclusively-reachable packages should be excluded from the SBOM.
+    /// Populated from `--exclude-groups` (CLI) or `exclude_groups` (config file).
+    /// When `--production-only` is set, `main.rs` overrides this with all group names from the
+    /// lockfile, since that resolution requires I/O that config_resolver must not perform.
+    pub exclude_groups: Vec<String>,
 }
 
 /// Load a config file from an explicit path or via auto-discovery.
@@ -133,6 +138,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
                 suggest_fix: args.suggest_fix,
                 check_abandoned: args.check_abandoned,
                 abandoned_threshold_days: args.abandoned_threshold_days.unwrap_or(730),
+                exclude_groups: args.exclude_groups.clone(),
             };
         }
     };
@@ -248,6 +254,15 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         .or(config.abandoned_threshold_days)
         .unwrap_or(730);
 
+    // exclude_groups: CLI overrides config entirely (not merged/deduplicated like exclude_patterns).
+    // --production-only is resolved in main.rs after lockfile I/O; when it is set, args.exclude_groups
+    // is guaranteed empty by clap's conflicts_with, so this resolves to the config value or empty.
+    let exclude_groups = if !args.exclude_groups.is_empty() {
+        args.exclude_groups.clone()
+    } else {
+        config.exclude_groups.clone().unwrap_or_default()
+    };
+
     MergedConfig {
         format,
         exclude_patterns,
@@ -260,6 +275,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         suggest_fix,
         check_abandoned,
         abandoned_threshold_days,
+        exclude_groups,
     }
 }
 
@@ -668,5 +684,70 @@ mod tests {
         let result = merge_config(&args, &None);
         assert!(result.check_abandoned);
         assert_eq!(result.abandoned_threshold_days, 180);
+    }
+
+    // --- exclude_groups merge tests ---
+
+    #[test]
+    fn test_merge_config_exclude_groups_default_empty() {
+        // No CLI flag, no config → exclude_groups is empty
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.exclude_groups.is_empty());
+    }
+
+    #[test]
+    fn test_merge_config_exclude_groups_from_cli() {
+        // --exclude-groups dev,test → populated from CLI
+        let args = Args::parse_from(["uv-sbom", "--exclude-groups", "dev,test"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert_eq!(result.exclude_groups, vec!["dev", "test"]);
+    }
+
+    #[test]
+    fn test_merge_config_exclude_groups_from_config() {
+        // No CLI flag, config provides exclude_groups
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            exclude_groups: Some(vec!["dev".to_string(), "lint".to_string()]),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert_eq!(result.exclude_groups, vec!["dev", "lint"]);
+    }
+
+    #[test]
+    fn test_merge_config_exclude_groups_cli_overrides_config() {
+        // CLI wins entirely — does NOT merge with config (unlike exclude_patterns)
+        let args = Args::parse_from(["uv-sbom", "--exclude-groups", "dev"]);
+        let config = Some(ConfigFile {
+            exclude_groups: Some(vec!["lint".to_string()]),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert_eq!(result.exclude_groups, vec!["dev"]);
+        assert!(!result.exclude_groups.contains(&"lint".to_string()));
+    }
+
+    #[test]
+    fn test_merge_config_no_config_file_exclude_groups() {
+        // No config file; exercises the early-return branch with --exclude-groups
+        let args = Args::parse_from(["uv-sbom", "--exclude-groups", "dev,test,lint"]);
+        let result = merge_config(&args, &None);
+        assert_eq!(result.exclude_groups, vec!["dev", "test", "lint"]);
+    }
+
+    #[test]
+    fn test_merge_config_no_config_file_exclude_groups_default_empty() {
+        // No CLI, no config file → empty (early-return branch)
+        let args = Args::parse_from(["uv-sbom"]);
+        let result = merge_config(&args, &None);
+        assert!(result.exclude_groups.is_empty());
     }
 }
