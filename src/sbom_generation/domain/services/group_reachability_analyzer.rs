@@ -7,7 +7,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// Performs BFS graph traversal to distinguish packages exclusively reachable
 /// from dev/optional groups (safe to exclude) from those on any production path
 /// (must be retained).
-#[allow(dead_code)] // WIRE(#629): remove when GenerateSbomUseCase calls filter_excluded_groups
 pub struct GroupReachabilityAnalyzer;
 
 impl GroupReachabilityAnalyzer {
@@ -22,7 +21,6 @@ impl GroupReachabilityAnalyzer {
     /// and are not roots of any excluded group.
     ///
     /// Unknown group names in `groups_to_exclude` are silently ignored.
-    #[allow(dead_code)] // WIRE(#629): remove when GenerateSbomUseCase calls filter_excluded_groups
     pub fn filter_excluded_groups(
         all_packages: &[Package],
         dep_graph: &HashMap<String, Vec<String>>,
@@ -50,7 +48,6 @@ impl GroupReachabilityAnalyzer {
     }
 }
 
-#[allow(dead_code)] // WIRE(#629): remove when GenerateSbomUseCase calls filter_excluded_groups
 fn collect_excluded_root_names<'a>(
     group_roots: &'a HashMap<String, Vec<String>>,
     groups_to_exclude: &[String],
@@ -62,7 +59,6 @@ fn collect_excluded_root_names<'a>(
         .collect()
 }
 
-#[allow(dead_code)] // WIRE(#629): remove when GenerateSbomUseCase calls filter_excluded_groups
 fn compute_production_reachable(
     dep_graph: &HashMap<String, Vec<String>>,
     excluded_root_names: &HashSet<&str>,
@@ -84,7 +80,6 @@ fn compute_production_reachable(
     bfs_reachable(dep_graph, &seeds)
 }
 
-#[allow(dead_code)] // WIRE(#629): remove when GenerateSbomUseCase calls filter_excluded_groups
 fn compute_exclude_set(
     dep_graph: &HashMap<String, Vec<String>>,
     group_roots: &HashMap<String, Vec<String>>,
@@ -107,7 +102,6 @@ fn compute_exclude_set(
     exclude_set
 }
 
-#[allow(dead_code)] // WIRE(#629): remove when GenerateSbomUseCase calls filter_excluded_groups
 fn bfs_reachable(dep_graph: &HashMap<String, Vec<String>>, seeds: &[&str]) -> HashSet<String> {
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<String> = VecDeque::new();

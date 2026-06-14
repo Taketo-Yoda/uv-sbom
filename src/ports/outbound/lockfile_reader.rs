@@ -9,7 +9,6 @@ pub type DependencyMap = HashMap<String, Vec<String>>;
 /// Type alias for lockfile parsing result: (packages, dependency map)
 pub type LockfileParseResult = (Vec<Package>, DependencyMap);
 
-#[allow(dead_code)] // WIRE(#629): remove when GenerateSbomUseCase calls read_and_parse_group_roots
 /// Group name -> list of root package names declared for that dependency group.
 ///
 /// Extracted from `[manifest.dependency-groups]` in `uv.lock`.
@@ -78,7 +77,6 @@ pub trait LockfileReader {
         member_name: &str,
     ) -> Result<LockfileParseResult>;
 
-    #[allow(dead_code)] // WIRE(#629): remove when GenerateSbomUseCase calls read_and_parse_group_roots
     /// Extract dependency-group roots from `[manifest.dependency-groups]` in `uv.lock`.
     ///
     /// Returns an empty map when no `[manifest.dependency-groups]` section is present,

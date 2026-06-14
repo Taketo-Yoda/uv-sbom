@@ -155,7 +155,6 @@ pub fn parse_lockfile_content_for_member(
     Ok((packages, dependency_map))
 }
 
-#[allow(dead_code)] // WIRE(#629): remove when GenerateSbomUseCase calls read_and_parse_group_roots
 /// Parse `[manifest.dependency-groups]` from uv.lock content.
 ///
 /// Returns a map of group name → list of root package names.

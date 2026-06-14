@@ -95,6 +95,7 @@ pub struct Messages {
     pub progress_fetching_abandoned: &'static str,
     pub progress_abandoned_found: &'static str,
     pub progress_abandoned_none: &'static str,
+    pub progress_excluded_groups: &'static str,
 
     // Section description paragraphs
     pub desc_sbom_report: &'static str,
@@ -303,6 +304,7 @@ static EN_MESSAGES: Messages = Messages {
     progress_fetching_abandoned: "🔍 Fetching package maintenance information...",
     progress_abandoned_found: "✅ Abandoned check complete: {} package(s) abandoned ({} direct, {} transitive), threshold: {} days",
     progress_abandoned_none: "✅ Abandoned check complete: No packages exceed {} day threshold",
+    progress_excluded_groups: "🚫 Excluded {} package(s) from dependency group(s): {}",
 
     // Section description paragraphs
     desc_sbom_report: "A comprehensive list of all software components and libraries included in this project.",
@@ -479,6 +481,7 @@ static JA_MESSAGES: Messages = Messages {
     progress_fetching_abandoned: "🔍 パッケージのメンテナンス情報を取得中...",
     progress_abandoned_found: "✅ 廃止パッケージチェック完了: {}件廃止（直接: {}件、間接: {}件）、閾値: {}日",
     progress_abandoned_none: "✅ 廃止パッケージチェック完了: {}日以上更新のないパッケージはありません",
+    progress_excluded_groups: "🚫 依存関係グループから{}個のパッケージを除外: {}",
 
     // Section description paragraphs
     desc_sbom_report: "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。",
