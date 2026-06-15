@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`--exclude-groups` and `--production-only` CLI flags**: Exclude packages that are exclusively reachable through specified dependency groups. `--exclude-groups dev,test,lint` accepts a comma-separated list of group names; `--production-only` automatically discovers all non-default groups from `[manifest.dependency-groups]` in `uv.lock` and excludes them. The two flags are mutually exclusive. A corresponding `exclude_groups` config key is supported in `uv-sbom.config.yml`; CLI overrides config entirely (not merged). Implemented as part of the group-based SBOM filtering feature (#624).
+
 ## [2.5.0] - 2026-06-08
 
 ### Added

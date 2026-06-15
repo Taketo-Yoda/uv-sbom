@@ -228,7 +228,6 @@ impl SbomRequestBuilder {
         self
     }
 
-    #[allow(dead_code)] // WIRE(#624): remove when --exclude-groups CLI flag calls this method
     /// Sets dependency group names to exclude from the SBOM (e.g. `["dev", "lint"]`).
     pub fn exclude_groups(mut self, groups: Vec<String>) -> Self {
         self.exclude_groups = groups;

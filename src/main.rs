@@ -272,6 +272,17 @@ async fn run(args: Args) -> Result<bool> {
     // Pre-flight check for --suggest-fix
     let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path);
 
+    // Resolve exclude_groups: --production-only expands to all group names in the lockfile.
+    // This requires lockfile I/O so it lives here rather than in config_resolver.
+    let exclude_groups = if args.production_only {
+        FileSystemReader::new()
+            .read_and_parse_group_roots(&project_path)?
+            .into_keys()
+            .collect::<Vec<_>>()
+    } else {
+        merged.exclude_groups.clone()
+    };
+
     // Create request using builder pattern
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
     let request = SbomRequest::builder()
@@ -288,6 +299,7 @@ async fn run(args: Args) -> Result<bool> {
         .suggest_fix(suggest_fix)
         .check_abandoned(merged.check_abandoned)
         .abandoned_threshold_days(merged.abandoned_threshold_days)
+        .exclude_groups(exclude_groups)
         .locale(locale)
         .build()?;
 
@@ -407,6 +419,17 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     let config = load_config(&args, &workspace_root)?;
     let merged = merge_config(&args, &config);
 
+    // Resolve exclude_groups for workspace mode: --production-only reads group roots from
+    // the workspace-root lockfile. --exclude-groups / config value is used otherwise.
+    let workspace_exclude_groups = if args.production_only {
+        FileSystemReader::new()
+            .read_and_parse_group_roots(&workspace_root)?
+            .into_keys()
+            .collect::<Vec<_>>()
+    } else {
+        merged.exclude_groups.clone()
+    };
+
     let format_ext = match merged.format {
         OutputFormat::Json => "json",
         OutputFormat::Markdown => "md",
@@ -463,6 +486,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             .suggest_fix(false)
             .check_abandoned(merged.check_abandoned)
             .abandoned_threshold_days(merged.abandoned_threshold_days)
+            .exclude_groups(workspace_exclude_groups.clone())
             .locale(locale)
             .build()?;
 

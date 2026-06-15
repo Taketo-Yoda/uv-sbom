@@ -236,6 +236,35 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 **Preventing Information Leakage:**
 Use the `--exclude` option to skip specific internal or proprietary libraries. This prevents their names from being sent to external registries (like PyPI) during metadata retrieval, ensuring your internal project structure remains private.
 
+### Excluding packages by dependency group
+
+Use `--exclude-groups` to exclude packages that are **exclusively reachable** through specified [dependency groups](https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups) (e.g., `dev`, `test`, `lint`). Packages shared with production dependencies are always retained.
+
+```bash
+# Exclude packages only reachable via the "dev" group
+uv-sbom --exclude-groups dev --format markdown
+
+# Exclude multiple groups (comma-separated)
+uv-sbom --exclude-groups dev,test,lint --format markdown
+
+# Production-only mode: exclude ALL non-default dependency groups automatically
+uv-sbom --production-only --format markdown
+```
+
+`--production-only` reads the `[manifest.dependency-groups]` section of your `uv.lock` file at runtime and sets `--exclude-groups` to every group it finds. This is equivalent to listing all groups explicitly but is more concise and automatically adapts as groups are added or removed.
+
+> **Note:** `--exclude-groups` and `--production-only` are mutually exclusive.
+
+You can also set this in the config file:
+
+```yaml
+# Exclude packages reachable only through these dependency groups
+exclude_groups:
+  - dev
+  - test
+  - lint
+```
+
 ### Configuration file
 
 You can use a configuration file (`uv-sbom.config.yml`) to set default options instead of passing them on the command line every time.
@@ -319,6 +348,7 @@ license_policy:
 | `license_policy.unknown` | string | No | Unknown license handling (`warn` / `deny` / `allow`) |
 | `check_abandoned` | bool | No | Enable abandoned package detection (opt-in, default: false) |
 | `abandoned_threshold_days` | integer | No | Inactivity threshold in days for abandoned package detection (default: 730) |
+| `exclude_groups` | string[] | No | Dependency groups whose exclusively-reachable packages are excluded from the SBOM |
 
 #### Priority and Merge Rules
 
@@ -329,6 +359,7 @@ license_policy:
 - **`check_license`** is enabled if set via CLI flag OR config file (logical OR, same as `check_cve`)
 - **`--license-allow`** and **`--license-deny`** CLI options **override** config file `license_policy.allow` / `license_policy.deny` entirely (not merged)
 - **`check_abandoned`** is opt-in (default: false). Enable via CLI flag `--check-abandoned` or config file `check_abandoned: true`. The `abandoned_threshold_days` value follows CLI > config file > default (730) resolution order.
+- **`exclude_groups`**: CLI `--exclude-groups` **overrides** the config file value entirely (not merged). `--production-only` resolves all group names from the lockfile at runtime and takes precedence over both CLI and config.
 
 ### Ignoring specific CVEs
 

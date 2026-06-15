@@ -235,6 +235,35 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 **情報の外部送信を防止する:**
 独自の社内ライブラリなど、PyPI等の外部レジストリに名前を送信したくないパッケージがある場合は、`--exclude` オプションを使用してください。これにより、メタデータ取得時の通信から特定のライブラリ名を除外し、秘匿性を保つことができます。
 
+### 依存関係グループによるパッケージの除外
+
+`--exclude-groups` を使用すると、指定した[依存関係グループ](https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups)（例: `dev`, `test`, `lint`）からのみ到達可能なパッケージを除外できます。本番の依存関係と共有されているパッケージは常に保持されます。
+
+```bash
+# "dev"グループからのみ到達可能なパッケージを除外
+uv-sbom --exclude-groups dev --format markdown
+
+# 複数グループを除外（カンマ区切り）
+uv-sbom --exclude-groups dev,test,lint --format markdown
+
+# プロダクションのみモード: すべての非デフォルト依存関係グループを自動的に除外
+uv-sbom --production-only --format markdown
+```
+
+`--production-only` は実行時に `uv.lock` ファイルの `[manifest.dependency-groups]` セクションを読み込み、検出されたすべてのグループに `--exclude-groups` を設定します。グループを明示的にすべて列挙するのと同等ですが、より簡潔で、グループの追加・削除に自動で対応します。
+
+> **注意:** `--exclude-groups` と `--production-only` は相互排他的です。
+
+設定ファイルでも指定できます:
+
+```yaml
+# これらの依存関係グループからのみ到達可能なパッケージを除外
+exclude_groups:
+  - dev
+  - test
+  - lint
+```
+
 ### 設定ファイル
 
 設定ファイル（`uv-sbom.config.yml`）を使用して、毎回コマンドラインでオプションを渡す代わりにデフォルトオプションを設定できます。
@@ -318,6 +347,7 @@ license_policy:
 | `license_policy.unknown` | string | No | 不明ライセンスの処理（`warn` / `deny` / `allow`） |
 | `check_abandoned` | bool | No | 廃止パッケージ検出を有効化（オプトイン、デフォルト: false） |
 | `abandoned_threshold_days` | integer | No | 廃止パッケージ検出の非アクティブ期間しきい値（日数、デフォルト: 730） |
+| `exclude_groups` | string[] | No | SBOMから除外する依存関係グループ（そのグループからのみ到達可能なパッケージを除外） |
 
 #### 優先度とマージルール
 
@@ -328,6 +358,7 @@ license_policy:
 - **`check_license`** はCLIフラグまたは設定ファイルのいずれかで設定されていれば有効化（論理OR、`check_cve`と同様）
 - **`--license-allow`** と **`--license-deny`** CLIオプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を**完全に上書き**します（マージされません）
 - **`check_abandoned`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-abandoned` または設定ファイルの `check_abandoned: true` で有効化できます。`abandoned_threshold_days` の値はCLI > 設定ファイル > デフォルト（730）の順に解決されます。
+- **`exclude_groups`**: CLIの `--exclude-groups` は設定ファイルの値を**完全に上書き**します（マージされません）。`--production-only` は実行時にlockfileからすべてのグループ名を解決し、CLIと設定ファイルの両方より優先されます。
 
 ### 特定のCVEを無視する
 
