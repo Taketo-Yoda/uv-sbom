@@ -916,6 +916,10 @@ Options:
       --check-license                Check license compliance against policy
       --license-allow <LIST>         Comma-separated list of allowed license patterns (overrides config)
       --license-deny <LIST>          Comma-separated list of denied license patterns (overrides config)
+      --exclude-groups <GROUPS>      Exclude packages reachable only through the specified dependency groups (comma-separated)
+                                     Example: --exclude-groups dev,test,lint. Cannot be used with --production-only
+      --production-only              Exclude all non-default dependency groups (production-only mode)
+                                     Cannot be used with --exclude-groups
   -h, --help                         Print help
   -V, --version                      Print version
 ```
