@@ -778,8 +778,7 @@ source = { registry = "https://pypi.org/simple" }
 
     #[test]
     fn test_parse_group_roots_rev3_returns_empty_when_no_project_package() {
-        let roots =
-            parse_group_roots(LOCK_REV3_NO_PROJECT_PACKAGE, Path::new("/project")).unwrap();
+        let roots = parse_group_roots(LOCK_REV3_NO_PROJECT_PACKAGE, Path::new("/project")).unwrap();
         assert!(roots.is_empty());
     }
 }
