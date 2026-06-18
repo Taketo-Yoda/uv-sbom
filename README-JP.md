@@ -910,6 +910,10 @@ Options:
       --check-license                ライセンスコンプライアンスをポリシーに対してチェック
       --license-allow <LIST>         許可するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
       --license-deny <LIST>          拒否するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
+      --exclude-groups <GROUPS>      指定した依存関係グループからのみ到達可能なパッケージを除外（カンマ区切り）
+                                     例: --exclude-groups dev,test,lint。--production-onlyとの同時使用は不可
+      --production-only              すべての非デフォルト依存関係グループを除外（プロダクションのみモード）
+                                     --exclude-groupsとの同時使用は不可
   -h, --help                         ヘルプを表示
   -V, --version                      バージョンを表示
 ```
