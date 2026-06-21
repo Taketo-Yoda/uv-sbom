@@ -55,6 +55,7 @@ impl MarkdownFormatter {
             model.vulnerabilities.as_ref(),
             model.license_compliance.as_ref(),
             model.abandoned_packages.as_ref(),
+            &model.applied_group_filter,
         );
         sections::header::render(self.messages, output);
         sections::components::render(
@@ -173,6 +174,7 @@ mod tests {
                 resolution_guide: None,
                 upgrade_recommendations: None,
                 abandoned_packages: None,
+                applied_group_filter: vec![],
             }
         }
 

@@ -39,6 +39,7 @@ impl SbomReadModelBuilder {
         project_component: Option<(&str, &str)>,
         upgrade_recommendations: Option<&[UpgradeRecommendation]>,
         abandoned_packages_report: Option<&AbandonedPackagesReport>,
+        applied_group_filter: &[String],
     ) -> SbomReadModel {
         let metadata_view = metadata_builder::build_metadata(metadata, project_component);
         let components = component_builder::build_components(&packages, dependency_graph);
@@ -70,6 +71,7 @@ impl SbomReadModelBuilder {
             resolution_guide,
             upgrade_recommendations,
             abandoned_packages,
+            applied_group_filter: applied_group_filter.to_vec(),
         }
     }
 
@@ -207,6 +209,7 @@ mod tests {
             None,
             None,
             None,
+            &[],
         );
 
         assert_eq!(read_model.metadata.tool_name, "uv-sbom");
@@ -224,7 +227,15 @@ mod tests {
         let metadata = th::metadata();
 
         let read_model = SbomReadModelBuilder::build_with_project(
-            packages, &metadata, None, None, None, None, None, None,
+            packages,
+            &metadata,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            &[],
         );
 
         assert!(read_model.components.is_empty());
@@ -253,6 +264,7 @@ mod tests {
             None,
             None,
             None,
+            &[],
         );
 
         assert!(read_model.vulnerabilities.is_some());
@@ -297,6 +309,7 @@ mod tests {
             None,
             None,
             None,
+            &[],
         );
 
         assert!(read_model.resolution_guide.is_some());
@@ -328,6 +341,7 @@ mod tests {
             None,
             None,
             None,
+            &[],
         );
 
         assert!(read_model.resolution_guide.is_none());
@@ -348,6 +362,7 @@ mod tests {
             None,
             None,
             None,
+            &[],
         );
 
         assert!(read_model.resolution_guide.is_none());
@@ -376,6 +391,7 @@ mod tests {
             None,
             None,
             None,
+            &[],
         );
 
         // requests is a direct dep, so ResolutionAnalyzer skips it → empty → None
@@ -396,6 +412,7 @@ mod tests {
             Some(("my-project", "1.0.0")),
             None,
             None,
+            &[],
         );
 
         assert!(read_model.metadata.component.is_some());

@@ -96,6 +96,7 @@ async fn test_e2e_json_format() {
     let response = result.unwrap();
 
     // Build read model and format as JSON
+    let applied_group_filter = response.applied_group_filter;
     let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build_with_project(
         response.enriched_packages,
         &response.metadata,
@@ -105,6 +106,7 @@ async fn test_e2e_json_format() {
         None,
         None,
         None,
+        &applied_group_filter,
     );
     let formatter = CycloneDxFormatter::new();
     let json_output = formatter.format(&read_model);
@@ -149,6 +151,7 @@ async fn test_e2e_markdown_format() {
     let response = result.unwrap();
 
     // Build read model and format as Markdown
+    let applied_group_filter = response.applied_group_filter;
     let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build_with_project(
         response.enriched_packages,
         &response.metadata,
@@ -158,6 +161,7 @@ async fn test_e2e_markdown_format() {
         None,
         None,
         None,
+        &applied_group_filter,
     );
     let formatter = MarkdownFormatter::new(uv_sbom::i18n::Locale::En);
     let markdown_output = formatter.format(&read_model);
@@ -497,6 +501,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
     let response = result.unwrap();
 
     // Build read model and format as Markdown
+    let applied_group_filter = response.applied_group_filter;
     let read_model = uv_sbom::application::read_models::SbomReadModelBuilder::build_with_project(
         response.enriched_packages,
         &response.metadata,
@@ -506,6 +511,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         None,
         None,
         None,
+        &applied_group_filter,
     );
     let formatter = MarkdownFormatter::new(uv_sbom::i18n::Locale::En);
     let markdown_output = formatter.format(&read_model);

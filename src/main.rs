@@ -334,6 +334,9 @@ async fn run(args: Args) -> Result<bool> {
             version.map(|v| (name, v))
         });
 
+    // Extract applied_group_filter before moving other response fields
+    let applied_group_filter = response.applied_group_filter;
+
     // Build read model first so we can extract package names for verification
     let read_model = SbomReadModelBuilder::build_with_project(
         response.enriched_packages,
@@ -346,6 +349,7 @@ async fn run(args: Args) -> Result<bool> {
             .map(|(n, v)| (n.as_str(), v.as_str())),
         response.upgrade_recommendations.as_deref(),
         response.abandoned_packages_report.as_ref(),
+        &applied_group_filter,
     );
 
     // Verify PyPI links if requested
@@ -492,6 +496,8 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
 
         let response = use_case.execute(request).await?;
 
+        let applied_group_filter = response.applied_group_filter;
+
         let read_model = SbomReadModelBuilder::build_with_project(
             response.enriched_packages,
             &response.metadata,
@@ -501,6 +507,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             None,
             response.upgrade_recommendations.as_deref(),
             response.abandoned_packages_report.as_ref(),
+            &applied_group_filter,
         );
 
         let formatter = FormatterFactory::create(merged.format, None, locale);

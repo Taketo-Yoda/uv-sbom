@@ -412,7 +412,8 @@ mod tests_response {
             Some("Test description".to_string()),
         )];
 
-        let response = use_case.build_response(enriched_packages, None, None, None, None, None);
+        let response =
+            use_case.build_response(enriched_packages, None, None, None, None, None, vec![]);
 
         assert_eq!(response.enriched_packages.len(), 1);
         assert!(response.dependency_graph.is_none());
@@ -457,6 +458,7 @@ mod tests_response {
             None,
             None,
             None,
+            vec![],
         );
 
         assert!(response.has_vulnerabilities_above_threshold);
@@ -504,6 +506,7 @@ mod tests_response {
             None,
             None,
             None,
+            vec![],
         );
 
         assert!(!response.has_vulnerabilities_above_threshold);

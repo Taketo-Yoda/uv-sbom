@@ -190,6 +190,7 @@ mod tests {
             resolution_guide: None,
             upgrade_recommendations: None,
             abandoned_packages: None,
+            applied_group_filter: vec![],
         }
     }
 
