@@ -1,7 +1,7 @@
 name: CI
 
 concurrency:
-  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref }}
   cancel-in-progress: true
 
 on:
@@ -14,6 +14,7 @@ on:
       - 'fix/**'        # Legacy: kept for backward compatibility
       - 'refactor/**'
       - 'doc/**'
+      - 'docs/**'
       - 'hotfix/**'
     paths-ignore:
       - '**.md'
