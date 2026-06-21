@@ -227,7 +227,15 @@ mod tests {
         let metadata = th::metadata();
 
         let read_model = SbomReadModelBuilder::build_with_project(
-            packages, &metadata, None, None, None, None, None, None, &[],
+            packages,
+            &metadata,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            &[],
         );
 
         assert!(read_model.components.is_empty());
