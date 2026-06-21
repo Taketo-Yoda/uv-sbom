@@ -33,6 +33,9 @@ pub struct SbomResponse {
     /// Abandoned packages report.
     /// Populated only when `check_abandoned` was true in the request.
     pub abandoned_packages_report: Option<AbandonedPackagesReport>,
+    /// Dependency groups that were excluded during SBOM generation.
+    /// Empty when no group filter was applied.
+    pub applied_group_filter: Vec<String>,
 }
 
 impl SbomResponse {
@@ -51,6 +54,7 @@ pub struct SbomResponseBuilder {
     has_license_violations: bool,
     upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
     abandoned_packages_report: Option<AbandonedPackagesReport>,
+    applied_group_filter: Vec<String>,
 }
 
 impl SbomResponseBuilder {
@@ -65,6 +69,7 @@ impl SbomResponseBuilder {
             has_license_violations: false,
             upgrade_recommendations: None,
             abandoned_packages_report: None,
+            applied_group_filter: Vec::new(),
         }
     }
 
@@ -119,6 +124,11 @@ impl SbomResponseBuilder {
         self
     }
 
+    pub fn applied_group_filter(mut self, groups: Vec<String>) -> Self {
+        self.applied_group_filter = groups;
+        self
+    }
+
     pub fn build(self) -> Result<SbomResponse, SbomError> {
         let metadata = self.metadata.ok_or_else(|| SbomError::Validation {
             message: "metadata is required".into(),
@@ -134,6 +144,7 @@ impl SbomResponseBuilder {
             has_license_violations: self.has_license_violations,
             upgrade_recommendations: self.upgrade_recommendations,
             abandoned_packages_report: self.abandoned_packages_report,
+            applied_group_filter: self.applied_group_filter,
         })
     }
 }

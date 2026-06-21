@@ -154,6 +154,7 @@ where
             license_compliance_result,
             upgrade_recommendations,
             abandoned_packages_report,
+            request.exclude_groups.clone(),
         ))
     }
 
@@ -678,6 +679,7 @@ where
         license_compliance_result: Option<LicenseComplianceResult>,
         upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
         abandoned_packages_report: Option<AbandonedPackagesReport>,
+        exclude_groups: Vec<String>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata();
 
@@ -696,7 +698,8 @@ where
             .enriched_packages(enriched_packages)
             .metadata(metadata)
             .has_vulnerabilities_above_threshold(has_vulnerabilities_above_threshold)
-            .has_license_violations(has_license_violations);
+            .has_license_violations(has_license_violations)
+            .applied_group_filter(exclude_groups);
 
         if let Some(graph) = dependency_graph {
             builder = builder.dependency_graph(graph);

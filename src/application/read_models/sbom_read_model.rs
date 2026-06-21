@@ -35,6 +35,8 @@ pub struct SbomReadModel {
     /// Abandoned packages report.
     /// Populated only when `check_abandoned` was true in the request.
     pub abandoned_packages: Option<AbandonedPackagesReport>,
+    /// Dependency groups that were excluded during generation. Empty = no filter.
+    pub applied_group_filter: Vec<String>,
 }
 
 /// View representation of SBOM metadata
