@@ -671,6 +671,7 @@ where
     }
 
     /// Builds the final SBOM response
+    #[allow(clippy::too_many_arguments)]
     fn build_response(
         &self,
         enriched_packages: Vec<EnrichedPackage>,
