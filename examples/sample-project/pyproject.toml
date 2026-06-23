@@ -14,3 +14,13 @@ dependencies = [
     "pyyaml==5.4",         # MEDIUM severity vulnerabilities
     "certifi>=2024.0.0",   # Current version (no known vulnerabilities)
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+test = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
