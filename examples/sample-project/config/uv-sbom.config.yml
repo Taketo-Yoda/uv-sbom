@@ -41,9 +41,9 @@ license_policy:
   unknown: warn
 
 # Exclude packages reachable only through these dependency groups (e.g. dev, test, lint)
-# exclude_groups:
-#   - dev
-#   - test
+exclude_groups:
+  - dev
+  - test
 
 ignore_cves:
   # pillow 8.3.2 - CRITICAL: buffer overflow in TiffDecode.c

@@ -82,6 +82,36 @@ uv-sbom -p examples/sample-project -f markdown \
 
 This exercises CVE, license, and abandoned detection in a single run.
 
+## Filtering by dependency groups
+
+`--exclude-groups` removes packages that are reachable *only* through the specified
+dependency groups (dev, test, lint, etc.). A package that is also a production dependency
+is always retained.
+
+```bash
+# Exclude the test group via CLI flag
+uv-sbom -p examples/sample-project --exclude-groups test -f markdown
+
+# Exclude the dev and test groups at once
+uv-sbom -p examples/sample-project --exclude-groups dev,test -f markdown
+
+# Exclude all non-default groups at once (production-only SBOM)
+uv-sbom -p examples/sample-project --production-only -f markdown
+
+# Via config file (exclude_groups already set in config/uv-sbom.config.yml)
+uv-sbom -p examples/sample-project -f markdown \
+  -c examples/sample-project/config/uv-sbom.config.yml
+```
+
+**What you will see:** `pytest`, `pytest-cov`, and their exclusive transitive dependencies
+(`colorama`, `coverage`, `iniconfig`, `packaging`, `pluggy`, `pygments`) are absent from
+the filtered output. Running without any filter flag shows the full set including those
+packages.
+
+> **Known limitation**: Due to [#645](https://github.com/Taketo-Yoda/uv-sbom/issues/645),
+> the `dev`-named group (`ruff`, `mypy`) is not correctly excluded by `--exclude-groups dev`
+> or `--production-only`. This will be fixed in a follow-up issue.
+
 ## Contrast with other examples
 
 | | `examples/sample-project` | `examples/abandoned-packages-project` | `examples/suggest-fix-project` | `examples/workspace` |
