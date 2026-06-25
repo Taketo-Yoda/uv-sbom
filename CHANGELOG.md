@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`--production-only` and `--exclude-groups dev` failed to exclude the `dev`-named group**: Packages listed under `[package.dev-dependencies]` with the group key `dev` were incorrectly added as children of the root project in the internal dependency map. This caused `GroupReachabilityAnalyzer` to treat them as production-reachable, so they were never excluded even though groups with other names (e.g. `test`) were correctly excluded. Fixed by removing the spurious dev-group edge injection; dev-group packages are now orphan roots in the dependency map as required by the group reachability algorithm (#645).
 - **`--exclude-groups` and `--production-only` were silent no-ops on uv 0.4+ projects**: uv lockfile revision 3 (introduced in uv 0.4+) stores dependency-group roots in `[package.dev-dependencies]` within the project's `[[package]]` entry instead of the `[manifest.dependency-groups]` section read by the parser. The parser now falls back to reading `[package.dev-dependencies]` when no `[manifest.dependency-groups]` section is present, restoring group filtering for projects using modern uv versions (#640).
 
 ### Added

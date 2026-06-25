@@ -44,8 +44,6 @@ pub fn parse_lockfile_content(content: &str, project_path: &Path) -> Result<Lock
         version: String,
         #[serde(default)]
         dependencies: Vec<UvDependency>,
-        #[serde(default, rename = "dev-dependencies")]
-        dev_dependencies: Option<DevDependencies>,
     }
 
     #[derive(Debug, Deserialize)]
@@ -64,15 +62,7 @@ pub fn parse_lockfile_content(content: &str, project_path: &Path) -> Result<Lock
     for pkg in lockfile.package {
         packages.push(Package::new(pkg.name.clone(), pkg.version.clone())?);
 
-        let mut deps = Vec::new();
-        for dep in &pkg.dependencies {
-            deps.push(dep.name.clone());
-        }
-        if let Some(dev_deps) = &pkg.dev_dependencies {
-            for dep in &dev_deps.dev {
-                deps.push(dep.name.clone());
-            }
-        }
+        let deps: Vec<String> = pkg.dependencies.iter().map(|d| d.name.clone()).collect();
         dependency_map.insert(pkg.name, deps);
     }
 
@@ -302,6 +292,87 @@ name = "urllib3"
 version = "2.0.7"
 source = { registry = "https://pypi.org/simple" }
 "#;
+
+    // Revision-3 lockfile with dev-dependency groups on the local project package.
+    // Production dep: requests. Dev groups: dev=[mypy, ruff], test=[pytest].
+    const LOCK_REV3_WITH_DEV_GROUPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "requests" },
+]
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }, { name = "ruff" }]
+test = [{ name = "pytest" }]
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "ruff"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_lockfile_content_dev_group_packages_not_added_to_dep_map_as_children() {
+        let (_packages, dep_map) =
+            parse_lockfile_content(LOCK_REV3_WITH_DEV_GROUPS, Path::new("/project")).unwrap();
+
+        let root_deps = &dep_map["my-app"];
+        assert!(
+            root_deps.contains(&"requests".to_string()),
+            "production dep must remain a child of root"
+        );
+        assert!(
+            !root_deps.contains(&"mypy".to_string()),
+            "dev-group package must NOT be a child of root"
+        );
+        assert!(!root_deps.contains(&"ruff".to_string()));
+        assert!(!root_deps.contains(&"pytest".to_string()));
+
+        // Dev packages are orphan roots: no package in the map points to them.
+        let has_parent: HashSet<&String> = dep_map.values().flatten().collect();
+        for orphan in ["mypy", "ruff", "pytest"] {
+            assert!(
+                !has_parent.contains(&orphan.to_string()),
+                "{orphan} must be an orphan root (no parent edge)"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_lockfile_content_all_packages_present_without_group_filter() {
+        let (packages, _dep_map) =
+            parse_lockfile_content(LOCK_REV3_WITH_DEV_GROUPS, Path::new("/project")).unwrap();
+
+        let names: HashSet<String> = packages.iter().map(|p| p.name().to_string()).collect();
+        for expected in ["my-app", "requests", "mypy", "ruff", "pytest"] {
+            assert!(
+                names.contains(expected),
+                "{expected} must still appear in the packages list"
+            );
+        }
+    }
 
     #[test]
     fn test_parse_lockfile_content_basic_returns_packages_and_deps() {
