@@ -1,4 +1,4 @@
-use crate::ports::outbound::LockfileParseResult;
+use crate::ports::outbound::{GroupRoots, LockfileParseResult};
 use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
@@ -44,8 +44,6 @@ pub fn parse_lockfile_content(content: &str, project_path: &Path) -> Result<Lock
         version: String,
         #[serde(default)]
         dependencies: Vec<UvDependency>,
-        #[serde(default, rename = "dev-dependencies")]
-        dev_dependencies: Option<DevDependencies>,
     }
 
     #[derive(Debug, Deserialize)]
@@ -64,15 +62,7 @@ pub fn parse_lockfile_content(content: &str, project_path: &Path) -> Result<Lock
     for pkg in lockfile.package {
         packages.push(Package::new(pkg.name.clone(), pkg.version.clone())?);
 
-        let mut deps = Vec::new();
-        for dep in &pkg.dependencies {
-            deps.push(dep.name.clone());
-        }
-        if let Some(dev_deps) = &pkg.dev_dependencies {
-            for dep in &dev_deps.dev {
-                deps.push(dep.name.clone());
-            }
-        }
+        let deps: Vec<String> = pkg.dependencies.iter().map(|d| d.name.clone()).collect();
         dependency_map.insert(pkg.name, deps);
     }
 
@@ -155,6 +145,90 @@ pub fn parse_lockfile_content_for_member(
     Ok((packages, dependency_map))
 }
 
+/// Parse dependency-group roots from uv.lock content.
+///
+/// Returns a map of group name → list of root package names.
+/// Returns an empty map when no group information is present.
+///
+/// Supports two lockfile formats:
+///
+/// **Revision ≤ 2** (`[manifest.dependency-groups]`):
+/// ```toml
+/// [manifest.dependency-groups]
+/// dev = [{ name = "pytest" }, { name = "mypy" }]
+/// lint = [{ name = "ruff" }]
+/// ```
+///
+/// **Revision 3** (`[package.dev-dependencies]` on the local project package):
+/// ```toml
+/// [[package]]
+/// name = "my-app"
+/// source = { virtual = "." }
+///
+/// [package.dev-dependencies]
+/// dev  = [{ name = "mypy" }, { name = "ruff" }]
+/// test = [{ name = "pytest" }]
+/// ```
+pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoots> {
+    #[derive(Debug, Deserialize)]
+    struct UvLock {
+        #[serde(default)]
+        manifest: Option<Manifest>,
+        #[serde(default)]
+        package: Vec<UvPackage>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Manifest {
+        #[serde(default, rename = "dependency-groups")]
+        dependency_groups: HashMap<String, Vec<UvDependency>>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct UvPackage {
+        source: Option<PackageSource>,
+        #[serde(default, rename = "dev-dependencies")]
+        dev_dependencies: Option<HashMap<String, Vec<UvDependency>>>,
+    }
+
+    let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
+        path: project_path.join("uv.lock"),
+        details: e.to_string(),
+    })?;
+
+    // Revision ≤ 2: prefer [manifest.dependency-groups] when present and non-empty.
+    let manifest_groups: GroupRoots = lockfile
+        .manifest
+        .map(|m| {
+            m.dependency_groups
+                .into_iter()
+                .map(|(group, deps)| (group, deps.into_iter().map(|d| d.name).collect()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if !manifest_groups.is_empty() {
+        return Ok(manifest_groups);
+    }
+
+    // Revision 3 fallback: read [package.dev-dependencies] from the local project package
+    // (identified by source.virtual or source.editable pointing to ".").
+    let package_groups: GroupRoots = lockfile
+        .package
+        .into_iter()
+        .find(|pkg| pkg.source.as_ref().map(|s| s.is_local()).unwrap_or(false))
+        .and_then(|pkg| pkg.dev_dependencies)
+        .map(|groups| {
+            groups
+                .into_iter()
+                .map(|(group, deps)| (group, deps.into_iter().map(|d| d.name).collect()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(package_groups)
+}
+
 /// Collect all dependency names from a package (runtime + dev).
 fn collect_all_deps(
     dependencies: &[UvDependency],
@@ -218,6 +292,87 @@ name = "urllib3"
 version = "2.0.7"
 source = { registry = "https://pypi.org/simple" }
 "#;
+
+    // Revision-3 lockfile with dev-dependency groups on the local project package.
+    // Production dep: requests. Dev groups: dev=[mypy, ruff], test=[pytest].
+    const LOCK_REV3_WITH_DEV_GROUPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "requests" },
+]
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }, { name = "ruff" }]
+test = [{ name = "pytest" }]
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "ruff"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_lockfile_content_dev_group_packages_not_added_to_dep_map_as_children() {
+        let (_packages, dep_map) =
+            parse_lockfile_content(LOCK_REV3_WITH_DEV_GROUPS, Path::new("/project")).unwrap();
+
+        let root_deps = &dep_map["my-app"];
+        assert!(
+            root_deps.contains(&"requests".to_string()),
+            "production dep must remain a child of root"
+        );
+        assert!(
+            !root_deps.contains(&"mypy".to_string()),
+            "dev-group package must NOT be a child of root"
+        );
+        assert!(!root_deps.contains(&"ruff".to_string()));
+        assert!(!root_deps.contains(&"pytest".to_string()));
+
+        // Dev packages are orphan roots: no package in the map points to them.
+        let has_parent: HashSet<&String> = dep_map.values().flatten().collect();
+        for orphan in ["mypy", "ruff", "pytest"] {
+            assert!(
+                !has_parent.contains(&orphan.to_string()),
+                "{orphan} must be an orphan root (no parent edge)"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_lockfile_content_all_packages_present_without_group_filter() {
+        let (packages, _dep_map) =
+            parse_lockfile_content(LOCK_REV3_WITH_DEV_GROUPS, Path::new("/project")).unwrap();
+
+        let names: HashSet<String> = packages.iter().map(|p| p.name().to_string()).collect();
+        for expected in ["my-app", "requests", "mypy", "ruff", "pytest"] {
+            assert!(
+                names.contains(expected),
+                "{expected} must still appear in the packages list"
+            );
+        }
+    }
 
     #[test]
     fn test_parse_lockfile_content_basic_returns_packages_and_deps() {
@@ -469,5 +624,232 @@ dependencies = [
         assert!(names.contains("celery"));
         assert!(!names.contains("requests"), "unreachable from worker");
         assert!(!names.contains("fastapi"), "unreachable from worker");
+    }
+
+    // --- parse_group_roots tests ---
+
+    const LOCK_WITH_GROUPS: &str = r#"
+version = 1
+requires-python = ">=3.11"
+
+[manifest]
+members = ["my-app"]
+
+[manifest.dependency-groups]
+dev = [{ name = "pytest" }, { name = "mypy" }]
+lint = [{ name = "ruff" }]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+"#;
+
+    const LOCK_WITH_MANIFEST_NO_GROUPS: &str = r#"
+version = 1
+requires-python = ">=3.11"
+
+[manifest]
+members = ["my-app"]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+"#;
+
+    const LOCK_WITHOUT_MANIFEST: &str = r#"
+version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_group_roots_extracts_multiple_groups() {
+        let roots = parse_group_roots(LOCK_WITH_GROUPS, Path::new("/project")).unwrap();
+
+        assert_eq!(roots.len(), 2);
+
+        let mut dev = roots["dev"].clone();
+        dev.sort();
+        assert_eq!(dev, vec!["mypy", "pytest"]);
+
+        assert_eq!(roots["lint"], vec!["ruff"]);
+    }
+
+    #[test]
+    fn test_parse_group_roots_returns_empty_when_manifest_has_no_groups() {
+        let roots = parse_group_roots(LOCK_WITH_MANIFEST_NO_GROUPS, Path::new("/project")).unwrap();
+        assert!(roots.is_empty());
+    }
+
+    #[test]
+    fn test_parse_group_roots_returns_empty_when_no_manifest_section() {
+        let roots = parse_group_roots(LOCK_WITHOUT_MANIFEST, Path::new("/project")).unwrap();
+        assert!(roots.is_empty());
+    }
+
+    #[test]
+    fn test_parse_group_roots_returns_error_on_invalid_toml() {
+        let result = parse_group_roots("invalid [[[ toml", Path::new("/project"));
+        assert!(result.is_err());
+    }
+
+    // --- parse_group_roots revision 3 tests ---
+
+    const LOCK_REV3_SINGLE_GROUP: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    const LOCK_REV3_MULTIPLE_GROUPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }, { name = "ruff" }]
+test = [{ name = "pytest" }, { name = "pytest-cov" }]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    const LOCK_REV3_MIXED_WITH_PROD_DEPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "certifi" },
+    { name = "requests" },
+]
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+
+[[package]]
+name = "certifi"
+version = "2024.1.1"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    const LOCK_REV3_EDITABLE_SOURCE: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { editable = "." }
+
+[package.dev-dependencies]
+dev = [{ name = "ruff" }]
+"#;
+
+    const LOCK_REV3_NO_PROJECT_PACKAGE: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "urllib3"
+version = "2.0.7"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_group_roots_rev3_single_group() {
+        let roots = parse_group_roots(LOCK_REV3_SINGLE_GROUP, Path::new("/project")).unwrap();
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots["dev"], vec!["mypy"]);
+    }
+
+    #[test]
+    fn test_parse_group_roots_rev3_multiple_groups() {
+        let roots = parse_group_roots(LOCK_REV3_MULTIPLE_GROUPS, Path::new("/project")).unwrap();
+
+        assert_eq!(roots.len(), 2);
+
+        let mut dev = roots["dev"].clone();
+        dev.sort();
+        assert_eq!(dev, vec!["mypy", "ruff"]);
+
+        let mut test_group = roots["test"].clone();
+        test_group.sort();
+        assert_eq!(test_group, vec!["pytest", "pytest-cov"]);
+    }
+
+    #[test]
+    fn test_parse_group_roots_rev3_mixed_with_production_deps() {
+        let roots =
+            parse_group_roots(LOCK_REV3_MIXED_WITH_PROD_DEPS, Path::new("/project")).unwrap();
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots["dev"], vec!["mypy"]);
+        assert!(
+            !roots.contains_key("requests"),
+            "production dep must not appear in group roots"
+        );
+        assert!(
+            !roots.contains_key("certifi"),
+            "production dep must not appear in group roots"
+        );
+    }
+
+    #[test]
+    fn test_parse_group_roots_rev3_editable_source() {
+        let roots = parse_group_roots(LOCK_REV3_EDITABLE_SOURCE, Path::new("/project")).unwrap();
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots["dev"], vec!["ruff"]);
+    }
+
+    #[test]
+    fn test_parse_group_roots_rev3_returns_empty_when_no_project_package() {
+        let roots = parse_group_roots(LOCK_REV3_NO_PROJECT_PACKAGE, Path::new("/project")).unwrap();
+        assert!(roots.is_empty());
     }
 }

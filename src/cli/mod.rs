@@ -105,6 +105,16 @@ pub struct Args {
     /// Output language for human-readable formats: en (default) or ja
     #[arg(long, default_value = "en", value_parser = parse_lang)]
     pub lang: Locale,
+
+    /// Exclude packages reachable only through the specified dependency groups (comma-separated).
+    /// Example: --exclude-groups dev,test,lint
+    #[arg(long, value_delimiter = ',')]
+    pub exclude_groups: Vec<String>,
+
+    /// Exclude all non-default dependency groups (production-only mode).
+    /// Equivalent to --exclude-groups <all-groups>.
+    #[arg(long, conflicts_with = "exclude_groups")]
+    pub production_only: bool,
 }
 
 fn parse_lang(s: &str) -> Result<Locale, String> {

@@ -2,7 +2,7 @@ use super::*;
 use crate::application::use_cases::test_doubles::{
     MockMaintenanceRepository, MockVulnerabilityRepository,
 };
-use crate::ports::outbound::{LockfileParseResult, PyPiMetadata};
+use crate::ports::outbound::{GroupRoots, LockfileParseResult, PyPiMetadata};
 use crate::sbom_generation::domain::Package;
 use std::collections::HashMap;
 use std::path::Path;
@@ -10,6 +10,7 @@ use std::path::Path;
 struct MockLockfileReader {
     packages: Vec<Package>,
     deps: HashMap<String, Vec<String>>,
+    group_roots: GroupRoots,
 }
 
 impl LockfileReader for MockLockfileReader {
@@ -27,6 +28,10 @@ impl LockfileReader for MockLockfileReader {
         _member_name: &str,
     ) -> Result<LockfileParseResult> {
         Ok((self.packages.clone(), self.deps.clone()))
+    }
+
+    fn read_and_parse_group_roots(&self, _path: &Path) -> Result<GroupRoots> {
+        Ok(self.group_roots.clone())
     }
 }
 
@@ -84,6 +89,7 @@ mod test_helpers {
     pub(super) struct UseCaseBuilder {
         packages: Vec<Package>,
         deps: HashMap<String, Vec<String>>,
+        group_roots: GroupRoots,
         project_name: String,
         vuln: Option<MockVulnerabilityRepository>,
         maint: Option<MockMaintenanceRepository>,
@@ -94,6 +100,7 @@ mod test_helpers {
             Self {
                 packages: Vec::new(),
                 deps: HashMap::new(),
+                group_roots: HashMap::new(),
                 project_name: "test-project".to_string(),
                 vuln: None,
                 maint: None,
@@ -117,6 +124,11 @@ mod test_helpers {
             self
         }
 
+        pub(super) fn with_group_roots(mut self, roots: GroupRoots) -> Self {
+            self.group_roots = roots;
+            self
+        }
+
         pub(super) fn with_project_name(mut self, name: impl Into<String>) -> Self {
             self.project_name = name.into();
             self
@@ -137,6 +149,7 @@ mod test_helpers {
                 MockLockfileReader {
                     packages: self.packages,
                     deps: self.deps,
+                    group_roots: self.group_roots,
                 },
                 MockProjectConfigReader {
                     project_name: self.project_name,
@@ -399,7 +412,8 @@ mod tests_response {
             Some("Test description".to_string()),
         )];
 
-        let response = use_case.build_response(enriched_packages, None, None, None, None, None);
+        let response =
+            use_case.build_response(enriched_packages, None, None, None, None, None, vec![]);
 
         assert_eq!(response.enriched_packages.len(), 1);
         assert!(response.dependency_graph.is_none());
@@ -444,6 +458,7 @@ mod tests_response {
             None,
             None,
             None,
+            vec![],
         );
 
         assert!(response.has_vulnerabilities_above_threshold);
@@ -491,6 +506,7 @@ mod tests_response {
             None,
             None,
             None,
+            vec![],
         );
 
         assert!(!response.has_vulnerabilities_above_threshold);
@@ -911,5 +927,156 @@ mod tests_regression {
 
         let response = use_case.execute(request).await.unwrap();
         assert_eq!(response.enriched_packages.len(), 1);
+    }
+}
+
+mod tests_group_exclusion {
+    use super::test_helpers::*;
+    use super::*;
+
+    fn make_dep_graph(edges: &[(&str, &[&str])]) -> HashMap<String, Vec<String>> {
+        let mut map: HashMap<String, Vec<String>> = HashMap::new();
+        for &(parent, deps) in edges {
+            let entry = map.entry(parent.to_string()).or_default();
+            for &dep in deps {
+                entry.push(dep.to_string());
+            }
+            for &dep in deps {
+                map.entry(dep.to_string()).or_default();
+            }
+        }
+        map
+    }
+
+    fn make_group_roots(groups: &[(&str, &[&str])]) -> GroupRoots {
+        groups
+            .iter()
+            .map(|&(g, roots)| (g.to_string(), roots.iter().map(|s| s.to_string()).collect()))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_empty_exclude_groups_returns_all_packages() {
+        let packages = vec![
+            pkg("myapp", "1.0.0"),
+            pkg("requests", "2.0.0"),
+            pkg("pytest", "7.0.0"),
+        ];
+        let deps = make_dep_graph(&[("myapp", &["requests"]), ("requests", &[]), ("pytest", &[])]);
+        let group_roots = make_group_roots(&[("dev", &["pytest"])]);
+
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile_and_deps(packages, deps)
+            .with_group_roots(group_roots)
+            .build();
+
+        let response = use_case.execute(default_request()).await.unwrap();
+
+        assert_eq!(response.enriched_packages.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_dev_only_package_excluded_via_execute() {
+        let packages = vec![
+            pkg("myapp", "1.0.0"),
+            pkg("requests", "2.0.0"),
+            pkg("pytest", "7.0.0"),
+            pkg("iniconfig", "2.0.0"),
+        ];
+        let deps = make_dep_graph(&[
+            ("myapp", &["requests"]),
+            ("requests", &[]),
+            ("pytest", &["iniconfig"]),
+            ("iniconfig", &[]),
+        ]);
+        let group_roots = make_group_roots(&[("dev", &["pytest"])]);
+
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile_and_deps(packages, deps)
+            .with_group_roots(group_roots)
+            .build();
+
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .exclude_groups(vec!["dev".to_string()])
+            .build()
+            .unwrap();
+
+        let response = use_case.execute(request).await.unwrap();
+
+        let names: Vec<&str> = response
+            .enriched_packages
+            .iter()
+            .map(|ep| ep.package.name())
+            .collect();
+        assert!(!names.contains(&"pytest"), "dev root must be excluded");
+        assert!(
+            !names.contains(&"iniconfig"),
+            "dev transitive must be excluded"
+        );
+        assert!(names.contains(&"requests"));
+        assert!(names.contains(&"myapp"));
+    }
+
+    #[tokio::test]
+    async fn test_shared_package_retained() {
+        let packages = vec![
+            pkg("myapp", "1.0.0"),
+            pkg("requests", "2.0.0"),
+            pkg("certifi", "2024.1.1"),
+            pkg("pytest", "7.0.0"),
+        ];
+        let deps = make_dep_graph(&[
+            ("myapp", &["requests"]),
+            ("requests", &["certifi"]),
+            ("pytest", &["certifi"]),
+            ("certifi", &[]),
+        ]);
+        let group_roots = make_group_roots(&[("dev", &["pytest"])]);
+
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile_and_deps(packages, deps)
+            .with_group_roots(group_roots)
+            .build();
+
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .exclude_groups(vec!["dev".to_string()])
+            .build()
+            .unwrap();
+
+        let response = use_case.execute(request).await.unwrap();
+
+        let names: Vec<&str> = response
+            .enriched_packages
+            .iter()
+            .map(|ep| ep.package.name())
+            .collect();
+        assert!(
+            names.contains(&"certifi"),
+            "shared package must be retained"
+        );
+        assert!(!names.contains(&"pytest"), "dev-only root must be excluded");
+    }
+
+    #[tokio::test]
+    async fn test_unknown_group_name_is_ignored() {
+        let packages = vec![pkg("myapp", "1.0.0"), pkg("requests", "2.0.0")];
+        let deps = make_dep_graph(&[("myapp", &["requests"]), ("requests", &[])]);
+
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile_and_deps(packages, deps)
+            .with_group_roots(HashMap::new())
+            .build();
+
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .exclude_groups(vec!["nonexistent".to_string()])
+            .build()
+            .unwrap();
+
+        let response = use_case.execute(request).await.unwrap();
+
+        assert_eq!(response.enriched_packages.len(), 2);
     }
 }

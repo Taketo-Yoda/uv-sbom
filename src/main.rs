@@ -23,7 +23,8 @@ use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::Args;
 use i18n::Messages;
 use ports::outbound::{
-    DiffSource, LockfileParseResult, LockfileReader, ProjectConfigReader, WorkspaceReader,
+    DiffSource, GroupRoots, LockfileParseResult, LockfileReader, ProjectConfigReader,
+    WorkspaceReader,
 };
 use shared::error::ExitCode;
 use shared::Result;
@@ -69,6 +70,10 @@ impl LockfileReader for MemberScopedLockfileReader {
     ) -> Result<LockfileParseResult> {
         self.inner
             .read_and_parse_lockfile_for_member(&self.workspace_root, member_name)
+    }
+
+    fn read_and_parse_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
+        self.inner.read_and_parse_group_roots(&self.workspace_root)
     }
 }
 
@@ -267,6 +272,17 @@ async fn run(args: Args) -> Result<bool> {
     // Pre-flight check for --suggest-fix
     let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path);
 
+    // Resolve exclude_groups: --production-only expands to all group names in the lockfile.
+    // This requires lockfile I/O so it lives here rather than in config_resolver.
+    let exclude_groups = if args.production_only {
+        FileSystemReader::new()
+            .read_and_parse_group_roots(&project_path)?
+            .into_keys()
+            .collect::<Vec<_>>()
+    } else {
+        merged.exclude_groups.clone()
+    };
+
     // Create request using builder pattern
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
     let request = SbomRequest::builder()
@@ -283,6 +299,7 @@ async fn run(args: Args) -> Result<bool> {
         .suggest_fix(suggest_fix)
         .check_abandoned(merged.check_abandoned)
         .abandoned_threshold_days(merged.abandoned_threshold_days)
+        .exclude_groups(exclude_groups)
         .locale(locale)
         .build()?;
 
@@ -317,6 +334,9 @@ async fn run(args: Args) -> Result<bool> {
             version.map(|v| (name, v))
         });
 
+    // Extract applied_group_filter before moving other response fields
+    let applied_group_filter = response.applied_group_filter;
+
     // Build read model first so we can extract package names for verification
     let read_model = SbomReadModelBuilder::build_with_project(
         response.enriched_packages,
@@ -329,6 +349,7 @@ async fn run(args: Args) -> Result<bool> {
             .map(|(n, v)| (n.as_str(), v.as_str())),
         response.upgrade_recommendations.as_deref(),
         response.abandoned_packages_report.as_ref(),
+        &applied_group_filter,
     );
 
     // Verify PyPI links if requested
@@ -402,6 +423,17 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     let config = load_config(&args, &workspace_root)?;
     let merged = merge_config(&args, &config);
 
+    // Resolve exclude_groups for workspace mode: --production-only reads group roots from
+    // the workspace-root lockfile. --exclude-groups / config value is used otherwise.
+    let workspace_exclude_groups = if args.production_only {
+        FileSystemReader::new()
+            .read_and_parse_group_roots(&workspace_root)?
+            .into_keys()
+            .collect::<Vec<_>>()
+    } else {
+        merged.exclude_groups.clone()
+    };
+
     let format_ext = match merged.format {
         OutputFormat::Json => "json",
         OutputFormat::Markdown => "md",
@@ -458,10 +490,13 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             .suggest_fix(false)
             .check_abandoned(merged.check_abandoned)
             .abandoned_threshold_days(merged.abandoned_threshold_days)
+            .exclude_groups(workspace_exclude_groups.clone())
             .locale(locale)
             .build()?;
 
         let response = use_case.execute(request).await?;
+
+        let applied_group_filter = response.applied_group_filter;
 
         let read_model = SbomReadModelBuilder::build_with_project(
             response.enriched_packages,
@@ -472,6 +507,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             None,
             response.upgrade_recommendations.as_deref(),
             response.abandoned_packages_report.as_ref(),
+            &applied_group_filter,
         );
 
         let formatter = FormatterFactory::create(merged.format, None, locale);

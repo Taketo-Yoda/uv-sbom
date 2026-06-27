@@ -13,8 +13,8 @@ use crate::ports::outbound::{
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::{
-    LicenseComplianceChecker, ResolutionAnalyzer, ThresholdConfig, UpgradeAdvisor,
-    VulnerabilityCheckResult, VulnerabilityChecker,
+    GroupReachabilityAnalyzer, LicenseComplianceChecker, ResolutionAnalyzer, ThresholdConfig,
+    UpgradeAdvisor, VulnerabilityCheckResult, VulnerabilityChecker,
 };
 use crate::sbom_generation::domain::{
     DependencyGraph, Package, PackageName, UpgradeRecommendation,
@@ -98,6 +98,11 @@ where
         // in dependency_map to correctly identify direct vs transitive dependencies.
         let filtered_packages = self.apply_exclusion_filters(packages, &request)?;
 
+        // Step 2b: Apply group reachability filter when exclude_groups is non-empty.
+        // dependency_map is borrowed (not filtered) to preserve direct/transitive classification.
+        let filtered_packages =
+            self.apply_group_filter(filtered_packages, &dependency_map, &request)?;
+
         // Early return for dry-run mode (validation only)
         if request.dry_run {
             return self.build_dry_run_response();
@@ -149,6 +154,7 @@ where
             license_compliance_result,
             upgrade_recommendations,
             abandoned_packages_report,
+            request.exclude_groups.clone(),
         ))
     }
 
@@ -325,6 +331,49 @@ where
         }
 
         Ok(filtered_pkgs)
+    }
+
+    /// Applies group reachability filtering when `exclude_groups` is non-empty.
+    ///
+    /// Reads `[manifest.dependency-groups]` from the lockfile, then delegates to
+    /// `GroupReachabilityAnalyzer::filter_excluded_groups` to remove packages that are
+    /// exclusively reachable from the specified groups.
+    ///
+    /// `dependency_map` is intentionally NOT filtered — Step 3 relies on the full map
+    /// to classify direct vs transitive dependencies (issue #206 invariant).
+    fn apply_group_filter(
+        &self,
+        packages: Vec<Package>,
+        dependency_map: &std::collections::HashMap<String, Vec<String>>,
+        request: &SbomRequest,
+    ) -> Result<Vec<Package>> {
+        if request.exclude_groups.is_empty() {
+            return Ok(packages);
+        }
+
+        let group_roots = self
+            .lockfile_reader
+            .read_and_parse_group_roots(&request.project_path)?;
+
+        let original_count = packages.len();
+        let filtered = GroupReachabilityAnalyzer::filter_excluded_groups(
+            &packages,
+            dependency_map,
+            &group_roots,
+            &request.exclude_groups,
+        );
+
+        let excluded_count = original_count - filtered.len();
+        if excluded_count > 0 {
+            let msgs = Messages::for_locale(self.locale);
+            let group_names = request.exclude_groups.join(", ");
+            self.progress_reporter.report(&Messages::format(
+                msgs.progress_excluded_groups,
+                &[&excluded_count.to_string(), &group_names],
+            ));
+        }
+
+        Ok(filtered)
     }
 
     /// Builds a response for dry-run mode (validation only)
@@ -622,6 +671,7 @@ where
     }
 
     /// Builds the final SBOM response
+    #[allow(clippy::too_many_arguments)]
     fn build_response(
         &self,
         enriched_packages: Vec<EnrichedPackage>,
@@ -630,6 +680,7 @@ where
         license_compliance_result: Option<LicenseComplianceResult>,
         upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
         abandoned_packages_report: Option<AbandonedPackagesReport>,
+        exclude_groups: Vec<String>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata();
 
@@ -648,7 +699,8 @@ where
             .enriched_packages(enriched_packages)
             .metadata(metadata)
             .has_vulnerabilities_above_threshold(has_vulnerabilities_above_threshold)
-            .has_license_violations(has_license_violations);
+            .has_license_violations(has_license_violations)
+            .applied_group_filter(exclude_groups);
 
         if let Some(graph) = dependency_graph {
             builder = builder.dependency_graph(graph);

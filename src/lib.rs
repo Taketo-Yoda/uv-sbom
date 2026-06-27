@@ -54,6 +54,7 @@
 //!     None,
 //!     None,
 //!     None, // No abandoned-package report in this example
+//!     &[], // No group filter in this example
 //! );
 //! let formatter = CycloneDxFormatter::new();
 //! let output = formatter.format(&read_model)?;
@@ -84,8 +85,8 @@ pub mod prelude {
     pub use crate::application::factories::{FormatterFactory, PresenterFactory, PresenterType};
     pub use crate::application::use_cases::GenerateSbomUseCase;
     pub use crate::ports::outbound::{
-        LicenseRepository, LockfileParseResult, LockfileReader, OutputPresenter, ProgressReporter,
-        ProjectConfigReader, SbomFormatter,
+        GroupRoots, LicenseRepository, LockfileParseResult, LockfileReader, OutputPresenter,
+        ProgressReporter, ProjectConfigReader, SbomFormatter,
     };
     pub use crate::sbom_generation::domain::{
         DependencyGraph, LicenseInfo, Package, PackageName, SbomMetadata,

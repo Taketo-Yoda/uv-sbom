@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-06-27
+
+### Fixed
+- **`--production-only` and `--exclude-groups dev` failed to exclude the `dev`-named group**: Packages listed under `[package.dev-dependencies]` with the group key `dev` were incorrectly added as children of the root project in the internal dependency map. This caused `GroupReachabilityAnalyzer` to treat them as production-reachable, so they were never excluded even though groups with other names (e.g. `test`) were correctly excluded. Fixed by removing the spurious dev-group edge injection; dev-group packages are now orphan roots in the dependency map as required by the group reachability algorithm (#645).
+- **`--exclude-groups` and `--production-only` were silent no-ops on uv 0.4+ projects**: uv lockfile revision 3 (introduced in uv 0.4+) stores dependency-group roots in `[package.dev-dependencies]` within the project's `[[package]]` entry instead of the `[manifest.dependency-groups]` section read by the parser. The parser now falls back to reading `[package.dev-dependencies]` when no `[manifest.dependency-groups]` section is present, restoring group filtering for projects using modern uv versions (#640).
+
+### Added
+- **Group filter row in SBOM summary**: When `--exclude-groups` or `--production-only` is active, a "Dependency group filter" row is now rendered in the `## Summary` table of Markdown output, listing the excluded group names. The row is omitted when no group filtering is applied (#639).
+- **`--exclude-groups` and `--production-only` CLI flags**: Exclude packages that are exclusively reachable through specified dependency groups. `--exclude-groups dev,test,lint` accepts a comma-separated list of group names; `--production-only` automatically discovers all non-default groups from `[manifest.dependency-groups]` in `uv.lock` and excludes them. The two flags are mutually exclusive. A corresponding `exclude_groups` config key is supported in `uv-sbom.config.yml`; CLI overrides config entirely (not merged). Implemented as part of the group-based SBOM filtering feature (#624).
+
 ## [2.5.0] - 2026-06-08
 
 ### Added

@@ -11,6 +11,7 @@ pub(in super::super) fn render(
     vulnerabilities: Option<&VulnerabilityReportView>,
     license_compliance: Option<&LicenseComplianceView>,
     abandoned_packages: Option<&AbandonedPackagesReport>,
+    group_filter: &[String],
 ) {
     output.push_str(messages.section_summary);
     output.push_str("\n\n");
@@ -40,6 +41,15 @@ pub(in super::super) fn render(
         "| {} | {} | ✅ |\n",
         messages.label_transitive_deps, transitive_count
     ));
+
+    // Group filter row (only when group filtering was applied)
+    if !group_filter.is_empty() {
+        output.push_str(&format!(
+            "| {} | {} | ✅ |\n",
+            messages.label_group_filter,
+            group_filter.join(", "),
+        ));
+    }
 
     // Vulnerability rows
     let mut has_critical = false;
@@ -222,6 +232,27 @@ mod tests {
             vulnerabilities,
             license_compliance,
             abandoned_packages,
+            &[],
+        );
+        output
+    }
+
+    fn render_summary_with_groups(
+        locale: Locale,
+        components: &[ComponentView],
+        vulnerabilities: Option<&VulnerabilityReportView>,
+        group_filter: &[String],
+    ) -> String {
+        let messages = Messages::for_locale(locale);
+        let mut output = String::new();
+        render(
+            messages,
+            &mut output,
+            components,
+            vulnerabilities,
+            None,
+            None,
+            group_filter,
         );
         output
     }
@@ -471,5 +502,38 @@ mod tests {
         );
         assert!(output.contains("**Overall: Action required**"));
         assert!(!output.contains("**Overall: Attention recommended**"));
+    }
+
+    #[test]
+    fn test_group_filter_row_present_en() {
+        let groups = vec!["dev".to_string(), "lint".to_string()];
+        let output = render_summary_with_groups(Locale::En, &[], None, &groups);
+        assert!(output.contains("| Dependency group filter | dev, lint | ✅ |"));
+    }
+
+    #[test]
+    fn test_group_filter_row_present_ja() {
+        let groups = vec!["dev".to_string(), "lint".to_string()];
+        let output = render_summary_with_groups(Locale::Ja, &[], None, &groups);
+        assert!(output.contains("| 依存グループフィルター | dev, lint | ✅ |"));
+    }
+
+    #[test]
+    fn test_group_filter_row_absent_when_empty() {
+        let output = render_summary_with_groups(Locale::En, &[], None, &[]);
+        assert!(!output.contains("Dependency group filter"));
+        assert!(!output.contains("依存グループフィルター"));
+    }
+
+    #[test]
+    fn test_group_filter_row_after_transitive_before_vuln() {
+        let groups = vec!["dev".to_string()];
+        let report = VulnerabilityReportView::default();
+        let output = render_summary_with_groups(Locale::En, &[], Some(&report), &groups);
+        let transitive_pos = output.find("Transitive dependencies").unwrap();
+        let group_filter_pos = output.find("Dependency group filter").unwrap();
+        let vuln_pos = output.find("Vulnerabilities (CRITICAL)").unwrap();
+        assert!(transitive_pos < group_filter_pos);
+        assert!(group_filter_pos < vuln_pos);
     }
 }

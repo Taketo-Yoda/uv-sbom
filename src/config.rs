@@ -64,6 +64,11 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 
 # Inactivity threshold in days for abandoned-package detection (default: 730)
 # abandoned_threshold_days: 730
+
+# Dependency groups to exclude from the SBOM (e.g. dev, test, lint)
+# exclude_groups:
+#   - "dev"
+#   - "test"
 "#;
 
 /// Generate a config template file in the specified directory.
@@ -109,6 +114,7 @@ pub struct ConfigFile {
     pub suggest_fix: Option<bool>,
     pub check_abandoned: Option<bool>,
     pub abandoned_threshold_days: Option<u64>,
+    pub exclude_groups: Option<Vec<String>>,
     /// Captures unknown fields for warnings.
     #[serde(flatten)]
     pub unknown_fields: HashMap<String, serde_yaml_ng::Value>,
@@ -375,7 +381,28 @@ another_unknown: value
         assert!(config.ignore_cves.is_none());
         assert!(config.check_abandoned.is_none());
         assert!(config.abandoned_threshold_days.is_none());
+        assert!(config.exclude_groups.is_none());
         assert!(config.unknown_fields.is_empty());
+    }
+
+    #[test]
+    fn test_load_config_with_exclude_groups() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join("config.yml");
+        fs::write(
+            &config_path,
+            r#"
+exclude_groups:
+  - dev
+  - test
+  - lint
+"#,
+        )
+        .unwrap();
+
+        let config = load_config_from_path(&config_path).unwrap();
+        let groups = config.exclude_groups.unwrap();
+        assert_eq!(groups, vec!["dev", "test", "lint"]);
     }
 
     #[test]
