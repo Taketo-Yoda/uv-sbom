@@ -1,8 +1,9 @@
 use super::lockfile_parser::{
     parse_group_roots, parse_lockfile_content, parse_lockfile_content_for_member,
+    parse_package_sources,
 };
 use crate::ports::outbound::{
-    GroupRoots, LockfileParseResult, LockfileReader, ProjectConfigReader,
+    GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap, ProjectConfigReader,
 };
 use crate::shared::error::SbomError;
 use crate::shared::security::{read_file_with_security, MAX_FILE_SIZE};
@@ -85,6 +86,11 @@ impl LockfileReader for FileSystemReader {
     fn read_and_parse_group_roots(&self, project_path: &Path) -> Result<GroupRoots> {
         let lockfile_content = self.read_lockfile(project_path)?;
         parse_group_roots(&lockfile_content, project_path)
+    }
+
+    fn read_and_parse_package_sources(&self, project_path: &Path) -> Result<PackageSourceMap> {
+        let lockfile_content = self.read_lockfile(project_path)?;
+        parse_package_sources(&lockfile_content, project_path)
     }
 }
 
@@ -321,5 +327,53 @@ source = { registry = "https://pypi.org/simple" }
         assert!(names.contains("urllib3"));
         assert!(names.contains("certifi"));
         assert!(!names.contains("alpha"));
+    }
+
+    const MIXED_SOURCES_LOCK: &str = r#"
+version = 1
+requires-python = ">=3.11"
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "git-pkg"
+version = "0.1.0"
+source = { git = "https://github.com/user/repo?rev=abc123" }
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+"#;
+
+    #[test]
+    fn test_read_and_parse_package_sources_reads_from_file() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("uv.lock"), MIXED_SOURCES_LOCK).unwrap();
+
+        let reader = FileSystemReader::new();
+        let map = reader
+            .read_and_parse_package_sources(temp_dir.path())
+            .unwrap();
+
+        use crate::ports::outbound::PackageSourceKind;
+        assert_eq!(map["requests"], PackageSourceKind::PyPi);
+        assert_eq!(
+            map["git-pkg"],
+            PackageSourceKind::Git("https://github.com/user/repo?rev=abc123".to_string())
+        );
+        assert_eq!(map["my-app"], PackageSourceKind::WorkspaceMember);
+    }
+
+    #[test]
+    fn test_read_and_parse_package_sources_returns_error_when_lockfile_missing() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let reader = FileSystemReader::new();
+        let result = reader.read_and_parse_package_sources(temp_dir.path());
+        assert!(result.is_err());
     }
 }
