@@ -23,8 +23,8 @@ use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::Args;
 use i18n::Messages;
 use ports::outbound::{
-    DiffSource, GroupRoots, LockfileParseResult, LockfileReader, ProjectConfigReader,
-    WorkspaceReader,
+    DiffSource, GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap,
+    ProjectConfigReader, WorkspaceReader,
 };
 use shared::error::ExitCode;
 use shared::Result;
@@ -74,6 +74,11 @@ impl LockfileReader for MemberScopedLockfileReader {
 
     fn read_and_parse_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
         self.inner.read_and_parse_group_roots(&self.workspace_root)
+    }
+
+    fn read_and_parse_package_sources(&self, _project_path: &Path) -> Result<PackageSourceMap> {
+        self.inner
+            .read_and_parse_package_sources(&self.workspace_root)
     }
 }
 
