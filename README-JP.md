@@ -347,6 +347,7 @@ license_policy:
 | `license_policy.unknown` | string | No | 不明ライセンスの処理（`warn` / `deny` / `allow`） |
 | `check_abandoned` | bool | No | 廃止パッケージ検出を有効化（オプトイン、デフォルト: false） |
 | `abandoned_threshold_days` | integer | No | 廃止パッケージ検出の非アクティブ期間しきい値（日数、デフォルト: 730） |
+| `check_non_pypi` | bool | No | 非PyPIソース検出を有効化（オプトイン、デフォルト: false） |
 | `exclude_groups` | string[] | No | SBOMから除外する依存関係グループ（そのグループからのみ到達可能なパッケージを除外） |
 
 #### 優先度とマージルール
@@ -358,6 +359,7 @@ license_policy:
 - **`check_license`** はCLIフラグまたは設定ファイルのいずれかで設定されていれば有効化（論理OR、`check_cve`と同様）
 - **`--license-allow`** と **`--license-deny`** CLIオプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を**完全に上書き**します（マージされません）
 - **`check_abandoned`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-abandoned` または設定ファイルの `check_abandoned: true` で有効化できます。`abandoned_threshold_days` の値はCLI > 設定ファイル > デフォルト（730）の順に解決されます。
+- **`check_non_pypi`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-non-pypi` または設定ファイルの `check_non_pypi: true` で有効化できます。
 - **`exclude_groups`**: CLIの `--exclude-groups` は設定ファイルの値を**完全に上書き**します（マージされません）。`--production-only` は実行時にlockfileからすべてのグループ名を解決し、CLIと設定ファイルの両方より優先されます。
 
 ### 特定のCVEを無視する
@@ -477,6 +479,22 @@ uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
 ```
 
 詳細は [`examples/abandoned-packages-project/README-JP.md`](examples/abandoned-packages-project/README-JP.md) を参照してください。
+
+### 非PyPIソース検出
+
+`--check-non-pypi` オプションを使用して、公式PyPIレジストリ以外のソース（git URL、ローカルパス、直接URL、プライベートレジストリ）からインストールされたパッケージを特定できます。uv.lockはすべてのパッケージのソース種別を明示的に記録しているため、サプライチェーンリスクの検出に役立ちます。
+
+```bash
+# 非PyPIソース検出を有効化
+uv-sbom --check-non-pypi --format markdown
+```
+
+**設定ファイルの場合:**
+```yaml
+check_non_pypi: true
+```
+
+> **注:** 非PyPIソース検出はネットワークアクセスを必要としません — すべてのデータは `uv.lock` から直接読み取られます。
 
 ### 脆弱性しきい値オプション
 
