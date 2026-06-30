@@ -20,6 +20,8 @@ pub struct MergedConfig {
     pub suggest_fix: bool,
     pub check_abandoned: bool,
     pub abandoned_threshold_days: u64,
+    #[allow(dead_code)] // WIRE(#627): remove when check_non_pypi is wired into SbomRequest
+    pub check_non_pypi: bool,
     /// Dependency groups whose exclusively-reachable packages should be excluded from the SBOM.
     /// Populated from `--exclude-groups` (CLI) or `exclude_groups` (config file).
     /// When `--production-only` is set, `main.rs` overrides this with all group names from the
@@ -138,6 +140,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
                 suggest_fix: args.suggest_fix,
                 check_abandoned: args.check_abandoned,
                 abandoned_threshold_days: args.abandoned_threshold_days.unwrap_or(730),
+                check_non_pypi: args.check_non_pypi,
                 exclude_groups: args.exclude_groups.clone(),
             };
         }
@@ -246,6 +249,9 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
     // check_abandoned: CLI flag || config value (mirrors check_license / suggest_fix)
     let check_abandoned = args.check_abandoned || config.check_abandoned.unwrap_or(false);
 
+    // check_non_pypi: CLI flag || config value (mirrors check_abandoned)
+    let check_non_pypi = args.check_non_pypi || config.check_non_pypi.unwrap_or(false);
+
     // abandoned_threshold_days: CLI > config > default 730.
     // args.abandoned_threshold_days is Option<u64>: None when the flag was not passed, Some when
     // the user explicitly provided a value. This cleanly expresses "not provided" vs "provided."
@@ -275,6 +281,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         suggest_fix,
         check_abandoned,
         abandoned_threshold_days,
+        check_non_pypi,
         exclude_groups,
     }
 }
@@ -749,5 +756,61 @@ mod tests {
         let args = Args::parse_from(["uv-sbom"]);
         let result = merge_config(&args, &None);
         assert!(result.exclude_groups.is_empty());
+    }
+
+    // --- check_non_pypi merge tests ---
+
+    #[test]
+    fn test_merge_config_check_non_pypi_default_false() {
+        // No CLI flag, no config → default false
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(!result.check_non_pypi);
+    }
+
+    #[test]
+    fn test_merge_config_check_non_pypi_from_config_true() {
+        // config: true, no CLI flag → check_non_pypi=true
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            check_non_pypi: Some(true),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.check_non_pypi);
+    }
+
+    #[test]
+    fn test_merge_config_check_non_pypi_cli_flag_true() {
+        // CLI: --check-non-pypi, default config → check_non_pypi=true
+        let args = Args::parse_from(["uv-sbom", "--check-non-pypi"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.check_non_pypi);
+    }
+
+    #[test]
+    fn test_merge_config_check_non_pypi_cli_wins_over_config_false() {
+        // CLI flag + config: false → CLI wins, check_non_pypi=true
+        let args = Args::parse_from(["uv-sbom", "--check-non-pypi"]);
+        let config = Some(ConfigFile {
+            check_non_pypi: Some(false),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.check_non_pypi);
+    }
+
+    #[test]
+    fn test_merge_config_no_config_file_check_non_pypi_cli_flag_true() {
+        // No config file; exercises the early-return branch with --check-non-pypi
+        let args = Args::parse_from(["uv-sbom", "--check-non-pypi"]);
+        let result = merge_config(&args, &None);
+        assert!(result.check_non_pypi);
     }
 }

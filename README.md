@@ -348,6 +348,7 @@ license_policy:
 | `license_policy.unknown` | string | No | Unknown license handling (`warn` / `deny` / `allow`) |
 | `check_abandoned` | bool | No | Enable abandoned package detection (opt-in, default: false) |
 | `abandoned_threshold_days` | integer | No | Inactivity threshold in days for abandoned package detection (default: 730) |
+| `check_non_pypi` | bool | No | Enable non-PyPI source detection (opt-in, default: false) |
 | `exclude_groups` | string[] | No | Dependency groups whose exclusively-reachable packages are excluded from the SBOM |
 
 #### Priority and Merge Rules
@@ -359,6 +360,7 @@ license_policy:
 - **`check_license`** is enabled if set via CLI flag OR config file (logical OR, same as `check_cve`)
 - **`--license-allow`** and **`--license-deny`** CLI options **override** config file `license_policy.allow` / `license_policy.deny` entirely (not merged)
 - **`check_abandoned`** is opt-in (default: false). Enable via CLI flag `--check-abandoned` or config file `check_abandoned: true`. The `abandoned_threshold_days` value follows CLI > config file > default (730) resolution order.
+- **`check_non_pypi`** is opt-in (default: false). Enable via CLI flag `--check-non-pypi` or config file `check_non_pypi: true`.
 - **`exclude_groups`**: CLI `--exclude-groups` **overrides** the config file value entirely (not merged). `--production-only` resolves all group names from the lockfile at runtime and takes precedence over both CLI and config.
 
 ### Ignoring specific CVEs
@@ -481,6 +483,22 @@ uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
 ```
 
 See [`examples/abandoned-packages-project/README.md`](examples/abandoned-packages-project/README.md) for a full walkthrough.
+
+### Non-PyPI Source Detection
+
+Use the `--check-non-pypi` option to identify packages installed from sources other than the official PyPI registry (git URLs, local paths, direct URLs, private registries). This helps detect potential supply chain risks unique to uv projects, since uv.lock explicitly records the source type for every package.
+
+```bash
+# Enable non-PyPI source detection
+uv-sbom --check-non-pypi --format markdown
+```
+
+**Config file equivalent:**
+```yaml
+check_non_pypi: true
+```
+
+> **Note:** Non-PyPI source detection requires no network access — all data is read directly from `uv.lock`.
 
 ### Vulnerability Threshold Options
 
