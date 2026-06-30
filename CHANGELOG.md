@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--check-non-pypi` CLI flag and `check_non_pypi` config key for opt-in non-PyPI package source detection (git, path, url, private registries) — groundwork for #627
+
 ## [2.6.0] - 2026-06-27
 
 ### Fixed
