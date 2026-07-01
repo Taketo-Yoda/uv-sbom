@@ -1146,10 +1146,7 @@ mod tests_non_pypi {
     #[test]
     fn test_check_non_pypi_pypi_packages_excluded() {
         let mut source_map = PackageSourceMap::new();
-        source_map.insert(
-            "requests".to_string(),
-            PackageSourceKind::PyPi,
-        );
+        source_map.insert("requests".to_string(), PackageSourceKind::PyPi);
         let use_case = UseCaseBuilder::default()
             .with_lockfile(vec![pkg("requests", "2.31.0")])
             .with_source_map(source_map)
@@ -1196,7 +1193,10 @@ mod tests_non_pypi {
         let view = &result.packages[0];
         assert_eq!(view.name, "my-lib");
         assert_eq!(view.source_label, "Git");
-        assert_eq!(view.source_location, "https://github.com/user/my-lib?rev=abc123");
+        assert_eq!(
+            view.source_location,
+            "https://github.com/user/my-lib?rev=abc123"
+        );
         assert!(!view.is_direct, "no graph → is_direct defaults to false");
     }
 
