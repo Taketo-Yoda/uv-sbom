@@ -54,6 +54,7 @@
 //!     None,
 //!     None,
 //!     None, // No abandoned-package report in this example
+//!     None, // No non-PyPI packages report in this example
 //!     &[], // No group filter in this example
 //! );
 //! let formatter = CycloneDxFormatter::new();

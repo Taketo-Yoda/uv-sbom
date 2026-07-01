@@ -20,7 +20,6 @@ pub struct MergedConfig {
     pub suggest_fix: bool,
     pub check_abandoned: bool,
     pub abandoned_threshold_days: u64,
-    #[allow(dead_code)] // WIRE(#627): remove when check_non_pypi is wired into SbomRequest
     pub check_non_pypi: bool,
     /// Dependency groups whose exclusively-reachable packages should be excluded from the SBOM.
     /// Populated from `--exclude-groups` (CLI) or `exclude_groups` (config file).

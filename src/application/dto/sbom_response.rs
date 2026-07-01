@@ -1,4 +1,5 @@
 use crate::application::read_models::abandoned_package::AbandonedPackagesReport;
+use crate::application::read_models::non_pypi_package::NonPyPiPackagesReport;
 use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
@@ -33,6 +34,9 @@ pub struct SbomResponse {
     /// Abandoned packages report.
     /// Populated only when `check_abandoned` was true in the request.
     pub abandoned_packages_report: Option<AbandonedPackagesReport>,
+    /// Non-PyPI packages report.
+    /// Populated only when `check_non_pypi` was true in the request.
+    pub non_pypi_packages_report: Option<NonPyPiPackagesReport>,
     /// Dependency groups that were excluded during SBOM generation.
     /// Empty when no group filter was applied.
     pub applied_group_filter: Vec<String>,
@@ -54,6 +58,7 @@ pub struct SbomResponseBuilder {
     has_license_violations: bool,
     upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
     abandoned_packages_report: Option<AbandonedPackagesReport>,
+    non_pypi_packages_report: Option<NonPyPiPackagesReport>,
     applied_group_filter: Vec<String>,
 }
 
@@ -69,6 +74,7 @@ impl SbomResponseBuilder {
             has_license_violations: false,
             upgrade_recommendations: None,
             abandoned_packages_report: None,
+            non_pypi_packages_report: None,
             applied_group_filter: Vec::new(),
         }
     }
@@ -124,6 +130,11 @@ impl SbomResponseBuilder {
         self
     }
 
+    pub fn non_pypi_packages_report(mut self, report: NonPyPiPackagesReport) -> Self {
+        self.non_pypi_packages_report = Some(report);
+        self
+    }
+
     pub fn applied_group_filter(mut self, groups: Vec<String>) -> Self {
         self.applied_group_filter = groups;
         self
@@ -144,6 +155,7 @@ impl SbomResponseBuilder {
             has_license_violations: self.has_license_violations,
             upgrade_recommendations: self.upgrade_recommendations,
             abandoned_packages_report: self.abandoned_packages_report,
+            non_pypi_packages_report: self.non_pypi_packages_report,
             applied_group_filter: self.applied_group_filter,
         })
     }

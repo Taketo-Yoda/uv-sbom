@@ -304,6 +304,7 @@ async fn run(args: Args) -> Result<bool> {
         .suggest_fix(suggest_fix)
         .check_abandoned(merged.check_abandoned)
         .abandoned_threshold_days(merged.abandoned_threshold_days)
+        .check_non_pypi(merged.check_non_pypi)
         .exclude_groups(exclude_groups)
         .locale(locale)
         .build()?;
@@ -354,6 +355,7 @@ async fn run(args: Args) -> Result<bool> {
             .map(|(n, v)| (n.as_str(), v.as_str())),
         response.upgrade_recommendations.as_deref(),
         response.abandoned_packages_report.as_ref(),
+        response.non_pypi_packages_report.as_ref(),
         &applied_group_filter,
     );
 
@@ -495,6 +497,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             .suggest_fix(false)
             .check_abandoned(merged.check_abandoned)
             .abandoned_threshold_days(merged.abandoned_threshold_days)
+            .check_non_pypi(merged.check_non_pypi)
             .exclude_groups(workspace_exclude_groups.clone())
             .locale(locale)
             .build()?;
@@ -512,6 +515,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             None,
             response.upgrade_recommendations.as_deref(),
             response.abandoned_packages_report.as_ref(),
+            response.non_pypi_packages_report.as_ref(),
             &applied_group_filter,
         );
 
