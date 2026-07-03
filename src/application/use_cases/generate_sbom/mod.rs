@@ -3,6 +3,9 @@ use crate::application::dto::{SbomRequest, SbomResponse};
 use crate::application::read_models::abandoned_package::{
     AbandonedPackageView, AbandonedPackagesReport,
 };
+use crate::application::read_models::non_pypi_package::{
+    NonPyPiPackageView, NonPyPiPackagesReport,
+};
 use crate::application::use_cases::{
     CheckAbandonedPackagesUseCase, CheckVulnerabilitiesUseCase, FetchLicensesUseCase,
 };
@@ -146,7 +149,14 @@ where
             .check_abandoned_if_requested(&request, &filtered_packages, dependency_graph.as_ref())
             .await?;
 
-        // Step 10: Build and return response
+        // Step 10: Non-PyPI source detection if requested
+        let non_pypi_packages_report = self.check_non_pypi_if_requested(
+            &request,
+            &filtered_packages,
+            dependency_graph.as_ref(),
+        )?;
+
+        // Step 11: Build and return response
         Ok(self.build_response(
             enriched_packages,
             dependency_graph,
@@ -154,6 +164,7 @@ where
             license_compliance_result,
             upgrade_recommendations,
             abandoned_packages_report,
+            non_pypi_packages_report,
             request.exclude_groups.clone(),
         ))
     }
@@ -196,9 +207,7 @@ where
         }
 
         let today = Utc::now().date_naive();
-        let direct_names: HashSet<&str> = dependency_graph
-            .map(|g| g.direct_dependencies().iter().map(|p| p.as_str()).collect())
-            .unwrap_or_default();
+        let direct_names = Self::resolve_direct_names(dependency_graph);
 
         let threshold = request.abandoned_threshold_days as i64;
         let mut abandoned_packages: Vec<AbandonedPackageView> = results
@@ -247,6 +256,58 @@ where
         }
 
         Ok(Some(report))
+    }
+
+    /// Detects packages sourced from non-PyPI origins when `check_non_pypi` is enabled.
+    ///
+    /// When `dependency_graph` is `None` (e.g. non-Markdown output without dep analysis),
+    /// `is_direct` defaults to `false` for all packages — consistent with the existing
+    /// pattern in `check_abandoned_if_requested`.
+    fn check_non_pypi_if_requested(
+        &self,
+        request: &SbomRequest,
+        packages: &[Package],
+        dependency_graph: Option<&DependencyGraph>,
+    ) -> Result<Option<NonPyPiPackagesReport>> {
+        if !request.check_non_pypi {
+            return Ok(None);
+        }
+
+        let source_map = self
+            .lockfile_reader
+            .read_and_parse_package_sources(&request.project_path)?;
+
+        let direct_names = Self::resolve_direct_names(dependency_graph);
+
+        let mut views: Vec<NonPyPiPackageView> = packages
+            .iter()
+            .filter_map(|pkg| {
+                let kind = source_map.get(pkg.name())?;
+                if !kind.is_non_pypi_external() {
+                    return None;
+                }
+                Some(NonPyPiPackageView {
+                    name: pkg.name().to_string(),
+                    version: pkg.version().to_string(),
+                    source_label: kind.label().to_string(),
+                    source_location: kind.value().to_string(),
+                    is_direct: direct_names.contains(pkg.name()),
+                })
+            })
+            .collect();
+        views.sort_by(|a, b| a.name.cmp(&b.name));
+
+        Ok(Some(NonPyPiPackagesReport { packages: views }))
+    }
+
+    /// Returns the set of direct dependency names from the graph.
+    ///
+    /// When `dependency_graph` is `None`, returns an empty set so every package
+    /// is treated as transitive — consistent across all `check_*_if_requested` methods.
+    fn resolve_direct_names(dependency_graph: Option<&DependencyGraph>) -> HashSet<&str> {
+        dependency_graph
+            .map(|g| g.direct_dependencies().iter().map(|p| p.as_str()).collect())
+            .unwrap_or_default()
     }
 
     /// Reads and parses the lockfile, reporting progress
@@ -680,6 +741,7 @@ where
         license_compliance_result: Option<LicenseComplianceResult>,
         upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
         abandoned_packages_report: Option<AbandonedPackagesReport>,
+        non_pypi_packages_report: Option<NonPyPiPackagesReport>,
         exclude_groups: Vec<String>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata();
@@ -716,6 +778,9 @@ where
         }
         if let Some(report) = abandoned_packages_report {
             builder = builder.abandoned_packages_report(report);
+        }
+        if let Some(report) = non_pypi_packages_report {
+            builder = builder.non_pypi_packages_report(report);
         }
 
         builder.build().expect("response build should not fail")

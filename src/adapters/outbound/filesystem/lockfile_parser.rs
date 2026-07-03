@@ -27,17 +27,9 @@ struct PackageSource {
     editable: Option<String>,
     #[serde(rename = "virtual")]
     virtual_path: Option<String>,
-    #[allow(dead_code)]
-    // WIRE(#627): remove when read_and_parse_package_sources is invoked from application code
     registry: Option<String>,
-    #[allow(dead_code)]
-    // WIRE(#627): remove when read_and_parse_package_sources is invoked from application code
     git: Option<String>,
-    #[allow(dead_code)]
-    // WIRE(#627): remove when read_and_parse_package_sources is invoked from application code
     path: Option<String>,
-    #[allow(dead_code)]
-    // WIRE(#627): remove when read_and_parse_package_sources is invoked from application code
     url: Option<String>,
 }
 
@@ -57,7 +49,6 @@ impl PackageSource {
     /// a `source = {}` empty table), falls back to `PyPi` as a non-flagging default.
     /// Callers should treat this fallback as "unknown / assumed PyPI" until a richer
     /// classification can be confirmed.
-    #[allow(dead_code)] // WIRE(#627): remove when read_and_parse_package_sources is invoked from application code
     fn to_kind(&self) -> PackageSourceKind {
         if self.is_local() {
             return PackageSourceKind::WorkspaceMember;
@@ -283,7 +274,6 @@ pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoot
 ///
 /// Packages whose `[[package]]` entry has no `source` field are omitted from
 /// the returned map. Invalid TOML returns an error.
-#[allow(dead_code)] // WIRE(#627): remove when read_and_parse_package_sources is invoked from application code
 pub fn parse_package_sources(content: &str, project_path: &Path) -> Result<PackageSourceMap> {
     #[derive(Debug, Deserialize)]
     struct UvPackage {

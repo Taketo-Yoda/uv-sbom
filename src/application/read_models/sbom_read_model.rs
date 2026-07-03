@@ -7,6 +7,7 @@ use super::abandoned_package::AbandonedPackagesReport;
 use super::component_view::ComponentView;
 use super::dependency_view::DependencyView;
 use super::license_compliance_view::LicenseComplianceView;
+use super::non_pypi_package::NonPyPiPackagesReport;
 use super::resolution_guide_view::ResolutionGuideView;
 use super::upgrade_recommendation_view::UpgradeRecommendationView;
 use super::vulnerability_view::VulnerabilityReportView;
@@ -35,6 +36,10 @@ pub struct SbomReadModel {
     /// Abandoned packages report.
     /// Populated only when `check_abandoned` was true in the request.
     pub abandoned_packages: Option<AbandonedPackagesReport>,
+    /// Non-PyPI packages report.
+    /// Populated only when `check_non_pypi` was true in the request.
+    #[allow(dead_code)] // WIRE(#660): remove when Markdown formatter reads this field
+    pub non_pypi_packages: Option<NonPyPiPackagesReport>,
     /// Dependency groups that were excluded during generation. Empty = no filter.
     pub applied_group_filter: Vec<String>,
 }

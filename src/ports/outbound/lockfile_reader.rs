@@ -16,7 +16,6 @@ pub type LockfileParseResult = (Vec<Package>, DependencyMap);
 pub type GroupRoots = HashMap<String, Vec<String>>;
 
 /// Classification of a package's `source` field in `uv.lock`.
-#[allow(dead_code)] // WIRE(#627): remove when wired into non-PyPI source detection use case
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PackageSourceKind {
     /// Standard PyPI registry (`https://pypi.org/simple`).
@@ -33,7 +32,6 @@ pub enum PackageSourceKind {
     WorkspaceMember,
 }
 
-#[allow(dead_code)] // WIRE(#627): remove when PackageSourceKind methods are used by application code
 impl PackageSourceKind {
     /// Returns `true` for sources that are external but not the canonical PyPI registry.
     ///
@@ -73,7 +71,6 @@ impl PackageSourceKind {
 ///
 /// Keyed by the package name as it appears in `uv.lock`. Packages without a
 /// `source` field are omitted from the map.
-#[allow(dead_code)] // WIRE(#627): remove when PackageSourceMap is used by application code
 pub type PackageSourceMap = HashMap<String, PackageSourceKind>;
 
 /// LockfileReader port for reading and parsing lockfile contents
@@ -148,6 +145,5 @@ pub trait LockfileReader {
     ///
     /// Returns a map of package name → `PackageSourceKind`. Packages whose
     /// `[[package]]` entry has no `source` field are omitted from the map.
-    #[allow(dead_code)] // WIRE(#627): remove when called by non-PyPI source detection use case
     fn read_and_parse_package_sources(&self, project_path: &Path) -> Result<PackageSourceMap>;
 }
