@@ -92,6 +92,11 @@ impl MarkdownFormatter {
         if let Some(report) = &model.abandoned_packages {
             sections::abandoned_packages::render(self.messages, output, report);
         }
+        if let Some(report) = &model.non_pypi_packages {
+            if !report.is_empty() {
+                sections::non_pypi_packages::render(self.messages, output, report);
+            }
+        }
         if let Some(guide) = &model.resolution_guide {
             if !guide.entries.is_empty() {
                 sections::resolution_guide::render(
@@ -908,5 +913,81 @@ mod tests {
         let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
         assert!(markdown.contains("| Abandoned packages | 2 | ⚠️ |"));
         assert!(!markdown.contains("_Abandoned package check skipped._"));
+    }
+
+    // ===== Non-PyPI packages section tests =====
+
+    fn with_non_pypi_packages(
+        packages: Vec<crate::application::read_models::NonPyPiPackageView>,
+    ) -> crate::application::read_models::SbomReadModel {
+        use crate::application::read_models::NonPyPiPackagesReport;
+        let mut model = test_fixtures::base_model();
+        model.non_pypi_packages = Some(NonPyPiPackagesReport { packages });
+        model
+    }
+
+    #[test]
+    fn test_non_pypi_section_absent_when_none() {
+        let model = test_fixtures::base_model(); // non_pypi_packages: None
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(!markdown.contains("## ⚠️ Non-PyPI Package Sources"));
+    }
+
+    #[test]
+    fn test_non_pypi_section_absent_when_empty() {
+        let model = with_non_pypi_packages(vec![]);
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(!markdown.contains("## ⚠️ Non-PyPI Package Sources"));
+    }
+
+    #[test]
+    fn test_non_pypi_section_order_after_abandoned_before_resolution_guide() {
+        use crate::application::read_models::{
+            AbandonedPackageView, AbandonedPackagesReport, IntroducedByView, NonPyPiPackageView,
+            ResolutionEntryView, ResolutionGuideView,
+        };
+        use chrono::NaiveDate;
+
+        let mut model = with_non_pypi_packages(vec![NonPyPiPackageView {
+            name: "dev-tool".to_string(),
+            version: "1.0.0".to_string(),
+            source_label: "Git".to_string(),
+            source_location: "https://github.com/example/repo".to_string(),
+            is_direct: true,
+        }]);
+        model.abandoned_packages = Some(AbandonedPackagesReport {
+            packages: vec![AbandonedPackageView {
+                name: "stale-lib".to_string(),
+                version: "1.0.0".to_string(),
+                last_release_date: NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+                days_inactive: 900,
+                is_direct: true,
+            }],
+            threshold_days: 730,
+        });
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "requests".to_string(),
+                current_version: "2.31.0".to_string(),
+                fixed_version: Some("2.32.0".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-0001".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+                dependency_chains: vec![],
+            }],
+        });
+
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert_section_order(
+            &markdown,
+            &[
+                "## Abandoned Packages",
+                "## ⚠️ Non-PyPI Package Sources",
+                "## Vulnerability Resolution Guide",
+            ],
+        );
     }
 }
