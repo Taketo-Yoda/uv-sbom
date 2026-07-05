@@ -223,6 +223,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
 | `GroupReachabilityAnalyzer` | `src/sbom_generation/domain/services/group_reachability_analyzer.rs` | Pure domain service for BFS-based group reachability traversal; wired into `GenerateSbomUseCase` via `apply_group_filter` in #623 |
 | `GroupRoots` | `src/ports/outbound/lockfile_reader.rs` | Type alias `HashMap<String, Vec<String>>` mapping dependency group name → root package names; extracted from `[manifest.dependency-groups]` in `uv.lock`; consumed by group reachability traversal in #622; wired into use case in #623 |
+| `NonPyPiPackageView` / `NonPyPiPackagesReport` | `src/application/read_models/non_pypi_package.rs` | Read model for packages sourced from non-PyPI origins (git, url, private registry); populated by `GenerateSbomUseCase` when `check_non_pypi` is true; rendered by the Markdown formatter's `non_pypi_packages` section (#656, #660) |
 
 ### Important Invariants
 

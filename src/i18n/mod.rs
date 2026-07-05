@@ -185,6 +185,13 @@ pub struct Messages {
     pub col_days_inactive: &'static str,
     pub col_type: &'static str,
 
+    // Non-PyPI packages section
+    pub section_non_pypi_packages: &'static str,
+    pub summary_non_pypi_packages: &'static str,
+    pub note_non_pypi_packages: &'static str,
+    pub col_source_type: &'static str,
+    pub col_source: &'static str,
+
     // Diff Markdown formatter strings
     pub diff_section_title: &'static str,
     pub diff_compared_line: &'static str,
@@ -394,6 +401,13 @@ static EN_MESSAGES: Messages = Messages {
     col_days_inactive: "Days Inactive",
     col_type: "Type",
 
+    // Non-PyPI packages section
+    section_non_pypi_packages: "## ⚠️ Non-PyPI Package Sources",
+    summary_non_pypi_packages: "{} packages are sourced from outside the official PyPI registry ({} direct, {} transitive).",
+    note_non_pypi_packages: "> Packages from non-PyPI sources may not be subject to PyPI's security policies. Review each package's origin before production deployment.",
+    col_source_type: "Source Type",
+    col_source: "Source",
+
     // Diff Markdown formatter strings
     diff_section_title: "## Dependency Diff Report",
     diff_compared_line: "Compared: `{}` vs current `uv.lock`",
@@ -573,6 +587,13 @@ static JA_MESSAGES: Messages = Messages {
     col_last_release: "最終リリース",
     col_days_inactive: "非アクティブ日数",
     col_type: "種別",
+
+    // Non-PyPI packages section
+    section_non_pypi_packages: "## ⚠️ PyPI以外のパッケージソース",
+    summary_non_pypi_packages: "{}個のパッケージが公式PyPIレジストリ以外から取得されています（直接依存 {}件、間接依存 {}件）。",
+    note_non_pypi_packages: "> PyPI以外のソースから取得されたパッケージは、PyPIのセキュリティポリシーの対象外である可能性があります。本番環境へのデプロイ前に、各パッケージの取得元を確認してください。",
+    col_source_type: "ソース種別",
+    col_source: "取得元",
 
     // Diff Markdown formatter strings
     diff_section_title: "## 依存関係差分レポート",
@@ -1096,6 +1117,44 @@ mod tests {
         assert_eq!(msgs.col_last_release, "最終リリース");
         assert_eq!(msgs.col_days_inactive, "非アクティブ日数");
         assert_eq!(msgs.col_type, "種別");
+    }
+
+    #[test]
+    fn test_messages_non_pypi_section_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.section_non_pypi_packages,
+            "## ⚠️ Non-PyPI Package Sources"
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_non_pypi_packages, &["3", "1", "2"]),
+            "3 packages are sourced from outside the official PyPI registry (1 direct, 2 transitive)."
+        );
+        assert_eq!(
+            msgs.note_non_pypi_packages,
+            "> Packages from non-PyPI sources may not be subject to PyPI's security policies. Review each package's origin before production deployment."
+        );
+        assert_eq!(msgs.col_source_type, "Source Type");
+        assert_eq!(msgs.col_source, "Source");
+    }
+
+    #[test]
+    fn test_messages_non_pypi_section_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.section_non_pypi_packages,
+            "## ⚠️ PyPI以外のパッケージソース"
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_non_pypi_packages, &["3", "1", "2"]),
+            "3個のパッケージが公式PyPIレジストリ以外から取得されています（直接依存 1件、間接依存 2件）。"
+        );
+        assert_eq!(
+            msgs.note_non_pypi_packages,
+            "> PyPI以外のソースから取得されたパッケージは、PyPIのセキュリティポリシーの対象外である可能性があります。本番環境へのデプロイ前に、各パッケージの取得元を確認してください。"
+        );
+        assert_eq!(msgs.col_source_type, "ソース種別");
+        assert_eq!(msgs.col_source, "取得元");
     }
 
     #[test]

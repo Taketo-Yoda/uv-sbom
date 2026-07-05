@@ -30,31 +30,26 @@ pub struct NonPyPiPackageView {
 #[derive(Debug, Clone, Default)]
 pub struct NonPyPiPackagesReport {
     /// Packages sourced from non-PyPI external origins.
-    #[allow(dead_code)] // WIRE(#660): remove when Markdown formatter renders this field
     pub packages: Vec<NonPyPiPackageView>,
 }
 
 impl NonPyPiPackagesReport {
     /// Returns the total number of non-PyPI packages.
-    #[allow(dead_code)] // WIRE(#660): remove when Markdown formatter calls this method
     pub fn total_count(&self) -> usize {
         self.packages.len()
     }
 
     /// Returns the number of non-PyPI packages that are direct dependencies.
-    #[allow(dead_code)] // WIRE(#660): remove when Markdown formatter calls this method
     pub fn direct_count(&self) -> usize {
         self.packages.iter().filter(|p| p.is_direct).count()
     }
 
     /// Returns the number of non-PyPI packages that are transitive dependencies.
-    #[allow(dead_code)] // WIRE(#660): remove when Markdown formatter calls this method
     pub fn transitive_count(&self) -> usize {
         self.packages.iter().filter(|p| !p.is_direct).count()
     }
 
     /// Returns `true` when no non-PyPI packages were found.
-    #[allow(dead_code)] // WIRE(#660): remove when Markdown formatter calls this method
     pub fn is_empty(&self) -> bool {
         self.packages.is_empty()
     }

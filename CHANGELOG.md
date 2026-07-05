@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `--check-non-pypi` CLI flag and `check_non_pypi` config key for opt-in non-PyPI package source detection (git, path, url, private registries) — groundwork for #627
+- **Non-PyPI Package Sources Markdown section**: When `--check-non-pypi` is active and non-PyPI packages are detected, a new `## ⚠️ Non-PyPI Package Sources` section is rendered in Markdown output after the Abandoned Packages section, showing a direct/transitive count summary, a table of Package, Version, Source Type, and Source, and an advisory note. The section is omitted entirely when the check is disabled or no non-PyPI packages are found. Local-path packages are intentionally excluded, consistent with existing source classification. Fully localized for EN and JA (#656, #660).
 
 ## [2.6.0] - 2026-06-27
 
