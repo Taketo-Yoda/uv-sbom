@@ -486,11 +486,35 @@ See [`examples/abandoned-packages-project/README.md`](examples/abandoned-package
 
 ### Non-PyPI Source Detection
 
-Use the `--check-non-pypi` option to identify packages installed from sources other than the official PyPI registry (git URLs, local paths, direct URLs, private registries). This helps detect potential supply chain risks unique to uv projects, since uv.lock explicitly records the source type for every package.
+Use the `--check-non-pypi` option to identify packages installed from sources other than the official PyPI registry (git repositories, direct URLs, private registries). This helps detect potential supply chain risks unique to uv projects, since uv.lock explicitly records the source type for every package.
 
 ```bash
 # Enable non-PyPI source detection
 uv-sbom --check-non-pypi --format markdown
+```
+
+**How it works:**
+- Reads the source classification directly from `uv.lock` (no network access, no PyPI API calls)
+- Flags packages sourced from a **Private Registry**, **Git** repository, or **Direct URL**
+- Local filesystem paths (`path = "..."`) and workspace members are not flagged — these are expected in uv workspace layouts and are not considered external supply chain risk
+
+**Output:**
+- **Non-PyPI Package Sources section**: Appears in the Markdown output listing the total count (direct vs. transitive) followed by a table of Package, Version, Source Type, and Source
+- When `--check-non-pypi` is not passed, or no packages match, the section is omitted entirely
+
+**Example output:**
+```markdown
+## ⚠️ Non-PyPI Package Sources
+
+3 packages are sourced from outside the official PyPI registry (1 direct, 2 transitive).
+
+| Package | Version | Source Type | Source |
+|---------|---------|--------------|--------|
+| my-internal-lib | 2.1.0 | Private Registry | https://internal.company.com/simple |
+| dev-tool | 0.4.0 | Git | https://github.com/user/repo?rev=abc123 |
+| patched-requests | 2.31.0 | Direct URL | https://example.com/patched-requests-2.31.0.tar.gz |
+
+> Packages from non-PyPI sources may not be subject to PyPI's security policies. Review each package's origin before production deployment.
 ```
 
 **Config file equivalent:**
@@ -931,7 +955,11 @@ Options:
                                      Requires uv CLI installed and pyproject.toml in project directory
       --workspace                    Generate one SBOM per workspace member
                                      Cannot be used with --output
+      --diff <REF_OR_PATH>           Compare current uv.lock against a base (git ref, tag, commit SHA, or path to a uv.lock file)
       --check-license                Check license compliance against policy
+      --check-abandoned              Check for abandoned/unmaintained packages (no upstream release within threshold days)
+      --abandoned-threshold-days <DAYS>  Inactivity threshold in days for abandoned-package detection (default: 730)
+      --check-non-pypi               Check for packages sourced from non-PyPI origins (git, direct URL, private registries)
       --license-allow <LIST>         Comma-separated list of allowed license patterns (overrides config)
       --license-deny <LIST>          Comma-separated list of denied license patterns (overrides config)
       --exclude-groups <GROUPS>      Exclude packages reachable only through the specified dependency groups (comma-separated)
