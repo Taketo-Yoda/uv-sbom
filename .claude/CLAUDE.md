@@ -63,6 +63,7 @@ Skills contain mandatory pre-flight checks and language requirements that preven
 - **Issue #59**: `cargo clippy` was run without `-D warnings`, causing CI failure after push
 - **2026-04-18**: v2.2.0 release promoted an empty `[Unreleased]` section. Features added in PRs #441–#483 were never recorded in CHANGELOG. Fixed by Issue #491 (added gate in `/release` Step 3.6 and `/pr` Step 4.5).
 - **2026-05-09 (Issue #511)**: `--check-abandoned` CLI flag was added without updating README.md, README-JP.md, `examples/sample-project/config/uv-sbom.config.yml`, or any example project README. Root cause: `/implement` Step 4 said "update docs as needed" without a concrete gate; `/pr` had no documentation backstop. Fixed by Issue #568 (`/implement` Step 4.3 CLI Flag Documentation Gate) and Issue #569 (`/pr` Step 4.6 CLI Flag Documentation Backstop).
+- **2026-07-08 (Issue #669)**: The `--check-non-pypi` flag (Issue #627) satisfied `/implement` Step 4.3.D with a README paragraph and a hand-fabricated example-output block, but no shipped example project's `uv.lock` contains a non-PyPI source, so running the flag against any example produces empty output. Root cause: Step 4.3.D only required a README *mention*, not *proof* of non-empty output. Fixed by Issue #669 (Step 4.3.D now requires actually running the flag against example data and producing real, non-empty output; a missing trigger is a blocker, not a gap). Note: `/pr` Step 4.6.D has the same weakness and should be hardened in a follow-up Issue.
 
 ### Enforcement
 

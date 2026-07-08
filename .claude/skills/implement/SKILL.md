@@ -157,10 +157,18 @@ If the diff is **non-empty**, verify ALL of the following before proceeding to S
 - [ ] `examples/sample-project/config/uv-sbom.config.yml` includes the new config key
   (commented out with the default value, matching the style of existing entries)
 
-#### D. Example project documentation
+#### D. Example project documentation and proof of non-empty output
 
 - [ ] At least one example project README demonstrates the new flag
   (use `examples/sample-project/README.md` if it exists, otherwise note this as a gap)
+- [ ] The flag was actually run against a shipped example project — e.g.
+  `cargo run -- -p examples/sample-project --<new-flag> -f markdown` — and produced
+  non-empty, feature-specific output (not an empty section, not a "no results" message).
+  A README mention alone does NOT satisfy this gate.
+- [ ] If no shipped example project's `uv.lock` triggers non-empty output, this is a
+  BLOCKER, not a gap: add or extend an example project (or its `uv.lock`) so the flag
+  produces real output, then paste the actual output into the README example. Never
+  fabricate example output by hand.
 
 **If any checkbox is unchecked**: implement the missing documentation now, before invoking `/code-review`.
 

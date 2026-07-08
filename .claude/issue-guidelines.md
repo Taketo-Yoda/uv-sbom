@@ -172,6 +172,8 @@ Before submitting via `gh issue create`:
 - [ ] Files to update/create are listed with explanations
 - [ ] Design decisions documented with rationale
 - [ ] Question: "Can an AI implement this without asking questions?" — Answer: Yes
+- [ ] If the Issue adds a CLI flag: example/demo output shown in the Issue is produced by
+  actually running the CLI against real example data, not hand-written (see `/implement` Step 4.3.D)
 
 ## Examples of Good Issues
 
