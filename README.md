@@ -509,10 +509,10 @@ uv-sbom --check-non-pypi --format markdown
 3 packages are sourced from outside the official PyPI registry (1 direct, 2 transitive).
 
 | Package | Version | Source Type | Source |
-|---------|---------|--------------|--------|
-| my-internal-lib | 2.1.0 | Private Registry | https://internal.company.com/simple |
-| dev-tool | 0.4.0 | Git | https://github.com/user/repo?rev=abc123 |
-| patched-requests | 2.31.0 | Direct URL | https://example.com/patched-requests-2.31.0.tar.gz |
+|---------|---------|-------------|--------|
+| acme-analytics-sdk | 1.4.0 | Private Registry | https://pypi.acme-corp.example/simple |
+| edge-config | 2.1.0 | Direct URL | https://downloads.acme-corp.example/edge-config-2.1.0-py3-none-any.whl |
+| telemetry-agent | 0.9.2 | Git | https://github.com/acme-corp/telemetry-agent?rev=9f2c1ab |
 
 > Packages from non-PyPI sources may not be subject to PyPI's security policies. Review each package's origin before production deployment.
 ```
@@ -523,6 +523,14 @@ check_non_pypi: true
 ```
 
 > **Note:** Non-PyPI source detection requires no network access — all data is read directly from `uv.lock`.
+
+For a demo with guaranteed output, run:
+
+```bash
+uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f markdown
+```
+
+See [`examples/non-pypi-sources-project/README.md`](examples/non-pypi-sources-project/README.md) for a full walkthrough.
 
 ### Vulnerability Threshold Options
 
