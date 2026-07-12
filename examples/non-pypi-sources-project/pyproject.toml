@@ -1,0 +1,11 @@
+[project]
+name = "non-pypi-sources-project"
+version = "0.1.0"
+description = "Example project demonstrating --check-non-pypi with git, private-registry, and direct-URL sources alongside a standard PyPI package"
+requires-python = ">=3.11"
+dependencies = [
+    # Package sources are recorded in uv.lock; --check-non-pypi reads them from there.
+    "acme-analytics-sdk==1.4.0",  # Private registry (non-PyPI) - flagged; pulls in git + direct-URL transitives
+    "requests==2.32.3",           # Standard PyPI - not flagged (contrast)
+    "vendored-parser==0.5.0",     # Local path source - intentionally NOT flagged (excluded by design)
+]

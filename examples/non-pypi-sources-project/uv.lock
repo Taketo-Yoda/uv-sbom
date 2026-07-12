@@ -1,0 +1,49 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "non-pypi-sources-project"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "acme-analytics-sdk" },
+    { name = "requests" },
+    { name = "vendored-parser" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "acme-analytics-sdk", specifier = "==1.4.0" },
+    { name = "requests", specifier = "==2.32.3" },
+    { name = "vendored-parser", specifier = "==0.5.0" },
+]
+
+[[package]]
+name = "acme-analytics-sdk"
+version = "1.4.0"
+source = { registry = "https://pypi.acme-corp.example/simple" }
+dependencies = [
+    { name = "edge-config" },
+    { name = "telemetry-agent" },
+]
+
+[[package]]
+name = "edge-config"
+version = "2.1.0"
+source = { url = "https://downloads.acme-corp.example/edge-config-2.1.0-py3-none-any.whl" }
+
+[[package]]
+name = "requests"
+version = "2.32.3"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "telemetry-agent"
+version = "0.9.2"
+source = { git = "https://github.com/acme-corp/telemetry-agent?rev=9f2c1ab" }
+
+[[package]]
+name = "vendored-parser"
+version = "0.5.0"
+source = { path = "vendor/vendored-parser" }

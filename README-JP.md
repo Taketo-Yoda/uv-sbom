@@ -505,10 +505,10 @@ uv-sbom --check-non-pypi --format markdown
 3個のパッケージが公式PyPIレジストリ以外から取得されています（直接依存 1件、間接依存 2件）。
 
 | パッケージ | バージョン | ソース種別 | 取得元 |
-|-----------|-----------|-----------|--------|
-| my-internal-lib | 2.1.0 | Private Registry | https://internal.company.com/simple |
-| dev-tool | 0.4.0 | Git | https://github.com/user/repo?rev=abc123 |
-| patched-requests | 2.31.0 | Direct URL | https://example.com/patched-requests-2.31.0.tar.gz |
+|-------|-------|-------|-----|
+| acme-analytics-sdk | 1.4.0 | Private Registry | https://pypi.acme-corp.example/simple |
+| edge-config | 2.1.0 | Direct URL | https://downloads.acme-corp.example/edge-config-2.1.0-py3-none-any.whl |
+| telemetry-agent | 0.9.2 | Git | https://github.com/acme-corp/telemetry-agent?rev=9f2c1ab |
 
 > PyPI以外のソースから取得されたパッケージは、PyPIのセキュリティポリシーの対象外である可能性があります。本番環境へのデプロイ前に、各パッケージの取得元を確認してください。
 ```
@@ -519,6 +519,14 @@ check_non_pypi: true
 ```
 
 > **注:** 非PyPIソース検出はネットワークアクセスを必要としません — すべてのデータは `uv.lock` から直接読み取られます。
+
+確実に出力が得られるデモを実行するには：
+
+```bash
+uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f markdown
+```
+
+詳細は [`examples/non-pypi-sources-project/README-JP.md`](examples/non-pypi-sources-project/README-JP.md) を参照してください。
 
 ### 脆弱性しきい値オプション
 
