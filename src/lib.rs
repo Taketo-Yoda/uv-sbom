@@ -54,6 +54,7 @@
 //!     None,
 //!     None,
 //!     None, // No abandoned-package report in this example
+//!     None, // No non-PyPI packages report in this example
 //!     &[], // No group filter in this example
 //! );
 //! let formatter = CycloneDxFormatter::new();
@@ -86,7 +87,7 @@ pub mod prelude {
     pub use crate::application::use_cases::GenerateSbomUseCase;
     pub use crate::ports::outbound::{
         GroupRoots, LicenseRepository, LockfileParseResult, LockfileReader, OutputPresenter,
-        ProgressReporter, ProjectConfigReader, SbomFormatter,
+        PackageSourceKind, PackageSourceMap, ProgressReporter, ProjectConfigReader, SbomFormatter,
     };
     pub use crate::sbom_generation::domain::{
         DependencyGraph, LicenseInfo, Package, PackageName, SbomMetadata,

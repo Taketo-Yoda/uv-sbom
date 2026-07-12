@@ -1,4 +1,6 @@
-use crate::ports::outbound::{GroupRoots, LockfileParseResult};
+use crate::ports::outbound::{
+    GroupRoots, LockfileParseResult, PackageSourceKind, PackageSourceMap,
+};
 use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
@@ -25,11 +27,50 @@ struct PackageSource {
     editable: Option<String>,
     #[serde(rename = "virtual")]
     virtual_path: Option<String>,
+    registry: Option<String>,
+    git: Option<String>,
+    path: Option<String>,
+    url: Option<String>,
 }
 
 impl PackageSource {
     fn is_local(&self) -> bool {
         self.editable.is_some() || self.virtual_path.is_some()
+    }
+
+    /// Classify this source into a `PackageSourceKind`.
+    ///
+    /// Priority when multiple fields are set (uv.lock sets exactly one in practice):
+    /// WorkspaceMember > Git > LocalPath > DirectUrl > Registry.
+    /// A registry URL of `"https://pypi.org/simple"` (with or without trailing slash)
+    /// maps to `PyPi`; all other registry URLs map to `PrivateRegistry`.
+    ///
+    /// If none of the known fields are set (e.g., a future uv.lock source type or
+    /// a `source = {}` empty table), falls back to `PyPi` as a non-flagging default.
+    /// Callers should treat this fallback as "unknown / assumed PyPI" until a richer
+    /// classification can be confirmed.
+    fn to_kind(&self) -> PackageSourceKind {
+        if self.is_local() {
+            return PackageSourceKind::WorkspaceMember;
+        }
+        if let Some(git) = &self.git {
+            return PackageSourceKind::Git(git.clone());
+        }
+        if let Some(path) = &self.path {
+            return PackageSourceKind::LocalPath(path.clone());
+        }
+        if let Some(url) = &self.url {
+            return PackageSourceKind::DirectUrl(url.clone());
+        }
+        if let Some(reg) = &self.registry {
+            let normalized = reg.trim_end_matches('/');
+            if normalized == "https://pypi.org/simple" {
+                return PackageSourceKind::PyPi;
+            }
+            return PackageSourceKind::PrivateRegistry(reg.clone());
+        }
+        // No source field set — treat as PyPI (non-flagging default).
+        PackageSourceKind::PyPi
     }
 }
 
@@ -227,6 +268,37 @@ pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoot
         .unwrap_or_default();
 
     Ok(package_groups)
+}
+
+/// Parse `uv.lock` content into a map of package name → source classification.
+///
+/// Packages whose `[[package]]` entry has no `source` field are omitted from
+/// the returned map. Invalid TOML returns an error.
+pub fn parse_package_sources(content: &str, project_path: &Path) -> Result<PackageSourceMap> {
+    #[derive(Debug, Deserialize)]
+    struct UvPackage {
+        name: String,
+        source: Option<PackageSource>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct UvLock {
+        #[serde(default)]
+        package: Vec<UvPackage>,
+    }
+
+    let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
+        path: project_path.join("uv.lock"),
+        details: e.to_string(),
+    })?;
+
+    let mut map = PackageSourceMap::new();
+    for pkg in lockfile.package {
+        if let Some(source) = pkg.source {
+            map.insert(pkg.name, source.to_kind());
+        }
+    }
+    Ok(map)
 }
 
 /// Collect all dependency names from a package (runtime + dev).
@@ -851,5 +923,199 @@ source = { registry = "https://pypi.org/simple" }
     fn test_parse_group_roots_rev3_returns_empty_when_no_project_package() {
         let roots = parse_group_roots(LOCK_REV3_NO_PROJECT_PACKAGE, Path::new("/project")).unwrap();
         assert!(roots.is_empty());
+    }
+
+    // --- PackageSourceKind and parse_package_sources tests ---
+
+    const MIXED_SOURCES_LOCK: &str = r#"
+version = 1
+requires-python = ">=3.11"
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "private-pkg"
+version = "1.0.0"
+source = { registry = "https://private.example.com/simple" }
+
+[[package]]
+name = "git-pkg"
+version = "0.1.0"
+source = { git = "https://github.com/user/repo?rev=abc123" }
+
+[[package]]
+name = "local-pkg"
+version = "0.2.0"
+source = { path = "/some/local/path" }
+
+[[package]]
+name = "url-pkg"
+version = "0.3.0"
+source = { url = "https://example.com/package.tar.gz" }
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+
+[[package]]
+name = "my-lib"
+version = "0.1.0"
+source = { editable = "packages/my-lib" }
+
+[[package]]
+name = "no-source-pkg"
+version = "1.0.0"
+"#;
+
+    #[test]
+    fn test_parse_package_sources_classifies_pypi_registry() {
+        let map = parse_package_sources(MIXED_SOURCES_LOCK, Path::new("/project")).unwrap();
+        assert_eq!(map["requests"], PackageSourceKind::PyPi);
+    }
+
+    #[test]
+    fn test_parse_package_sources_classifies_private_registry() {
+        let map = parse_package_sources(MIXED_SOURCES_LOCK, Path::new("/project")).unwrap();
+        assert_eq!(
+            map["private-pkg"],
+            PackageSourceKind::PrivateRegistry("https://private.example.com/simple".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_package_sources_classifies_git() {
+        let map = parse_package_sources(MIXED_SOURCES_LOCK, Path::new("/project")).unwrap();
+        assert_eq!(
+            map["git-pkg"],
+            PackageSourceKind::Git("https://github.com/user/repo?rev=abc123".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_package_sources_classifies_local_path() {
+        let map = parse_package_sources(MIXED_SOURCES_LOCK, Path::new("/project")).unwrap();
+        assert_eq!(
+            map["local-pkg"],
+            PackageSourceKind::LocalPath("/some/local/path".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_package_sources_classifies_direct_url() {
+        let map = parse_package_sources(MIXED_SOURCES_LOCK, Path::new("/project")).unwrap();
+        assert_eq!(
+            map["url-pkg"],
+            PackageSourceKind::DirectUrl("https://example.com/package.tar.gz".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_package_sources_classifies_virtual_as_workspace_member() {
+        let map = parse_package_sources(MIXED_SOURCES_LOCK, Path::new("/project")).unwrap();
+        assert_eq!(map["my-app"], PackageSourceKind::WorkspaceMember);
+    }
+
+    #[test]
+    fn test_parse_package_sources_classifies_editable_as_workspace_member() {
+        let map = parse_package_sources(MIXED_SOURCES_LOCK, Path::new("/project")).unwrap();
+        assert_eq!(map["my-lib"], PackageSourceKind::WorkspaceMember);
+    }
+
+    #[test]
+    fn test_parse_package_sources_omits_packages_without_source() {
+        let map = parse_package_sources(MIXED_SOURCES_LOCK, Path::new("/project")).unwrap();
+        assert!(!map.contains_key("no-source-pkg"));
+    }
+
+    #[test]
+    fn test_parse_package_sources_invalid_toml_returns_error() {
+        let result = parse_package_sources("invalid [[[ toml", Path::new("/project"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_package_sources_pypi_trailing_slash_normalized() {
+        let content = r#"
+version = 1
+requires-python = ">=3.11"
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple/" }
+"#;
+        let map = parse_package_sources(content, Path::new("/project")).unwrap();
+        assert_eq!(map["requests"], PackageSourceKind::PyPi);
+    }
+
+    #[test]
+    fn test_package_source_kind_is_non_pypi_external() {
+        assert!(!PackageSourceKind::PyPi.is_non_pypi_external());
+        assert!(PackageSourceKind::PrivateRegistry("url".to_string()).is_non_pypi_external());
+        assert!(PackageSourceKind::Git("url".to_string()).is_non_pypi_external());
+        assert!(!PackageSourceKind::LocalPath("path".to_string()).is_non_pypi_external());
+        assert!(PackageSourceKind::DirectUrl("url".to_string()).is_non_pypi_external());
+        assert!(!PackageSourceKind::WorkspaceMember.is_non_pypi_external());
+    }
+
+    #[test]
+    fn test_package_source_kind_label() {
+        assert_eq!(PackageSourceKind::PyPi.label(), "PyPI");
+        assert_eq!(
+            PackageSourceKind::PrivateRegistry("url".to_string()).label(),
+            "Private Registry"
+        );
+        assert_eq!(PackageSourceKind::Git("url".to_string()).label(), "Git");
+        assert_eq!(
+            PackageSourceKind::LocalPath("path".to_string()).label(),
+            "Local Path"
+        );
+        assert_eq!(
+            PackageSourceKind::DirectUrl("url".to_string()).label(),
+            "Direct URL"
+        );
+        assert_eq!(
+            PackageSourceKind::WorkspaceMember.label(),
+            "Workspace Member"
+        );
+    }
+
+    #[test]
+    fn test_package_source_kind_value() {
+        assert_eq!(PackageSourceKind::PyPi.value(), "");
+        assert_eq!(
+            PackageSourceKind::PrivateRegistry("https://example.com".to_string()).value(),
+            "https://example.com"
+        );
+        assert_eq!(
+            PackageSourceKind::Git("https://github.com/u/r".to_string()).value(),
+            "https://github.com/u/r"
+        );
+        assert_eq!(
+            PackageSourceKind::LocalPath("/path/to/pkg".to_string()).value(),
+            "/path/to/pkg"
+        );
+        assert_eq!(
+            PackageSourceKind::DirectUrl("https://example.com/pkg.tar.gz".to_string()).value(),
+            "https://example.com/pkg.tar.gz"
+        );
+        assert_eq!(PackageSourceKind::WorkspaceMember.value(), "");
+    }
+
+    #[test]
+    fn test_to_kind_workspace_member_takes_priority_over_registry() {
+        let source = PackageSource {
+            editable: Some(".".to_string()),
+            virtual_path: None,
+            registry: Some("https://pypi.org/simple".to_string()),
+            git: None,
+            path: None,
+            url: None,
+        };
+        assert_eq!(source.to_kind(), PackageSourceKind::WorkspaceMember);
     }
 }

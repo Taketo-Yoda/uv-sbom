@@ -347,6 +347,7 @@ license_policy:
 | `license_policy.unknown` | string | No | 不明ライセンスの処理（`warn` / `deny` / `allow`） |
 | `check_abandoned` | bool | No | 廃止パッケージ検出を有効化（オプトイン、デフォルト: false） |
 | `abandoned_threshold_days` | integer | No | 廃止パッケージ検出の非アクティブ期間しきい値（日数、デフォルト: 730） |
+| `check_non_pypi` | bool | No | 非PyPIソース検出を有効化（オプトイン、デフォルト: false） |
 | `exclude_groups` | string[] | No | SBOMから除外する依存関係グループ（そのグループからのみ到達可能なパッケージを除外） |
 
 #### 優先度とマージルール
@@ -358,6 +359,7 @@ license_policy:
 - **`check_license`** はCLIフラグまたは設定ファイルのいずれかで設定されていれば有効化（論理OR、`check_cve`と同様）
 - **`--license-allow`** と **`--license-deny`** CLIオプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を**完全に上書き**します（マージされません）
 - **`check_abandoned`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-abandoned` または設定ファイルの `check_abandoned: true` で有効化できます。`abandoned_threshold_days` の値はCLI > 設定ファイル > デフォルト（730）の順に解決されます。
+- **`check_non_pypi`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-non-pypi` または設定ファイルの `check_non_pypi: true` で有効化できます。
 - **`exclude_groups`**: CLIの `--exclude-groups` は設定ファイルの値を**完全に上書き**します（マージされません）。`--production-only` は実行時にlockfileからすべてのグループ名を解決し、CLIと設定ファイルの両方より優先されます。
 
 ### 特定のCVEを無視する
@@ -477,6 +479,54 @@ uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
 ```
 
 詳細は [`examples/abandoned-packages-project/README-JP.md`](examples/abandoned-packages-project/README-JP.md) を参照してください。
+
+### 非PyPIソース検出
+
+`--check-non-pypi` オプションを使用して、公式PyPIレジストリ以外のソース（gitリポジトリ、直接URL、プライベートレジストリ）からインストールされたパッケージを特定できます。uv.lockはすべてのパッケージのソース種別を明示的に記録しているため、サプライチェーンリスクの検出に役立ちます。
+
+```bash
+# 非PyPIソース検出を有効化
+uv-sbom --check-non-pypi --format markdown
+```
+
+**動作の仕組み:**
+- `uv.lock` からソース分類を直接読み取ります（ネットワークアクセスやPyPI APIの呼び出しは不要）
+- **プライベートレジストリ**、**Git**リポジトリ、**直接URL**から取得されたパッケージを検出対象とします
+- ローカルファイルシステムパス（`path = "..."`）やワークスペースメンバーは検出対象外です — これらはuvワークスペース構成では通常のパターンであり、サプライチェーン上の外部リスクとはみなされません
+
+**出力:**
+- **非PyPIパッケージソースセクション**: Markdown出力に、件数（直接依存 / 間接依存）とパッケージ・バージョン・ソース種別・取得元の列を持つテーブルが表示されます
+- `--check-non-pypi` を指定しない場合、または該当パッケージがない場合は、セクション自体が省略されます
+
+**出力例（`--lang ja` 指定時）:**
+```markdown
+## ⚠️ PyPI以外のパッケージソース
+
+3個のパッケージが公式PyPIレジストリ以外から取得されています（直接依存 1件、間接依存 2件）。
+
+| パッケージ | バージョン | ソース種別 | 取得元 |
+|-------|-------|-------|-----|
+| acme-analytics-sdk | 1.4.0 | Private Registry | https://pypi.acme-corp.example/simple |
+| edge-config | 2.1.0 | Direct URL | https://downloads.acme-corp.example/edge-config-2.1.0-py3-none-any.whl |
+| telemetry-agent | 0.9.2 | Git | https://github.com/acme-corp/telemetry-agent?rev=9f2c1ab |
+
+> PyPI以外のソースから取得されたパッケージは、PyPIのセキュリティポリシーの対象外である可能性があります。本番環境へのデプロイ前に、各パッケージの取得元を確認してください。
+```
+
+**設定ファイルの場合:**
+```yaml
+check_non_pypi: true
+```
+
+> **注:** 非PyPIソース検出はネットワークアクセスを必要としません — すべてのデータは `uv.lock` から直接読み取られます。
+
+確実に出力が得られるデモを実行するには：
+
+```bash
+uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f markdown
+```
+
+詳細は [`examples/non-pypi-sources-project/README-JP.md`](examples/non-pypi-sources-project/README-JP.md) を参照してください。
 
 ### 脆弱性しきい値オプション
 
@@ -907,7 +957,11 @@ Options:
                                      --no-check-cveとの同時使用は不可、uvのインストール、プロジェクトディレクトリのpyproject.tomlが必要
       --workspace                    ワークスペースの各メンバーに対して SBOM を生成
                                      --outputとの同時使用は不可
+      --diff <REF_OR_PATH>           現在のuv.lockをベース（gitのref、タグ、コミットSHA、またはuv.lockファイルへのパス）と比較
       --check-license                ライセンスコンプライアンスをポリシーに対してチェック
+      --check-abandoned              廃止/メンテナンス停止パッケージをチェック（しきい値日数以内に新しいリリースがない）
+      --abandoned-threshold-days <DAYS>  廃止パッケージ検出の非活動しきい値（日数、デフォルト: 730）
+      --check-non-pypi               非PyPIソース（git、直接URL、プライベートレジストリ）からのパッケージをチェック
       --license-allow <LIST>         許可するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
       --license-deny <LIST>          拒否するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
       --exclude-groups <GROUPS>      指定した依存関係グループからのみ到達可能なパッケージを除外（カンマ区切り）

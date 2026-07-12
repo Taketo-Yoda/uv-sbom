@@ -23,8 +23,8 @@ use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::Args;
 use i18n::Messages;
 use ports::outbound::{
-    DiffSource, GroupRoots, LockfileParseResult, LockfileReader, ProjectConfigReader,
-    WorkspaceReader,
+    DiffSource, GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap,
+    ProjectConfigReader, WorkspaceReader,
 };
 use shared::error::ExitCode;
 use shared::Result;
@@ -74,6 +74,11 @@ impl LockfileReader for MemberScopedLockfileReader {
 
     fn read_and_parse_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
         self.inner.read_and_parse_group_roots(&self.workspace_root)
+    }
+
+    fn read_and_parse_package_sources(&self, _project_path: &Path) -> Result<PackageSourceMap> {
+        self.inner
+            .read_and_parse_package_sources(&self.workspace_root)
     }
 }
 
@@ -299,6 +304,7 @@ async fn run(args: Args) -> Result<bool> {
         .suggest_fix(suggest_fix)
         .check_abandoned(merged.check_abandoned)
         .abandoned_threshold_days(merged.abandoned_threshold_days)
+        .check_non_pypi(merged.check_non_pypi)
         .exclude_groups(exclude_groups)
         .locale(locale)
         .build()?;
@@ -349,6 +355,7 @@ async fn run(args: Args) -> Result<bool> {
             .map(|(n, v)| (n.as_str(), v.as_str())),
         response.upgrade_recommendations.as_deref(),
         response.abandoned_packages_report.as_ref(),
+        response.non_pypi_packages_report.as_ref(),
         &applied_group_filter,
     );
 
@@ -490,6 +497,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             .suggest_fix(false)
             .check_abandoned(merged.check_abandoned)
             .abandoned_threshold_days(merged.abandoned_threshold_days)
+            .check_non_pypi(merged.check_non_pypi)
             .exclude_groups(workspace_exclude_groups.clone())
             .locale(locale)
             .build()?;
@@ -507,6 +515,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             None,
             response.upgrade_recommendations.as_deref(),
             response.abandoned_packages_report.as_ref(),
+            response.non_pypi_packages_report.as_ref(),
             &applied_group_filter,
         );
 

@@ -1,0 +1,15 @@
+[project]
+name = "non-pypi-project"
+version = "0.1.0"
+description = "A fixture project with non-PyPI package sources for testing"
+requires-python = ">=3.8"
+dependencies = [
+    "my-internal-lib",
+    "standard-lib",
+    "local-lib",
+    "internal-workspace-pkg",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

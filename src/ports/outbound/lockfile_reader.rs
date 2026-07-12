@@ -15,6 +15,64 @@ pub type LockfileParseResult = (Vec<Package>, DependencyMap);
 /// Empty map when no `[manifest.dependency-groups]` section is present.
 pub type GroupRoots = HashMap<String, Vec<String>>;
 
+/// Classification of a package's `source` field in `uv.lock`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PackageSourceKind {
+    /// Standard PyPI registry (`https://pypi.org/simple`).
+    PyPi,
+    /// A registry URL other than the canonical PyPI registry.
+    PrivateRegistry(String),
+    /// Git repository (plain URL string, may include `?rev=` fragment).
+    Git(String),
+    /// Local filesystem path (`path = "..."`).
+    LocalPath(String),
+    /// Direct URL to an archive or wheel (`url = "..."`).
+    DirectUrl(String),
+    /// Workspace member (`editable` or `virtual` source).
+    WorkspaceMember,
+}
+
+impl PackageSourceKind {
+    /// Returns `true` for sources that are external but not the canonical PyPI registry.
+    ///
+    /// `PrivateRegistry`, `Git`, and `DirectUrl` are considered non-PyPI external.
+    /// `LocalPath` and `WorkspaceMember` are local; `PyPi` is the canonical registry.
+    pub fn is_non_pypi_external(&self) -> bool {
+        matches!(
+            self,
+            Self::PrivateRegistry(_) | Self::Git(_) | Self::DirectUrl(_)
+        )
+    }
+
+    /// Stable human-readable category label suitable for reports and output.
+    pub fn label(&self) -> &str {
+        match self {
+            Self::PyPi => "PyPI",
+            Self::PrivateRegistry(_) => "Private Registry",
+            Self::Git(_) => "Git",
+            Self::LocalPath(_) => "Local Path",
+            Self::DirectUrl(_) => "Direct URL",
+            Self::WorkspaceMember => "Workspace Member",
+        }
+    }
+
+    /// The associated location string (URL or path).
+    ///
+    /// Returns `""` for `PyPi` and `WorkspaceMember`, which carry no explicit URL.
+    pub fn value(&self) -> &str {
+        match self {
+            Self::PrivateRegistry(s) | Self::Git(s) | Self::LocalPath(s) | Self::DirectUrl(s) => s,
+            Self::PyPi | Self::WorkspaceMember => "",
+        }
+    }
+}
+
+/// Package name → source classification.
+///
+/// Keyed by the package name as it appears in `uv.lock`. Packages without a
+/// `source` field are omitted from the map.
+pub type PackageSourceMap = HashMap<String, PackageSourceKind>;
+
 /// LockfileReader port for reading and parsing lockfile contents
 ///
 /// This port abstracts the file system operations and TOML parsing
@@ -82,4 +140,10 @@ pub trait LockfileReader {
     /// Returns an empty map when no `[manifest.dependency-groups]` section is present,
     /// preserving backward compatibility with lock files that have no groups.
     fn read_and_parse_group_roots(&self, project_path: &Path) -> Result<GroupRoots>;
+
+    /// Read `uv.lock` and classify each package's `source` field.
+    ///
+    /// Returns a map of package name → `PackageSourceKind`. Packages whose
+    /// `[[package]]` entry has no `source` field are omitted from the map.
+    fn read_and_parse_package_sources(&self, project_path: &Path) -> Result<PackageSourceMap>;
 }

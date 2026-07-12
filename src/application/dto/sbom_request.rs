@@ -40,6 +40,8 @@ pub struct SbomRequest {
     /// Inactivity threshold in days for abandoned-package detection.
     /// Only meaningful when `check_abandoned` is true.
     pub abandoned_threshold_days: u64,
+    /// Whether to detect packages sourced from non-PyPI origins.
+    pub check_non_pypi: bool,
     /// Dependency group names to exclude from the SBOM (e.g. ["dev", "lint"]).
     /// Empty = no group filtering.
     pub exclude_groups: Vec<String>,
@@ -107,6 +109,7 @@ pub struct SbomRequestBuilder {
     suggest_fix: bool,
     check_abandoned: bool,
     abandoned_threshold_days: u64,
+    check_non_pypi: bool,
     exclude_groups: Vec<String>,
     locale: Locale,
 }
@@ -137,6 +140,7 @@ impl SbomRequestBuilder {
             suggest_fix: false,
             check_abandoned: false,
             abandoned_threshold_days: 730,
+            check_non_pypi: false,
             exclude_groups: Vec::new(),
             locale: Locale::default(),
         }
@@ -228,6 +232,12 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets whether to detect packages sourced from non-PyPI origins.
+    pub fn check_non_pypi(mut self, check: bool) -> Self {
+        self.check_non_pypi = check;
+        self
+    }
+
     /// Sets dependency group names to exclude from the SBOM (e.g. `["dev", "lint"]`).
     pub fn exclude_groups(mut self, groups: Vec<String>) -> Self {
         self.exclude_groups = groups;
@@ -264,6 +274,7 @@ impl SbomRequestBuilder {
             suggest_fix: self.suggest_fix,
             check_abandoned: self.check_abandoned,
             abandoned_threshold_days: self.abandoned_threshold_days,
+            check_non_pypi: self.check_non_pypi,
             exclude_groups: self.exclude_groups,
             locale: self.locale,
         })

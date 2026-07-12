@@ -348,6 +348,7 @@ license_policy:
 | `license_policy.unknown` | string | No | Unknown license handling (`warn` / `deny` / `allow`) |
 | `check_abandoned` | bool | No | Enable abandoned package detection (opt-in, default: false) |
 | `abandoned_threshold_days` | integer | No | Inactivity threshold in days for abandoned package detection (default: 730) |
+| `check_non_pypi` | bool | No | Enable non-PyPI source detection (opt-in, default: false) |
 | `exclude_groups` | string[] | No | Dependency groups whose exclusively-reachable packages are excluded from the SBOM |
 
 #### Priority and Merge Rules
@@ -359,6 +360,7 @@ license_policy:
 - **`check_license`** is enabled if set via CLI flag OR config file (logical OR, same as `check_cve`)
 - **`--license-allow`** and **`--license-deny`** CLI options **override** config file `license_policy.allow` / `license_policy.deny` entirely (not merged)
 - **`check_abandoned`** is opt-in (default: false). Enable via CLI flag `--check-abandoned` or config file `check_abandoned: true`. The `abandoned_threshold_days` value follows CLI > config file > default (730) resolution order.
+- **`check_non_pypi`** is opt-in (default: false). Enable via CLI flag `--check-non-pypi` or config file `check_non_pypi: true`.
 - **`exclude_groups`**: CLI `--exclude-groups` **overrides** the config file value entirely (not merged). `--production-only` resolves all group names from the lockfile at runtime and takes precedence over both CLI and config.
 
 ### Ignoring specific CVEs
@@ -481,6 +483,54 @@ uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
 ```
 
 See [`examples/abandoned-packages-project/README.md`](examples/abandoned-packages-project/README.md) for a full walkthrough.
+
+### Non-PyPI Source Detection
+
+Use the `--check-non-pypi` option to identify packages installed from sources other than the official PyPI registry (git repositories, direct URLs, private registries). This helps detect potential supply chain risks unique to uv projects, since uv.lock explicitly records the source type for every package.
+
+```bash
+# Enable non-PyPI source detection
+uv-sbom --check-non-pypi --format markdown
+```
+
+**How it works:**
+- Reads the source classification directly from `uv.lock` (no network access, no PyPI API calls)
+- Flags packages sourced from a **Private Registry**, **Git** repository, or **Direct URL**
+- Local filesystem paths (`path = "..."`) and workspace members are not flagged — these are expected in uv workspace layouts and are not considered external supply chain risk
+
+**Output:**
+- **Non-PyPI Package Sources section**: Appears in the Markdown output listing the total count (direct vs. transitive) followed by a table of Package, Version, Source Type, and Source
+- When `--check-non-pypi` is not passed, or no packages match, the section is omitted entirely
+
+**Example output:**
+```markdown
+## ⚠️ Non-PyPI Package Sources
+
+3 packages are sourced from outside the official PyPI registry (1 direct, 2 transitive).
+
+| Package | Version | Source Type | Source |
+|---------|---------|-------------|--------|
+| acme-analytics-sdk | 1.4.0 | Private Registry | https://pypi.acme-corp.example/simple |
+| edge-config | 2.1.0 | Direct URL | https://downloads.acme-corp.example/edge-config-2.1.0-py3-none-any.whl |
+| telemetry-agent | 0.9.2 | Git | https://github.com/acme-corp/telemetry-agent?rev=9f2c1ab |
+
+> Packages from non-PyPI sources may not be subject to PyPI's security policies. Review each package's origin before production deployment.
+```
+
+**Config file equivalent:**
+```yaml
+check_non_pypi: true
+```
+
+> **Note:** Non-PyPI source detection requires no network access — all data is read directly from `uv.lock`.
+
+For a demo with guaranteed output, run:
+
+```bash
+uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f markdown
+```
+
+See [`examples/non-pypi-sources-project/README.md`](examples/non-pypi-sources-project/README.md) for a full walkthrough.
 
 ### Vulnerability Threshold Options
 
@@ -913,7 +963,11 @@ Options:
                                      Requires uv CLI installed and pyproject.toml in project directory
       --workspace                    Generate one SBOM per workspace member
                                      Cannot be used with --output
+      --diff <REF_OR_PATH>           Compare current uv.lock against a base (git ref, tag, commit SHA, or path to a uv.lock file)
       --check-license                Check license compliance against policy
+      --check-abandoned              Check for abandoned/unmaintained packages (no upstream release within threshold days)
+      --abandoned-threshold-days <DAYS>  Inactivity threshold in days for abandoned-package detection (default: 730)
+      --check-non-pypi               Check for packages sourced from non-PyPI origins (git, direct URL, private registries)
       --license-allow <LIST>         Comma-separated list of allowed license patterns (overrides config)
       --license-deny <LIST>          Comma-separated list of denied license patterns (overrides config)
       --exclude-groups <GROUPS>      Exclude packages reachable only through the specified dependency groups (comma-separated)

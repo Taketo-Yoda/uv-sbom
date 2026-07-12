@@ -2,7 +2,7 @@ use super::*;
 use crate::application::use_cases::test_doubles::{
     MockMaintenanceRepository, MockVulnerabilityRepository,
 };
-use crate::ports::outbound::{GroupRoots, LockfileParseResult, PyPiMetadata};
+use crate::ports::outbound::{GroupRoots, LockfileParseResult, PackageSourceMap, PyPiMetadata};
 use crate::sbom_generation::domain::Package;
 use std::collections::HashMap;
 use std::path::Path;
@@ -11,6 +11,7 @@ struct MockLockfileReader {
     packages: Vec<Package>,
     deps: HashMap<String, Vec<String>>,
     group_roots: GroupRoots,
+    source_map: PackageSourceMap,
 }
 
 impl LockfileReader for MockLockfileReader {
@@ -32,6 +33,10 @@ impl LockfileReader for MockLockfileReader {
 
     fn read_and_parse_group_roots(&self, _path: &Path) -> Result<GroupRoots> {
         Ok(self.group_roots.clone())
+    }
+
+    fn read_and_parse_package_sources(&self, _path: &Path) -> Result<PackageSourceMap> {
+        Ok(self.source_map.clone())
     }
 }
 
@@ -90,6 +95,7 @@ mod test_helpers {
         packages: Vec<Package>,
         deps: HashMap<String, Vec<String>>,
         group_roots: GroupRoots,
+        source_map: PackageSourceMap,
         project_name: String,
         vuln: Option<MockVulnerabilityRepository>,
         maint: Option<MockMaintenanceRepository>,
@@ -101,6 +107,7 @@ mod test_helpers {
                 packages: Vec::new(),
                 deps: HashMap::new(),
                 group_roots: HashMap::new(),
+                source_map: PackageSourceMap::new(),
                 project_name: "test-project".to_string(),
                 vuln: None,
                 maint: None,
@@ -144,12 +151,18 @@ mod test_helpers {
             self
         }
 
+        pub(super) fn with_source_map(mut self, map: PackageSourceMap) -> Self {
+            self.source_map = map;
+            self
+        }
+
         pub(super) fn build(self) -> TestUseCase {
             GenerateSbomUseCase::new(
                 MockLockfileReader {
                     packages: self.packages,
                     deps: self.deps,
                     group_roots: self.group_roots,
+                    source_map: self.source_map,
                 },
                 MockProjectConfigReader {
                     project_name: self.project_name,
@@ -412,8 +425,16 @@ mod tests_response {
             Some("Test description".to_string()),
         )];
 
-        let response =
-            use_case.build_response(enriched_packages, None, None, None, None, None, vec![]);
+        let response = use_case.build_response(
+            enriched_packages,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            vec![],
+        );
 
         assert_eq!(response.enriched_packages.len(), 1);
         assert!(response.dependency_graph.is_none());
@@ -455,6 +476,7 @@ mod tests_response {
             enriched_packages,
             None,
             Some(check_result),
+            None,
             None,
             None,
             None,
@@ -503,6 +525,7 @@ mod tests_response {
             enriched_packages,
             None,
             Some(check_result),
+            None,
             None,
             None,
             None,
@@ -1078,5 +1101,137 @@ mod tests_group_exclusion {
         let response = use_case.execute(request).await.unwrap();
 
         assert_eq!(response.enriched_packages.len(), 2);
+    }
+}
+
+mod tests_non_pypi {
+    use super::test_helpers::*;
+    use super::*;
+    use crate::ports::outbound::lockfile_reader::PackageSourceKind;
+
+    #[test]
+    fn test_check_non_pypi_disabled_returns_none() {
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+
+        let result = use_case
+            .check_non_pypi_if_requested(&default_request(), &packages, None)
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_check_non_pypi_empty_source_map_returns_empty_report() {
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_non_pypi(true)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_non_pypi_if_requested(&request, &packages, None)
+            .unwrap();
+
+        let report = result.expect("check enabled → Some");
+        assert!(report.is_empty());
+    }
+
+    #[test]
+    fn test_check_non_pypi_pypi_packages_excluded() {
+        let mut source_map = PackageSourceMap::new();
+        source_map.insert("requests".to_string(), PackageSourceKind::PyPi);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .with_source_map(source_map)
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_non_pypi(true)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_non_pypi_if_requested(&request, &packages, None)
+            .unwrap()
+            .expect("check enabled → Some");
+
+        assert!(result.is_empty(), "PyPI packages must not appear in report");
+    }
+
+    #[test]
+    fn test_check_non_pypi_git_package_detected() {
+        let mut source_map = PackageSourceMap::new();
+        source_map.insert(
+            "my-lib".to_string(),
+            PackageSourceKind::Git("https://github.com/user/my-lib?rev=abc123".to_string()),
+        );
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("my-lib", "0.1.0")])
+            .with_source_map(source_map)
+            .build();
+        let packages = [pkg("my-lib", "0.1.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_non_pypi(true)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_non_pypi_if_requested(&request, &packages, None)
+            .unwrap()
+            .expect("check enabled → Some");
+
+        assert_eq!(result.total_count(), 1);
+        let view = &result.packages[0];
+        assert_eq!(view.name, "my-lib");
+        assert_eq!(view.source_label, "Git");
+        assert_eq!(
+            view.source_location,
+            "https://github.com/user/my-lib?rev=abc123"
+        );
+        assert!(!view.is_direct, "no graph → is_direct defaults to false");
+    }
+
+    #[test]
+    fn test_check_non_pypi_is_direct_from_dependency_graph() {
+        use crate::sbom_generation::domain::{DependencyGraph, PackageName};
+
+        let mut source_map = PackageSourceMap::new();
+        source_map.insert(
+            "internal".to_string(),
+            PackageSourceKind::PrivateRegistry("https://internal.example.com/simple".to_string()),
+        );
+
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("internal", "1.0.0")])
+            .with_source_map(source_map)
+            .build();
+        let packages = [pkg("internal", "1.0.0")];
+
+        let direct = vec![PackageName::new("internal".to_string()).unwrap()];
+        let graph = DependencyGraph::new(direct, Default::default(), Default::default());
+
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .check_non_pypi(true)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_non_pypi_if_requested(&request, &packages, Some(&graph))
+            .unwrap()
+            .expect("check enabled → Some");
+
+        assert_eq!(result.direct_count(), 1);
+        assert_eq!(result.transitive_count(), 0);
+        assert!(result.packages[0].is_direct);
     }
 }

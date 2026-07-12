@@ -80,6 +80,10 @@ pub struct Args {
     #[arg(long, value_name = "DAYS", requires = "check_abandoned")]
     pub abandoned_threshold_days: Option<u64>,
 
+    /// Check for packages sourced from non-PyPI origins (git, path, url, private registries)
+    #[arg(long)]
+    pub check_non_pypi: bool,
+
     /// Allowed license patterns (comma-separated, requires --check-license)
     /// Supports wildcards: "MIT,Apache-2.0,BSD-*"
     #[arg(long, value_delimiter = ',', requires = "check_license")]
