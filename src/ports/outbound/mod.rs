@@ -11,6 +11,7 @@ pub mod maintenance_repository;
 pub mod output_presenter;
 pub mod progress_reporter;
 pub mod project_config_reader;
+pub mod python_compatibility_repository;
 pub mod uv_lock_simulator;
 pub mod vulnerability_repository;
 pub mod workspace_reader;
@@ -28,6 +29,11 @@ pub use maintenance_repository::{MaintenanceInfo, MaintenanceRepository};
 pub use output_presenter::OutputPresenter;
 pub use progress_reporter::{ProgressCallback, ProgressReporter};
 pub use project_config_reader::ProjectConfigReader;
+// Note: Will be used in subsequent subtasks (target-python compatibility check)
+#[allow(unused_imports)]
+pub use python_compatibility_repository::{
+    is_incompatible, PythonCompatibilityInfo, PythonCompatibilityRepository,
+};
 // Note: This will be used in a subsequent subtask for uv lock simulation
 #[allow(unused_imports)]
 pub use uv_lock_simulator::{SimulationResult, UvLockSimulator};
