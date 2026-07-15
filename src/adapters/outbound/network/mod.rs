@@ -2,6 +2,8 @@
 mod caching_pypi_client;
 mod osv_client;
 mod pypi_client;
+// Note: Will be exported once wired into GenerateSbomUseCase and main.rs (#681)
+mod pypi_compatibility_client;
 mod pypi_maintenance_client;
 
 pub use caching_pypi_client::CachingPyPiLicenseRepository;
