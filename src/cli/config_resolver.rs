@@ -2,12 +2,15 @@ use crate::application::dto::OutputFormat;
 use crate::sbom_generation::domain::license_policy::{LicensePolicy, UnknownLicenseHandling};
 use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::Result;
+use pep440_rs::Version;
 use std::collections::HashSet;
+use std::str::FromStr;
 use uv_sbom::config::{self, ConfigFile, IgnoreCve};
 
 use super::Args;
 
 /// Merged configuration after combining CLI arguments and config file values.
+#[derive(Debug)]
 pub struct MergedConfig {
     pub format: OutputFormat,
     pub exclude_patterns: Vec<String>,
@@ -26,6 +29,10 @@ pub struct MergedConfig {
     /// When `--production-only` is set, `main.rs` overrides this with all group names from the
     /// lockfile, since that resolution requires I/O that config_resolver must not perform.
     pub exclude_groups: Vec<String>,
+    /// Target Python version for compatibility checking (PEP 440 format).
+    /// Populated from `--target-python` (CLI) or `target_python` (config file).
+    #[allow(dead_code)] // WIRE(#681): remove when wired into main.rs and GenerateSbomUseCase
+    pub target_python: Option<String>,
 }
 
 /// Load a config file from an explicit path or via auto-discovery.
@@ -92,12 +99,42 @@ pub fn merge_ignore_cves(cli: &[IgnoreCve], config: &Option<Vec<IgnoreCve>>) -> 
     result
 }
 
+/// Resolve `target_python` from CLI (highest priority) or config file, then validate
+/// that the resolved value parses as a PEP 440 version. This is the single point where
+/// CLI-supplied and config-file-supplied values converge, so it catches typos from
+/// either source with one code path, before any network calls are made.
+///
+/// # Errors
+/// Returns an error if the resolved value does not parse as a valid PEP 440 version.
+fn resolve_target_python(cli: Option<&String>, config: Option<&String>) -> Result<Option<String>> {
+    let resolved = cli.or(config).cloned();
+    if let Some(ref version) = resolved {
+        Version::from_str(version).map_err(|e| {
+            anyhow::anyhow!(
+                "Invalid Python version: '{}': {}. Example: --target-python 3.13",
+                version,
+                e
+            )
+        })?;
+    }
+    Ok(resolved)
+}
+
 /// Merge CLI arguments with config file values.
 ///
 /// Priority: CLI > config file > defaults.
 /// List fields (exclude_patterns, ignore_cves) are merged and deduplicated.
 /// Scalar fields use CLI value if present, otherwise config value, otherwise default.
-pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
+///
+/// # Errors
+/// Returns an error if `target_python` is set (via CLI or config) but does not parse
+/// as a valid PEP 440 version.
+pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedConfig> {
+    let target_python = resolve_target_python(
+        args.target_python.as_ref(),
+        config.as_ref().and_then(|c| c.target_python.as_ref()),
+    )?;
+
     let config = match config {
         Some(c) => c,
         None => {
@@ -120,7 +157,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
                 None
             };
 
-            return MergedConfig {
+            return Ok(MergedConfig {
                 format: args.format,
                 exclude_patterns: args.exclude.clone(),
                 check_cve: !args.no_check_cve,
@@ -141,7 +178,8 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
                 abandoned_threshold_days: args.abandoned_threshold_days.unwrap_or(730),
                 check_non_pypi: args.check_non_pypi,
                 exclude_groups: args.exclude_groups.clone(),
-            };
+                target_python,
+            });
         }
     };
 
@@ -268,7 +306,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         config.exclude_groups.clone().unwrap_or_default()
     };
 
-    MergedConfig {
+    Ok(MergedConfig {
         format,
         exclude_patterns,
         check_cve,
@@ -282,7 +320,8 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> MergedConfig {
         abandoned_threshold_days,
         check_non_pypi,
         exclude_groups,
-    }
+        target_python,
+    })
 }
 
 #[cfg(test)]
@@ -295,7 +334,7 @@ mod tests {
     #[test]
     fn test_merge_config_no_config_file() {
         let args = Args::parse_from(["uv-sbom"]);
-        let result = merge_config(&args, &None);
+        let result = merge_config(&args, &None).unwrap();
         assert_eq!(result.format, OutputFormat::Json);
         assert!(result.exclude_patterns.is_empty());
         assert!(result.check_cve); // CVE check is enabled by default
@@ -321,7 +360,7 @@ mod tests {
             }]),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.format, OutputFormat::Markdown);
         assert_eq!(result.exclude_patterns, vec!["pkg-a"]);
         assert!(result.check_cve);
@@ -340,7 +379,7 @@ mod tests {
             format: Some("json".to_string()),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.format, OutputFormat::Markdown);
     }
 
@@ -351,7 +390,7 @@ mod tests {
             check_cve: Some(true),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(!result.check_cve);
     }
 
@@ -363,7 +402,7 @@ mod tests {
             check_cve: Some(true),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(!result.check_cve);
     }
 
@@ -374,7 +413,7 @@ mod tests {
             check_cve: Some(true),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.check_cve);
     }
 
@@ -385,7 +424,7 @@ mod tests {
             exclude_packages: Some(vec!["config-pkg".to_string(), "cli-pkg".to_string()]),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.exclude_patterns, vec!["cli-pkg", "config-pkg"]);
     }
 
@@ -405,7 +444,7 @@ mod tests {
             ]),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.ignore_cves.len(), 2);
         // CLI entry takes precedence (no reason)
         assert_eq!(result.ignore_cves[0].id, "CVE-2024-1");
@@ -420,7 +459,7 @@ mod tests {
             severity_threshold: Some("low".to_string()),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.severity_threshold, Some(Severity::Critical));
     }
 
@@ -431,7 +470,7 @@ mod tests {
             severity_threshold: Some("medium".to_string()),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.severity_threshold, Some(Severity::Medium));
     }
 
@@ -442,7 +481,7 @@ mod tests {
             cvss_threshold: Some(5.0),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.cvss_threshold, Some(8.5));
     }
 
@@ -453,7 +492,7 @@ mod tests {
             cvss_threshold: Some(6.0),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.cvss_threshold, Some(6.0));
     }
 
@@ -467,7 +506,7 @@ mod tests {
             suggest_fix: Some(true),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.suggest_fix);
     }
 
@@ -479,7 +518,7 @@ mod tests {
             suggest_fix: Some(true),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.suggest_fix);
     }
 
@@ -491,7 +530,7 @@ mod tests {
             suggest_fix: Some(false),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.suggest_fix);
     }
 
@@ -502,7 +541,7 @@ mod tests {
         let config = Some(ConfigFile {
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(!result.suggest_fix);
     }
 
@@ -597,7 +636,7 @@ mod tests {
         let config = Some(ConfigFile {
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(!result.check_abandoned);
         assert_eq!(result.abandoned_threshold_days, 730);
     }
@@ -611,7 +650,7 @@ mod tests {
             abandoned_threshold_days: Some(365),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.check_abandoned);
         assert_eq!(result.abandoned_threshold_days, 365);
     }
@@ -623,7 +662,7 @@ mod tests {
         let config = Some(ConfigFile {
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.check_abandoned);
         assert_eq!(result.abandoned_threshold_days, 730);
     }
@@ -636,7 +675,7 @@ mod tests {
             check_abandoned: Some(false),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.check_abandoned);
     }
 
@@ -648,7 +687,7 @@ mod tests {
             abandoned_threshold_days: Some(365),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.abandoned_threshold_days, 365);
     }
 
@@ -666,7 +705,7 @@ mod tests {
             abandoned_threshold_days: Some(365),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.abandoned_threshold_days, 90);
     }
 
@@ -674,7 +713,7 @@ mod tests {
     fn test_merge_config_abandoned_threshold_default_when_neither() {
         // No CLI, no config → default 730
         let args = Args::parse_from(["uv-sbom"]);
-        let result = merge_config(&args, &None);
+        let result = merge_config(&args, &None).unwrap();
         assert_eq!(result.abandoned_threshold_days, 730);
     }
 
@@ -687,7 +726,7 @@ mod tests {
             "--abandoned-threshold-days",
             "180",
         ]);
-        let result = merge_config(&args, &None);
+        let result = merge_config(&args, &None).unwrap();
         assert!(result.check_abandoned);
         assert_eq!(result.abandoned_threshold_days, 180);
     }
@@ -701,7 +740,7 @@ mod tests {
         let config = Some(ConfigFile {
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.exclude_groups.is_empty());
     }
 
@@ -712,7 +751,7 @@ mod tests {
         let config = Some(ConfigFile {
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.exclude_groups, vec!["dev", "test"]);
     }
 
@@ -724,7 +763,7 @@ mod tests {
             exclude_groups: Some(vec!["dev".to_string(), "lint".to_string()]),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.exclude_groups, vec!["dev", "lint"]);
     }
 
@@ -736,7 +775,7 @@ mod tests {
             exclude_groups: Some(vec!["lint".to_string()]),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.exclude_groups, vec!["dev"]);
         assert!(!result.exclude_groups.contains(&"lint".to_string()));
     }
@@ -745,7 +784,7 @@ mod tests {
     fn test_merge_config_no_config_file_exclude_groups() {
         // No config file; exercises the early-return branch with --exclude-groups
         let args = Args::parse_from(["uv-sbom", "--exclude-groups", "dev,test,lint"]);
-        let result = merge_config(&args, &None);
+        let result = merge_config(&args, &None).unwrap();
         assert_eq!(result.exclude_groups, vec!["dev", "test", "lint"]);
     }
 
@@ -753,7 +792,7 @@ mod tests {
     fn test_merge_config_no_config_file_exclude_groups_default_empty() {
         // No CLI, no config file → empty (early-return branch)
         let args = Args::parse_from(["uv-sbom"]);
-        let result = merge_config(&args, &None);
+        let result = merge_config(&args, &None).unwrap();
         assert!(result.exclude_groups.is_empty());
     }
 
@@ -766,7 +805,7 @@ mod tests {
         let config = Some(ConfigFile {
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(!result.check_non_pypi);
     }
 
@@ -778,7 +817,7 @@ mod tests {
             check_non_pypi: Some(true),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.check_non_pypi);
     }
 
@@ -789,7 +828,7 @@ mod tests {
         let config = Some(ConfigFile {
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.check_non_pypi);
     }
 
@@ -801,7 +840,7 @@ mod tests {
             check_non_pypi: Some(false),
             ..Default::default()
         });
-        let result = merge_config(&args, &config);
+        let result = merge_config(&args, &config).unwrap();
         assert!(result.check_non_pypi);
     }
 
@@ -809,7 +848,101 @@ mod tests {
     fn test_merge_config_no_config_file_check_non_pypi_cli_flag_true() {
         // No config file; exercises the early-return branch with --check-non-pypi
         let args = Args::parse_from(["uv-sbom", "--check-non-pypi"]);
-        let result = merge_config(&args, &None);
+        let result = merge_config(&args, &None).unwrap();
         assert!(result.check_non_pypi);
+    }
+
+    // --- target_python resolution/validation tests ---
+
+    #[test]
+    fn test_merge_config_target_python_default_none() {
+        // No CLI flag, no config → None
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        assert!(result.target_python.is_none());
+    }
+
+    #[test]
+    fn test_merge_config_target_python_no_config_file_default_none() {
+        // No config file; exercises the early-return branch
+        let args = Args::parse_from(["uv-sbom"]);
+        let result = merge_config(&args, &None).unwrap();
+        assert!(result.target_python.is_none());
+    }
+
+    #[test]
+    fn test_merge_config_target_python_from_cli() {
+        let args = Args::parse_from(["uv-sbom", "--target-python", "3.13"]);
+        let config = Some(ConfigFile {
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        assert_eq!(result.target_python.as_deref(), Some("3.13"));
+    }
+
+    #[test]
+    fn test_merge_config_target_python_no_config_file_from_cli() {
+        // No config file; exercises the early-return branch with --target-python
+        let args = Args::parse_from(["uv-sbom", "--target-python", "3.13.0"]);
+        let result = merge_config(&args, &None).unwrap();
+        assert_eq!(result.target_python.as_deref(), Some("3.13.0"));
+    }
+
+    #[test]
+    fn test_merge_config_target_python_from_config() {
+        // No CLI flag, config provides target_python
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            target_python: Some("3.11".to_string()),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        assert_eq!(result.target_python.as_deref(), Some("3.11"));
+    }
+
+    #[test]
+    fn test_merge_config_target_python_cli_overrides_config() {
+        let args = Args::parse_from(["uv-sbom", "--target-python", "3.13"]);
+        let config = Some(ConfigFile {
+            target_python: Some("3.11".to_string()),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        assert_eq!(result.target_python.as_deref(), Some("3.13"));
+    }
+
+    #[test]
+    fn test_merge_config_target_python_valid_full_version() {
+        let args = Args::parse_from(["uv-sbom", "--target-python", "3.13.0"]);
+        let result = merge_config(&args, &None).unwrap();
+        assert_eq!(result.target_python.as_deref(), Some("3.13.0"));
+    }
+
+    #[test]
+    fn test_merge_config_target_python_invalid_cli_value_errors() {
+        let args = Args::parse_from(["uv-sbom", "--target-python", "3.x"]);
+        let result = merge_config(&args, &None);
+        assert!(result.is_err());
+        let err = format!("{}", result.unwrap_err());
+        assert!(err.starts_with("Invalid Python version: '3.x': "));
+        assert!(err.ends_with("Example: --target-python 3.13"));
+    }
+
+    #[test]
+    fn test_merge_config_target_python_invalid_config_only_value_errors() {
+        // Config-file-only typo (no CLI flag) must be caught by the same code path.
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            target_python: Some("3.x".to_string()),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config);
+        assert!(result.is_err());
+        let err = format!("{}", result.unwrap_err());
+        assert!(err.starts_with("Invalid Python version: '3.x': "));
+        assert!(err.ends_with("Example: --target-python 3.13"));
     }
 }
