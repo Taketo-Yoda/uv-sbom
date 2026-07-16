@@ -240,7 +240,7 @@ async fn run(args: Args) -> Result<bool> {
     let config = load_config(&args, &project_path)?;
 
     // Merge CLI and config values
-    let merged = merge_config(&args, &config);
+    let merged = merge_config(&args, &config)?;
 
     // Create adapters (Dependency Injection)
     let lockfile_reader = FileSystemReader::new();
@@ -428,7 +428,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     );
 
     let config = load_config(&args, &workspace_root)?;
-    let merged = merge_config(&args, &config);
+    let merged = merge_config(&args, &config)?;
 
     // Resolve exclude_groups for workspace mode: --production-only reads group roots from
     // the workspace-root lockfile. --exclude-groups / config value is used otherwise.
@@ -558,7 +558,7 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     validate_project_path(&project_path)?;
 
     let config = load_config(&args, &project_path)?;
-    let merged = merge_config(&args, &config);
+    let merged = merge_config(&args, &config)?;
 
     let check_cve = merged.check_cve;
     let request = DiffRequest {

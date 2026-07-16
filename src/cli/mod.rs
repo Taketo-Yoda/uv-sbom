@@ -119,6 +119,10 @@ pub struct Args {
     /// Equivalent to --exclude-groups <all-groups>.
     #[arg(long, conflicts_with = "exclude_groups")]
     pub production_only: bool,
+
+    /// Target Python version for compatibility checking (PEP 440 format, e.g. 3.13)
+    #[arg(long, value_name = "VERSION")]
+    pub target_python: Option<String>,
 }
 
 fn parse_lang(s: &str) -> Result<Locale, String> {
@@ -237,5 +241,17 @@ mod tests {
         let result = parse_cvss_threshold("abc");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("must be a number"));
+    }
+
+    #[test]
+    fn test_target_python_flag_parses() {
+        let args = Args::parse_from(["uv-sbom", "--target-python", "3.13"]);
+        assert_eq!(args.target_python.as_deref(), Some("3.13"));
+    }
+
+    #[test]
+    fn test_target_python_flag_absent_by_default() {
+        let args = Args::parse_from(["uv-sbom"]);
+        assert!(args.target_python.is_none());
     }
 }
