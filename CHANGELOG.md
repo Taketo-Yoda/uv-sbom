@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--target-python` CLI flag and `target_python` config key for specifying a target Python version, resolved as CLI > config > None and validated as a PEP 440 version before any network calls — groundwork for #628; not yet consumed by SBOM generation (#678)
+
 ## [2.7.0] - 2026-07-12
 
 ### Added
