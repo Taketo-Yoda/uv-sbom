@@ -9,6 +9,7 @@ pub mod cve_delta_view;
 pub mod dependency_view;
 pub mod license_compliance_view;
 pub mod non_pypi_package;
+pub mod python_compatibility;
 pub mod resolution_guide_view;
 pub mod sbom_read_model;
 pub mod sbom_read_model_builder;
@@ -29,6 +30,8 @@ pub use license_compliance_view::{
 };
 #[allow(unused_imports)]
 pub use non_pypi_package::{NonPyPiPackageView, NonPyPiPackagesReport};
+#[allow(unused_imports)]
+pub use python_compatibility::{PythonCompatibilityReport, PythonIncompatibilityView};
 #[allow(unused_imports)]
 pub use resolution_guide_view::{IntroducedByView, ResolutionEntryView, ResolutionGuideView};
 #[allow(unused_imports)]
