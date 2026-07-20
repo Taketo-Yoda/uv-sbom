@@ -5,7 +5,6 @@
 //! the underlying `requires_python` data is fetched.
 
 /// View representation of a single package incompatible with the target Python version
-#[allow(dead_code)] // WIRE(#680): remove when CheckPythonCompatibilityUseCase constructs this view
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PythonIncompatibilityView {
     /// Package name as listed in the lockfile
@@ -27,7 +26,6 @@ pub struct PythonIncompatibilityView {
 ///
 /// Holds the list of packages incompatible with the target Python version
 /// along with the target version string used to classify them.
-#[allow(dead_code)] // WIRE(#680): remove when CheckPythonCompatibilityUseCase constructs this report
 #[derive(Debug, Clone)]
 pub struct PythonCompatibilityReport {
     /// Target Python version the report was checked against (e.g. "3.13")
@@ -36,7 +34,7 @@ pub struct PythonCompatibilityReport {
     pub incompatible: Vec<PythonIncompatibilityView>,
 }
 
-#[allow(dead_code)] // WIRE(#680): remove when CheckPythonCompatibilityUseCase calls these methods
+#[allow(dead_code)] // WIRE(#681): remove when GenerateSbomUseCase reports these counts via ProgressReporter
 impl PythonCompatibilityReport {
     /// Returns `true` when no packages were classified as incompatible.
     pub fn is_empty(&self) -> bool {

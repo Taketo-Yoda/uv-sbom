@@ -1,10 +1,11 @@
 use crate::ports::outbound::{
-    MaintenanceInfo, MaintenanceRepository, ProgressCallback, VulnerabilityRepository,
+    MaintenanceInfo, MaintenanceRepository, ProgressCallback, PythonCompatibilityInfo,
+    PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::{Package, PackageVulnerabilities};
 use crate::shared::Result;
 use async_trait::async_trait;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 /// Mock VulnerabilityRepository that returns pre-configured responses in order.
@@ -90,6 +91,44 @@ impl MaintenanceRepository for MockMaintenanceRepository {
             None => Ok(MaintenanceInfo {
                 last_release_date: None,
             }),
+        }
+    }
+}
+
+/// Configurable in-memory mock implementing `PythonCompatibilityRepository`.
+///
+/// Responses are keyed by package name rather than popped from a FIFO queue,
+/// because `CheckPythonCompatibilityUseCase` fetches packages concurrently via
+/// `buffer_unordered` — a FIFO queue would make test assertions depend on
+/// nondeterministic completion order. A package name with no configured
+/// response returns an error (simulating a 404), matching the soft-fail path.
+#[derive(Clone, Default)]
+pub(crate) struct MockPythonCompatibilityRepository {
+    responses: Arc<HashMap<String, std::result::Result<PythonCompatibilityInfo, String>>>,
+}
+
+impl MockPythonCompatibilityRepository {
+    /// Creates a mock keyed by package name.
+    pub fn with_responses(
+        pairs: impl IntoIterator<Item = (String, std::result::Result<PythonCompatibilityInfo, String>)>,
+    ) -> Self {
+        Self {
+            responses: Arc::new(pairs.into_iter().collect()),
+        }
+    }
+}
+
+#[async_trait]
+impl PythonCompatibilityRepository for MockPythonCompatibilityRepository {
+    async fn fetch_python_compatibility(
+        &self,
+        package_name: &str,
+        _package_version: &str,
+    ) -> Result<PythonCompatibilityInfo> {
+        match self.responses.get(package_name) {
+            Some(Ok(info)) => Ok(info.clone()),
+            Some(Err(msg)) => Err(anyhow::anyhow!("{}", msg)),
+            None => Err(anyhow::anyhow!("404 Not Found: {}", package_name)),
         }
     }
 }
