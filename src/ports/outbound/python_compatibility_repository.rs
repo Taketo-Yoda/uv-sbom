@@ -14,7 +14,6 @@ use std::str::FromStr;
 ///   MUST be treated as "compatible with every target" (see
 ///   [`PythonCompatibilityInfo::is_incompatible_with`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // WIRE(#681): remove when wired into GenerateSbomUseCase and main.rs
 pub struct PythonCompatibilityInfo {
     /// Raw PEP 440 `Requires-Python` specifier string (e.g. ">=3.8,<3.12").
     /// `None` when the package declares no constraint.
@@ -25,7 +24,6 @@ impl PythonCompatibilityInfo {
     /// Returns `true` iff this package is incompatible with `target`.
     ///
     /// A `None` `requires_python` is always treated as compatible.
-    #[allow(dead_code)] // WIRE(#681): remove when wired into GenerateSbomUseCase and main.rs
     pub fn is_incompatible_with(&self, target: &str) -> bool {
         self.requires_python
             .as_deref()
@@ -75,7 +73,6 @@ impl PythonCompatibilityInfo {
 /// # }
 /// ```
 #[async_trait]
-#[allow(dead_code)] // WIRE(#681): remove when wired into GenerateSbomUseCase and main.rs
 pub trait PythonCompatibilityRepository: Send + Sync {
     /// Fetches the `Requires-Python` constraint for a specific package version
     ///
@@ -123,7 +120,6 @@ impl PythonCompatibilityRepository for () {
 ///
 /// This never panics: parse failures degrade to "compatible" so a malformed
 /// upstream constraint can never produce a false-positive incompatibility.
-#[allow(dead_code)] // WIRE(#681): remove when wired into GenerateSbomUseCase and main.rs
 pub fn is_incompatible(requires_python: &str, target: &str) -> bool {
     let (Ok(specifiers), Ok(version)) = (
         VersionSpecifiers::from_str(requires_python),

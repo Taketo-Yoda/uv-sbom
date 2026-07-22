@@ -31,7 +31,6 @@ pub struct MergedConfig {
     pub exclude_groups: Vec<String>,
     /// Target Python version for compatibility checking (PEP 440 format).
     /// Populated from `--target-python` (CLI) or `target_python` (config file).
-    #[allow(dead_code)] // WIRE(#681): remove when wired into main.rs and GenerateSbomUseCase
     pub target_python: Option<String>,
 }
 

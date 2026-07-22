@@ -34,7 +34,6 @@ pub struct PythonCompatibilityReport {
     pub incompatible: Vec<PythonIncompatibilityView>,
 }
 
-#[allow(dead_code)] // WIRE(#681): remove when GenerateSbomUseCase reports these counts via ProgressReporter
 impl PythonCompatibilityReport {
     /// Returns `true` when no packages were classified as incompatible.
     pub fn is_empty(&self) -> bool {

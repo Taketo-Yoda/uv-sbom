@@ -96,6 +96,9 @@ pub struct Messages {
     pub progress_abandoned_found: &'static str,
     pub progress_abandoned_none: &'static str,
     pub progress_excluded_groups: &'static str,
+    pub progress_fetching_python_compat: &'static str,
+    pub progress_python_compat_found: &'static str,
+    pub progress_python_compat_none: &'static str,
 
     // Section description paragraphs
     pub desc_sbom_report: &'static str,
@@ -313,6 +316,9 @@ static EN_MESSAGES: Messages = Messages {
     progress_abandoned_found: "✅ Abandoned check complete: {} package(s) abandoned ({} direct, {} transitive), threshold: {} days",
     progress_abandoned_none: "✅ Abandoned check complete: No packages exceed {} day threshold",
     progress_excluded_groups: "🚫 Excluded {} package(s) from dependency group(s): {}",
+    progress_fetching_python_compat: "🔍 Checking Python version compatibility...",
+    progress_python_compat_found: "✅ Python compatibility check complete: {} package(s) incompatible with Python {} ({} direct, {} transitive)",
+    progress_python_compat_none: "✅ Python compatibility check complete: All packages compatible with Python {}",
 
     // Section description paragraphs
     desc_sbom_report: "A comprehensive list of all software components and libraries included in this project.",
@@ -498,6 +504,9 @@ static JA_MESSAGES: Messages = Messages {
     progress_abandoned_found: "✅ 廃止パッケージチェック完了: {}件廃止（直接: {}件、間接: {}件）、閾値: {}日",
     progress_abandoned_none: "✅ 廃止パッケージチェック完了: {}日以上更新のないパッケージはありません",
     progress_excluded_groups: "🚫 依存関係グループから{}個のパッケージを除外: {}",
+    progress_fetching_python_compat: "🔍 Pythonバージョン互換性を確認中...",
+    progress_python_compat_found: "✅ Python互換性チェック完了: {}件のパッケージがPython {}と互換性がありません（直接: {}件、間接: {}件）",
+    progress_python_compat_none: "✅ Python互換性チェック完了: すべてのパッケージがPython {}と互換性があります",
 
     // Section description paragraphs
     desc_sbom_report: "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。",

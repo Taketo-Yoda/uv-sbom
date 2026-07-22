@@ -45,6 +45,9 @@ pub struct SbomRequest {
     /// Dependency group names to exclude from the SBOM (e.g. ["dev", "lint"]).
     /// Empty = no group filtering.
     pub exclude_groups: Vec<String>,
+    /// Target Python version for compatibility checking (PEP 440 format, e.g. "3.13").
+    /// `None` disables the check.
+    pub target_python: Option<String>,
     /// Output locale for human-readable formats
     pub locale: Locale,
 }
@@ -111,6 +114,7 @@ pub struct SbomRequestBuilder {
     abandoned_threshold_days: u64,
     check_non_pypi: bool,
     exclude_groups: Vec<String>,
+    target_python: Option<String>,
     locale: Locale,
 }
 
@@ -142,6 +146,7 @@ impl SbomRequestBuilder {
             abandoned_threshold_days: 730,
             check_non_pypi: false,
             exclude_groups: Vec::new(),
+            target_python: None,
             locale: Locale::default(),
         }
     }
@@ -244,6 +249,12 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets the target Python version for compatibility checking (PEP 440 format).
+    pub fn target_python(mut self, target: Option<String>) -> Self {
+        self.target_python = target;
+        self
+    }
+
     /// Sets the output locale for human-readable formats.
     pub fn locale(mut self, locale: Locale) -> Self {
         self.locale = locale;
@@ -276,6 +287,7 @@ impl SbomRequestBuilder {
             abandoned_threshold_days: self.abandoned_threshold_days,
             check_non_pypi: self.check_non_pypi,
             exclude_groups: self.exclude_groups,
+            target_python: self.target_python,
             locale: self.locale,
         })
     }

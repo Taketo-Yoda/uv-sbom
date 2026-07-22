@@ -13,6 +13,7 @@ mod vulnerability_builder;
 
 use super::abandoned_package::AbandonedPackagesReport;
 use super::non_pypi_package::NonPyPiPackagesReport;
+use super::python_compatibility::PythonCompatibilityReport;
 use super::resolution_guide_view::ResolutionGuideView;
 use super::sbom_read_model::SbomReadModel;
 use crate::ports::outbound::EnrichedPackage;
@@ -41,6 +42,7 @@ impl SbomReadModelBuilder {
         upgrade_recommendations: Option<&[UpgradeRecommendation]>,
         abandoned_packages_report: Option<&AbandonedPackagesReport>,
         non_pypi_packages_report: Option<&NonPyPiPackagesReport>,
+        python_compatibility_report: Option<&PythonCompatibilityReport>,
         applied_group_filter: &[String],
     ) -> SbomReadModel {
         let metadata_view = metadata_builder::build_metadata(metadata, project_component);
@@ -64,6 +66,7 @@ impl SbomReadModelBuilder {
 
         let abandoned_packages = abandoned_packages_report.cloned();
         let non_pypi_packages = non_pypi_packages_report.cloned();
+        let python_compatibility = python_compatibility_report.cloned();
 
         SbomReadModel {
             metadata: metadata_view,
@@ -75,6 +78,7 @@ impl SbomReadModelBuilder {
             upgrade_recommendations,
             abandoned_packages,
             non_pypi_packages,
+            python_compatibility,
             applied_group_filter: applied_group_filter.to_vec(),
         }
     }
@@ -214,6 +218,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &[],
         );
 
@@ -234,6 +239,7 @@ mod tests {
         let read_model = SbomReadModelBuilder::build_with_project(
             packages,
             &metadata,
+            None,
             None,
             None,
             None,
@@ -266,6 +272,7 @@ mod tests {
             &metadata,
             None,
             Some(&vuln_result),
+            None,
             None,
             None,
             None,
@@ -317,6 +324,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &[],
         );
 
@@ -350,6 +358,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &[],
         );
 
@@ -366,6 +375,7 @@ mod tests {
             packages,
             &metadata,
             Some(&graph),
+            None,
             None,
             None,
             None,
@@ -402,6 +412,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &[],
         );
 
@@ -421,6 +432,7 @@ mod tests {
             None,
             None,
             Some(("my-project", "1.0.0")),
+            None,
             None,
             None,
             None,
