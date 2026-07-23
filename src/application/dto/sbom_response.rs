@@ -1,5 +1,6 @@
 use crate::application::read_models::abandoned_package::AbandonedPackagesReport;
 use crate::application::read_models::non_pypi_package::NonPyPiPackagesReport;
+use crate::application::read_models::python_compatibility::PythonCompatibilityReport;
 use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
@@ -37,6 +38,9 @@ pub struct SbomResponse {
     /// Non-PyPI packages report.
     /// Populated only when `check_non_pypi` was true in the request.
     pub non_pypi_packages_report: Option<NonPyPiPackagesReport>,
+    /// Python version compatibility report.
+    /// Populated only when `target_python` was set in the request.
+    pub python_compatibility_report: Option<PythonCompatibilityReport>,
     /// Dependency groups that were excluded during SBOM generation.
     /// Empty when no group filter was applied.
     pub applied_group_filter: Vec<String>,
@@ -59,6 +63,7 @@ pub struct SbomResponseBuilder {
     upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
     abandoned_packages_report: Option<AbandonedPackagesReport>,
     non_pypi_packages_report: Option<NonPyPiPackagesReport>,
+    python_compatibility_report: Option<PythonCompatibilityReport>,
     applied_group_filter: Vec<String>,
 }
 
@@ -75,6 +80,7 @@ impl SbomResponseBuilder {
             upgrade_recommendations: None,
             abandoned_packages_report: None,
             non_pypi_packages_report: None,
+            python_compatibility_report: None,
             applied_group_filter: Vec::new(),
         }
     }
@@ -135,6 +141,12 @@ impl SbomResponseBuilder {
         self
     }
 
+    /// Sets the Python version compatibility report.
+    pub fn python_compatibility_report(mut self, report: PythonCompatibilityReport) -> Self {
+        self.python_compatibility_report = Some(report);
+        self
+    }
+
     pub fn applied_group_filter(mut self, groups: Vec<String>) -> Self {
         self.applied_group_filter = groups;
         self
@@ -156,6 +168,7 @@ impl SbomResponseBuilder {
             upgrade_recommendations: self.upgrade_recommendations,
             abandoned_packages_report: self.abandoned_packages_report,
             non_pypi_packages_report: self.non_pypi_packages_report,
+            python_compatibility_report: self.python_compatibility_report,
             applied_group_filter: self.applied_group_filter,
         })
     }

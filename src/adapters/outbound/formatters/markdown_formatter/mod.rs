@@ -180,6 +180,7 @@ mod tests {
                 upgrade_recommendations: None,
                 abandoned_packages: None,
                 non_pypi_packages: None,
+                python_compatibility: None,
                 applied_group_filter: vec![],
             }
         }

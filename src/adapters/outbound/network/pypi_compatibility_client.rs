@@ -5,14 +5,12 @@ use serde::Deserialize;
 use std::time::Duration;
 
 #[derive(Debug, Default, Deserialize)]
-#[allow(dead_code)] // WIRE(#681): remove when PyPiCompatibilityClient is wired into main.rs
 struct PyPiInfo {
     #[serde(default)]
     requires_python: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[allow(dead_code)] // WIRE(#681): remove when PyPiCompatibilityClient is wired into main.rs
 struct PyPiVersionResponse {
     #[serde(default)]
     info: PyPiInfo,
@@ -24,13 +22,11 @@ struct PyPiVersionResponse {
 /// retrieve the `Requires-Python` constraint declared for a specific locked
 /// package version, used for target-Python compatibility checking.
 #[derive(Clone)]
-#[allow(dead_code)] // WIRE(#681): remove when PyPiCompatibilityClient is wired into main.rs
 pub struct PyPiCompatibilityClient {
     client: reqwest::Client,
     base_url: String,
 }
 
-#[allow(dead_code)] // WIRE(#681): remove when PyPiCompatibilityClient is wired into main.rs
 impl PyPiCompatibilityClient {
     const MAX_RETRIES: u32 = 3;
     // 10 MB — well above any realistic PyPI package metadata response

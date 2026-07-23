@@ -27,12 +27,10 @@ type FetchOutcome = (
 ///
 /// # Type Parameters
 /// * `PR` - `PythonCompatibilityRepository` implementation
-#[allow(dead_code)] // WIRE(#681): remove when wired into GenerateSbomUseCase and main.rs
 pub struct CheckPythonCompatibilityUseCase<PR: PythonCompatibilityRepository> {
     compatibility_repository: PR,
 }
 
-#[allow(dead_code)] // WIRE(#681): remove when wired into GenerateSbomUseCase and main.rs
 impl<PR: PythonCompatibilityRepository> CheckPythonCompatibilityUseCase<PR> {
     /// Creates a new `CheckPythonCompatibilityUseCase` with the given repository.
     pub fn new(compatibility_repository: PR) -> Self {

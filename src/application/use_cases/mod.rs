@@ -11,7 +11,6 @@ mod progress_bar;
 pub(crate) mod test_doubles;
 
 pub use check_abandoned_packages::CheckAbandonedPackagesUseCase;
-#[allow(unused_imports)] // WIRE(#681): remove when wired into GenerateSbomUseCase and main.rs
 pub use check_python_compatibility::CheckPythonCompatibilityUseCase;
 pub use check_vulnerabilities::CheckVulnerabilitiesUseCase;
 pub use fetch_licenses::FetchLicensesUseCase;

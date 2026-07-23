@@ -6,13 +6,15 @@ use crate::application::read_models::abandoned_package::{
 use crate::application::read_models::non_pypi_package::{
     NonPyPiPackageView, NonPyPiPackagesReport,
 };
+use crate::application::read_models::python_compatibility::PythonCompatibilityReport;
 use crate::application::use_cases::{
-    CheckAbandonedPackagesUseCase, CheckVulnerabilitiesUseCase, FetchLicensesUseCase,
+    CheckAbandonedPackagesUseCase, CheckPythonCompatibilityUseCase, CheckVulnerabilitiesUseCase,
+    FetchLicensesUseCase,
 };
 use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
     EnrichedPackage, LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
-    ProjectConfigReader, VulnerabilityRepository,
+    ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::{
@@ -44,17 +46,20 @@ type PackagesWithDependencyMap = (Vec<Package>, std::collections::HashMap<String
 /// * `PR` - ProgressReporter implementation
 /// * `VREPO` - VulnerabilityRepository implementation (optional)
 /// * `MREPO` - MaintenanceRepository implementation (optional)
-pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO> {
+/// * `PCREPO` - PythonCompatibilityRepository implementation (optional)
+pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = ()> {
     lockfile_reader: LR,
     project_config_reader: PCR,
     license_repository: LREPO,
     progress_reporter: PR,
     vulnerability_repository: Option<VREPO>,
     maintenance_repository: Option<MREPO>,
+    compatibility_repository: Option<PCREPO>,
     locale: Locale,
 }
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO> GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -62,8 +67,10 @@ where
     PR: ProgressReporter,
     VREPO: VulnerabilityRepository + Clone,
     MREPO: MaintenanceRepository + Clone,
+    PCREPO: PythonCompatibilityRepository + Clone,
 {
     /// Creates a new GenerateSbomUseCase with injected dependencies
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         lockfile_reader: LR,
         project_config_reader: PCR,
@@ -71,6 +78,7 @@ where
         progress_reporter: PR,
         vulnerability_repository: Option<VREPO>,
         maintenance_repository: Option<MREPO>,
+        compatibility_repository: Option<PCREPO>,
         locale: Locale,
     ) -> Self {
         Self {
@@ -80,6 +88,7 @@ where
             progress_reporter,
             vulnerability_repository,
             maintenance_repository,
+            compatibility_repository,
             locale,
         }
     }
@@ -156,7 +165,16 @@ where
             dependency_graph.as_ref(),
         )?;
 
-        // Step 11: Build and return response
+        // Step 11: Python version compatibility check if requested
+        let python_compatibility_report = self
+            .check_python_compatibility_if_requested(
+                &request,
+                &filtered_packages,
+                dependency_graph.as_ref(),
+            )
+            .await?;
+
+        // Step 12: Build and return response
         Ok(self.build_response(
             enriched_packages,
             dependency_graph,
@@ -165,6 +183,7 @@ where
             upgrade_recommendations,
             abandoned_packages_report,
             non_pypi_packages_report,
+            python_compatibility_report,
             request.exclude_groups.clone(),
         ))
     }
@@ -298,6 +317,57 @@ where
         views.sort_by(|a, b| a.name.cmp(&b.name));
 
         Ok(Some(NonPyPiPackagesReport { packages: views }))
+    }
+
+    /// Checks package compatibility against `target_python` if requested.
+    ///
+    /// Returns `None` when `target_python` is unset or no compatibility
+    /// repository is configured. When `dependency_graph` is `None`, `is_direct`
+    /// defaults to `false` for all packages — consistent with the existing
+    /// pattern in `check_abandoned_if_requested`.
+    async fn check_python_compatibility_if_requested(
+        &self,
+        request: &SbomRequest,
+        packages: &[Package],
+        dependency_graph: Option<&DependencyGraph>,
+    ) -> Result<Option<PythonCompatibilityReport>> {
+        let Some(target) = &request.target_python else {
+            return Ok(None);
+        };
+        let Some(repo) = &self.compatibility_repository else {
+            return Ok(None);
+        };
+
+        let msgs = Messages::for_locale(self.locale);
+        self.progress_reporter
+            .report(msgs.progress_fetching_python_compat);
+
+        let direct_names = Self::resolve_direct_names(dependency_graph);
+        let compat_use_case = CheckPythonCompatibilityUseCase::new(repo.clone());
+        let report = compat_use_case
+            .check_with_progress(packages.to_vec(), target, &direct_names)
+            .await?;
+
+        eprintln!(); // newline after progress bar
+
+        if report.is_empty() {
+            self.progress_reporter.report(&Messages::format(
+                msgs.progress_python_compat_none,
+                &[&report.target_python],
+            ));
+        } else {
+            self.progress_reporter.report(&Messages::format(
+                msgs.progress_python_compat_found,
+                &[
+                    &report.total_count().to_string(),
+                    &report.target_python,
+                    &report.direct_count().to_string(),
+                    &report.transitive_count().to_string(),
+                ],
+            ));
+        }
+
+        Ok(Some(report))
     }
 
     /// Returns the set of direct dependency names from the graph.
@@ -742,6 +812,7 @@ where
         upgrade_recommendations: Option<Vec<UpgradeRecommendation>>,
         abandoned_packages_report: Option<AbandonedPackagesReport>,
         non_pypi_packages_report: Option<NonPyPiPackagesReport>,
+        python_compatibility_report: Option<PythonCompatibilityReport>,
         exclude_groups: Vec<String>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata();
@@ -781,6 +852,9 @@ where
         }
         if let Some(report) = non_pypi_packages_report {
             builder = builder.non_pypi_packages_report(report);
+        }
+        if let Some(report) = python_compatibility_report {
+            builder = builder.python_compatibility_report(report);
         }
 
         builder.build().expect("response build should not fail")

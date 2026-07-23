@@ -83,6 +83,7 @@ async fn test_e2e_json_format() {
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -103,6 +104,7 @@ async fn test_e2e_json_format() {
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
         None,
         None,
         None,
@@ -138,6 +140,7 @@ async fn test_e2e_markdown_format() {
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -159,6 +162,7 @@ async fn test_e2e_markdown_format() {
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
         None,
         None,
         None,
@@ -195,6 +199,7 @@ async fn test_e2e_nonexistent_project() {
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -221,6 +226,7 @@ async fn test_e2e_package_count() {
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
@@ -263,6 +269,7 @@ async fn test_e2e_exclude_single_package() {
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -301,6 +308,7 @@ async fn test_e2e_exclude_multiple_packages() {
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
@@ -347,6 +355,7 @@ async fn test_e2e_exclude_with_wildcard() {
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -385,6 +394,7 @@ async fn test_e2e_exclude_all_packages_error() {
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
@@ -431,6 +441,7 @@ async fn test_e2e_exclude_root_project_preserves_dependency_classification() {
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
@@ -487,6 +498,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -510,6 +522,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
         None,
         None,
         None,

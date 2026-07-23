@@ -27,6 +27,9 @@ abandoned_threshold_days: 730
 # Detect packages sourced from non-PyPI origins (git, path, url, private registries)
 # check_non_pypi: false
 
+# Check package compatibility against a target Python version (PEP 440 format)
+# target_python: "3.8"
+
 license_policy:
   allow:
     - "MIT"

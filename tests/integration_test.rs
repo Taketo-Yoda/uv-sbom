@@ -39,6 +39,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -93,6 +94,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -128,6 +130,7 @@ async fn test_generate_sbom_lockfile_read_failure() {
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -160,6 +163,7 @@ source = { registry = "https://pypi.org/simple" }
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
@@ -200,6 +204,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter.clone(),
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -234,6 +239,7 @@ async fn test_generate_sbom_invalid_toml() {
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
@@ -272,6 +278,7 @@ source = { registry = "https://pypi.org/simple" }
         project_config_reader,
         license_repository,
         progress_reporter.clone(),
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
@@ -322,6 +329,7 @@ source = { registry = "https://pypi.org/simple" }
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
@@ -397,6 +405,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -455,6 +464,7 @@ source = { registry = "https://pypi.org/simple" }
         progress_reporter,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -496,6 +506,7 @@ source = { registry = "https://pypi.org/simple" }
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
@@ -559,6 +570,7 @@ source = { registry = "https://pypi.org/simple" }
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         uv_sbom::i18n::Locale::En,
