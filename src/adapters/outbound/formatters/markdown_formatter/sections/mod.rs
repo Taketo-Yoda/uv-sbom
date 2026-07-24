@@ -4,5 +4,6 @@ pub(super) mod dependencies;
 pub(super) mod header;
 pub(super) mod license_compliance;
 pub(super) mod non_pypi_packages;
+pub(super) mod python_compatibility;
 pub(super) mod resolution_guide;
 pub(super) mod summary;

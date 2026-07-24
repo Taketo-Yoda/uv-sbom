@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `--target-python` CLI flag and `target_python` config key for specifying a target Python version, resolved as CLI > config > None and validated as a PEP 440 version before any network calls (#678)
-- **Python version compatibility checking**: When `--target-python` is set, uv-sbom now queries PyPI for each locked package's `Requires-Python` constraint and reports packages incompatible with the target version via a stderr progress summary (e.g. `N package(s) incompatible with Python 3.8 (D direct, T transitive)`). Markdown/CycloneDX rendering of the incompatible-package list is not yet implemented — tracked separately in #689 (#628, #679, #680, #681)
+- **Python version compatibility checking**: When `--target-python` is set, uv-sbom now queries PyPI for each locked package's `Requires-Python` constraint and reports packages incompatible with the target version via a stderr progress summary (e.g. `N package(s) incompatible with Python 3.8 (D direct, T transitive)`) and a Markdown section (#628, #679, #680, #681)
+- **Python Compatibility Markdown section**: When `--target-python` is set, Markdown output now renders a `## ⚠️ Python {version} Compatibility Issues` section with a table of Package, Version, Requires-Python, and Type when incompatible packages are found, or a `## ✅ Python {version} Compatibility` "all clear" section when every package is compatible. The section is omitted entirely when `--target-python` is not set. Fully localized for EN and JA (#682)
 
 ## [2.7.0] - 2026-07-12
 

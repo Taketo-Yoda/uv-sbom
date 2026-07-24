@@ -42,7 +42,6 @@ pub struct SbomReadModel {
     pub non_pypi_packages: Option<NonPyPiPackagesReport>,
     /// Python version compatibility report.
     /// Populated only when `target_python` was set in the request.
-    #[allow(dead_code)] // WIRE(#689): remove when a formatter renders this field
     pub python_compatibility: Option<PythonCompatibilityReport>,
     /// Dependency groups that were excluded during generation. Empty = no filter.
     pub applied_group_filter: Vec<String>,
