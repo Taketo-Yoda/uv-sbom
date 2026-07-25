@@ -553,16 +553,36 @@ uv-sbom --target-python 3.8 --check-license --severity-threshold high
 - If a package's PyPI metadata cannot be fetched, it is skipped without aborting the run
 - Requires network access; adds one API call per package
 
-**Output:** currently a progress summary printed to stderr — no Markdown/CycloneDX section is rendered yet (tracked separately in [#689](https://github.com/Taketo-Yoda/uv-sbom/issues/689)). Example, run against [`examples/sample-project`](examples/sample-project):
+**Output:**
+- **Python Compatibility Issues section**: Appears in the Markdown output when any incompatible package is found, listing the total count (direct vs. transitive) followed by a table of Package, Version, Requires-Python, and Type
+- **Python Compatibility section (all clear)**: Appears instead when every package is compatible with the target version
+- When `--target-python` is not passed, no compatibility section is rendered
+
+**Example output:**
+```markdown
+## ⚠️ Python 3.8 Compatibility Issues
+
+11 package(s) incompatible with the target Python version (0 direct, 11 transitive).
+
+| Package | Version | Requires-Python | Type |
+|---------|---------|-----------------|------|
+| coverage | 7.14.3 | >=3.10 | Transitive dependencies |
+| iniconfig | 2.3.0 | >=3.10 | Transitive dependencies |
+| librt | 0.11.0 | >=3.9 | Transitive dependencies |
+| markupsafe | 3.0.3 | >=3.9 | Transitive dependencies |
+| mypy | 2.1.0 | >=3.10 | Transitive dependencies |
+| pathspec | 1.1.1 | >=3.9 | Transitive dependencies |
+| pluggy | 1.6.0 | >=3.9 | Transitive dependencies |
+| pygments | 2.20.0 | >=3.9 | Transitive dependencies |
+| pytest | 9.1.1 | >=3.10 | Transitive dependencies |
+| pytest-cov | 7.1.0 | >=3.9 | Transitive dependencies |
+| typing-extensions | 4.15.0 | >=3.9 | Transitive dependencies |
+```
+
+Produced by running against [`examples/sample-project`](examples/sample-project):
 
 ```bash
 uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdown
-```
-
-```text
-🔍 Checking Python version compatibility...
-
-✅ Python compatibility check complete: 11 package(s) incompatible with Python 3.8 (0 direct, 11 transitive)
 ```
 
 **Config file equivalent:**

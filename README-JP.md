@@ -549,16 +549,36 @@ uv-sbom --target-python 3.8 --check-license --severity-threshold high
 - パッケージのPyPIメタデータが取得できない場合、実行全体を中断せずにそのパッケージをスキップします
 - ネットワークアクセスが必要です。パッケージごとに1回のAPI呼び出しが発生します
 
-**出力:** 現時点ではstderrへの進捗サマリーのみで、Markdown/CycloneDXへのセクション出力はまだ実装されていません（別Issue [#689](https://github.com/Taketo-Yoda/uv-sbom/issues/689) で追跡中）。[`examples/sample-project`](examples/sample-project) に対して実行した例:
+**出力:**
+- **Python互換性の問題セクション**: 非互換なパッケージが1件でも見つかった場合にMarkdown出力に表示され、合計件数（直接依存・間接依存の内訳）に続いてPackage、Version、Requires-Python、Typeの表が表示されます
+- **Python互換性セクション（問題なし）**: 全パッケージが互換性を持つ場合はこちらが代わりに表示されます
+- `--target-python` を指定しない場合、互換性セクションは出力されません
+
+**出力例:**
+```markdown
+## ⚠️ Python 3.8 互換性の問題
+
+11個のパッケージがターゲットPythonバージョンと非互換です（直接依存 0件、間接依存 11件）。
+
+| パッケージ | バージョン | Requires-Python | 種別 |
+|---------|---------|-----------------|------|
+| coverage | 7.14.3 | >=3.10 | 間接依存パッケージ |
+| iniconfig | 2.3.0 | >=3.10 | 間接依存パッケージ |
+| librt | 0.11.0 | >=3.9 | 間接依存パッケージ |
+| markupsafe | 3.0.3 | >=3.9 | 間接依存パッケージ |
+| mypy | 2.1.0 | >=3.10 | 間接依存パッケージ |
+| pathspec | 1.1.1 | >=3.9 | 間接依存パッケージ |
+| pluggy | 1.6.0 | >=3.9 | 間接依存パッケージ |
+| pygments | 2.20.0 | >=3.9 | 間接依存パッケージ |
+| pytest | 9.1.1 | >=3.10 | 間接依存パッケージ |
+| pytest-cov | 7.1.0 | >=3.9 | 間接依存パッケージ |
+| typing-extensions | 4.15.0 | >=3.9 | 間接依存パッケージ |
+```
+
+[`examples/sample-project`](examples/sample-project) に対して実行した例:
 
 ```bash
 uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdown
-```
-
-```text
-🔍 Checking Python version compatibility...
-
-✅ Python compatibility check complete: 11 package(s) incompatible with Python 3.8 (0 direct, 11 transitive)
 ```
 
 **設定ファイルでの指定:**
