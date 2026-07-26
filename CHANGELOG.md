@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.8.0] - 2026-07-26
 
+### Security
+- Updated `quinn-proto` to 0.11.16 to fix GHSA-4w2j-m93h-cj5j (remote memory exhaustion via unbounded out-of-order stream reassembly) (#698)
+
 ### Added
 - `--target-python` CLI flag and `target_python` config key for specifying a target Python version, resolved as CLI > config > None and validated as a PEP 440 version before any network calls (#678)
 - **Python version compatibility checking**: When `--target-python` is set, uv-sbom now queries PyPI for each locked package's `Requires-Python` constraint and reports packages incompatible with the target version via a stderr progress summary (e.g. `N package(s) incompatible with Python 3.8 (D direct, T transitive)`) and a Markdown section (#628, #679, #680, #681)
