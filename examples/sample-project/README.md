@@ -13,6 +13,7 @@ realistic uv-sbom output for all three major opt-in analysis features:
 | CVE detection | `--check-cve` (default on) | Multiple known vulnerabilities in locked packages |
 | License compliance | `--check-license` | `chardet 3.0.4` uses LGPL-2.1-only (denied) |
 | Abandoned package detection | `--check-abandoned` | Some packages may be flagged depending on PyPI state; see `examples/abandoned-packages-project/` for a focused demo |
+| Python version compatibility | `--target-python` | Several transitive dependencies declare `Requires-Python` constraints incompatible with older Python versions (e.g. 3.8) |
 
 > ⚠️ **Do not use these package versions in production.** They are intentionally
 > outdated for demonstration purposes.
@@ -60,7 +61,23 @@ uv-sbom -p examples/sample-project --check-abandoned \
   --abandoned-threshold-days 365 -f markdown
 ```
 
-### Step 4: Dependency diff against a git ref
+### Step 4: Python version compatibility check
+
+```bash
+uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdown
+```
+
+**What you will see:** a progress summary printed to stderr (no Markdown
+section is rendered yet — tracked separately in
+[#689](https://github.com/Taketo-Yoda/uv-sbom/issues/689)):
+
+```text
+🔍 Checking Python version compatibility...
+
+✅ Python compatibility check complete: 11 package(s) incompatible with Python 3.8 (0 direct, 11 transitive)
+```
+
+### Step 5: Dependency diff against a git ref
 
 ```bash
 # Compare the sample-project lockfile against the main branch
@@ -73,7 +90,7 @@ uv-sbom --diff /path/to/old/uv.lock -p examples/sample-project -f json
 **What you will see:** A diff report listing Added, Removed, Updated, and
 Unchanged packages between the base ref and the current lockfile.
 
-### Step 5: All checks via config file
+### Step 6: All checks via config file
 
 ```bash
 uv-sbom -p examples/sample-project -f markdown \

@@ -96,6 +96,9 @@ pub struct Messages {
     pub progress_abandoned_found: &'static str,
     pub progress_abandoned_none: &'static str,
     pub progress_excluded_groups: &'static str,
+    pub progress_fetching_python_compat: &'static str,
+    pub progress_python_compat_found: &'static str,
+    pub progress_python_compat_none: &'static str,
 
     // Section description paragraphs
     pub desc_sbom_report: &'static str,
@@ -191,6 +194,13 @@ pub struct Messages {
     pub note_non_pypi_packages: &'static str,
     pub col_source_type: &'static str,
     pub col_source: &'static str,
+
+    // Python compatibility section
+    pub section_python_compat_issues: &'static str,
+    pub section_python_compat_ok: &'static str,
+    pub summary_python_compat_issues: &'static str,
+    pub label_python_compat_all_clear: &'static str,
+    pub col_requires_python: &'static str,
 
     // Diff Markdown formatter strings
     pub diff_section_title: &'static str,
@@ -313,6 +323,9 @@ static EN_MESSAGES: Messages = Messages {
     progress_abandoned_found: "✅ Abandoned check complete: {} package(s) abandoned ({} direct, {} transitive), threshold: {} days",
     progress_abandoned_none: "✅ Abandoned check complete: No packages exceed {} day threshold",
     progress_excluded_groups: "🚫 Excluded {} package(s) from dependency group(s): {}",
+    progress_fetching_python_compat: "🔍 Checking Python version compatibility...",
+    progress_python_compat_found: "✅ Python compatibility check complete: {} package(s) incompatible with Python {} ({} direct, {} transitive)",
+    progress_python_compat_none: "✅ Python compatibility check complete: All packages compatible with Python {}",
 
     // Section description paragraphs
     desc_sbom_report: "A comprehensive list of all software components and libraries included in this project.",
@@ -408,6 +421,13 @@ static EN_MESSAGES: Messages = Messages {
     col_source_type: "Source Type",
     col_source: "Source",
 
+    // Python compatibility section
+    section_python_compat_issues: "## ⚠️ Python {} Compatibility Issues",
+    section_python_compat_ok: "## ✅ Python {} Compatibility",
+    summary_python_compat_issues: "{} package(s) incompatible with the target Python version ({} direct, {} transitive).",
+    label_python_compat_all_clear: "All packages are compatible with the target Python version.",
+    col_requires_python: "Requires-Python",
+
     // Diff Markdown formatter strings
     diff_section_title: "## Dependency Diff Report",
     diff_compared_line: "Compared: `{}` vs current `uv.lock`",
@@ -498,6 +518,9 @@ static JA_MESSAGES: Messages = Messages {
     progress_abandoned_found: "✅ 廃止パッケージチェック完了: {}件廃止（直接: {}件、間接: {}件）、閾値: {}日",
     progress_abandoned_none: "✅ 廃止パッケージチェック完了: {}日以上更新のないパッケージはありません",
     progress_excluded_groups: "🚫 依存関係グループから{}個のパッケージを除外: {}",
+    progress_fetching_python_compat: "🔍 Pythonバージョン互換性を確認中...",
+    progress_python_compat_found: "✅ Python互換性チェック完了: {}件のパッケージがPython {}と互換性がありません（直接: {}件、間接: {}件）",
+    progress_python_compat_none: "✅ Python互換性チェック完了: すべてのパッケージがPython {}と互換性があります",
 
     // Section description paragraphs
     desc_sbom_report: "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。",
@@ -594,6 +617,13 @@ static JA_MESSAGES: Messages = Messages {
     note_non_pypi_packages: "> PyPI以外のソースから取得されたパッケージは、PyPIのセキュリティポリシーの対象外である可能性があります。本番環境へのデプロイ前に、各パッケージの取得元を確認してください。",
     col_source_type: "ソース種別",
     col_source: "取得元",
+
+    // Python compatibility section
+    section_python_compat_issues: "## ⚠️ Python {} 互換性の問題",
+    section_python_compat_ok: "## ✅ Python {} 互換性",
+    summary_python_compat_issues: "{}個のパッケージがターゲットPythonバージョンと非互換です（直接依存 {}件、間接依存 {}件）。",
+    label_python_compat_all_clear: "すべてのパッケージがターゲットPythonバージョンと互換性があります。",
+    col_requires_python: "Requires-Python",
 
     // Diff Markdown formatter strings
     diff_section_title: "## 依存関係差分レポート",
@@ -1155,6 +1185,50 @@ mod tests {
         );
         assert_eq!(msgs.col_source_type, "ソース種別");
         assert_eq!(msgs.col_source, "取得元");
+    }
+
+    #[test]
+    fn test_messages_python_compat_section_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            Messages::format(msgs.section_python_compat_issues, &["3.13"]),
+            "## ⚠️ Python 3.13 Compatibility Issues"
+        );
+        assert_eq!(
+            Messages::format(msgs.section_python_compat_ok, &["3.13"]),
+            "## ✅ Python 3.13 Compatibility"
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_python_compat_issues, &["3", "1", "2"]),
+            "3 package(s) incompatible with the target Python version (1 direct, 2 transitive)."
+        );
+        assert_eq!(
+            msgs.label_python_compat_all_clear,
+            "All packages are compatible with the target Python version."
+        );
+        assert_eq!(msgs.col_requires_python, "Requires-Python");
+    }
+
+    #[test]
+    fn test_messages_python_compat_section_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            Messages::format(msgs.section_python_compat_issues, &["3.13"]),
+            "## ⚠️ Python 3.13 互換性の問題"
+        );
+        assert_eq!(
+            Messages::format(msgs.section_python_compat_ok, &["3.13"]),
+            "## ✅ Python 3.13 互換性"
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_python_compat_issues, &["3", "1", "2"]),
+            "3個のパッケージがターゲットPythonバージョンと非互換です（直接依存 1件、間接依存 2件）。"
+        );
+        assert_eq!(
+            msgs.label_python_compat_all_clear,
+            "すべてのパッケージがターゲットPythonバージョンと互換性があります。"
+        );
+        assert_eq!(msgs.col_requires_python, "Requires-Python");
     }
 
     #[test]

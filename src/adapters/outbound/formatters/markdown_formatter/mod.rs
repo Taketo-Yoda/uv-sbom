@@ -66,8 +66,9 @@ impl MarkdownFormatter {
         );
     }
 
-    /// Renders the five conditional sections when present: dependencies, vulnerabilities,
-    /// license compliance, abandoned packages, and resolution guide.
+    /// Renders the conditional sections when present: dependencies, vulnerabilities,
+    /// license compliance, abandoned packages, non-PyPI packages, Python compatibility,
+    /// and resolution guide.
     fn render_optional_sections(&self, output: &mut String, model: &SbomReadModel) {
         if let Some(deps) = &model.dependencies {
             sections::dependencies::render(
@@ -96,6 +97,9 @@ impl MarkdownFormatter {
             if !report.is_empty() {
                 sections::non_pypi_packages::render(self.messages, output, report);
             }
+        }
+        if let Some(report) = &model.python_compatibility {
+            sections::python_compatibility::render(self.messages, output, report);
         }
         if let Some(guide) = &model.resolution_guide {
             if !guide.entries.is_empty() {
@@ -180,6 +184,7 @@ mod tests {
                 upgrade_recommendations: None,
                 abandoned_packages: None,
                 non_pypi_packages: None,
+                python_compatibility: None,
                 applied_group_filter: vec![],
             }
         }
@@ -986,6 +991,69 @@ mod tests {
             &[
                 "## Abandoned Packages",
                 "## ⚠️ Non-PyPI Package Sources",
+                "## Vulnerability Resolution Guide",
+            ],
+        );
+    }
+
+    // ===== Python compatibility section tests =====
+
+    #[test]
+    fn test_python_compat_section_absent_when_none() {
+        let model = test_fixtures::base_model(); // python_compatibility: None
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(!markdown.contains("Python 3"));
+        assert!(!markdown.contains("Compatibility Issues"));
+        assert!(!markdown.contains("Compatibility"));
+    }
+
+    #[test]
+    fn test_python_compat_section_order_after_non_pypi_before_resolution_guide() {
+        use crate::application::read_models::{
+            IntroducedByView, NonPyPiPackageView, NonPyPiPackagesReport, PythonCompatibilityReport,
+            PythonIncompatibilityView, ResolutionEntryView, ResolutionGuideView,
+        };
+
+        let mut model = test_fixtures::base_model();
+        model.non_pypi_packages = Some(NonPyPiPackagesReport {
+            packages: vec![NonPyPiPackageView {
+                name: "dev-tool".to_string(),
+                version: "1.0.0".to_string(),
+                source_label: "Git".to_string(),
+                source_location: "https://github.com/example/repo".to_string(),
+                is_direct: true,
+            }],
+        });
+        model.python_compatibility = Some(PythonCompatibilityReport {
+            target_python: "3.13".to_string(),
+            incompatible: vec![PythonIncompatibilityView {
+                name: "legacy-lib".to_string(),
+                version: "1.0.0".to_string(),
+                requires_python: Some(">=3.8,<3.12".to_string()),
+                is_direct: true,
+            }],
+        });
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "requests".to_string(),
+                current_version: "2.31.0".to_string(),
+                fixed_version: Some("2.32.0".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-0001".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+                dependency_chains: vec![],
+            }],
+        });
+
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert_section_order(
+            &markdown,
+            &[
+                "## ⚠️ Non-PyPI Package Sources",
+                "## ⚠️ Python",
                 "## Vulnerability Resolution Guide",
             ],
         );

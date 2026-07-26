@@ -1,6 +1,6 @@
 use super::*;
 use crate::application::use_cases::test_doubles::{
-    MockMaintenanceRepository, MockVulnerabilityRepository,
+    MockMaintenanceRepository, MockPythonCompatibilityRepository, MockVulnerabilityRepository,
 };
 use crate::ports::outbound::{GroupRoots, LockfileParseResult, PackageSourceMap, PyPiMetadata};
 use crate::sbom_generation::domain::Package;
@@ -89,6 +89,7 @@ mod test_helpers {
         MockProgressReporter,
         MockVulnerabilityRepository,
         MockMaintenanceRepository,
+        MockPythonCompatibilityRepository,
     >;
 
     pub(super) struct UseCaseBuilder {
@@ -99,6 +100,7 @@ mod test_helpers {
         project_name: String,
         vuln: Option<MockVulnerabilityRepository>,
         maint: Option<MockMaintenanceRepository>,
+        pyc: Option<MockPythonCompatibilityRepository>,
     }
 
     impl Default for UseCaseBuilder {
@@ -111,6 +113,7 @@ mod test_helpers {
                 project_name: "test-project".to_string(),
                 vuln: None,
                 maint: None,
+                pyc: None,
             }
         }
     }
@@ -151,6 +154,14 @@ mod test_helpers {
             self
         }
 
+        pub(super) fn with_python_compat_repo(
+            mut self,
+            repo: MockPythonCompatibilityRepository,
+        ) -> Self {
+            self.pyc = Some(repo);
+            self
+        }
+
         pub(super) fn with_source_map(mut self, map: PackageSourceMap) -> Self {
             self.source_map = map;
             self
@@ -171,6 +182,7 @@ mod test_helpers {
                 MockProgressReporter,
                 self.vuln,
                 self.maint,
+                self.pyc,
                 Locale::default(),
             )
         }
@@ -433,6 +445,7 @@ mod tests_response {
             None,
             None,
             None,
+            None,
             vec![],
         );
 
@@ -476,6 +489,7 @@ mod tests_response {
             enriched_packages,
             None,
             Some(check_result),
+            None,
             None,
             None,
             None,
@@ -525,6 +539,7 @@ mod tests_response {
             enriched_packages,
             None,
             Some(check_result),
+            None,
             None,
             None,
             None,
@@ -797,6 +812,147 @@ mod tests_abandoned {
         assert_eq!(report.total_count(), 2);
         // Sorted descending: older-pkg (more days inactive) should be first
         assert!(report.packages[0].days_inactive >= report.packages[1].days_inactive);
+    }
+}
+
+mod tests_python_compatibility {
+    use super::test_helpers::*;
+    use super::*;
+    use crate::ports::outbound::PythonCompatibilityInfo;
+
+    #[tokio::test]
+    async fn test_python_compat_target_unset_returns_none() {
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+
+        let result = use_case
+            .check_python_compatibility_if_requested(&default_request(), &packages, None)
+            .await
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_python_compat_no_repo_returns_none() {
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .target_python(Some("3.13".to_string()))
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_python_compatibility_if_requested(&request, &packages, None)
+            .await
+            .unwrap();
+
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_python_compat_with_incompatible_package_returns_report() {
+        let pyc_repo = MockPythonCompatibilityRepository::with_responses([(
+            "legacy-lib".to_string(),
+            Ok(PythonCompatibilityInfo {
+                requires_python: Some(">=3.8,<3.12".to_string()),
+            }),
+        )]);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("legacy-lib", "1.0.0")])
+            .with_python_compat_repo(pyc_repo)
+            .build();
+        let packages = [pkg("legacy-lib", "1.0.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .target_python(Some("3.13".to_string()))
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_python_compatibility_if_requested(&request, &packages, None)
+            .await
+            .unwrap();
+
+        assert!(result.is_some());
+        let report = result.unwrap();
+        assert_eq!(report.total_count(), 1);
+        assert_eq!(report.incompatible[0].name, "legacy-lib");
+        assert_eq!(report.target_python, "3.13");
+    }
+
+    #[tokio::test]
+    async fn test_python_compat_all_compatible_produces_empty_report() {
+        let pyc_repo = MockPythonCompatibilityRepository::with_responses([(
+            "requests".to_string(),
+            Ok(PythonCompatibilityInfo {
+                requires_python: Some(">=3.7".to_string()),
+            }),
+        )]);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .with_python_compat_repo(pyc_repo)
+            .build();
+        let packages = [pkg("requests", "2.31.0")];
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .target_python(Some("3.13".to_string()))
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .check_python_compatibility_if_requested(&request, &packages, None)
+            .await
+            .unwrap();
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_empty());
+    }
+
+    /// End-to-end integration test: exercises the `target_python` path through
+    /// `execute()`, verifying `SbomResponse.python_compatibility_report` is
+    /// populated from a mock `PythonCompatibilityRepository`.
+    #[tokio::test]
+    async fn test_execute_with_target_python_populates_response_report() {
+        let pyc_repo = MockPythonCompatibilityRepository::with_responses([(
+            "legacy-lib".to_string(),
+            Ok(PythonCompatibilityInfo {
+                requires_python: Some(">=3.8,<3.12".to_string()),
+            }),
+        )]);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("legacy-lib", "1.0.0")])
+            .with_python_compat_repo(pyc_repo)
+            .build();
+
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .target_python(Some("3.13".to_string()))
+            .build()
+            .unwrap();
+
+        let response = use_case.execute(request).await.unwrap();
+
+        assert!(response.python_compatibility_report.is_some());
+        let report = response.python_compatibility_report.unwrap();
+        assert_eq!(report.total_count(), 1);
+        assert_eq!(report.incompatible[0].name, "legacy-lib");
+    }
+
+    #[tokio::test]
+    async fn test_execute_without_target_python_leaves_report_none() {
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .build();
+
+        let response = use_case.execute(default_request()).await.unwrap();
+
+        assert!(response.python_compatibility_report.is_none());
     }
 }
 
@@ -1233,5 +1389,84 @@ mod tests_non_pypi {
         assert_eq!(result.direct_count(), 1);
         assert_eq!(result.transitive_count(), 0);
         assert!(result.packages[0].is_direct);
+    }
+}
+
+mod tests_python_compat_markdown {
+    use super::test_helpers::*;
+    use super::*;
+    use crate::adapters::outbound::formatters::MarkdownFormatter;
+    use crate::application::read_models::SbomReadModelBuilder;
+    use crate::i18n::Locale;
+    use crate::ports::outbound::{PythonCompatibilityInfo, SbomFormatter};
+
+    fn format_markdown(response: &crate::application::dto::SbomResponse) -> String {
+        let read_model = SbomReadModelBuilder::build_with_project(
+            response.enriched_packages.clone(),
+            &response.metadata,
+            response.dependency_graph.as_ref(),
+            response.vulnerability_check_result.as_ref(),
+            response.license_compliance_result.as_ref(),
+            None,
+            response.upgrade_recommendations.as_deref(),
+            response.abandoned_packages_report.as_ref(),
+            response.non_pypi_packages_report.as_ref(),
+            response.python_compatibility_report.as_ref(),
+            &response.applied_group_filter,
+        );
+        MarkdownFormatter::new(Locale::En)
+            .format(&read_model)
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_markdown_renders_python_compat_issues_table() {
+        let pyc_repo = MockPythonCompatibilityRepository::with_responses([(
+            "legacy-lib".to_string(),
+            Ok(PythonCompatibilityInfo {
+                requires_python: Some(">=3.8,<3.12".to_string()),
+            }),
+        )]);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("legacy-lib", "1.0.0")])
+            .with_python_compat_repo(pyc_repo)
+            .build();
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .target_python(Some("3.13".to_string()))
+            .build()
+            .unwrap();
+
+        let response = use_case.execute(request).await.unwrap();
+        let markdown = format_markdown(&response);
+
+        assert!(markdown.contains("## ⚠️ Python 3.13 Compatibility Issues"));
+        assert!(markdown.contains("| Package | Version | Requires-Python | Type |"));
+        assert!(markdown.contains("| legacy-lib | 1.0.0 | >=3.8,<3.12 |"));
+    }
+
+    #[tokio::test]
+    async fn test_markdown_renders_python_compat_all_clear() {
+        let pyc_repo = MockPythonCompatibilityRepository::with_responses([(
+            "requests".to_string(),
+            Ok(PythonCompatibilityInfo {
+                requires_python: Some(">=3.7".to_string()),
+            }),
+        )]);
+        let use_case = UseCaseBuilder::default()
+            .with_lockfile(vec![pkg("requests", "2.31.0")])
+            .with_python_compat_repo(pyc_repo)
+            .build();
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .target_python(Some("3.13".to_string()))
+            .build()
+            .unwrap();
+
+        let response = use_case.execute(request).await.unwrap();
+        let markdown = format_markdown(&response);
+
+        assert!(markdown.contains("## ✅ Python 3.13 Compatibility"));
+        assert!(!markdown.contains("Compatibility Issues"));
     }
 }

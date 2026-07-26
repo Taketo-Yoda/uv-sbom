@@ -10,7 +10,8 @@ use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::{determine_diff_source, FileSystemReader, GitLockfileReader};
 use adapters::outbound::formatters::{DiffJsonFormatter, DiffMarkdownFormatter};
 use adapters::outbound::network::{
-    CachingPyPiLicenseRepository, OsvClient, PyPiLicenseRepository, PyPiMaintenanceRepository,
+    CachingPyPiLicenseRepository, OsvClient, PyPiCompatibilityClient, PyPiLicenseRepository,
+    PyPiMaintenanceRepository,
 };
 use adapters::outbound::uv::UvWorkspaceReader;
 use application::dto::{DiffRequest, OutputFormat, SbomRequest};
@@ -240,7 +241,7 @@ async fn run(args: Args) -> Result<bool> {
     let config = load_config(&args, &project_path)?;
 
     // Merge CLI and config values
-    let merged = merge_config(&args, &config);
+    let merged = merge_config(&args, &config)?;
 
     // Create adapters (Dependency Injection)
     let lockfile_reader = FileSystemReader::new();
@@ -263,6 +264,13 @@ async fn run(args: Args) -> Result<bool> {
         None
     };
 
+    // Create Python compatibility repository if --target-python is set
+    let compatibility_repository = if merged.target_python.is_some() {
+        Some(PyPiCompatibilityClient::new()?)
+    } else {
+        None
+    };
+
     // Create use case with injected dependencies
     let use_case = GenerateSbomUseCase::new(
         lockfile_reader,
@@ -271,6 +279,7 @@ async fn run(args: Args) -> Result<bool> {
         progress_reporter,
         vulnerability_repository,
         maintenance_repository,
+        compatibility_repository,
         locale,
     );
 
@@ -306,6 +315,7 @@ async fn run(args: Args) -> Result<bool> {
         .abandoned_threshold_days(merged.abandoned_threshold_days)
         .check_non_pypi(merged.check_non_pypi)
         .exclude_groups(exclude_groups)
+        .target_python(merged.target_python.clone())
         .locale(locale)
         .build()?;
 
@@ -356,6 +366,7 @@ async fn run(args: Args) -> Result<bool> {
         response.upgrade_recommendations.as_deref(),
         response.abandoned_packages_report.as_ref(),
         response.non_pypi_packages_report.as_ref(),
+        response.python_compatibility_report.as_ref(),
         &applied_group_filter,
     );
 
@@ -428,7 +439,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     );
 
     let config = load_config(&args, &workspace_root)?;
-    let merged = merge_config(&args, &config);
+    let merged = merge_config(&args, &config)?;
 
     // Resolve exclude_groups for workspace mode: --production-only reads group roots from
     // the workspace-root lockfile. --exclude-groups / config value is used otherwise.
@@ -473,6 +484,12 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             None
         };
 
+        let compatibility_repository = if merged.target_python.is_some() {
+            Some(PyPiCompatibilityClient::new()?)
+        } else {
+            None
+        };
+
         let use_case = GenerateSbomUseCase::new(
             lockfile_reader,
             project_config_reader,
@@ -480,6 +497,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             progress_reporter,
             vulnerability_repository,
             maintenance_repository,
+            compatibility_repository,
             locale,
         );
 
@@ -499,6 +517,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             .abandoned_threshold_days(merged.abandoned_threshold_days)
             .check_non_pypi(merged.check_non_pypi)
             .exclude_groups(workspace_exclude_groups.clone())
+            .target_python(merged.target_python.clone())
             .locale(locale)
             .build()?;
 
@@ -516,6 +535,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             response.upgrade_recommendations.as_deref(),
             response.abandoned_packages_report.as_ref(),
             response.non_pypi_packages_report.as_ref(),
+            response.python_compatibility_report.as_ref(),
             &applied_group_filter,
         );
 
@@ -558,7 +578,7 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     validate_project_path(&project_path)?;
 
     let config = load_config(&args, &project_path)?;
-    let merged = merge_config(&args, &config);
+    let merged = merge_config(&args, &config)?;
 
     let check_cve = merged.check_cve;
     let request = DiffRequest {

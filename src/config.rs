@@ -72,6 +72,9 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 # exclude_groups:
 #   - "dev"
 #   - "test"
+
+# Target Python version for compatibility checking (PEP 440 format, e.g. 3.13)
+# target_python: "3.13"
 "#;
 
 /// Generate a config template file in the specified directory.
@@ -119,6 +122,7 @@ pub struct ConfigFile {
     pub abandoned_threshold_days: Option<u64>,
     pub check_non_pypi: Option<bool>,
     pub exclude_groups: Option<Vec<String>>,
+    pub target_python: Option<String>,
     /// Captures unknown fields for warnings.
     #[serde(flatten)]
     pub unknown_fields: HashMap<String, serde_yaml_ng::Value>,
@@ -387,6 +391,7 @@ another_unknown: value
         assert!(config.abandoned_threshold_days.is_none());
         assert!(config.check_non_pypi.is_none());
         assert!(config.exclude_groups.is_none());
+        assert!(config.target_python.is_none());
         assert!(config.unknown_fields.is_empty());
     }
 

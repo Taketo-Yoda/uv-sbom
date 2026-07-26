@@ -215,7 +215,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `MergedConfig` | `src/cli/config_resolver.rs` | Final resolved config (CLI > env > file > default) |
 | `ConfigFile` | `src/config.rs` | Raw deserialized config file struct |
 | `SbomRequest` / `SbomResponse` | `src/application/dto/` | Input/output for the main use case |
-| `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555 |
+| `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO,PCREPO=()>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555; 7th param `PCREPO: PythonCompatibilityRepository` (defaults to `()`) added in #681 |
 | `CheckAbandonedPackagesUseCase` | `src/application/use_cases/check_abandoned_packages.rs` | Fetches PyPI maintenance info for all packages with progress bar and soft-fail per package |
 | `DiffRequest` | `src/application/dto/diff_request.rs` | Input DTO for the diff use case (source, project_path, check_cve) |
 | `DiffResult` | `src/application/dto/diff_result.rs` | Output of `GenerateDiffUseCase::execute`; wraps domain `DependencyDiff` with `Option<CveDeltaView>` to keep domain layer free of read-model dependencies |
@@ -225,6 +225,9 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `GroupReachabilityAnalyzer` | `src/sbom_generation/domain/services/group_reachability_analyzer.rs` | Pure domain service for BFS-based group reachability traversal; wired into `GenerateSbomUseCase` via `apply_group_filter` in #623 |
 | `GroupRoots` | `src/ports/outbound/lockfile_reader.rs` | Type alias `HashMap<String, Vec<String>>` mapping dependency group name → root package names; extracted from `[manifest.dependency-groups]` in `uv.lock`; consumed by group reachability traversal in #622; wired into use case in #623 |
 | `NonPyPiPackageView` / `NonPyPiPackagesReport` | `src/application/read_models/non_pypi_package.rs` | Read model for packages sourced from non-PyPI origins (git, url, private registry); populated by `GenerateSbomUseCase` when `check_non_pypi` is true; rendered by the Markdown formatter's `non_pypi_packages` section (#656, #660) |
+| `PythonIncompatibilityView` / `PythonCompatibilityReport` | `src/application/read_models/python_compatibility.rs` | Read model for packages incompatible with a target Python version, independent of how `requires_python` data is fetched; added in #679; constructed by `CheckPythonCompatibilityUseCase` in #680; wired into `GenerateSbomUseCase`/`main.rs` via `--target-python` in #681; rendered by the Markdown formatter's `python_compatibility` section (dual heading: issues table vs. all-clear) in #682 |
+| `CheckPythonCompatibilityUseCase` | `src/application/use_cases/check_python_compatibility.rs` | Fetches `requires_python` for all packages concurrently via `PythonCompatibilityRepository` (bounded by `MAX_CONCURRENT`), evaluates with `is_incompatible`, and builds a `PythonCompatibilityReport`; soft-fails per-package fetch errors; added in #680; wired into `GenerateSbomUseCase` in #681 |
+| `ProgressBarHandle` | `src/application/use_cases/progress_bar.rs` | Shared indicatif progress-bar helper (background-thread polling an `AtomicUsize` counter) used by `CheckAbandonedPackagesUseCase` and `CheckPythonCompatibilityUseCase` to avoid duplicating the spawn/poll/finish pattern |
 
 ### Important Invariants
 

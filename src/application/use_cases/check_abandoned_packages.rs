@@ -1,10 +1,8 @@
+use super::progress_bar::ProgressBarHandle;
 use crate::ports::outbound::{MaintenanceInfo, MaintenanceRepository};
 use crate::sbom_generation::domain::Package;
 use crate::shared::Result;
-use indicatif::{ProgressBar, ProgressStyle};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::thread;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 /// Delay between maintenance info fetch requests (ms)
@@ -43,28 +41,9 @@ impl<MR: MaintenanceRepository> CheckAbandonedPackagesUseCase<MR> {
         packages: Vec<Package>,
     ) -> Result<(Vec<(Package, MaintenanceInfo)>, Vec<(String, String)>)> {
         let total = packages.len();
-        let progress_current = Arc::new(AtomicUsize::new(0));
-        let is_done = Arc::new(AtomicBool::new(false));
-
-        let progress_handle = {
-            let cur = progress_current.clone();
-            let done = is_done.clone();
-            thread::spawn(move || {
-                let pb = ProgressBar::new(total as u64);
-                pb.set_style(
-                    ProgressStyle::default_bar()
-                        .template("   {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} - {msg}")
-                        .expect("Failed to set progress bar template")
-                        .progress_chars("=>-"),
-                );
-                pb.set_message("Fetching maintenance information..."); // i18n-ok: internal progress bar label
-                while !done.load(Ordering::Relaxed) {
-                    pb.set_position(cur.load(Ordering::Relaxed) as u64);
-                    thread::sleep(Duration::from_millis(50));
-                }
-                pb.finish_and_clear();
-            })
-        };
+        // i18n-ok: internal progress bar label
+        let progress = ProgressBarHandle::spawn(total, "Fetching maintenance information...");
+        let progress_current = progress.counter();
 
         let mut results: Vec<(Package, MaintenanceInfo)> = Vec::new();
         let mut errors: Vec<(String, String)> = Vec::new();
@@ -85,8 +64,7 @@ impl<MR: MaintenanceRepository> CheckAbandonedPackagesUseCase<MR> {
             }
         }
 
-        is_done.store(true, Ordering::Relaxed);
-        let _ = progress_handle.join();
+        progress.finish();
 
         Ok((results, errors))
     }

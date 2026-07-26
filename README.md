@@ -350,6 +350,7 @@ license_policy:
 | `abandoned_threshold_days` | integer | No | Inactivity threshold in days for abandoned package detection (default: 730) |
 | `check_non_pypi` | bool | No | Enable non-PyPI source detection (opt-in, default: false) |
 | `exclude_groups` | string[] | No | Dependency groups whose exclusively-reachable packages are excluded from the SBOM |
+| `target_python` | string | No | Target Python version for compatibility checking (PEP 440 format, e.g. `"3.8"`). Unset disables the check |
 
 #### Priority and Merge Rules
 
@@ -362,6 +363,7 @@ license_policy:
 - **`check_abandoned`** is opt-in (default: false). Enable via CLI flag `--check-abandoned` or config file `check_abandoned: true`. The `abandoned_threshold_days` value follows CLI > config file > default (730) resolution order.
 - **`check_non_pypi`** is opt-in (default: false). Enable via CLI flag `--check-non-pypi` or config file `check_non_pypi: true`.
 - **`exclude_groups`**: CLI `--exclude-groups` **overrides** the config file value entirely (not merged). `--production-only` resolves all group names from the lockfile at runtime and takes precedence over both CLI and config.
+- **`target_python`** is opt-in (default: unset, no check performed). Enable via CLI flag `--target-python 3.8` or config file `target_python: "3.8"`. CLI value takes precedence over the config file.
 
 ### Ignoring specific CVEs
 
@@ -531,6 +533,62 @@ uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f 
 ```
 
 See [`examples/non-pypi-sources-project/README.md`](examples/non-pypi-sources-project/README.md) for a full walkthrough.
+
+### Python Version Compatibility Check
+
+Use the `--target-python` option to check whether any dependency declares a `Requires-Python` constraint (via PyPI metadata) that is incompatible with a target Python version. This helps detect dependencies that would break if you upgraded (or downgraded) your project's Python version.
+
+```bash
+# Check compatibility with Python 3.8
+uv-sbom --target-python 3.8 --format markdown
+
+# Combine with other checks
+uv-sbom --target-python 3.8 --check-license --severity-threshold high
+```
+
+**How it works:**
+- Queries the PyPI version-level endpoint (`https://pypi.org/pypi/{name}/{version}/json`) for each locked package version
+- Compares the package's declared `Requires-Python` constraint (PEP 440) against the target version
+- Packages with no declared constraint, or an unparseable constraint, are treated as compatible
+- If a package's PyPI metadata cannot be fetched, it is skipped without aborting the run
+- Requires network access; adds one API call per package
+
+**Output:**
+- **Python Compatibility Issues section**: Appears in the Markdown output when any incompatible package is found, listing the total count (direct vs. transitive) followed by a table of Package, Version, Requires-Python, and Type
+- **Python Compatibility section (all clear)**: Appears instead when every package is compatible with the target version
+- When `--target-python` is not passed, no compatibility section is rendered
+
+**Example output:**
+```markdown
+## ⚠️ Python 3.8 Compatibility Issues
+
+11 package(s) incompatible with the target Python version (0 direct, 11 transitive).
+
+| Package | Version | Requires-Python | Type |
+|---------|---------|-----------------|------|
+| coverage | 7.14.3 | >=3.10 | Transitive dependencies |
+| iniconfig | 2.3.0 | >=3.10 | Transitive dependencies |
+| librt | 0.11.0 | >=3.9 | Transitive dependencies |
+| markupsafe | 3.0.3 | >=3.9 | Transitive dependencies |
+| mypy | 2.1.0 | >=3.10 | Transitive dependencies |
+| pathspec | 1.1.1 | >=3.9 | Transitive dependencies |
+| pluggy | 1.6.0 | >=3.9 | Transitive dependencies |
+| pygments | 2.20.0 | >=3.9 | Transitive dependencies |
+| pytest | 9.1.1 | >=3.10 | Transitive dependencies |
+| pytest-cov | 7.1.0 | >=3.9 | Transitive dependencies |
+| typing-extensions | 4.15.0 | >=3.9 | Transitive dependencies |
+```
+
+Produced by running against [`examples/sample-project`](examples/sample-project):
+
+```bash
+uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdown
+```
+
+**Config file equivalent:**
+```yaml
+target_python: "3.8"
+```
 
 ### Vulnerability Threshold Options
 
@@ -974,6 +1032,7 @@ Options:
                                      Example: --exclude-groups dev,test,lint. Cannot be used with --production-only
       --production-only              Exclude all non-default dependency groups (production-only mode)
                                      Cannot be used with --exclude-groups
+      --target-python <VERSION>      Target Python version for compatibility checking (PEP 440 format, e.g. 3.8)
   -h, --help                         Print help
   -V, --version                      Print version
 ```

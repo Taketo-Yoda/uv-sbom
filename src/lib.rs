@@ -35,6 +35,7 @@
 //!     progress_reporter,
 //!     None, // No vulnerability checking in this example
 //!     None, // No abandoned-package checking in this example
+//!     None, // No Python compatibility checking in this example
 //!     uv_sbom::i18n::Locale::default(),
 //! );
 //!
@@ -55,6 +56,7 @@
 //!     None,
 //!     None, // No abandoned-package report in this example
 //!     None, // No non-PyPI packages report in this example
+//!     None, // No Python compatibility report in this example
 //!     &[], // No group filter in this example
 //! );
 //! let formatter = CycloneDxFormatter::new();

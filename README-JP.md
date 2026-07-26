@@ -349,6 +349,7 @@ license_policy:
 | `abandoned_threshold_days` | integer | No | 廃止パッケージ検出の非アクティブ期間しきい値（日数、デフォルト: 730） |
 | `check_non_pypi` | bool | No | 非PyPIソース検出を有効化（オプトイン、デフォルト: false） |
 | `exclude_groups` | string[] | No | SBOMから除外する依存関係グループ（そのグループからのみ到達可能なパッケージを除外） |
+| `target_python` | string | No | 互換性チェック対象のPythonバージョン（PEP 440形式、例: `"3.8"`）。未設定の場合はチェックを行わない |
 
 #### 優先度とマージルール
 
@@ -361,6 +362,7 @@ license_policy:
 - **`check_abandoned`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-abandoned` または設定ファイルの `check_abandoned: true` で有効化できます。`abandoned_threshold_days` の値はCLI > 設定ファイル > デフォルト（730）の順に解決されます。
 - **`check_non_pypi`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-non-pypi` または設定ファイルの `check_non_pypi: true` で有効化できます。
 - **`exclude_groups`**: CLIの `--exclude-groups` は設定ファイルの値を**完全に上書き**します（マージされません）。`--production-only` は実行時にlockfileからすべてのグループ名を解決し、CLIと設定ファイルの両方より優先されます。
+- **`target_python`** はオプトイン（デフォルト: 未設定、チェックを行わない）です。CLIフラグ `--target-python 3.8` または設定ファイルの `target_python: "3.8"` で有効化できます。CLIの値が設定ファイルより優先されます。
 
 ### 特定のCVEを無視する
 
@@ -527,6 +529,62 @@ uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f 
 ```
 
 詳細は [`examples/non-pypi-sources-project/README-JP.md`](examples/non-pypi-sources-project/README-JP.md) を参照してください。
+
+### Pythonバージョン互換性チェック
+
+`--target-python` オプションを使用すると、依存パッケージがPyPIメタデータで宣言している `Requires-Python` 制約が、指定したターゲットPythonバージョンと互換性があるかをチェックできます。プロジェクトのPythonバージョンをアップグレード（またはダウングレード）した際に壊れる可能性のある依存関係を検出するのに役立ちます。
+
+```bash
+# Python 3.8との互換性をチェック
+uv-sbom --target-python 3.8 --format markdown
+
+# 他のチェックと組み合わせる
+uv-sbom --target-python 3.8 --check-license --severity-threshold high
+```
+
+**仕組み:**
+- ロックされた各パッケージバージョンについて、PyPIのバージョン単位エンドポイント（`https://pypi.org/pypi/{name}/{version}/json`）に問い合わせます
+- パッケージが宣言する `Requires-Python` 制約（PEP 440）をターゲットバージョンと比較します
+- 制約が宣言されていない、または解析できない場合は互換性ありとして扱います
+- パッケージのPyPIメタデータが取得できない場合、実行全体を中断せずにそのパッケージをスキップします
+- ネットワークアクセスが必要です。パッケージごとに1回のAPI呼び出しが発生します
+
+**出力:**
+- **Python互換性の問題セクション**: 非互換なパッケージが1件でも見つかった場合にMarkdown出力に表示され、合計件数（直接依存・間接依存の内訳）に続いてPackage、Version、Requires-Python、Typeの表が表示されます
+- **Python互換性セクション（問題なし）**: 全パッケージが互換性を持つ場合はこちらが代わりに表示されます
+- `--target-python` を指定しない場合、互換性セクションは出力されません
+
+**出力例:**
+```markdown
+## ⚠️ Python 3.8 互換性の問題
+
+11個のパッケージがターゲットPythonバージョンと非互換です（直接依存 0件、間接依存 11件）。
+
+| パッケージ | バージョン | Requires-Python | 種別 |
+|---------|---------|-----------------|------|
+| coverage | 7.14.3 | >=3.10 | 間接依存パッケージ |
+| iniconfig | 2.3.0 | >=3.10 | 間接依存パッケージ |
+| librt | 0.11.0 | >=3.9 | 間接依存パッケージ |
+| markupsafe | 3.0.3 | >=3.9 | 間接依存パッケージ |
+| mypy | 2.1.0 | >=3.10 | 間接依存パッケージ |
+| pathspec | 1.1.1 | >=3.9 | 間接依存パッケージ |
+| pluggy | 1.6.0 | >=3.9 | 間接依存パッケージ |
+| pygments | 2.20.0 | >=3.9 | 間接依存パッケージ |
+| pytest | 9.1.1 | >=3.10 | 間接依存パッケージ |
+| pytest-cov | 7.1.0 | >=3.9 | 間接依存パッケージ |
+| typing-extensions | 4.15.0 | >=3.9 | 間接依存パッケージ |
+```
+
+[`examples/sample-project`](examples/sample-project) に対して実行した例:
+
+```bash
+uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdown
+```
+
+**設定ファイルでの指定:**
+```yaml
+target_python: "3.8"
+```
 
 ### 脆弱性しきい値オプション
 
@@ -968,6 +1026,7 @@ Options:
                                      例: --exclude-groups dev,test,lint。--production-onlyとの同時使用は不可
       --production-only              すべての非デフォルト依存関係グループを除外（プロダクションのみモード）
                                      --exclude-groupsとの同時使用は不可
+      --target-python <VERSION>      互換性チェック対象のPythonバージョン（PEP 440形式、例: 3.8）
   -h, --help                         ヘルプを表示
   -V, --version                      バージョンを表示
 ```
