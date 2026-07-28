@@ -1,4 +1,4 @@
-use crate::sbom_generation::domain::Package;
+use super::Package;
 
 /// EnrichedPackage represents a package with its license information
 ///

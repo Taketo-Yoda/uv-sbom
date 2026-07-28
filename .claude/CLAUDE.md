@@ -222,6 +222,8 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `GenerateDiffUseCase<LR,DLR,VR>` | `src/application/use_cases/generate_diff.rs` | Orchestrates dependency diff: reads current via LockfileReader, base via DiffLockfileReader, runs DependencyDiffAnalyzer, optionally fetches CVE delta via VulnerabilityRepository; 3rd param `VR` (default `()`) added in #599 |
 | `CveDeltaView` / `CveDeltaEntry` | `src/application/read_models/cve_delta_view.rs` | Read model for CVE exposure diff between two lock file snapshots; wired into `GenerateDiffUseCase` in #599; consumed by diff formatters (Markdown/JSON) in #600 |
 | `Package` | `src/sbom_generation/domain/` | Core domain model for a dependency |
+| `EnrichedPackage` | `src/sbom_generation/domain/enriched_package.rs` | Value object pairing a `Package` with license/description/sha256 metadata; moved out of `ports/outbound/` in #703 (it has no I/O, so it never belonged there) |
+| `UvLockSimulator` / `SimulationResult` | `src/sbom_generation/domain/uv_lock_simulator.rs` | Domain-owned port (async trait) for simulating `uv lock --upgrade-package`; implemented by `adapters::outbound::uv::UvLockAdapter`. Unlike other outbound ports, this one is defined in the domain — not `src/ports/outbound/` — because the `UpgradeAdvisor` domain service consumes it directly as a generic bound and the domain layer must not import from `ports/`. Moved in #703 |
 | `GroupReachabilityAnalyzer` | `src/sbom_generation/domain/services/group_reachability_analyzer.rs` | Pure domain service for BFS-based group reachability traversal; wired into `GenerateSbomUseCase` via `apply_group_filter` in #623 |
 | `GroupRoots` | `src/ports/outbound/lockfile_reader.rs` | Type alias `HashMap<String, Vec<String>>` mapping dependency group name → root package names; extracted from `[manifest.dependency-groups]` in `uv.lock`; consumed by group reachability traversal in #622; wired into use case in #623 |
 | `NonPyPiPackageView` / `NonPyPiPackagesReport` | `src/application/read_models/non_pypi_package.rs` | Read model for packages sourced from non-PyPI origins (git, url, private registry); populated by `GenerateSbomUseCase` when `check_non_pypi` is true; rendered by the Markdown formatter's `non_pypi_packages` section (#656, #660) |
@@ -234,6 +236,9 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 - **Config resolution order**: CLI args > environment variables > config file > defaults.
   This order is enforced in `config_resolver.rs` and must not be changed without updating tests.
 - **Domain layer has no I/O**: `src/sbom_generation/` must never import from `adapters` or `ports`.
+  A port trait consumed directly by a domain service as a generic bound (e.g. `UvLockSimulator`,
+  used by `UpgradeAdvisor`) is defined in `src/sbom_generation/domain/` instead of `src/ports/outbound/`
+  — the port belongs to the hexagon, and the domain cannot import from `ports/` to reach it (#703).
 - **All GitHub artifacts (commits, PRs, Issues) must be in English** — enforced by skills in `.claude/skills/`.
 
 ### Files NOT to touch unless their issue explicitly targets them

@@ -13,7 +13,7 @@ use crate::application::use_cases::{
 };
 use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
-    EnrichedPackage, LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
+    LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
     ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
@@ -22,7 +22,7 @@ use crate::sbom_generation::domain::services::{
     UpgradeAdvisor, VulnerabilityCheckResult, VulnerabilityChecker,
 };
 use crate::sbom_generation::domain::{
-    DependencyGraph, Package, PackageName, UpgradeRecommendation,
+    DependencyGraph, EnrichedPackage, Package, PackageName, UpgradeRecommendation,
 };
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
 use crate::shared::Result;

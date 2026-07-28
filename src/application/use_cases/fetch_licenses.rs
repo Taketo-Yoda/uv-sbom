@@ -1,5 +1,5 @@
-use crate::ports::outbound::{EnrichedPackage, LicenseRepository};
-use crate::sbom_generation::domain::Package;
+use crate::ports::outbound::LicenseRepository;
+use crate::sbom_generation::domain::{EnrichedPackage, Package};
 use crate::shared::Result;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

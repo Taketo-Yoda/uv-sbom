@@ -3,9 +3,9 @@ use std::str::FromStr;
 
 use pep440_rs::Version;
 
-use crate::ports::outbound::uv_lock_simulator::{SimulationResult, UvLockSimulator};
 use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
 use crate::sbom_generation::domain::upgrade_recommendation::UpgradeRecommendation;
+use crate::sbom_generation::domain::{SimulationResult, UvLockSimulator};
 
 /// Stateless domain service that orchestrates upgrade simulations and produces
 /// `UpgradeRecommendation` results by comparing resolved transitive versions

@@ -1,3 +1,12 @@
+//! Domain-owned port for uv lock simulation.
+//!
+//! Unlike the other outbound ports, this trait is defined in the domain layer
+//! rather than under `src/ports/outbound/`. The `UpgradeAdvisor` domain service
+//! consumes it as a generic bound (`advise<S: UvLockSimulator>`), and the domain
+//! layer must never import from `ports/` or `adapters/`. In Ports & Adapters the
+//! port belongs to the hexagon anyway; it is implemented outside by
+//! `adapters::outbound::uv::UvLockAdapter`. See Issue #703.
+
 use anyhow::Result;
 use std::collections::HashMap;
 

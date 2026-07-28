@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use crate::ports::outbound::enriched_package::EnrichedPackage;
 use crate::sbom_generation::domain::dependency_graph::DependencyGraph;
 use crate::sbom_generation::domain::package::PackageName;
 use crate::sbom_generation::domain::resolution_guide::{IntroducedBy, ResolutionEntry};
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
+use crate::sbom_generation::domain::EnrichedPackage;
 
 /// Stateless domain service for cross-referencing vulnerability data with the
 /// dependency graph to identify which direct dependencies introduce vulnerable
