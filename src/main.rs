@@ -19,10 +19,10 @@ use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::read_models::SbomReadModelBuilder;
 use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase};
 use clap::Parser;
-use cli::config_resolver::{load_config, merge_config};
+use cli::config_resolver::{load_config, merge_config, MergedConfig};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::Args;
-use i18n::Messages;
+use i18n::{Locale, Messages};
 use ports::outbound::{
     DiffSource, GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap,
     ProjectConfigReader, WorkspaceReader,
@@ -81,6 +81,67 @@ impl LockfileReader for MemberScopedLockfileReader {
         self.inner
             .read_and_parse_package_sources(&self.workspace_root)
     }
+}
+
+/// The fully-wired `GenerateSbomUseCase` type produced by [`build_use_case`].
+///
+/// Only the `LockfileReader` varies between call sites: normal mode uses
+/// `FileSystemReader`, workspace mode uses `MemberScopedLockfileReader`.
+type WiredSbomUseCase<LR> = GenerateSbomUseCase<
+    LR,
+    FileSystemReader,
+    CachingPyPiLicenseRepository<PyPiLicenseRepository>,
+    StderrProgressReporter,
+    OsvClient,
+    PyPiMaintenanceRepository,
+    PyPiCompatibilityClient,
+>;
+
+/// Builds a fully-wired `GenerateSbomUseCase` from the resolved config.
+///
+/// Only the `LockfileReader` differs between normal mode and workspace mode,
+/// so it is injected by the caller; every other adapter is constructed here.
+fn build_use_case<LR: LockfileReader>(
+    lockfile_reader: LR,
+    locale: Locale,
+    merged: &MergedConfig,
+) -> Result<WiredSbomUseCase<LR>> {
+    let project_config_reader = FileSystemReader::new();
+    let pypi_repository = PyPiLicenseRepository::new()?;
+    let license_repository = CachingPyPiLicenseRepository::new(pypi_repository);
+    let progress_reporter = StderrProgressReporter::new(locale);
+
+    // Create vulnerability repository if CVE check is requested
+    let vulnerability_repository = if merged.check_cve {
+        Some(OsvClient::new()?)
+    } else {
+        None
+    };
+
+    // Create maintenance repository if abandoned check is requested
+    let maintenance_repository = if merged.check_abandoned {
+        Some(PyPiMaintenanceRepository::new()?)
+    } else {
+        None
+    };
+
+    // Create Python compatibility repository if --target-python is set
+    let compatibility_repository = if merged.target_python.is_some() {
+        Some(PyPiCompatibilityClient::new()?)
+    } else {
+        None
+    };
+
+    Ok(GenerateSbomUseCase::new(
+        lockfile_reader,
+        project_config_reader,
+        license_repository,
+        progress_reporter,
+        vulnerability_repository,
+        maintenance_repository,
+        compatibility_repository,
+        locale,
+    ))
 }
 
 #[tokio::main]
@@ -243,45 +304,8 @@ async fn run(args: Args) -> Result<bool> {
     // Merge CLI and config values
     let merged = merge_config(&args, &config)?;
 
-    // Create adapters (Dependency Injection)
-    let lockfile_reader = FileSystemReader::new();
-    let project_config_reader = FileSystemReader::new();
-    let pypi_repository = PyPiLicenseRepository::new()?;
-    let license_repository = CachingPyPiLicenseRepository::new(pypi_repository);
-    let progress_reporter = StderrProgressReporter::new(locale);
-
-    // Create vulnerability repository if CVE check is requested
-    let vulnerability_repository = if merged.check_cve {
-        Some(OsvClient::new()?)
-    } else {
-        None
-    };
-
-    // Create maintenance repository if abandoned check is requested
-    let maintenance_repository = if merged.check_abandoned {
-        Some(PyPiMaintenanceRepository::new()?)
-    } else {
-        None
-    };
-
-    // Create Python compatibility repository if --target-python is set
-    let compatibility_repository = if merged.target_python.is_some() {
-        Some(PyPiCompatibilityClient::new()?)
-    } else {
-        None
-    };
-
     // Create use case with injected dependencies
-    let use_case = GenerateSbomUseCase::new(
-        lockfile_reader,
-        project_config_reader,
-        license_repository,
-        progress_reporter,
-        vulnerability_repository,
-        maintenance_repository,
-        compatibility_repository,
-        locale,
-    );
+    let use_case = build_use_case(FileSystemReader::new(), locale, &merged)?;
 
     // Pre-flight check for --suggest-fix
     let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path);
@@ -467,39 +491,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
 
         let lockfile_reader =
             MemberScopedLockfileReader::new(workspace_root.clone(), member.name.clone());
-        let project_config_reader = FileSystemReader::new();
-        let pypi_repository = PyPiLicenseRepository::new()?;
-        let license_repository = CachingPyPiLicenseRepository::new(pypi_repository);
-        let progress_reporter = StderrProgressReporter::new(locale);
-
-        let vulnerability_repository = if merged.check_cve {
-            Some(OsvClient::new()?)
-        } else {
-            None
-        };
-
-        let maintenance_repository = if merged.check_abandoned {
-            Some(PyPiMaintenanceRepository::new()?)
-        } else {
-            None
-        };
-
-        let compatibility_repository = if merged.target_python.is_some() {
-            Some(PyPiCompatibilityClient::new()?)
-        } else {
-            None
-        };
-
-        let use_case = GenerateSbomUseCase::new(
-            lockfile_reader,
-            project_config_reader,
-            license_repository,
-            progress_reporter,
-            vulnerability_repository,
-            maintenance_repository,
-            compatibility_repository,
-            locale,
-        );
+        let use_case = build_use_case(lockfile_reader, locale, &merged)?;
 
         let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
         let request = SbomRequest::builder()
