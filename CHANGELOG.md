@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Moved `EnrichedPackage`/`SimulationResult`/`UvLockSimulator` out of `src/ports/outbound/` into `src/sbom_generation/domain/`**: `ResolutionAnalyzer` and `UpgradeAdvisor` (domain services) were importing these types from `ports/outbound/`, violating the invariant that the domain layer must never import from `ports/` or `adapters/`. `EnrichedPackage` and `SimulationResult` are plain value objects with no I/O, so they now live in the domain; `UvLockSimulator`, a genuine port trait consumed by `UpgradeAdvisor` as a generic bound, is now a domain-owned port (still implemented by `adapters::outbound::uv::UvLockAdapter`). Internal refactor only, no behavior change (#703)
+
 ### Fixed
 - **Upgrade advisor's version comparison used a fragile hand-rolled comparator instead of `pep440_rs`**: `UpgradeAdvisor` silently dropped non-numeric dot-separated segments (e.g. `"v1.2.3"` lost its leading segment) and unconditionally treated any pre-release, dev, or post marker in the resolved version as failing to satisfy the fixed-version minimum, regardless of the actual release segment. Replaced with `pep440_rs::Version`, already used elsewhere in the codebase, which correctly implements PEP 440 ordering. As a result, e.g. `"2.0.8.post1" >= "2.0.7"` and `"2.1.0rc1" >= "2.0.0"` now correctly evaluate as satisfying the minimum (#709)
 

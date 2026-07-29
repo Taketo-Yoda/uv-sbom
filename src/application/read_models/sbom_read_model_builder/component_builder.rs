@@ -1,5 +1,4 @@
-use crate::ports::outbound::EnrichedPackage;
-use crate::sbom_generation::domain::DependencyGraph;
+use crate::sbom_generation::domain::{DependencyGraph, EnrichedPackage};
 use crate::sbom_generation::policies::spdx_license_map;
 
 use super::super::component_view::{ComponentView, LicenseView};
@@ -53,7 +52,6 @@ fn build_component(enriched: &EnrichedPackage, graph: Option<&DependencyGraph>) 
 mod tests {
     use super::super::test_helpers as th;
     use super::*;
-    use crate::ports::outbound::EnrichedPackage;
     use crate::sbom_generation::domain::Package;
 
     #[test]

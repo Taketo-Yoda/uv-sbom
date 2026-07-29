@@ -1,5 +1,6 @@
 pub mod dependency_diff;
 pub mod dependency_graph;
+pub mod enriched_package;
 pub mod license_info;
 pub mod license_policy;
 pub mod package;
@@ -7,12 +8,14 @@ pub mod resolution_guide;
 pub mod sbom_metadata;
 pub mod services;
 pub mod upgrade_recommendation;
+pub mod uv_lock_simulator;
 pub mod vulnerability;
 
 // Note: These will be used in subsequent subtasks of the dependency-diff feature (#224)
 #[allow(unused_imports)]
 pub use dependency_diff::{ChangeType, DependencyDiff, DiffSummary, PackageChange};
 pub use dependency_graph::DependencyGraph;
+pub use enriched_package::EnrichedPackage;
 pub use license_info::LicenseInfo;
 // Note: These types are used within the application layer via full paths
 #[allow(unused_imports)]
@@ -39,6 +42,7 @@ pub use services::{ThresholdConfig, VulnerabilityCheckResult, VulnerabilityCheck
 // Note: These will be used in subsequent subtasks (Subtask 2-8)
 #[allow(unused_imports)]
 pub use upgrade_recommendation::UpgradeRecommendation;
+pub use uv_lock_simulator::{SimulationResult, UvLockSimulator};
 // Note: These will be used in subsequent subtasks (Subtask 2-8)
 #[allow(unused_imports)]
 pub use vulnerability::{CvssScore, PackageVulnerabilities, Severity, Vulnerability};
