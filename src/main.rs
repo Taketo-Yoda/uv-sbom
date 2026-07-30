@@ -14,7 +14,7 @@ use adapters::outbound::network::{
     PyPiMaintenanceRepository,
 };
 use adapters::outbound::uv::UvWorkspaceReader;
-use application::dto::{DiffRequest, OutputFormat, SbomRequest};
+use application::dto::{DiffRequest, OutputFormat, SbomRequest, SbomResponse};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::read_models::SbomReadModelBuilder;
 use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase};
@@ -144,6 +144,179 @@ fn build_use_case<LR: LockfileReader>(
     ))
 }
 
+/// Prints deprecation/no-effect warnings for CLI flags that don't apply given the
+/// rest of the invocation (e.g. `--verify-links` combined with `--format json`).
+///
+/// Gates on `args.format` (the raw CLI value, defaulting to `Json`) rather than
+/// the resolved `MergedConfig`, matching the pre-extraction behavior verbatim.
+/// Note this means a `format: markdown` set only via config file (no `--format`
+/// flag) will not suppress these warnings, since `args.format` stays at its
+/// default; that pre-existing quirk is out of scope for this extraction.
+fn print_startup_warnings(args: &Args, msgs: &Messages) {
+    // Warn if deprecated --check-cve flag is used
+    if args.check_cve {
+        eprintln!("Warning: --check-cve is deprecated and will be removed in a future release. CVE checking is now enabled by default. Use --no-check-cve to opt out.");
+    }
+
+    // Warn if CVE check is active with JSON format
+    if !args.no_check_cve && args.format == OutputFormat::Json {
+        eprintln!("{}", msgs.warn_check_cve_no_effect);
+        eprintln!("   Vulnerability data is not included in JSON output.");
+        eprintln!("   Use --format markdown to see vulnerability report.");
+        eprintln!();
+    }
+
+    // Warn if check_license is used with JSON format
+    if args.check_license && args.format == OutputFormat::Json {
+        eprintln!("{}", msgs.warn_check_license_no_effect);
+        eprintln!("   License compliance data is not included in JSON output.");
+        eprintln!("   Use --format markdown to see license compliance report.");
+        eprintln!();
+    }
+
+    // Warn if verify_links is used with JSON format
+    if args.verify_links && args.format == OutputFormat::Json {
+        eprintln!("{}", msgs.warn_verify_links_no_effect);
+        eprintln!("   PyPI link verification only applies to Markdown output.");
+        eprintln!("   Use --format markdown to use link verification.");
+        eprintln!();
+    }
+}
+
+/// Builds an `SbomRequest` via the builder pattern, shared between normal mode
+/// (`run()`) and workspace mode (`run_workspace()`'s per-member loop).
+///
+/// `exclude_groups`, `suggest_fix`, and `dry_run` are taken as explicit
+/// parameters rather than derived from `&Args`/`&MergedConfig` internally,
+/// since each varies between the two call sites: `exclude_groups` requires I/O
+/// rooted at a different path per mode, workspace mode always passes
+/// `suggest_fix(false)`, and only normal mode supports `--dry-run`.
+fn build_sbom_request(
+    project_path: PathBuf,
+    merged: &MergedConfig,
+    exclude_groups: Vec<String>,
+    suggest_fix: bool,
+    dry_run: bool,
+    locale: Locale,
+) -> Result<SbomRequest> {
+    let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
+    SbomRequest::builder()
+        .project_path(project_path)
+        .include_dependency_info(include_dependency_info)
+        .exclude_patterns(merged.exclude_patterns.clone())
+        .dry_run(dry_run)
+        .check_cve(merged.check_cve)
+        .severity_threshold_opt(merged.severity_threshold)
+        .cvss_threshold_opt(merged.cvss_threshold)
+        .ignore_cves(merged.ignore_cves.clone())
+        .check_license(merged.check_license)
+        .license_policy(merged.license_policy.clone())
+        .suggest_fix(suggest_fix)
+        .check_abandoned(merged.check_abandoned)
+        .abandoned_threshold_days(merged.abandoned_threshold_days)
+        .check_non_pypi(merged.check_non_pypi)
+        .exclude_groups(exclude_groups)
+        .target_python(merged.target_python.clone())
+        .locale(locale)
+        .build()
+}
+
+/// Resolves the project's own name/version from the lockfile response, for use
+/// as CycloneDX metadata.
+///
+/// Must be called before `response.enriched_packages` is moved into the read
+/// model, since it needs to search `&response.enriched_packages` for the
+/// project's own version.
+fn resolve_project_component(
+    response: &SbomResponse,
+    project_path: &Path,
+) -> Option<(String, String)> {
+    let project_reader = FileSystemReader::new();
+    project_reader
+        .read_project_name(project_path)
+        .ok()
+        .and_then(|name| {
+            let version = response
+                .enriched_packages
+                .iter()
+                .find(|ep| ep.package.name() == name)
+                .map(|ep| ep.package.version().to_string());
+            version.map(|v| (name, v))
+        })
+}
+
+/// Builds the read model, optionally verifies PyPI links, formats, and writes
+/// the output via the given presenter. Returns whether vulnerabilities,
+/// license violations, or abandoned packages were detected above threshold.
+///
+/// `presenter_type` and `verify_links` are taken as explicit parameters rather
+/// than derived from `&Args` internally: normal mode derives `presenter_type`
+/// from `args.output` (file or stdout) while workspace mode always writes to
+/// `{member_path}/sbom.{ext}`, and only normal mode supports `--verify-links`.
+async fn render_and_present(
+    response: SbomResponse,
+    project_component_info: Option<(String, String)>,
+    presenter_type: PresenterType,
+    format: OutputFormat,
+    verify_links: bool,
+    locale: Locale,
+) -> Result<bool> {
+    // Extract applied_group_filter before moving other response fields
+    let applied_group_filter = response.applied_group_filter;
+
+    // Build read model first so we can extract package names for verification
+    let read_model = SbomReadModelBuilder::build_with_project(
+        response.enriched_packages,
+        &response.metadata,
+        response.dependency_graph.as_ref(),
+        response.vulnerability_check_result.as_ref(),
+        response.license_compliance_result.as_ref(),
+        project_component_info
+            .as_ref()
+            .map(|(n, v)| (n.as_str(), v.as_str())),
+        response.upgrade_recommendations.as_deref(),
+        response.abandoned_packages_report.as_ref(),
+        response.non_pypi_packages_report.as_ref(),
+        response.python_compatibility_report.as_ref(),
+        &applied_group_filter,
+    );
+
+    // Verify PyPI links if requested
+    let verified_packages = if verify_links && format == OutputFormat::Markdown {
+        let msgs = Messages::for_locale(locale);
+        eprintln!("{}", msgs.progress_verifying_links);
+        let pypi_verifier = PyPiLicenseRepository::new()?;
+        let package_names: Vec<String> = read_model
+            .components
+            .iter()
+            .map(|c| c.name.clone())
+            .collect();
+        Some(pypi_verifier.verify_packages(&package_names).await)
+    } else {
+        None
+    };
+
+    // Create formatter using factory with optional verified packages
+    let formatter = FormatterFactory::create(format, verified_packages, locale);
+    let formatted_output = formatter.format(&read_model)?;
+
+    // Create presenter using factory
+    let presenter = PresenterFactory::create(presenter_type, locale);
+    presenter.present(&formatted_output)?;
+
+    // Determine if vulnerabilities, license violations, or abandoned packages were detected
+    let has_abandoned = response
+        .abandoned_packages_report
+        .as_ref()
+        .map(|r| !r.is_empty())
+        .unwrap_or(false);
+    let has_issues = response.has_vulnerabilities_above_threshold
+        || response.has_license_violations
+        || has_abandoned;
+
+    Ok(has_issues)
+}
+
 #[tokio::main]
 async fn main() {
     // Parse command-line arguments first to catch argument errors early
@@ -263,34 +436,7 @@ async fn run(args: Args) -> Result<bool> {
     let locale = args.lang;
     let msgs = Messages::for_locale(locale);
 
-    // Warn if deprecated --check-cve flag is used
-    if args.check_cve {
-        eprintln!("Warning: --check-cve is deprecated and will be removed in a future release. CVE checking is now enabled by default. Use --no-check-cve to opt out.");
-    }
-
-    // Warn if CVE check is active with JSON format
-    if !args.no_check_cve && args.format == OutputFormat::Json {
-        eprintln!("{}", msgs.warn_check_cve_no_effect);
-        eprintln!("   Vulnerability data is not included in JSON output.");
-        eprintln!("   Use --format markdown to see vulnerability report.");
-        eprintln!();
-    }
-
-    // Warn if check_license is used with JSON format
-    if args.check_license && args.format == OutputFormat::Json {
-        eprintln!("{}", msgs.warn_check_license_no_effect);
-        eprintln!("   License compliance data is not included in JSON output.");
-        eprintln!("   Use --format markdown to see license compliance report.");
-        eprintln!();
-    }
-
-    // Warn if verify_links is used with JSON format
-    if args.verify_links && args.format == OutputFormat::Json {
-        eprintln!("{}", msgs.warn_verify_links_no_effect);
-        eprintln!("   PyPI link verification only applies to Markdown output.");
-        eprintln!("   Use --format markdown to use link verification.");
-        eprintln!();
-    }
+    print_startup_warnings(&args, msgs);
 
     // Validate project directory
     let project_dir = args.path.as_deref().unwrap_or(".");
@@ -321,27 +467,15 @@ async fn run(args: Args) -> Result<bool> {
         merged.exclude_groups.clone()
     };
 
-    // Create request using builder pattern
-    let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
-    let request = SbomRequest::builder()
-        .project_path(project_path.clone())
-        .include_dependency_info(include_dependency_info)
-        .exclude_patterns(merged.exclude_patterns)
-        .dry_run(args.dry_run)
-        .check_cve(merged.check_cve)
-        .severity_threshold_opt(merged.severity_threshold)
-        .cvss_threshold_opt(merged.cvss_threshold)
-        .ignore_cves(merged.ignore_cves)
-        .check_license(merged.check_license)
-        .license_policy(merged.license_policy)
-        .suggest_fix(suggest_fix)
-        .check_abandoned(merged.check_abandoned)
-        .abandoned_threshold_days(merged.abandoned_threshold_days)
-        .check_non_pypi(merged.check_non_pypi)
-        .exclude_groups(exclude_groups)
-        .target_python(merged.target_python.clone())
-        .locale(locale)
-        .build()?;
+    // Create request using shared builder helper
+    let request = build_sbom_request(
+        project_path.clone(),
+        &merged,
+        exclude_groups,
+        suggest_fix,
+        args.dry_run,
+        locale,
+    )?;
 
     // Re-bind locale from the validated request to ensure consistency
     let locale = request.locale;
@@ -360,79 +494,26 @@ async fn run(args: Args) -> Result<bool> {
         FormatterFactory::progress_message(merged.format, locale)
     );
 
-    // Determine project component for CycloneDX metadata
-    let project_reader = FileSystemReader::new();
-    let project_component_info = project_reader
-        .read_project_name(&project_path)
-        .ok()
-        .and_then(|name| {
-            let version = response
-                .enriched_packages
-                .iter()
-                .find(|ep| ep.package.name() == name)
-                .map(|ep| ep.package.version().to_string());
-            version.map(|v| (name, v))
-        });
+    // Determine project component for CycloneDX metadata before response is moved
+    let project_component_info = resolve_project_component(&response, &project_path);
 
-    // Extract applied_group_filter before moving other response fields
-    let applied_group_filter = response.applied_group_filter;
-
-    // Build read model first so we can extract package names for verification
-    let read_model = SbomReadModelBuilder::build_with_project(
-        response.enriched_packages,
-        &response.metadata,
-        response.dependency_graph.as_ref(),
-        response.vulnerability_check_result.as_ref(),
-        response.license_compliance_result.as_ref(),
-        project_component_info
-            .as_ref()
-            .map(|(n, v)| (n.as_str(), v.as_str())),
-        response.upgrade_recommendations.as_deref(),
-        response.abandoned_packages_report.as_ref(),
-        response.non_pypi_packages_report.as_ref(),
-        response.python_compatibility_report.as_ref(),
-        &applied_group_filter,
-    );
-
-    // Verify PyPI links if requested
-    let verified_packages = if args.verify_links && merged.format == OutputFormat::Markdown {
-        eprintln!("{}", msgs.progress_verifying_links);
-        let pypi_verifier = PyPiLicenseRepository::new()?;
-        let package_names: Vec<String> = read_model
-            .components
-            .iter()
-            .map(|c| c.name.clone())
-            .collect();
-        Some(pypi_verifier.verify_packages(&package_names).await)
-    } else {
-        None
-    };
-
-    // Create formatter using factory with optional verified packages
-    let formatter = FormatterFactory::create(merged.format, verified_packages, locale);
-    let formatted_output = formatter.format(&read_model)?;
-
-    // Create presenter using factory
     let presenter_type = if let Some(output_path) = args.output {
         PresenterType::File(PathBuf::from(output_path))
     } else {
         PresenterType::Stdout
     };
 
-    let presenter = PresenterFactory::create(presenter_type, locale);
-    presenter.present(&formatted_output)?;
+    let verify_links = args.verify_links && merged.format == OutputFormat::Markdown;
 
-    // Determine if vulnerabilities, license violations, or abandoned packages were detected
-    let has_abandoned = response
-        .abandoned_packages_report
-        .as_ref()
-        .map(|r| !r.is_empty())
-        .unwrap_or(false);
-    let has_issues = response.has_vulnerabilities_above_threshold
-        || response.has_license_violations
-        || has_abandoned;
-
-    Ok(has_issues)
+    render_and_present(
+        response,
+        project_component_info,
+        presenter_type,
+        merged.format,
+        verify_links,
+        locale,
+    )
+    .await
 }
 
 /// Runs workspace mode: generates one SBOM per workspace member.
@@ -493,50 +574,23 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             MemberScopedLockfileReader::new(workspace_root.clone(), member.name.clone());
         let use_case = build_use_case(lockfile_reader, locale, &merged)?;
 
-        let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
-        let request = SbomRequest::builder()
-            .project_path(member.absolute_path.clone())
-            .include_dependency_info(include_dependency_info)
-            .exclude_patterns(merged.exclude_patterns.clone())
-            .check_cve(merged.check_cve)
-            .severity_threshold_opt(merged.severity_threshold)
-            .cvss_threshold_opt(merged.cvss_threshold)
-            .ignore_cves(merged.ignore_cves.clone())
-            .check_license(merged.check_license)
-            .license_policy(merged.license_policy.clone())
-            .suggest_fix(false)
-            .check_abandoned(merged.check_abandoned)
-            .abandoned_threshold_days(merged.abandoned_threshold_days)
-            .check_non_pypi(merged.check_non_pypi)
-            .exclude_groups(workspace_exclude_groups.clone())
-            .target_python(merged.target_python.clone())
-            .locale(locale)
-            .build()?;
+        let request = build_sbom_request(
+            member.absolute_path.clone(),
+            &merged,
+            workspace_exclude_groups.clone(),
+            false,
+            false,
+            locale,
+        )?;
 
         let response = use_case.execute(request).await?;
 
-        let applied_group_filter = response.applied_group_filter;
-
-        let read_model = SbomReadModelBuilder::build_with_project(
-            response.enriched_packages,
-            &response.metadata,
-            response.dependency_graph.as_ref(),
-            response.vulnerability_check_result.as_ref(),
-            response.license_compliance_result.as_ref(),
-            None,
-            response.upgrade_recommendations.as_deref(),
-            response.abandoned_packages_report.as_ref(),
-            response.non_pypi_packages_report.as_ref(),
-            response.python_compatibility_report.as_ref(),
-            &applied_group_filter,
-        );
-
-        let formatter = FormatterFactory::create(merged.format, None, locale);
-        let formatted_output = formatter.format(&read_model)?;
-
         let output_path = member.absolute_path.join(format!("sbom.{}", format_ext));
-        let presenter = PresenterFactory::create(PresenterType::File(output_path.clone()), locale);
-        presenter.present(&formatted_output)?;
+        let presenter_type = PresenterType::File(output_path.clone());
+
+        let _has_issues =
+            render_and_present(response, None, presenter_type, merged.format, false, locale)
+                .await?;
 
         summary.push((member.name.clone(), output_path));
     }
