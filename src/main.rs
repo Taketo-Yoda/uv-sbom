@@ -13,7 +13,7 @@ use adapters::outbound::network::{
     CachingPyPiLicenseRepository, OsvClient, PyPiCompatibilityClient, PyPiLicenseRepository,
     PyPiMaintenanceRepository,
 };
-use adapters::outbound::uv::UvWorkspaceReader;
+use adapters::outbound::uv::{UvLockAdapter, UvWorkspaceReader};
 use application::dto::{DiffRequest, OutputFormat, SbomRequest, SbomResponse};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::read_models::SbomReadModelBuilder;
@@ -95,6 +95,7 @@ type WiredSbomUseCase<LR> = GenerateSbomUseCase<
     OsvClient,
     PyPiMaintenanceRepository,
     PyPiCompatibilityClient,
+    UvLockAdapter,
 >;
 
 /// Builds a fully-wired `GenerateSbomUseCase` from the resolved config.
@@ -132,6 +133,14 @@ fn build_use_case<LR: LockfileReader>(
         None
     };
 
+    // Upgrade simulator: unconditionally injected. `UvLockAdapter::new()` is
+    // infallible and constructs a zero-sized struct with no I/O, so there is
+    // nothing to gate on here (unlike the repositories above, which build real
+    // HTTP clients). Whether it is actually used is decided later by
+    // `SbomRequest::suggest_fix`, which is resolved by the caller after this
+    // function returns.
+    let uv_lock_simulator = Some(UvLockAdapter::new());
+
     Ok(GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
@@ -140,6 +149,7 @@ fn build_use_case<LR: LockfileReader>(
         vulnerability_repository,
         maintenance_repository,
         compatibility_repository,
+        uv_lock_simulator,
         locale,
     ))
 }

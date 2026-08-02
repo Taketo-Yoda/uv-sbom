@@ -36,6 +36,7 @@
 //!     None, // No vulnerability checking in this example
 //!     None, // No abandoned-package checking in this example
 //!     None, // No Python compatibility checking in this example
+//!     None, // No upgrade simulation in this example
 //!     uv_sbom::i18n::Locale::default(),
 //! );
 //!
