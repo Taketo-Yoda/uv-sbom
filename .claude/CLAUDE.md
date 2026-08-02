@@ -215,7 +215,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `MergedConfig` | `src/cli/config_resolver.rs` | Final resolved config (CLI > env > file > default) |
 | `ConfigFile` | `src/config.rs` | Raw deserialized config file struct |
 | `SbomRequest` / `SbomResponse` | `src/application/dto/` | Input/output for the main use case |
-| `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO,PCREPO=()>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555; 7th param `PCREPO: PythonCompatibilityRepository` (defaults to `()`) added in #681 |
+| `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO,PCREPO=(),USIM=()>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555; 7th param `PCREPO: PythonCompatibilityRepository` (defaults to `()`) added in #681; 8th param `USIM: UvLockSimulator` (defaults to `()`, no `+ Clone` bound — only ever borrowed) added in #704, replacing a direct `UvLockAdapter` construction inside `advise_upgrades_if_requested` |
 | `CheckAbandonedPackagesUseCase` | `src/application/use_cases/check_abandoned_packages.rs` | Fetches PyPI maintenance info for all packages with progress bar and soft-fail per package |
 | `DiffRequest` | `src/application/dto/diff_request.rs` | Input DTO for the diff use case (source, project_path, check_cve) |
 | `DiffResult` | `src/application/dto/diff_result.rs` | Output of `GenerateDiffUseCase::execute`; wraps domain `DependencyDiff` with `Option<CveDeltaView>` to keep domain layer free of read-model dependencies |
