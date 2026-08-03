@@ -3,7 +3,7 @@ use crate::application::use_cases::test_doubles::{
     MockMaintenanceRepository, MockPythonCompatibilityRepository, MockVulnerabilityRepository,
 };
 use crate::ports::outbound::{GroupRoots, LockfileParseResult, PackageSourceMap, PyPiMetadata};
-use crate::sbom_generation::domain::Package;
+use crate::sbom_generation::domain::{Package, SimulationResult};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -78,6 +78,59 @@ impl ProgressReporter for MockProgressReporter {
     fn report_completion(&self, _message: &str) {}
 }
 
+/// Configurable in-memory mock implementing `UvLockSimulator`.
+///
+/// Responses are keyed by package name rather than a FIFO queue, because
+/// `UpgradeAdvisor::advise` iterates a `HashMap` of unique direct deps — a
+/// FIFO queue would make test assertions depend on nondeterministic
+/// iteration order, matching the reasoning behind
+/// `MockPythonCompatibilityRepository` in `test_doubles.rs`. Not shared via
+/// `test_doubles.rs` since this use case is its only consumer.
+#[derive(Default)]
+struct MockUvLockSimulator {
+    results: HashMap<String, SimulationResult>,
+    errors: HashMap<String, String>,
+}
+
+impl MockUvLockSimulator {
+    fn with_result(package: &str, result: SimulationResult) -> Self {
+        let mut results = HashMap::new();
+        results.insert(package.to_string(), result);
+        Self {
+            results,
+            errors: HashMap::new(),
+        }
+    }
+
+    fn with_error(package: &str, error: &str) -> Self {
+        let mut errors = HashMap::new();
+        errors.insert(package.to_string(), error.to_string());
+        Self {
+            results: HashMap::new(),
+            errors,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl UvLockSimulator for MockUvLockSimulator {
+    async fn simulate_upgrade(
+        &self,
+        package_name: &str,
+        _project_path: &Path,
+    ) -> Result<SimulationResult> {
+        if let Some(error) = self.errors.get(package_name) {
+            anyhow::bail!("{}", error);
+        }
+        self.results.get(package_name).cloned().ok_or_else(|| {
+            anyhow::anyhow!(
+                "MockUvLockSimulator: no response configured for {}",
+                package_name
+            )
+        })
+    }
+}
+
 mod test_helpers {
     use super::*;
     use crate::i18n::Locale;
@@ -90,6 +143,7 @@ mod test_helpers {
         MockVulnerabilityRepository,
         MockMaintenanceRepository,
         MockPythonCompatibilityRepository,
+        MockUvLockSimulator,
     >;
 
     pub(super) struct UseCaseBuilder {
@@ -101,6 +155,7 @@ mod test_helpers {
         vuln: Option<MockVulnerabilityRepository>,
         maint: Option<MockMaintenanceRepository>,
         pyc: Option<MockPythonCompatibilityRepository>,
+        sim: Option<MockUvLockSimulator>,
     }
 
     impl Default for UseCaseBuilder {
@@ -114,6 +169,7 @@ mod test_helpers {
                 vuln: None,
                 maint: None,
                 pyc: None,
+                sim: None,
             }
         }
     }
@@ -162,6 +218,11 @@ mod test_helpers {
             self
         }
 
+        pub(super) fn with_simulator(mut self, sim: MockUvLockSimulator) -> Self {
+            self.sim = Some(sim);
+            self
+        }
+
         pub(super) fn with_source_map(mut self, map: PackageSourceMap) -> Self {
             self.source_map = map;
             self
@@ -183,6 +244,7 @@ mod test_helpers {
                 self.vuln,
                 self.maint,
                 self.pyc,
+                self.sim,
                 Locale::default(),
             )
         }
@@ -1468,5 +1530,194 @@ mod tests_python_compat_markdown {
 
         assert!(markdown.contains("## ✅ Python 3.13 Compatibility"));
         assert!(!markdown.contains("Compatibility Issues"));
+    }
+}
+
+mod tests_upgrade_advisor {
+    use super::test_helpers::*;
+    use super::*;
+    use crate::sbom_generation::domain::vulnerability::{CvssScore, Severity, Vulnerability};
+    use crate::sbom_generation::domain::{DependencyGraph, PackageName, PackageVulnerabilities};
+
+    /// Builds a minimal fixture: a direct dependency `app-dep` that transitively
+    /// introduces `vuln-lib`, which has one vulnerability with a fixed version.
+    /// This is the shape `ResolutionAnalyzer::analyze` requires to produce a
+    /// non-empty `ResolutionEntry` list (see resolution_analyzer.rs).
+    struct Fixture {
+        graph: DependencyGraph,
+        vulns: Vec<PackageVulnerabilities>,
+        enriched: Vec<EnrichedPackage>,
+    }
+
+    fn make_fixture() -> Fixture {
+        let direct = vec![PackageName::new("app-dep".to_string()).unwrap()];
+        let transitive = HashMap::from([(
+            PackageName::new("app-dep".to_string()).unwrap(),
+            vec![PackageName::new("vuln-lib".to_string()).unwrap()],
+        )]);
+        let graph = DependencyGraph::new(direct, transitive, HashMap::new());
+
+        let vuln = Vulnerability::new(
+            "CVE-2024-0001".to_string(),
+            Some(CvssScore::new(7.5).unwrap()),
+            Severity::High,
+            Some("2.0.0".to_string()),
+            None,
+        )
+        .unwrap();
+        let vulns = vec![PackageVulnerabilities::new(
+            "vuln-lib".to_string(),
+            "1.0.0".to_string(),
+            vec![vuln],
+        )];
+
+        let enriched = vec![EnrichedPackage::new(
+            pkg("app-dep", "1.0.0"),
+            Some("MIT".to_string()),
+            None,
+        )];
+
+        Fixture {
+            graph,
+            vulns,
+            enriched,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_advise_returns_none_when_suggest_fix_disabled() {
+        let use_case = UseCaseBuilder::default().build();
+        let fixture = make_fixture();
+
+        let result = use_case
+            .advise_upgrades_if_requested(
+                &default_request(),
+                Some(&fixture.graph),
+                Some(&fixture.vulns),
+                &fixture.enriched,
+            )
+            .await;
+
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_advise_returns_empty_when_no_graph_or_vuln_report() {
+        let use_case = UseCaseBuilder::default().build();
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .suggest_fix(true)
+            .build()
+            .unwrap();
+
+        let result = use_case
+            .advise_upgrades_if_requested(&request, None, None, &[])
+            .await;
+
+        assert!(result.expect("suggest_fix enabled → Some").is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_advise_returns_empty_when_no_resolution_entries() {
+        let use_case = UseCaseBuilder::default().build();
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .suggest_fix(true)
+            .build()
+            .unwrap();
+        let graph = DependencyGraph::new(vec![], HashMap::new(), HashMap::new());
+
+        let result = use_case
+            .advise_upgrades_if_requested(&request, Some(&graph), Some(&[]), &[])
+            .await;
+
+        assert!(result.expect("suggest_fix enabled → Some").is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_advise_returns_upgradable_with_mock_simulator() {
+        let simulator = MockUvLockSimulator::with_result(
+            "app-dep",
+            SimulationResult {
+                upgraded_to_version: "3.0.0".to_string(),
+                resolved_versions: HashMap::from([("vuln-lib".to_string(), "2.0.0".to_string())]),
+            },
+        );
+        let use_case = UseCaseBuilder::default().with_simulator(simulator).build();
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .suggest_fix(true)
+            .build()
+            .unwrap();
+        let fixture = make_fixture();
+
+        let result = use_case
+            .advise_upgrades_if_requested(
+                &request,
+                Some(&fixture.graph),
+                Some(&fixture.vulns),
+                &fixture.enriched,
+            )
+            .await;
+
+        let recommendations = result.expect("suggest_fix enabled with entries → Some");
+        assert_eq!(recommendations.len(), 1);
+        assert!(matches!(
+            recommendations[0],
+            UpgradeRecommendation::Upgradable { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_advise_returns_simulation_failed_on_simulator_error() {
+        let simulator = MockUvLockSimulator::with_error("app-dep", "uv command timed out");
+        let use_case = UseCaseBuilder::default().with_simulator(simulator).build();
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .suggest_fix(true)
+            .build()
+            .unwrap();
+        let fixture = make_fixture();
+
+        let result = use_case
+            .advise_upgrades_if_requested(
+                &request,
+                Some(&fixture.graph),
+                Some(&fixture.vulns),
+                &fixture.enriched,
+            )
+            .await;
+
+        let recommendations = result.expect("suggest_fix enabled with entries → Some");
+        assert_eq!(recommendations.len(), 1);
+        assert!(matches!(
+            recommendations[0],
+            UpgradeRecommendation::SimulationFailed { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_advise_returns_empty_when_no_simulator_injected() {
+        // No `.with_simulator(...)` — documents the injected-`None` branch:
+        // `self.uv_lock_simulator` is `None`, so `advise_upgrades_if_requested`
+        // must not panic or call a simulator, even with real entries present.
+        let use_case = UseCaseBuilder::default().build();
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .suggest_fix(true)
+            .build()
+            .unwrap();
+        let fixture = make_fixture();
+
+        let result = use_case
+            .advise_upgrades_if_requested(
+                &request,
+                Some(&fixture.graph),
+                Some(&fixture.vulns),
+                &fixture.enriched,
+            )
+            .await;
+
+        assert!(result.expect("suggest_fix enabled → Some").is_empty());
     }
 }

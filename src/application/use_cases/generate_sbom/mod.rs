@@ -1,4 +1,3 @@
-use crate::adapters::outbound::uv::UvLockAdapter;
 use crate::application::dto::{SbomRequest, SbomResponse};
 use crate::application::read_models::abandoned_package::{
     AbandonedPackageView, AbandonedPackagesReport,
@@ -22,7 +21,7 @@ use crate::sbom_generation::domain::services::{
     UpgradeAdvisor, VulnerabilityCheckResult, VulnerabilityChecker,
 };
 use crate::sbom_generation::domain::{
-    DependencyGraph, EnrichedPackage, Package, PackageName, UpgradeRecommendation,
+    DependencyGraph, EnrichedPackage, Package, PackageName, UpgradeRecommendation, UvLockSimulator,
 };
 use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter, SbomGenerator};
 use crate::shared::Result;
@@ -47,7 +46,8 @@ type PackagesWithDependencyMap = (Vec<Package>, std::collections::HashMap<String
 /// * `VREPO` - VulnerabilityRepository implementation (optional)
 /// * `MREPO` - MaintenanceRepository implementation (optional)
 /// * `PCREPO` - PythonCompatibilityRepository implementation (optional)
-pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = ()> {
+/// * `USIM` - UvLockSimulator implementation (optional)
+pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = (), USIM = ()> {
     lockfile_reader: LR,
     project_config_reader: PCR,
     license_repository: LREPO,
@@ -55,11 +55,12 @@ pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = ()> {
     vulnerability_repository: Option<VREPO>,
     maintenance_repository: Option<MREPO>,
     compatibility_repository: Option<PCREPO>,
+    uv_lock_simulator: Option<USIM>,
     locale: Locale,
 }
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -68,6 +69,7 @@ where
     VREPO: VulnerabilityRepository + Clone,
     MREPO: MaintenanceRepository + Clone,
     PCREPO: PythonCompatibilityRepository + Clone,
+    USIM: UvLockSimulator,
 {
     /// Creates a new GenerateSbomUseCase with injected dependencies
     #[allow(clippy::too_many_arguments)]
@@ -79,6 +81,7 @@ where
         vulnerability_repository: Option<VREPO>,
         maintenance_repository: Option<MREPO>,
         compatibility_repository: Option<PCREPO>,
+        uv_lock_simulator: Option<USIM>,
         locale: Locale,
     ) -> Self {
         Self {
@@ -89,6 +92,7 @@ where
             vulnerability_repository,
             maintenance_repository,
             compatibility_repository,
+            uv_lock_simulator,
             locale,
         }
     }
@@ -705,9 +709,15 @@ where
             &[&unique_dep_count.to_string(), unit],
         ));
 
-        let simulator = UvLockAdapter::new();
-        let recommendations =
-            UpgradeAdvisor::advise(&simulator, &entries, &request.project_path).await;
+        // `None` is unreachable in production (the CLI composition root always
+        // injects a real simulator); it exists only for tests that deliberately
+        // omit one.
+        let recommendations = match self.uv_lock_simulator.as_ref() {
+            Some(simulator) => {
+                UpgradeAdvisor::advise(simulator, &entries, &request.project_path).await
+            }
+            None => Vec::new(),
+        };
 
         for rec in &recommendations {
             match rec {

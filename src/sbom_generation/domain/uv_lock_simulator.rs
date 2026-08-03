@@ -36,3 +36,20 @@ pub trait UvLockSimulator: Send + Sync {
         project_path: &std::path::Path,
     ) -> Result<SimulationResult>;
 }
+
+/// Null-object impl so `GenerateSbomUseCase`'s `USIM = ()` default satisfies the
+/// trait bound. Never called in practice: the use case only reaches the
+/// simulator through `Option<USIM>`, which the CLI composition root always
+/// populates with a real `UvLockAdapter`; `None`/`()` only arises in tests that
+/// intentionally omit a simulator. Mirrors `impl PythonCompatibilityRepository
+/// for ()` in `src/ports/outbound/python_compatibility_repository.rs`.
+#[async_trait::async_trait]
+impl UvLockSimulator for () {
+    async fn simulate_upgrade(
+        &self,
+        _package_name: &str,
+        _project_path: &std::path::Path,
+    ) -> Result<SimulationResult> {
+        unreachable!("UvLockSimulator not configured")
+    }
+}
