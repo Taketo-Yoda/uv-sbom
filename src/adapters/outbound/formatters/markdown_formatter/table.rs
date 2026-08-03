@@ -1,13 +1,13 @@
 use crate::i18n::Messages;
 
 /// Escapes pipe characters and newlines for safe Markdown table rendering
-pub(super) fn escape_markdown_table_cell(text: &str) -> String {
+pub(crate) fn escape_markdown_table_cell(text: &str) -> String {
     text.replace('|', "\\|").replace('\n', " ")
 }
 
 /// Generates a Markdown table separator row from column header strings.
 /// Each separator cell width matches the header's char count plus two spaces.
-pub(super) fn make_separator(cols: &[&str]) -> String {
+pub(crate) fn make_separator(cols: &[&str]) -> String {
     let mut sep = String::from("|");
     for col in cols {
         let dashes = "-".repeat(col.chars().count() + 2);

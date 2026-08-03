@@ -1,7 +1,7 @@
 mod helpers;
 mod links;
 mod sections;
-mod table;
+pub(super) mod table;
 mod vuln_render;
 
 use crate::application::read_models::SbomReadModel;
