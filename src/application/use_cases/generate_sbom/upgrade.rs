@@ -1,0 +1,123 @@
+use super::GenerateSbomUseCase;
+use crate::application::dto::SbomRequest;
+use crate::i18n::Messages;
+use crate::ports::outbound::{
+    LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
+    ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+};
+use crate::sbom_generation::domain::services::{ResolutionAnalyzer, UpgradeAdvisor};
+use crate::sbom_generation::domain::{
+    DependencyGraph, EnrichedPackage, PackageVulnerabilities, UpgradeRecommendation,
+    UvLockSimulator,
+};
+
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
+where
+    LR: LockfileReader,
+    PCR: ProjectConfigReader,
+    LREPO: LicenseRepository + Clone,
+    PR: ProgressReporter,
+    VREPO: VulnerabilityRepository + Clone,
+    MREPO: MaintenanceRepository + Clone,
+    PCREPO: PythonCompatibilityRepository + Clone,
+    USIM: UvLockSimulator,
+{
+    /// Runs the UpgradeAdvisor when `suggest_fix` is true and the required context is available
+    ///
+    /// Returns `None` when `suggest_fix` is false (no overhead).
+    /// Returns `Some(vec)` when the advisor runs, even if the vector is empty.
+    pub(super) async fn advise_upgrades_if_requested(
+        &self,
+        request: &SbomRequest,
+        dependency_graph: Option<&DependencyGraph>,
+        vulnerability_report: Option<&[PackageVulnerabilities]>,
+        enriched_packages: &[EnrichedPackage],
+    ) -> Option<Vec<UpgradeRecommendation>> {
+        if !request.suggest_fix {
+            return None;
+        }
+
+        let (Some(graph), Some(vuln_report)) = (dependency_graph, vulnerability_report) else {
+            return Some(vec![]);
+        };
+
+        let entries = ResolutionAnalyzer::analyze(graph, vuln_report, enriched_packages);
+        if entries.is_empty() {
+            return Some(vec![]);
+        }
+
+        let msgs = Messages::for_locale(self.locale);
+
+        let unique_dep_count = entries
+            .iter()
+            .flat_map(|e| e.introduced_by())
+            .map(|i| i.package_name())
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        let unit = if unique_dep_count == 1 {
+            msgs.label_dependency_singular
+        } else {
+            msgs.label_dependency_plural
+        };
+        self.progress_reporter.report(&Messages::format(
+            msgs.progress_analyzing_upgrade_paths,
+            &[&unique_dep_count.to_string(), unit],
+        ));
+
+        // `None` is unreachable in production (the CLI composition root always
+        // injects a real simulator); it exists only for tests that deliberately
+        // omit one.
+        let recommendations = match self.uv_lock_simulator.as_ref() {
+            Some(simulator) => {
+                UpgradeAdvisor::advise(simulator, &entries, &request.project_path).await
+            }
+            None => Vec::new(),
+        };
+
+        for rec in &recommendations {
+            match rec {
+                UpgradeRecommendation::Upgradable {
+                    direct_dep_name,
+                    direct_dep_target_version,
+                    transitive_dep_name,
+                    transitive_resolved_version,
+                    vulnerability_id,
+                    ..
+                } => {
+                    self.progress_reporter.report(&Messages::format(
+                        msgs.progress_upgrade_resolves,
+                        &[
+                            direct_dep_name,
+                            direct_dep_target_version,
+                            transitive_dep_name,
+                            transitive_resolved_version,
+                            vulnerability_id,
+                        ],
+                    ));
+                }
+                UpgradeRecommendation::Unresolvable {
+                    direct_dep_name,
+                    reason,
+                    vulnerability_id,
+                } => {
+                    self.progress_reporter.report(&Messages::format(
+                        msgs.progress_upgrade_unresolvable,
+                        &[direct_dep_name, reason, vulnerability_id],
+                    ));
+                }
+                UpgradeRecommendation::SimulationFailed {
+                    direct_dep_name,
+                    error,
+                } => {
+                    self.progress_reporter.report(&Messages::format(
+                        msgs.progress_upgrade_simulation_failed,
+                        &[direct_dep_name, error],
+                    ));
+                }
+            }
+        }
+
+        Some(recommendations)
+    }
+}
