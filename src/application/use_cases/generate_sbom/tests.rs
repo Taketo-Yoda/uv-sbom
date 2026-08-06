@@ -3,7 +3,10 @@ use crate::application::use_cases::test_doubles::{
     MockMaintenanceRepository, MockPythonCompatibilityRepository, MockVulnerabilityRepository,
 };
 use crate::ports::outbound::{GroupRoots, LockfileParseResult, PackageSourceMap, PyPiMetadata};
-use crate::sbom_generation::domain::{Package, SimulationResult};
+use crate::sbom_generation::domain::services::{ThresholdConfig, VulnerabilityCheckResult};
+use crate::sbom_generation::domain::{
+    EnrichedPackage, Package, SimulationResult, UpgradeRecommendation,
+};
 use std::collections::HashMap;
 use std::path::Path;
 
