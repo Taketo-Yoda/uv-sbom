@@ -215,6 +215,41 @@ pub fn validate_directory_path(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Validates a URL path component (e.g. a package name or version) to prevent
+/// path traversal and URL injection when building PyPI API request URLs.
+///
+/// # Arguments
+/// * `component` - The value to validate (e.g. a package name or version string)
+/// * `component_type` - Description of the component for error messages
+///
+/// # Errors
+/// Returns an error if the component contains path separators, `..`, or
+/// URL-unsafe characters (`#`, `?`, `@`).
+pub fn validate_url_component(component: &str, component_type: &str) -> Result<()> {
+    if component.contains('/') || component.contains('\\') {
+        anyhow::bail!(
+            "Security: {} contains path separators which are not allowed",
+            component_type
+        );
+    }
+
+    if component.contains("..") {
+        anyhow::bail!(
+            "Security: {} contains '..' which is not allowed",
+            component_type
+        );
+    }
+
+    if component.contains('#') || component.contains('?') || component.contains('@') {
+        anyhow::bail!(
+            "Security: {} contains URL-unsafe characters",
+            component_type
+        );
+    }
+
+    Ok(())
+}
+
 /// Validates that a path is not a symbolic link
 ///
 /// # Security
@@ -377,5 +412,26 @@ mod tests {
         assert!(result.is_err());
         let err_string = format!("{}", result.unwrap_err());
         assert!(err_string.contains("Not a directory"));
+    }
+
+    #[test]
+    fn test_validate_url_component_accepts_normal_name() {
+        assert!(validate_url_component("requests", "Package name").is_ok());
+        assert!(validate_url_component("my-package-123", "Package name").is_ok());
+        assert!(validate_url_component("2.31.0", "Package version").is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_component_rejects_path_separators() {
+        assert!(validate_url_component("pkg/evil", "Package name").is_err());
+        assert!(validate_url_component("pkg\\evil", "Package name").is_err());
+        assert!(validate_url_component("pkg..evil", "Package name").is_err());
+    }
+
+    #[test]
+    fn test_validate_url_component_rejects_unsafe_chars() {
+        assert!(validate_url_component("pkg#evil", "Package name").is_err());
+        assert!(validate_url_component("pkg?evil", "Package name").is_err());
+        assert!(validate_url_component("pkg@evil", "Package name").is_err());
     }
 }
