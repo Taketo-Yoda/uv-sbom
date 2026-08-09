@@ -67,36 +67,13 @@ impl PyPiCompatibilityClient {
         })
     }
 
-    /// Validates a URL component to prevent injection attacks
-    fn validate_url_component(component: &str, component_type: &str) -> Result<()> {
-        if component.contains('/') || component.contains('\\') {
-            anyhow::bail!(
-                "Security: {} contains path separators which are not allowed",
-                component_type
-            );
-        }
-        if component.contains("..") {
-            anyhow::bail!(
-                "Security: {} contains '..' which is not allowed",
-                component_type
-            );
-        }
-        if component.contains('#') || component.contains('?') || component.contains('@') {
-            anyhow::bail!(
-                "Security: {} contains URL-unsafe characters",
-                component_type
-            );
-        }
-        Ok(())
-    }
-
     async fn fetch_from_pypi(
         &self,
         package_name: &str,
         package_version: &str,
     ) -> Result<PyPiVersionResponse> {
-        Self::validate_url_component(package_name, "Package name")?;
-        Self::validate_url_component(package_version, "Package version")?;
+        crate::shared::security::validate_url_component(package_name, "Package name")?;
+        crate::shared::security::validate_url_component(package_version, "Package version")?;
         let encoded_name = urlencoding::encode(package_name);
         let encoded_version = urlencoding::encode(package_version);
         let url = format!(
@@ -129,20 +106,10 @@ impl PyPiCompatibilityClient {
         package_name: &str,
         package_version: &str,
     ) -> Result<PyPiVersionResponse> {
-        let mut last_error = None;
-        for attempt in 1..=Self::MAX_RETRIES {
-            match self.fetch_from_pypi(package_name, package_version).await {
-                Ok(result) => return Ok(result),
-                Err(e) => {
-                    last_error = Some(e);
-                    if attempt < Self::MAX_RETRIES {
-                        // Linear back-off: 100 ms, 200 ms — matches PyPiMaintenanceRepository
-                        tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
-                    }
-                }
-            }
-        }
-        Err(last_error.unwrap())
+        crate::shared::http_retry::fetch_with_retry(Self::MAX_RETRIES, || {
+            self.fetch_from_pypi(package_name, package_version)
+        })
+        .await
     }
 }
 
@@ -169,42 +136,6 @@ mod tests {
     #[test]
     fn test_pypi_compatibility_client_creation() {
         assert!(PyPiCompatibilityClient::new().is_ok());
-    }
-
-    #[test]
-    fn test_validate_url_component_accepts_normal_name() {
-        assert!(
-            PyPiCompatibilityClient::validate_url_component("requests", "Package name").is_ok()
-        );
-        assert!(
-            PyPiCompatibilityClient::validate_url_component("2.31.0", "Package version").is_ok()
-        );
-    }
-
-    #[test]
-    fn test_validate_url_component_rejects_path_separators() {
-        assert!(
-            PyPiCompatibilityClient::validate_url_component("pkg/evil", "Package name").is_err()
-        );
-        assert!(
-            PyPiCompatibilityClient::validate_url_component("pkg\\evil", "Package name").is_err()
-        );
-        assert!(
-            PyPiCompatibilityClient::validate_url_component("pkg..evil", "Package name").is_err()
-        );
-    }
-
-    #[test]
-    fn test_validate_url_component_rejects_unsafe_chars() {
-        assert!(
-            PyPiCompatibilityClient::validate_url_component("pkg#evil", "Package name").is_err()
-        );
-        assert!(
-            PyPiCompatibilityClient::validate_url_component("pkg?evil", "Package name").is_err()
-        );
-        assert!(
-            PyPiCompatibilityClient::validate_url_component("pkg@evil", "Package name").is_err()
-        );
     }
 
     #[test]
