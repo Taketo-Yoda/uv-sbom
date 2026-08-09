@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **Moved PEP 440 `Requires-Python` comparison logic out of `src/ports/outbound/` into `src/sbom_generation/domain/`**: `python_compatibility_repository.rs` contained the `is_incompatible` free function and `PythonCompatibilityInfo::is_incompatible_with` method — real business logic, not just a port contract, violating the invariant that `ports/` only defines trait contracts and DTOs. Moved to the new `PythonCompatibilityChecker` domain service (`Option<&str>`-based, no dependency on the `ports/` DTO, avoiding a domain→ports import per the #703 precedent). Internal refactor only, no behavior change (#705)
+
 ## [2.8.1] - 2026-08-09
 
 ### Fixed
