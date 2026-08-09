@@ -7,8 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Moved `EnrichedPackage`/`SimulationResult`/`UvLockSimulator` out of `src/ports/outbound/` into `src/sbom_generation/domain/`**: `ResolutionAnalyzer` and `UpgradeAdvisor` (domain services) were importing these types from `ports/outbound/`, violating the invariant that the domain layer must never import from `ports/` or `adapters/`. `EnrichedPackage` and `SimulationResult` are plain value objects with no I/O, so they now live in the domain; `UvLockSimulator`, a genuine port trait consumed by `UpgradeAdvisor` as a generic bound, is now a domain-owned port (still implemented by `adapters::outbound::uv::UvLockAdapter`). Internal refactor only, no behavior change (#703)
+## [2.8.1] - 2026-08-09
 
 ### Fixed
 - **`--diff` Markdown output could break the CVE Delta table when a vulnerability summary contained a newline**: `diff_markdown_formatter.rs` escaped `|` in CVE summaries but not `\n`; a free-text OSV summary containing a literal newline would split the table row across lines and corrupt rendering. Now reuses the same `escape_markdown_table_cell` helper already used elsewhere in Markdown output, which handles both cases (#708)
