@@ -43,31 +43,8 @@ impl PyPiMaintenanceRepository {
         Ok(Self { client })
     }
 
-    /// Validates a URL component to prevent injection attacks
-    fn validate_url_component(component: &str, component_type: &str) -> Result<()> {
-        if component.contains('/') || component.contains('\\') {
-            anyhow::bail!(
-                "Security: {} contains path separators which are not allowed",
-                component_type
-            );
-        }
-        if component.contains("..") {
-            anyhow::bail!(
-                "Security: {} contains '..' which is not allowed",
-                component_type
-            );
-        }
-        if component.contains('#') || component.contains('?') || component.contains('@') {
-            anyhow::bail!(
-                "Security: {} contains URL-unsafe characters",
-                component_type
-            );
-        }
-        Ok(())
-    }
-
     async fn fetch_from_pypi(&self, package_name: &str) -> Result<PyPiPackageResponse> {
-        Self::validate_url_component(package_name, "Package name")?;
+        crate::shared::security::validate_url_component(package_name, "Package name")?;
         let encoded = urlencoding::encode(package_name);
         let url = format!("https://pypi.org/pypi/{}/json", encoded);
 
@@ -92,20 +69,10 @@ impl PyPiMaintenanceRepository {
     }
 
     async fn fetch_with_retry(&self, package_name: &str) -> Result<PyPiPackageResponse> {
-        let mut last_error = None;
-        for attempt in 1..=Self::MAX_RETRIES {
-            match self.fetch_from_pypi(package_name).await {
-                Ok(result) => return Ok(result),
-                Err(e) => {
-                    last_error = Some(e);
-                    if attempt < Self::MAX_RETRIES {
-                        // Linear back-off: 100 ms, 200 ms — matches PyPiLicenseRepository
-                        tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
-                    }
-                }
-            }
-        }
-        Err(last_error.unwrap())
+        crate::shared::http_retry::fetch_with_retry(Self::MAX_RETRIES, || {
+            self.fetch_from_pypi(package_name)
+        })
+        .await
     }
 
     /// Parses the latest release date from a PyPI package response.
@@ -242,44 +209,6 @@ mod tests {
         }"#;
         let response: PyPiPackageResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.urls.len(), 1);
-    }
-
-    #[test]
-    fn test_validate_url_component_accepts_normal_name() {
-        assert!(
-            PyPiMaintenanceRepository::validate_url_component("requests", "Package name").is_ok()
-        );
-        assert!(PyPiMaintenanceRepository::validate_url_component(
-            "my-package-123",
-            "Package name"
-        )
-        .is_ok());
-    }
-
-    #[test]
-    fn test_validate_url_component_rejects_path_separators() {
-        assert!(
-            PyPiMaintenanceRepository::validate_url_component("pkg/evil", "Package name").is_err()
-        );
-        assert!(
-            PyPiMaintenanceRepository::validate_url_component("pkg\\evil", "Package name").is_err()
-        );
-        assert!(
-            PyPiMaintenanceRepository::validate_url_component("pkg..evil", "Package name").is_err()
-        );
-    }
-
-    #[test]
-    fn test_validate_url_component_rejects_unsafe_chars() {
-        assert!(
-            PyPiMaintenanceRepository::validate_url_component("pkg#evil", "Package name").is_err()
-        );
-        assert!(
-            PyPiMaintenanceRepository::validate_url_component("pkg?evil", "Package name").is_err()
-        );
-        assert!(
-            PyPiMaintenanceRepository::validate_url_component("pkg@evil", "Package name").is_err()
-        );
     }
 
     // Integration tests - require network access

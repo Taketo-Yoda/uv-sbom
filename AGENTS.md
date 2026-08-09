@@ -37,6 +37,8 @@ uv-sbom/
 │   │   │   ├── dependency_graph.rs # DependencyGraph aggregate
 │   │   │   ├── sbom_metadata.rs   # SbomMetadata (timestamp, UUID)
 │   │   │   ├── vulnerability.rs   # Vulnerability, Severity, CvssScore
+│   │   │   ├── enriched_package.rs    # EnrichedPackage struct
+│   │   │   ├── uv_lock_simulator.rs   # UvLockSimulator trait (domain-owned port), SimulationResult
 │   │   │   └── services/
 │   │   │       └── vulnerability_checker.rs  # Threshold evaluation
 │   │   ├── services/              # Domain services (pure functions)
@@ -70,8 +72,7 @@ uv-sbom/
 │   │   │   ├── vulnerability_repository.rs # VulnerabilityRepository trait
 │   │   │   ├── formatter.rs               # SbomFormatter trait
 │   │   │   ├── output_presenter.rs        # OutputPresenter trait
-│   │   │   ├── progress_reporter.rs       # ProgressReporter trait
-│   │   │   └── enriched_package.rs        # EnrichedPackage struct
+│   │   │   └── progress_reporter.rs       # ProgressReporter trait
 │   │   └── inbound/               # (reserved for future use)
 │   ├── adapters/                  # Infrastructure implementations
 │   │   └── outbound/

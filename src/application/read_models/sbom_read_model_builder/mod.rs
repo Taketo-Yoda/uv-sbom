@@ -16,11 +16,12 @@ use super::non_pypi_package::NonPyPiPackagesReport;
 use super::python_compatibility::PythonCompatibilityReport;
 use super::resolution_guide_view::ResolutionGuideView;
 use super::sbom_read_model::SbomReadModel;
-use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::{ResolutionAnalyzer, VulnerabilityCheckResult};
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
-use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecommendation};
+use crate::sbom_generation::domain::{
+    DependencyGraph, EnrichedPackage, SbomMetadata, UpgradeRecommendation,
+};
 
 /// Builder for constructing SbomReadModel from domain objects
 ///
@@ -106,12 +107,13 @@ impl SbomReadModelBuilder {
 
 #[cfg(test)]
 pub(crate) mod test_helpers {
-    use crate::ports::outbound::EnrichedPackage;
     use crate::sbom_generation::domain::resolution_guide::{IntroducedBy, ResolutionEntry};
     use crate::sbom_generation::domain::vulnerability::{
         CvssScore, PackageVulnerabilities, Severity, Vulnerability,
     };
-    use crate::sbom_generation::domain::{DependencyGraph, Package, PackageName, SbomMetadata};
+    use crate::sbom_generation::domain::{
+        DependencyGraph, EnrichedPackage, Package, PackageName, SbomMetadata,
+    };
     use std::collections::HashMap;
 
     pub(crate) fn metadata() -> SbomMetadata {

@@ -47,10 +47,11 @@ struct PyPiInfo {
 #[derive(Clone)]
 pub struct PyPiLicenseRepository {
     client: reqwest::Client,
-    max_retries: u32,
 }
 
 impl PyPiLicenseRepository {
+    const MAX_RETRIES: u32 = 3;
+
     /// Creates a new PyPI license repository with default configuration
     pub fn new() -> Result<Self> {
         let version = env!("CARGO_PKG_VERSION");
@@ -60,65 +61,22 @@ impl PyPiLicenseRepository {
             .user_agent(user_agent)
             .build()?;
 
-        Ok(Self {
-            client,
-            max_retries: 3,
-        })
+        Ok(Self { client })
     }
 
     /// Fetches package information from PyPI with retry logic (async)
     async fn fetch_with_retry(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
-        let mut last_error = None;
-
-        for attempt in 1..=self.max_retries {
-            match self.fetch_from_pypi(package_name, version).await {
-                Ok(result) => return Ok(result),
-                Err(e) => {
-                    last_error = Some(e);
-                    if attempt < self.max_retries {
-                        // Retry after a short wait (async)
-                        tokio::time::sleep(Duration::from_millis(100 * attempt as u64)).await;
-                    }
-                }
-            }
-        }
-
-        Err(last_error.unwrap())
-    }
-
-    /// Validates and sanitizes package name and version for URL safety
-    fn validate_url_component(component: &str, component_type: &str) -> Result<()> {
-        // Security: Prevent URL injection attacks
-        if component.contains('/') || component.contains('\\') {
-            anyhow::bail!(
-                "Security: {} contains path separators which are not allowed",
-                component_type
-            );
-        }
-
-        if component.contains("..") {
-            anyhow::bail!(
-                "Security: {} contains '..' which is not allowed",
-                component_type
-            );
-        }
-
-        // Check for URL-unsafe characters that could cause issues
-        if component.contains('#') || component.contains('?') || component.contains('@') {
-            anyhow::bail!(
-                "Security: {} contains URL-unsafe characters",
-                component_type
-            );
-        }
-
-        Ok(())
+        crate::shared::http_retry::fetch_with_retry(Self::MAX_RETRIES, || {
+            self.fetch_from_pypi(package_name, version)
+        })
+        .await
     }
 
     /// Fetches package information from PyPI API (async)
     async fn fetch_from_pypi(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
         // Security: Validate URL components before using them
-        Self::validate_url_component(package_name, "Package name")?;
-        Self::validate_url_component(version, "Version")?;
+        crate::shared::security::validate_url_component(package_name, "Package name")?;
+        crate::shared::security::validate_url_component(version, "Version")?;
 
         // URL encode components to handle special characters safely
         let encoded_package = urlencoding::encode(package_name);

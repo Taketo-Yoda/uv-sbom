@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-08-09
+
+### Fixed
+- **`--diff` Markdown output could break the CVE Delta table when a vulnerability summary contained a newline**: `diff_markdown_formatter.rs` escaped `|` in CVE summaries but not `\n`; a free-text OSV summary containing a literal newline would split the table row across lines and corrupt rendering. Now reuses the same `escape_markdown_table_cell` helper already used elsewhere in Markdown output, which handles both cases (#708)
+- **Upgrade advisor's version comparison used a fragile hand-rolled comparator instead of `pep440_rs`**: `UpgradeAdvisor` silently dropped non-numeric dot-separated segments (e.g. `"v1.2.3"` lost its leading segment) and unconditionally treated any pre-release, dev, or post marker in the resolved version as failing to satisfy the fixed-version minimum, regardless of the actual release segment. Replaced with `pep440_rs::Version`, already used elsewhere in the codebase, which correctly implements PEP 440 ordering. As a result, e.g. `"2.0.8.post1" >= "2.0.7"` and `"2.1.0rc1" >= "2.0.0"` now correctly evaluate as satisfying the minimum (#709)
+
 ## [2.8.0] - 2026-07-26
 
 ### Security

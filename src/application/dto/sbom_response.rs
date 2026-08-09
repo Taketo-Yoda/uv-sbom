@@ -1,10 +1,11 @@
 use crate::application::read_models::abandoned_package::AbandonedPackagesReport;
 use crate::application::read_models::non_pypi_package::NonPyPiPackagesReport;
 use crate::application::read_models::python_compatibility::PythonCompatibilityReport;
-use crate::ports::outbound::EnrichedPackage;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
-use crate::sbom_generation::domain::{DependencyGraph, SbomMetadata, UpgradeRecommendation};
+use crate::sbom_generation::domain::{
+    DependencyGraph, EnrichedPackage, SbomMetadata, UpgradeRecommendation,
+};
 use crate::shared::error::SbomError;
 
 /// SbomResponse - Internal response DTO from SBOM generation use case

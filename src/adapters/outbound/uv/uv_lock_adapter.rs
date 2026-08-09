@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::Duration;
 use tokio::time::timeout;
 
-use crate::ports::outbound::uv_lock_simulator::{SimulationResult, UvLockSimulator};
+use crate::sbom_generation::domain::{SimulationResult, UvLockSimulator};
 
 /// Adapter that implements [`UvLockSimulator`] by shelling out to the `uv` CLI.
 ///

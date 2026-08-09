@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use super::markdown_formatter::table::{escape_markdown_table_cell, make_separator};
 use crate::application::read_models::cve_delta_view::{CveDeltaEntry, CveDeltaView};
 use crate::application::read_models::vulnerability_view::SeverityView;
 use crate::i18n::{Locale, Messages};
@@ -49,7 +50,12 @@ impl DiffMarkdownFormatter {
             msgs.diff_col_metric, msgs.diff_col_count
         )
         .unwrap();
-        writeln!(out, "|--------|-------|").unwrap();
+        write!(
+            out,
+            "{}",
+            make_separator(&[msgs.diff_col_metric, msgs.diff_col_count])
+        )
+        .unwrap();
         writeln!(
             out,
             "| {} | {} |",
@@ -89,9 +95,17 @@ impl DiffMarkdownFormatter {
             msgs.diff_col_vulnerabilities,
         )
         .unwrap();
-        writeln!(
+        write!(
             out,
-            "|---------|--------|-------------|-------------|---------|-----------------|"
+            "{}",
+            make_separator(&[
+                msgs.col_package,
+                msgs.diff_col_change,
+                msgs.diff_col_old_version,
+                msgs.diff_col_new_version,
+                msgs.col_license,
+                msgs.diff_col_vulnerabilities,
+            ])
         )
         .unwrap();
 
@@ -139,7 +153,12 @@ impl Default for DiffMarkdownFormatter {
 fn write_cve_subsection(out: &mut String, entries: &[CveDeltaEntry], empty_label: &str) {
     writeln!(out).unwrap();
     writeln!(out, "| Package | Version | CVE | Severity | Summary |").unwrap();
-    writeln!(out, "|---------|---------|-----|----------|---------|").unwrap();
+    write!(
+        out,
+        "{}",
+        make_separator(&["Package", "Version", "CVE", "Severity", "Summary"])
+    )
+    .unwrap();
     if entries.is_empty() {
         writeln!(out, "| — | — | — | — | {} |", empty_label).unwrap();
     } else {
@@ -170,14 +189,15 @@ fn format_change_row(change: &PackageChange, msgs: &Messages) -> String {
 ///
 /// Column order: `Package | Version | CVE | Severity | Summary`.
 /// `Option::None` severity renders as `"UNKNOWN"`; `Some(SeverityView::None)` renders as `"NONE"`.
-/// Literal `|` characters in `summary` are escaped as `\|` to avoid breaking the table.
+/// Literal `|` characters in `summary` are escaped as `\|`, and newlines are
+/// collapsed to spaces, to avoid breaking the table.
 fn format_cve_row(entry: &CveDeltaEntry) -> String {
     let severity = entry
         .severity
         .as_ref()
         .map(SeverityView::as_str)
         .unwrap_or("UNKNOWN");
-    let summary = entry.summary.replace('|', "\\|");
+    let summary = escape_markdown_table_cell(&entry.summary);
     format!(
         "| {} | {} | {} | {} | {} |",
         entry.package_name, entry.version, entry.cve_id, severity, summary
@@ -542,6 +562,25 @@ mod tests {
         let md = DiffMarkdownFormatter::new(Locale::En).format(&diff, Some(&delta));
 
         assert!(md.contains("see CVE \\| NVD"));
+    }
+
+    #[test]
+    fn test_cve_delta_newline_in_summary_is_collapsed_to_space() {
+        let diff = make_diff(vec![]);
+        let delta = CveDeltaView {
+            new: vec![make_entry(
+                "pkg",
+                "1.0.0",
+                "CVE-2024-0004",
+                Some(SeverityView::High),
+                "Line one\nLine two",
+            )],
+            resolved: vec![],
+        };
+        let md = DiffMarkdownFormatter::new(Locale::En).format(&diff, Some(&delta));
+
+        assert!(!md.contains("Line one\nLine two"));
+        assert!(md.contains("| pkg | 1.0.0 | CVE-2024-0004 | HIGH | Line one Line two |"));
     }
 
     #[test]

@@ -88,6 +88,14 @@ Layer boundary violations (🔴 MUST FIX if any):
 
 Port/Adapter structure:
 - Are new port traits placed under src/ports/outbound/ or src/ports/inbound/?
+  Exception: a port trait consumed directly by a domain service as a generic
+  bound (e.g. a domain service function like `fn advise<S: SomeTrait>(...)`)
+  is domain-owned and belongs under src/sbom_generation/domain/ instead — the
+  domain layer must never import from src/ports/, so the port cannot live
+  there if a domain service needs the trait in scope. See UvLockSimulator in
+  src/sbom_generation/domain/uv_lock_simulator.rs (#703) as the reference
+  example. This exception does not apply to traits only consumed from
+  src/application/ or src/adapters/.
 - Are new adapters placed under the correct src/adapters/outbound/ subdirectory?
 - Does every new async trait method have #[async_trait] and Send + Sync bounds?
 

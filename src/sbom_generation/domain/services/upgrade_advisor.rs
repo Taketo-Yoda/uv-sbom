@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
-use crate::ports::outbound::uv_lock_simulator::{SimulationResult, UvLockSimulator};
+use pep440_rs::Version;
+
 use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
 use crate::sbom_generation::domain::upgrade_recommendation::UpgradeRecommendation;
+use crate::sbom_generation::domain::{SimulationResult, UvLockSimulator};
 
 /// Stateless domain service that orchestrates upgrade simulations and produces
 /// `UpgradeRecommendation` results by comparing resolved transitive versions
@@ -115,6 +118,10 @@ impl UpgradeAdvisor {
 }
 
 /// Strip operator prefix from version strings (e.g., `">= 2.0.7"` → `"2.0.7"`).
+///
+/// `pep440_rs::Version::from_str` only accepts a bare version string, not a
+/// specifier, so OSV-style fixed-version strings (which may carry an operator
+/// prefix) must be normalized with this function before parsing.
 fn strip_operator_prefix(version: &str) -> String {
     version
         .trim()
@@ -123,97 +130,17 @@ fn strip_operator_prefix(version: &str) -> String {
         .to_string()
 }
 
-/// Compare two PEP 440 version strings.
+/// Compare two PEP 440 version strings using `pep440_rs::Version`.
 /// Returns true if `actual` satisfies `required_min` (i.e., actual >= required_min).
-/// Uses simple dot-separated numeric comparison for common cases.
 ///
-/// Pre-release markers (`a`, `b`, `rc`, `dev`, `post`) in `actual` are treated
-/// conservatively: a pre-release version is considered *not* to satisfy the minimum.
-/// For example, `"2.0.0rc1" >= "2.0.0"` returns false because rc1 < final release.
+/// If either string fails to parse as a valid PEP 440 version, this returns
+/// `false` as a conservative fallback.
 fn version_satisfies_min(actual: &str, required_min: &str) -> bool {
-    if has_prerelease_marker(actual) {
+    let (Ok(actual_v), Ok(min_v)) = (Version::from_str(actual), Version::from_str(required_min))
+    else {
         return false;
-    }
-
-    let actual_parts = parse_version_parts(actual);
-    let min_parts = parse_version_parts(required_min);
-
-    if actual_parts.is_empty() {
-        return false;
-    }
-
-    let max_len = actual_parts.len().max(min_parts.len());
-    for i in 0..max_len {
-        let a = actual_parts.get(i).copied().unwrap_or(0);
-        let m = min_parts.get(i).copied().unwrap_or(0);
-        match a.cmp(&m) {
-            std::cmp::Ordering::Greater => return true,
-            std::cmp::Ordering::Less => return false,
-            std::cmp::Ordering::Equal => continue,
-        }
-    }
-    true // versions are equal → satisfies minimum
-}
-
-/// Returns true if `version` contains a PEP 440 pre-release marker
-/// (`a`, `b`, `rc`, `dev`, `post`).
-///
-/// For example: `"2.0.0a1"`, `"2.0.0b2"`, `"2.0.0rc1"`, `"2.0.0.dev1"`.
-fn has_prerelease_marker(version: &str) -> bool {
-    // Normalise separators: PEP 440 allows "2.0.0rc1" and "2.0.0.rc1"
-    let v = version.to_ascii_lowercase();
-    // dev / post releases are also treated as not-yet-stable
-    v.contains("dev") || v.contains("post") || {
-        // Look for alpha/beta/rc markers: must be preceded by a digit
-        // to avoid false positives (e.g. package names with 'a' in them)
-        let bytes = v.as_bytes();
-        bytes
-            .windows(2)
-            .any(|w| w[0].is_ascii_digit() && matches!(w[1], b'a' | b'b'))
-            || bytes
-                .windows(3)
-                .any(|w| w[0].is_ascii_digit() && w[1] == b'r' && w[2] == b'c')
-    }
-}
-
-/// Parse a version string into its numeric components.
-///
-/// Only dot-separated **purely numeric** segments are accepted.
-/// Any segment that contains non-digit characters is silently dropped.
-///
-/// # Accepted formats
-///
-/// | Input | Output | Note |
-/// |---|---|---|
-/// | `"2.0.7"` | `[2, 0, 7]` | Standard SemVer / PEP 440 release |
-/// | `"2026.1"` | `[2026, 1]` | CalVer (calendar versioning) |
-/// | `"1.26.15"` | `[1, 26, 15]` | Multi-component numeric version |
-///
-/// # Unsupported formats — and how they behave
-///
-/// | Input | Output | Why unsupported |
-/// |---|---|---|
-/// | `"2.0.0rc1"` | `[]` | Pre-release suffix `rc1` is not purely numeric. **These versions must be caught by `has_prerelease_marker()` before this function is called.** |
-/// | `"2.0.0a1"`, `"2.0.0b2"` | `[]` | Same as above. |
-/// | `"2.0.0.dev1"` | `[2, 0, 0]` | `dev1` is dropped; the remaining `[2, 0, 0]` would compare equal to the final `"2.0.0"` and incorrectly satisfy the minimum. Rely on `has_prerelease_marker()` to reject dev builds first. |
-/// | `"2026.v1"` | `[2026]` | `v1` is not numeric; only the leading `2026` is kept. Comparison is incomplete. In practice, Python packages use PEP 440 and this format does not appear in `uv.lock` or OSV data. |
-/// | `"v1.2.3"` | `[2, 3]` | The leading `v1` segment is dropped entirely (not numeric). Comparison is likely wrong. Same justification: PEP 440 does not allow a `v` prefix in release segments. |
-///
-/// # Design rationale
-///
-/// This tool processes versions that come from two sources, both guaranteed
-/// to be PEP 440 compliant:
-/// - Resolved versions in `uv.lock` (output of `uv lock --upgrade-package`)
-/// - Fixed versions in OSV vulnerability data for Python packages
-///
-/// For pre-release versions specifically, `has_prerelease_marker()` is
-/// called **before** this function in `version_satisfies_min()`, so
-/// `"2.0.0rc1"` is rejected early and never reaches the numeric comparison.
-fn parse_version_parts(version: &str) -> Vec<u64> {
-    version
-        .split('.')
-        .filter_map(|segment| segment.parse::<u64>().ok())
-        .collect()
+    };
+    actual_v >= min_v
 }
 
 #[cfg(test)]
@@ -631,28 +558,46 @@ mod tests {
         assert!(version_satisfies_min("2.0.0", "2.0.0"));
     }
 
+    // ---------------------------------------------------------------------------
+    // pep440_rs migration edge cases (Issue #709)
+    // ---------------------------------------------------------------------------
+
     #[test]
-    fn test_has_prerelease_marker_alpha() {
-        assert!(has_prerelease_marker("2.0.0a1"));
+    fn test_v_prefixed_version_is_parsed_correctly() {
+        // PEP 440 permits an optional "v" prefix; pep440_rs normalizes it away,
+        // so "v1.2.3" parses as 1.2.3 (unlike the old hand-rolled parser, which
+        // silently dropped the "v1" segment entirely).
+        assert!(version_satisfies_min("v1.2.3", "1.2.3"));
     }
 
     #[test]
-    fn test_has_prerelease_marker_beta() {
-        assert!(has_prerelease_marker("2.0.0b3"));
+    fn test_non_pep440_segment_falls_back_to_false() {
+        // "2026.v1" is not a valid PEP 440 version (the "v1" release segment
+        // cannot follow a numeric segment without a separator), so
+        // Version::from_str fails and the conservative fallback applies.
+        assert!(!version_satisfies_min("2026.v1", "2.0.7"));
     }
 
     #[test]
-    fn test_has_prerelease_marker_rc() {
-        assert!(has_prerelease_marker("2.0.0rc1"));
+    fn test_calver_versions_compare_correctly() {
+        assert!(version_satisfies_min("2024.1.1", "2023.7.22"));
     }
 
     #[test]
-    fn test_has_prerelease_marker_dev() {
-        assert!(has_prerelease_marker("2.0.0.dev1"));
+    fn test_post_release_now_satisfies_min_via_pep440_ordering() {
+        // Behavior change from the old implementation: the old parser treated
+        // any "post" marker as automatically not satisfying the minimum. Under
+        // correct PEP 440 ordering, a post-release sorts after its base
+        // release, so "2.0.8.post1" >= "2.0.7" is true.
+        assert!(version_satisfies_min("2.0.8.post1", "2.0.7"));
     }
 
     #[test]
-    fn test_has_no_prerelease_marker_stable() {
-        assert!(!has_prerelease_marker("2.0.7"));
+    fn test_prerelease_of_a_later_release_now_satisfies_min_via_pep440_ordering() {
+        // Behavior change from the old implementation: the old parser treated
+        // any prerelease marker as automatically not satisfying the minimum,
+        // regardless of the release segment. Under correct PEP 440 ordering,
+        // "2.1.0rc1" sorts after "2.0.0" because 2.1.0 > 2.0.0.
+        assert!(version_satisfies_min("2.1.0rc1", "2.0.0"));
     }
 }
