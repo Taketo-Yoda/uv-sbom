@@ -33,11 +33,7 @@ pub use maintenance_repository::{MaintenanceInfo, MaintenanceRepository};
 pub use output_presenter::OutputPresenter;
 pub use progress_reporter::{ProgressCallback, ProgressReporter};
 pub use project_config_reader::ProjectConfigReader;
-// Note: Will be used in subsequent subtasks (target-python compatibility check)
-#[allow(unused_imports)]
-pub use python_compatibility_repository::{
-    is_incompatible, PythonCompatibilityInfo, PythonCompatibilityRepository,
-};
+pub use python_compatibility_repository::{PythonCompatibilityInfo, PythonCompatibilityRepository};
 // Note: This will be used in subsequent subtasks (Subtask 3-8)
 #[allow(unused_imports)]
 pub use vulnerability_repository::VulnerabilityRepository;
