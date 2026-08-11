@@ -119,6 +119,139 @@ fn resolve_target_python(cli: Option<&String>, config: Option<&String>) -> Resul
     Ok(resolved)
 }
 
+/// Resolve a boolean opt-in flag: CLI flag wins if set, otherwise the config value
+/// (defaulting to `false` if the config doesn't specify it).
+///
+/// Shared by `check_license`, `suggest_fix`, `check_abandoned`, and `check_non_pypi`,
+/// which all follow this exact `cli || config.unwrap_or(false)` shape.
+fn resolve_flag(cli_flag: bool, config_value: Option<bool>) -> bool {
+    cli_flag || config_value.unwrap_or(false)
+}
+
+/// Resolve `format`: CLI > config > default (json).
+///
+/// clap always provides a default value for `--format` (default "json"), so we can't
+/// distinguish "user explicitly passed --format json" from "user passed nothing" —
+/// `cli` is always populated. Convention: CLI wins whenever it differs from the clap
+/// default; when it equals the default, config is allowed to override it. This means
+/// an explicit `--format json` loses to a config value other than json.
+fn resolve_format(cli: OutputFormat, config: Option<&str>) -> OutputFormat {
+    let Some(config_format) = config else {
+        return cli;
+    };
+    if cli != OutputFormat::Json {
+        cli
+    } else {
+        config_format.parse::<OutputFormat>().unwrap_or(cli)
+    }
+}
+
+/// Resolve `check_cve`: CLI opt-out (`--no-check-cve`) takes highest priority;
+/// otherwise use the config value (default `true`).
+fn resolve_check_cve(cli_opt_out: bool, config: Option<bool>) -> bool {
+    if cli_opt_out {
+        false
+    } else {
+        config.unwrap_or(true)
+    }
+}
+
+/// Resolve `severity_threshold`: CLI > config > `None`.
+fn resolve_severity_threshold(cli: Option<Severity>, config: Option<&str>) -> Option<Severity> {
+    cli.or_else(|| {
+        config.and_then(|s| match s.to_lowercase().as_str() {
+            "low" => Some(Severity::Low),
+            "medium" => Some(Severity::Medium),
+            "high" => Some(Severity::High),
+            "critical" => Some(Severity::Critical),
+            _ => None,
+        })
+    })
+}
+
+/// Resolve `cvss_threshold`: CLI > config > `None`.
+fn resolve_cvss_threshold(cli: Option<f32>, config: Option<f64>) -> Option<f32> {
+    cli.or(config.map(|v| v as f32))
+}
+
+/// Resolve the `unknown` license handling from its config string representation.
+/// Unrecognized or unspecified values default to `Warn`. Config-file values are
+/// already validated at load time (`config.rs`), so the fallback here is defensive.
+fn resolve_unknown_license_handling(config: Option<&str>) -> UnknownLicenseHandling {
+    config
+        .map(|s| match s.to_lowercase().as_str() {
+            "deny" => UnknownLicenseHandling::Deny,
+            "allow" => UnknownLicenseHandling::Allow,
+            _ => UnknownLicenseHandling::Warn,
+        })
+        .unwrap_or_default()
+}
+
+/// Resolve `license_policy`. `check_license` must be the already-resolved merged
+/// value (not re-derived here), since config-only activation
+/// (`config.check_license = true`) must also pick up the CLI-supplied lists.
+///
+/// If `check_license` is enabled and CLI allow/deny lists are non-empty, they
+/// override the config policy entirely. Otherwise, the config policy is used if
+/// present, falling back to an empty policy (default `Warn` unknown-handling).
+fn resolve_license_policy(
+    check_license: bool,
+    cli_allow: &[String],
+    cli_deny: &[String],
+    config: Option<&config::LicensePolicyConfig>,
+) -> Option<LicensePolicy> {
+    if !check_license {
+        return None;
+    }
+    if !cli_allow.is_empty() || !cli_deny.is_empty() {
+        // CLI provides policy — override config entirely
+        return Some(LicensePolicy::new(
+            cli_allow,
+            cli_deny,
+            UnknownLicenseHandling::default(),
+        ));
+    }
+    if let Some(lp_config) = config {
+        // Use config policy
+        let unknown = resolve_unknown_license_handling(lp_config.unknown.as_deref());
+        let allow = lp_config.allow.clone().unwrap_or_default();
+        let deny = lp_config.deny.clone().unwrap_or_default();
+        return Some(LicensePolicy::new(&allow, &deny, unknown));
+    }
+    // check_license enabled but no policy specified
+    Some(LicensePolicy::new(
+        &[],
+        &[],
+        UnknownLicenseHandling::default(),
+    ))
+}
+
+/// Default inactivity threshold (in days) for abandoned-package detection when
+/// neither CLI nor config specifies one.
+const DEFAULT_ABANDONED_THRESHOLD_DAYS: u64 = 730;
+
+/// Resolve `abandoned_threshold_days`: CLI > config > default.
+///
+/// `cli` is `None` when the flag was not passed and `Some` when the user explicitly
+/// provided a value, cleanly expressing "not provided" vs. "provided."
+fn resolve_abandoned_threshold_days(cli: Option<u64>, config: Option<u64>) -> u64 {
+    cli.or(config).unwrap_or(DEFAULT_ABANDONED_THRESHOLD_DAYS)
+}
+
+/// Resolve `exclude_groups`: CLI overrides config entirely (not merged/deduplicated
+/// like `exclude_patterns`).
+///
+/// `--production-only` is resolved in `main.rs` after lockfile I/O; when it is set,
+/// `cli` is guaranteed empty by clap's `conflicts_with`, so this resolves to the
+/// config value or empty.
+fn resolve_exclude_groups(cli: &[String], config: Option<&[String]>) -> Vec<String> {
+    if !cli.is_empty() {
+        cli.to_vec()
+    } else {
+        config.map(<[String]>::to_vec).unwrap_or_default()
+    }
+}
+
 /// Merge CLI arguments with config file values.
 ///
 /// Priority: CLI > config file > defaults.
@@ -129,61 +262,16 @@ fn resolve_target_python(cli: Option<&String>, config: Option<&String>) -> Resul
 /// Returns an error if `target_python` is set (via CLI or config) but does not parse
 /// as a valid PEP 440 version.
 pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedConfig> {
+    let cfg = config.as_ref();
+
     let target_python = resolve_target_python(
         args.target_python.as_ref(),
-        config.as_ref().and_then(|c| c.target_python.as_ref()),
+        cfg.and_then(|c| c.target_python.as_ref()),
     )?;
 
-    let config = match config {
-        Some(c) => c,
-        None => {
-            // No config file — use CLI values directly
-            let license_policy = if args.check_license
-                && (!args.license_allow.is_empty() || !args.license_deny.is_empty())
-            {
-                Some(LicensePolicy::new(
-                    &args.license_allow,
-                    &args.license_deny,
-                    UnknownLicenseHandling::default(),
-                ))
-            } else if args.check_license {
-                Some(LicensePolicy::new(
-                    &[],
-                    &[],
-                    UnknownLicenseHandling::default(),
-                ))
-            } else {
-                None
-            };
-
-            return Ok(MergedConfig {
-                format: args.format,
-                exclude_patterns: args.exclude.clone(),
-                check_cve: !args.no_check_cve,
-                severity_threshold: args.severity_threshold,
-                cvss_threshold: args.cvss_threshold,
-                ignore_cves: args
-                    .ignore_cve
-                    .iter()
-                    .map(|id| IgnoreCve {
-                        id: id.clone(),
-                        reason: None,
-                    })
-                    .collect(),
-                check_license: args.check_license,
-                license_policy,
-                suggest_fix: args.suggest_fix,
-                check_abandoned: args.check_abandoned,
-                abandoned_threshold_days: args.abandoned_threshold_days.unwrap_or(730),
-                check_non_pypi: args.check_non_pypi,
-                exclude_groups: args.exclude_groups.clone(),
-                target_python,
-            });
-        }
-    };
-
     // Merge exclude_patterns: combine both sources, deduplicate
-    let exclude_patterns = merge_string_lists(&args.exclude, &config.exclude_packages);
+    let exclude_patterns =
+        merge_string_lists(&args.exclude, &cfg.and_then(|c| c.exclude_packages.clone()));
 
     // Merge ignore_cves: combine both sources, deduplicate by ID
     let cli_ignore_cves: Vec<IgnoreCve> = args
@@ -194,116 +282,34 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedCo
             reason: None,
         })
         .collect();
-    let ignore_cves = merge_ignore_cves(&cli_ignore_cves, &config.ignore_cves);
+    let ignore_cves = merge_ignore_cves(&cli_ignore_cves, &cfg.and_then(|c| c.ignore_cves.clone()));
 
-    // Format: CLI > config > default (json)
-    // Note: clap always provides a default value for format, so we check if user explicitly
-    // provided it by comparing against the default. However, since clap's default_value means
-    // args.format is always set, we use config only when format is json (default) and config
-    // provides a different value.
-    let format = if let Some(ref config_format) = config.format {
-        // If user didn't explicitly pass --format, use config value
-        // clap default is "json", so if args.format == Json, config might override
-        // But we can't distinguish "user passed --format json" from "default json"
-        // Convention: CLI always wins since clap provides the value
-        if args.format != OutputFormat::Json {
-            args.format
-        } else {
-            config_format.parse::<OutputFormat>().unwrap_or(args.format)
-        }
-    } else {
-        args.format
-    };
-
-    // check_cve: CLI opt-out takes highest priority; otherwise use config value (default true)
-    let check_cve = if args.no_check_cve {
-        false
-    } else {
-        config.check_cve.unwrap_or(true)
-    };
-
-    // severity_threshold: CLI > config > None
-    let severity_threshold = args.severity_threshold.or_else(|| {
-        config
-            .severity_threshold
-            .as_ref()
-            .and_then(|s| match s.to_lowercase().as_str() {
-                "low" => Some(Severity::Low),
-                "medium" => Some(Severity::Medium),
-                "high" => Some(Severity::High),
-                "critical" => Some(Severity::Critical),
-                _ => None,
-            })
-    });
-
-    // cvss_threshold: CLI > config > None
-    let cvss_threshold = args
-        .cvss_threshold
-        .or(config.cvss_threshold.map(|v| v as f32));
-
-    // check_license: CLI flag || config value
-    let check_license = args.check_license || config.check_license.unwrap_or(false);
-
-    // license_policy: CLI args override config entirely if any CLI args provided
-    let license_policy = if check_license {
-        if !args.license_allow.is_empty() || !args.license_deny.is_empty() {
-            // CLI provides policy — override config entirely
-            Some(LicensePolicy::new(
-                &args.license_allow,
-                &args.license_deny,
-                UnknownLicenseHandling::default(),
-            ))
-        } else if let Some(ref lp_config) = config.license_policy {
-            // Use config policy
-            let unknown = lp_config
-                .unknown
-                .as_ref()
-                .map(|s| match s.to_lowercase().as_str() {
-                    "deny" => UnknownLicenseHandling::Deny,
-                    "allow" => UnknownLicenseHandling::Allow,
-                    _ => UnknownLicenseHandling::Warn,
-                })
-                .unwrap_or_default();
-            let allow = lp_config.allow.clone().unwrap_or_default();
-            let deny = lp_config.deny.clone().unwrap_or_default();
-            Some(LicensePolicy::new(&allow, &deny, unknown))
-        } else {
-            // check_license enabled but no policy specified
-            Some(LicensePolicy::new(
-                &[],
-                &[],
-                UnknownLicenseHandling::default(),
-            ))
-        }
-    } else {
-        None
-    };
-
-    // suggest_fix: CLI flag takes priority over config value
-    let suggest_fix = args.suggest_fix || config.suggest_fix.unwrap_or(false);
-
-    // check_abandoned: CLI flag || config value (mirrors check_license / suggest_fix)
-    let check_abandoned = args.check_abandoned || config.check_abandoned.unwrap_or(false);
-
-    // check_non_pypi: CLI flag || config value (mirrors check_abandoned)
-    let check_non_pypi = args.check_non_pypi || config.check_non_pypi.unwrap_or(false);
-
-    // abandoned_threshold_days: CLI > config > default 730.
-    // args.abandoned_threshold_days is Option<u64>: None when the flag was not passed, Some when
-    // the user explicitly provided a value. This cleanly expresses "not provided" vs "provided."
-    let abandoned_threshold_days = args
-        .abandoned_threshold_days
-        .or(config.abandoned_threshold_days)
-        .unwrap_or(730);
-
-    // exclude_groups: CLI overrides config entirely (not merged/deduplicated like exclude_patterns).
-    // --production-only is resolved in main.rs after lockfile I/O; when it is set, args.exclude_groups
-    // is guaranteed empty by clap's conflicts_with, so this resolves to the config value or empty.
-    let exclude_groups = if !args.exclude_groups.is_empty() {
-        args.exclude_groups.clone()
-    } else {
-        config.exclude_groups.clone().unwrap_or_default()
-    };
+    let format = resolve_format(args.format, cfg.and_then(|c| c.format.as_deref()));
+    let check_cve = resolve_check_cve(args.no_check_cve, cfg.and_then(|c| c.check_cve));
+    let severity_threshold = resolve_severity_threshold(
+        args.severity_threshold,
+        cfg.and_then(|c| c.severity_threshold.as_deref()),
+    );
+    let cvss_threshold =
+        resolve_cvss_threshold(args.cvss_threshold, cfg.and_then(|c| c.cvss_threshold));
+    let check_license = resolve_flag(args.check_license, cfg.and_then(|c| c.check_license));
+    let license_policy = resolve_license_policy(
+        check_license,
+        &args.license_allow,
+        &args.license_deny,
+        cfg.and_then(|c| c.license_policy.as_ref()),
+    );
+    let suggest_fix = resolve_flag(args.suggest_fix, cfg.and_then(|c| c.suggest_fix));
+    let check_abandoned = resolve_flag(args.check_abandoned, cfg.and_then(|c| c.check_abandoned));
+    let check_non_pypi = resolve_flag(args.check_non_pypi, cfg.and_then(|c| c.check_non_pypi));
+    let abandoned_threshold_days = resolve_abandoned_threshold_days(
+        args.abandoned_threshold_days,
+        cfg.and_then(|c| c.abandoned_threshold_days),
+    );
+    let exclude_groups = resolve_exclude_groups(
+        &args.exclude_groups,
+        cfg.and_then(|c| c.exclude_groups.as_deref()),
+    );
 
     Ok(MergedConfig {
         format,
@@ -493,6 +499,194 @@ mod tests {
         });
         let result = merge_config(&args, &config).unwrap();
         assert_eq!(result.cvss_threshold, Some(6.0));
+    }
+
+    // --- format edge case: explicit CLI value vs config (characterization) ---
+    // clap always provides a value for `--format` (default "json"), so `merge_config`
+    // cannot distinguish "user explicitly passed --format json" from "user passed
+    // nothing". The current, intentionally-preserved behavior: config wins whenever
+    // `args.format == Json`, even if the user explicitly typed `--format json`.
+
+    #[test]
+    fn test_merge_config_format_explicit_json_cli_loses_to_config() {
+        let args = Args::parse_from(["uv-sbom", "--format", "json"]);
+        let config = Some(ConfigFile {
+            format: Some("markdown".to_string()),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        assert_eq!(result.format, OutputFormat::Markdown);
+    }
+
+    #[test]
+    fn test_merge_config_format_invalid_config_value_falls_back_to_cli() {
+        let args = Args::parse_from(["uv-sbom", "--format", "markdown"]);
+        let config = Some(ConfigFile {
+            format: Some("not-a-format".to_string()),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        assert_eq!(result.format, OutputFormat::Markdown);
+    }
+
+    // --- early-return branch (no config file) coverage for fields not yet exercised ---
+
+    #[test]
+    fn test_merge_config_no_config_file_severity_threshold_from_cli() {
+        let args = Args::parse_from(["uv-sbom", "--severity-threshold", "high"]);
+        let result = merge_config(&args, &None).unwrap();
+        assert_eq!(result.severity_threshold, Some(Severity::High));
+    }
+
+    #[test]
+    fn test_merge_config_no_config_file_cvss_threshold_from_cli() {
+        let args = Args::parse_from(["uv-sbom", "--cvss-threshold", "9.0"]);
+        let result = merge_config(&args, &None).unwrap();
+        assert_eq!(result.cvss_threshold, Some(9.0));
+    }
+
+    #[test]
+    fn test_merge_config_no_config_file_suggest_fix_from_cli() {
+        let args = Args::parse_from(["uv-sbom", "--suggest-fix"]);
+        let result = merge_config(&args, &None).unwrap();
+        assert!(result.suggest_fix);
+    }
+
+    // --- license_policy merge tests (check_license / license_policy) ---
+
+    #[test]
+    fn test_merge_config_check_license_default_false_no_policy() {
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile::default());
+        let result = merge_config(&args, &config).unwrap();
+        assert!(!result.check_license);
+        assert!(result.license_policy.is_none());
+    }
+
+    #[test]
+    fn test_merge_config_check_license_cli_flag_no_lists_empty_policy() {
+        // --check-license alone (no allow/deny) → Some(empty policy), Warn handling
+        let args = Args::parse_from(["uv-sbom", "--check-license"]);
+        let config = Some(ConfigFile::default());
+        let result = merge_config(&args, &config).unwrap();
+        assert!(result.check_license);
+        let policy = result.license_policy.expect("policy should be Some");
+        assert!(policy.allow.is_empty());
+        assert!(policy.deny.is_empty());
+        assert_eq!(policy.unknown, UnknownLicenseHandling::Warn);
+    }
+
+    #[test]
+    fn test_merge_config_check_license_from_config_true_uses_config_policy() {
+        // check_license enabled via config only; config supplies allow/deny/unknown
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            check_license: Some(true),
+            license_policy: Some(uv_sbom::config::LicensePolicyConfig {
+                allow: Some(vec!["MIT".to_string()]),
+                deny: Some(vec!["GPL-3.0".to_string()]),
+                unknown: Some("deny".to_string()),
+            }),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        assert!(result.check_license);
+        let policy = result.license_policy.expect("policy should be Some");
+        assert_eq!(policy.allow.len(), 1);
+        assert_eq!(policy.allow[0].as_str(), "MIT");
+        assert_eq!(policy.deny.len(), 1);
+        assert_eq!(policy.deny[0].as_str(), "GPL-3.0");
+        assert_eq!(policy.unknown, UnknownLicenseHandling::Deny);
+    }
+
+    #[test]
+    fn test_merge_config_check_license_config_unknown_allow() {
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            check_license: Some(true),
+            license_policy: Some(uv_sbom::config::LicensePolicyConfig {
+                allow: None,
+                deny: None,
+                unknown: Some("allow".to_string()),
+            }),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        let policy = result.license_policy.expect("policy should be Some");
+        assert_eq!(policy.unknown, UnknownLicenseHandling::Allow);
+    }
+
+    #[test]
+    fn test_merge_config_check_license_cli_lists_override_config_policy_entirely() {
+        // CLI --license-allow/--license-deny provided → CLI overrides config policy entirely,
+        // even though config also has check_license=true and its own policy.
+        let args = Args::parse_from([
+            "uv-sbom",
+            "--check-license",
+            "--license-allow",
+            "Apache-2.0",
+        ]);
+        let config = Some(ConfigFile {
+            check_license: Some(true),
+            license_policy: Some(uv_sbom::config::LicensePolicyConfig {
+                allow: Some(vec!["MIT".to_string()]),
+                deny: Some(vec!["GPL-3.0".to_string()]),
+                unknown: Some("deny".to_string()),
+            }),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        let policy = result.license_policy.expect("policy should be Some");
+        assert_eq!(policy.allow.len(), 1);
+        assert_eq!(policy.allow[0].as_str(), "Apache-2.0");
+        assert!(policy.deny.is_empty());
+        // CLI-only construction always uses default (Warn) unknown handling
+        assert_eq!(policy.unknown, UnknownLicenseHandling::Warn);
+    }
+
+    #[test]
+    fn test_merge_config_check_license_cli_flag_enables_even_when_config_false() {
+        // config.check_license = false, but CLI --check-license wins (OR semantics)
+        let args = Args::parse_from(["uv-sbom", "--check-license", "--license-deny", "GPL-3.0"]);
+        let config = Some(ConfigFile {
+            check_license: Some(false),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        assert!(result.check_license);
+        let policy = result.license_policy.expect("policy should be Some");
+        assert_eq!(policy.deny.len(), 1);
+    }
+
+    #[test]
+    fn test_merge_config_no_config_file_check_license_cli_only_policy() {
+        // Early-return branch: no config file, CLI supplies check_license + lists
+        let args = Args::parse_from(["uv-sbom", "--check-license", "--license-allow", "MIT"]);
+        let result = merge_config(&args, &None).unwrap();
+        assert!(result.check_license);
+        let policy = result.license_policy.expect("policy should be Some");
+        assert_eq!(policy.allow.len(), 1);
+        assert_eq!(policy.allow[0].as_str(), "MIT");
+    }
+
+    #[test]
+    fn test_merge_config_no_config_file_check_license_cli_flag_only_empty_policy() {
+        // Early-return branch: no config file, --check-license alone → empty policy
+        let args = Args::parse_from(["uv-sbom", "--check-license"]);
+        let result = merge_config(&args, &None).unwrap();
+        assert!(result.check_license);
+        let policy = result.license_policy.expect("policy should be Some");
+        assert!(policy.allow.is_empty());
+        assert!(policy.deny.is_empty());
+    }
+
+    #[test]
+    fn test_merge_config_no_config_file_check_license_false_no_policy() {
+        // Early-return branch: no config file, no --check-license → None
+        let args = Args::parse_from(["uv-sbom"]);
+        let result = merge_config(&args, &None).unwrap();
+        assert!(!result.check_license);
+        assert!(result.license_policy.is_none());
     }
 
     // --- suggest_fix merge tests ---
