@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Refactored
 - **Moved PEP 440 `Requires-Python` comparison logic out of `src/ports/outbound/` into `src/sbom_generation/domain/`**: `python_compatibility_repository.rs` contained the `is_incompatible` free function and `PythonCompatibilityInfo::is_incompatible_with` method — real business logic, not just a port contract, violating the invariant that `ports/` only defines trait contracts and DTOs. Moved to the new `PythonCompatibilityChecker` domain service (`Option<&str>`-based, no dependency on the `ports/` DTO, avoiding a domain→ports import per the #703 precedent). Internal refactor only, no behavior change (#705)
+- **Extracted per-field resolver functions from `config_resolver::merge_config`**: the ~196-line function resolved all 13 `MergedConfig` fields inline. Extracted each into a named `resolve_*` function (or the shared `resolve_flag` helper for the four boolean-OR fields), following the existing `resolve_target_python` pattern, and collapsed the duplicate `None`-config early-return branch into the same resolver calls. Config resolution order (CLI > config file > defaults) is unchanged; a suite of new characterization tests (notably for `license_policy`, previously uncovered) confirms behavior is preserved. Internal refactor only, no behavior change (#712)
 
 ## [2.8.1] - 2026-08-09
 
