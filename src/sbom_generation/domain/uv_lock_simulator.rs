@@ -1,11 +1,15 @@
 //! Domain-owned port for uv lock simulation.
 //!
-//! Unlike the other outbound ports, this trait is defined in the domain layer
-//! rather than under `src/ports/outbound/`. The `UpgradeAdvisor` domain service
-//! consumes it as a generic bound (`advise<S: UvLockSimulator>`), and the domain
-//! layer must never import from `ports/` or `adapters/`. In Ports & Adapters the
-//! port belongs to the hexagon anyway; it is implemented outside by
-//! `adapters::outbound::uv::UvLockAdapter`. See Issue #703.
+//! This trait was moved into the domain layer in #703 because `UpgradeAdvisor`
+//! (a domain service) consumed it directly as a generic bound. As of #716,
+//! `UpgradeAdvisor` is a pure, synchronous comparator that no longer touches
+//! this trait at all — the simulation-running loop now lives in
+//! `application::use_cases::SimulateUpgradesUseCase`, which owns this port the
+//! same way other application-layer use cases own their outbound ports. The
+//! trait itself remains here for now rather than moving to
+//! `src/ports/outbound/`; `SimulationResult` is a plain value object (no I/O)
+//! so it can stay regardless. It is implemented by
+//! `adapters::outbound::uv::UvLockAdapter`.
 
 use anyhow::Result;
 use std::collections::HashMap;
