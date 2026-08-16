@@ -1,5 +1,6 @@
 use super::GenerateSbomUseCase;
 use crate::application::dto::SbomRequest;
+use crate::application::use_cases::SimulateUpgradesUseCase;
 use crate::i18n::Messages;
 use crate::ports::outbound::{
     LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
@@ -70,7 +71,10 @@ where
         // omit one.
         let recommendations = match self.uv_lock_simulator.as_ref() {
             Some(simulator) => {
-                UpgradeAdvisor::advise(simulator, &entries, &request.project_path).await
+                let simulation_outcomes = SimulateUpgradesUseCase::new(simulator)
+                    .run(&entries, &request.project_path)
+                    .await;
+                UpgradeAdvisor::advise(&entries, &simulation_outcomes)
             }
             None => Vec::new(),
         };

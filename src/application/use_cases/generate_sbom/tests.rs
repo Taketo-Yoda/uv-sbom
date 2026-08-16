@@ -1,6 +1,7 @@
 use super::*;
 use crate::application::use_cases::test_doubles::{
-    MockMaintenanceRepository, MockPythonCompatibilityRepository, MockVulnerabilityRepository,
+    MockMaintenanceRepository, MockPythonCompatibilityRepository, MockUvLockSimulator,
+    MockVulnerabilityRepository,
 };
 use crate::ports::outbound::{GroupRoots, LockfileParseResult, PackageSourceMap, PyPiMetadata};
 use crate::sbom_generation::domain::services::{ThresholdConfig, VulnerabilityCheckResult};
@@ -79,59 +80,6 @@ impl ProgressReporter for MockProgressReporter {
     fn report(&self, _message: &str) {}
     fn report_error(&self, _message: &str) {}
     fn report_completion(&self, _message: &str) {}
-}
-
-/// Configurable in-memory mock implementing `UvLockSimulator`.
-///
-/// Responses are keyed by package name rather than a FIFO queue, because
-/// `UpgradeAdvisor::advise` iterates a `HashMap` of unique direct deps — a
-/// FIFO queue would make test assertions depend on nondeterministic
-/// iteration order, matching the reasoning behind
-/// `MockPythonCompatibilityRepository` in `test_doubles.rs`. Not shared via
-/// `test_doubles.rs` since this use case is its only consumer.
-#[derive(Default)]
-struct MockUvLockSimulator {
-    results: HashMap<String, SimulationResult>,
-    errors: HashMap<String, String>,
-}
-
-impl MockUvLockSimulator {
-    fn with_result(package: &str, result: SimulationResult) -> Self {
-        let mut results = HashMap::new();
-        results.insert(package.to_string(), result);
-        Self {
-            results,
-            errors: HashMap::new(),
-        }
-    }
-
-    fn with_error(package: &str, error: &str) -> Self {
-        let mut errors = HashMap::new();
-        errors.insert(package.to_string(), error.to_string());
-        Self {
-            results: HashMap::new(),
-            errors,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl UvLockSimulator for MockUvLockSimulator {
-    async fn simulate_upgrade(
-        &self,
-        package_name: &str,
-        _project_path: &Path,
-    ) -> Result<SimulationResult> {
-        if let Some(error) = self.errors.get(package_name) {
-            anyhow::bail!("{}", error);
-        }
-        self.results.get(package_name).cloned().ok_or_else(|| {
-            anyhow::anyhow!(
-                "MockUvLockSimulator: no response configured for {}",
-                package_name
-            )
-        })
-    }
 }
 
 mod test_helpers {

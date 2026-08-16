@@ -13,5 +13,5 @@ pub use group_reachability_analyzer::GroupReachabilityAnalyzer;
 pub use license_compliance_checker::LicenseComplianceChecker;
 pub use python_compatibility_checker::PythonCompatibilityChecker;
 pub use resolution_analyzer::ResolutionAnalyzer;
-pub use upgrade_advisor::UpgradeAdvisor;
+pub use upgrade_advisor::{SimulationOutcomes, UpgradeAdvisor};
 pub use vulnerability_checker::{ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker};
