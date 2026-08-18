@@ -166,13 +166,7 @@ pub(super) fn render_vulnerability_row(
         .cvss_score
         .map_or("N/A".to_string(), |s| format!("{:.1}", s));
     let fixed_version = vuln.fixed_version.as_deref().unwrap_or("N/A");
-    let severity_emoji = match vuln.severity {
-        crate::application::read_models::SeverityView::Critical => "🔴",
-        crate::application::read_models::SeverityView::High => "🟠",
-        crate::application::read_models::SeverityView::Medium => "🟡",
-        crate::application::read_models::SeverityView::Low => "🟢",
-        crate::application::read_models::SeverityView::None => "⚪",
-    };
+    let severity_emoji = vuln.severity.emoji();
 
     output.push_str(&format!(
         "| {} | {} | {} | {} | {} {} | {} |\n",
