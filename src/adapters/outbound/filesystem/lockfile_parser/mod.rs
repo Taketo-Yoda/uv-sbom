@@ -1,113 +1,45 @@
-use crate::ports::outbound::{
-    GroupRoots, LockfileParseResult, PackageSourceKind, PackageSourceMap,
-};
+mod toml_schema;
+
+#[cfg(test)]
+use crate::ports::outbound::PackageSourceKind;
+use crate::ports::outbound::{GroupRoots, LockfileParseResult, PackageSourceMap};
 use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
-use serde::Deserialize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
-
-// Shared TOML deserialization structs.
-// Module-scoped so both parse functions share the same definitions.
-
-#[derive(Debug, Deserialize)]
-struct UvDependency {
-    name: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct DevDependencies {
-    #[serde(default)]
-    dev: Vec<UvDependency>,
-}
-
-#[derive(Debug, Deserialize)]
-struct PackageSource {
-    editable: Option<String>,
-    #[serde(rename = "virtual")]
-    virtual_path: Option<String>,
-    registry: Option<String>,
-    git: Option<String>,
-    path: Option<String>,
-    url: Option<String>,
-}
-
-impl PackageSource {
-    fn is_local(&self) -> bool {
-        self.editable.is_some() || self.virtual_path.is_some()
-    }
-
-    /// Classify this source into a `PackageSourceKind`.
-    ///
-    /// Priority when multiple fields are set (uv.lock sets exactly one in practice):
-    /// WorkspaceMember > Git > LocalPath > DirectUrl > Registry.
-    /// A registry URL of `"https://pypi.org/simple"` (with or without trailing slash)
-    /// maps to `PyPi`; all other registry URLs map to `PrivateRegistry`.
-    ///
-    /// If none of the known fields are set (e.g., a future uv.lock source type or
-    /// a `source = {}` empty table), falls back to `PyPi` as a non-flagging default.
-    /// Callers should treat this fallback as "unknown / assumed PyPI" until a richer
-    /// classification can be confirmed.
-    fn to_kind(&self) -> PackageSourceKind {
-        if self.is_local() {
-            return PackageSourceKind::WorkspaceMember;
-        }
-        if let Some(git) = &self.git {
-            return PackageSourceKind::Git(git.clone());
-        }
-        if let Some(path) = &self.path {
-            return PackageSourceKind::LocalPath(path.clone());
-        }
-        if let Some(url) = &self.url {
-            return PackageSourceKind::DirectUrl(url.clone());
-        }
-        if let Some(reg) = &self.registry {
-            let normalized = reg.trim_end_matches('/');
-            if normalized == "https://pypi.org/simple" {
-                return PackageSourceKind::PyPi;
-            }
-            return PackageSourceKind::PrivateRegistry(reg.clone());
-        }
-        // No source field set — treat as PyPI (non-flagging default).
-        PackageSourceKind::PyPi
-    }
-}
+#[cfg(test)]
+use toml_schema::PackageSource;
+use toml_schema::{UvDependency, UvLock};
 
 /// Parse uv.lock TOML content into (packages, dependency_map).
 ///
 /// Pure function: no I/O, no `&self`. Suitable for reuse by any adapter
 /// that has the raw lockfile bytes (filesystem, git blob, in-memory, etc.).
 pub fn parse_lockfile_content(content: &str, project_path: &Path) -> Result<LockfileParseResult> {
-    #[derive(Debug, Deserialize)]
-    struct UvPackage {
-        name: String,
-        version: String,
-        #[serde(default)]
-        dependencies: Vec<UvDependency>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct UvLock {
-        package: Vec<UvPackage>,
-    }
-
     let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
         path: project_path.join("uv.lock"),
         details: e.to_string(),
     })?;
 
-    let mut packages = Vec::new();
+    let packages = lockfile
+        .package
+        .ok_or_else(|| SbomError::LockfileParseError {
+            path: project_path.join("uv.lock"),
+            details: "missing field `package`".to_string(),
+        })?;
+
+    let mut result_packages = Vec::new();
     let mut dependency_map = HashMap::new();
 
-    for pkg in lockfile.package {
-        packages.push(Package::new(pkg.name.clone(), pkg.version.clone())?);
+    for pkg in packages {
+        result_packages.push(Package::new(pkg.name.clone(), pkg.version.clone())?);
 
         let deps: Vec<String> = pkg.dependencies.iter().map(|d| d.name.clone()).collect();
         dependency_map.insert(pkg.name, deps);
     }
 
-    Ok((packages, dependency_map))
+    Ok((result_packages, dependency_map))
 }
 
 /// Parse uv.lock TOML content and return only packages reachable from
@@ -123,33 +55,24 @@ pub fn parse_lockfile_content_for_member(
     project_path: &Path,
     member_name: &str,
 ) -> Result<LockfileParseResult> {
-    #[derive(Debug, Deserialize)]
-    struct UvPackage {
-        name: String,
-        version: String,
-        #[serde(default)]
-        dependencies: Vec<UvDependency>,
-        #[serde(default, rename = "dev-dependencies")]
-        dev_dependencies: Option<DevDependencies>,
-        source: Option<PackageSource>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct UvLock {
-        package: Vec<UvPackage>,
-    }
-
     let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
         path: project_path.join("uv.lock"),
         details: e.to_string(),
     })?;
 
+    let packages = lockfile
+        .package
+        .ok_or_else(|| SbomError::LockfileParseError {
+            path: project_path.join("uv.lock"),
+            details: "missing field `package`".to_string(),
+        })?;
+
     let mut full_dep_map: HashMap<String, Vec<String>> = HashMap::new();
     let mut pkg_lookup: HashMap<String, (String, String)> = HashMap::new();
     let mut member_direct_deps: Option<Vec<String>> = None;
 
-    for pkg in &lockfile.package {
-        let deps = collect_all_deps(&pkg.dependencies, pkg.dev_dependencies.as_ref());
+    for pkg in &packages {
+        let deps = collect_all_deps(&pkg.dependencies, pkg.dev_group());
 
         let is_member_root =
             pkg.name == member_name && pkg.source.as_ref().map(|s| s.is_local()).unwrap_or(false);
@@ -211,27 +134,6 @@ pub fn parse_lockfile_content_for_member(
 /// test = [{ name = "pytest" }]
 /// ```
 pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoots> {
-    #[derive(Debug, Deserialize)]
-    struct UvLock {
-        #[serde(default)]
-        manifest: Option<Manifest>,
-        #[serde(default)]
-        package: Vec<UvPackage>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct Manifest {
-        #[serde(default, rename = "dependency-groups")]
-        dependency_groups: HashMap<String, Vec<UvDependency>>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct UvPackage {
-        source: Option<PackageSource>,
-        #[serde(default, rename = "dev-dependencies")]
-        dev_dependencies: Option<HashMap<String, Vec<UvDependency>>>,
-    }
-
     let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
         path: project_path.join("uv.lock"),
         details: e.to_string(),
@@ -256,6 +158,7 @@ pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoot
     // (identified by source.virtual or source.editable pointing to ".").
     let package_groups: GroupRoots = lockfile
         .package
+        .unwrap_or_default()
         .into_iter()
         .find(|pkg| pkg.source.as_ref().map(|s| s.is_local()).unwrap_or(false))
         .and_then(|pkg| pkg.dev_dependencies)
@@ -275,25 +178,13 @@ pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoot
 /// Packages whose `[[package]]` entry has no `source` field are omitted from
 /// the returned map. Invalid TOML returns an error.
 pub fn parse_package_sources(content: &str, project_path: &Path) -> Result<PackageSourceMap> {
-    #[derive(Debug, Deserialize)]
-    struct UvPackage {
-        name: String,
-        source: Option<PackageSource>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct UvLock {
-        #[serde(default)]
-        package: Vec<UvPackage>,
-    }
-
     let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
         path: project_path.join("uv.lock"),
         details: e.to_string(),
     })?;
 
     let mut map = PackageSourceMap::new();
-    for pkg in lockfile.package {
+    for pkg in lockfile.package.unwrap_or_default() {
         if let Some(source) = pkg.source {
             map.insert(pkg.name, source.to_kind());
         }
@@ -304,11 +195,11 @@ pub fn parse_package_sources(content: &str, project_path: &Path) -> Result<Packa
 /// Collect all dependency names from a package (runtime + dev).
 fn collect_all_deps(
     dependencies: &[UvDependency],
-    dev_dependencies: Option<&DevDependencies>,
+    dev_group: Option<&[UvDependency]>,
 ) -> Vec<String> {
     let mut deps: Vec<String> = dependencies.iter().map(|d| d.name.clone()).collect();
-    if let Some(dev_deps) = dev_dependencies {
-        for dep in &dev_deps.dev {
+    if let Some(dev_deps) = dev_group {
+        for dep in dev_deps {
             deps.push(dep.name.clone());
         }
     }
@@ -613,6 +504,17 @@ source = { registry = "https://pypi.org/simple" }
         );
     }
 
+    // Like `parse_lockfile_content` (see `test_parse_lockfile_content_empty_lockfile_returns_no_packages`),
+    // a `uv.lock` with no `[[package]]` array at all is a parse error for
+    // `parse_lockfile_content_for_member`, unlike `parse_group_roots`/`parse_package_sources`
+    // which treat it as empty. See `toml_schema::UvLock::package`'s doc comment.
+    #[test]
+    fn test_parse_lockfile_for_member_no_package_section_at_all_returns_error() {
+        let result =
+            parse_lockfile_content_for_member("version = 1\n", Path::new("/workspace"), "my-app");
+        assert!(result.is_err());
+    }
+
     // uv >= 0.5 workspace lock fixture using `source.virtual` instead of `source.editable`.
     //
     // Dependency graph:
@@ -698,6 +600,65 @@ dependencies = [
         assert!(!names.contains("fastapi"), "unreachable from worker");
     }
 
+    // Member-scoped traversal only folds the `dev` group of `[package.dev-dependencies]`
+    // into the reachability graph (via `UvPackage::dev_group`); other named groups (e.g.
+    // `test`) must stay excluded, exactly like the pre-split `DevDependencies { dev }`
+    // struct behaved.
+    const WORKSPACE_LOCK_MULTI_DEV_GROUPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["my-app"]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+test = [{ name = "pytest" }]
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_lockfile_for_member_includes_dev_group_but_not_other_groups() {
+        let (packages, _) = parse_lockfile_content_for_member(
+            WORKSPACE_LOCK_MULTI_DEV_GROUPS,
+            Path::new("/project"),
+            "my-app",
+        )
+        .unwrap();
+
+        let names: HashSet<String> = packages.iter().map(|p| p.name().to_string()).collect();
+        assert!(
+            names.contains("requests"),
+            "production dep must be reachable"
+        );
+        assert!(names.contains("mypy"), "dev group must be reachable");
+        assert!(
+            !names.contains("pytest"),
+            "test group must NOT be reachable"
+        );
+    }
+
     // --- parse_group_roots tests ---
 
     const LOCK_WITH_GROUPS: &str = r#"
@@ -769,6 +730,22 @@ source = { registry = "https://pypi.org/simple" }
     fn test_parse_group_roots_returns_error_on_invalid_toml() {
         let result = parse_group_roots("invalid [[[ toml", Path::new("/project"));
         assert!(result.is_err());
+    }
+
+    // Unlike `parse_lockfile_content` / `parse_lockfile_content_for_member`, a `uv.lock`
+    // with no `[[package]]` array at all is not an error for `parse_group_roots` — it
+    // simply yields no group roots. This asymmetry predates the shared `UvLock` schema
+    // (see `toml_schema::UvLock::package`'s doc comment) and must not regress.
+    #[test]
+    fn test_parse_group_roots_returns_empty_when_no_package_section_at_all() {
+        let roots = parse_group_roots("version = 1\n", Path::new("/project")).unwrap();
+        assert!(roots.is_empty());
+    }
+
+    #[test]
+    fn test_parse_package_sources_returns_empty_when_no_package_section_at_all() {
+        let map = parse_package_sources("version = 1\n", Path::new("/project")).unwrap();
+        assert!(map.is_empty());
     }
 
     // --- parse_group_roots revision 3 tests ---
