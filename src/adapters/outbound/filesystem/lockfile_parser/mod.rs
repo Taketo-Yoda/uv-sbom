@@ -1,3 +1,4 @@
+mod source_classifier;
 mod toml_schema;
 
 #[cfg(test)]
@@ -8,8 +9,6 @@ use crate::shared::error::SbomError;
 use crate::shared::Result;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
-#[cfg(test)]
-use toml_schema::PackageSource;
 use toml_schema::{UvDependency, UvLock};
 
 /// Parse uv.lock TOML content into (packages, dependency_map).
@@ -1081,18 +1080,5 @@ source = { registry = "https://pypi.org/simple/" }
             "https://example.com/pkg.tar.gz"
         );
         assert_eq!(PackageSourceKind::WorkspaceMember.value(), "");
-    }
-
-    #[test]
-    fn test_to_kind_workspace_member_takes_priority_over_registry() {
-        let source = PackageSource {
-            editable: Some(".".to_string()),
-            virtual_path: None,
-            registry: Some("https://pypi.org/simple".to_string()),
-            git: None,
-            path: None,
-            url: None,
-        };
-        assert_eq!(source.to_kind(), PackageSourceKind::WorkspaceMember);
     }
 }
