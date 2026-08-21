@@ -1,3 +1,4 @@
+mod graph;
 mod source_classifier;
 mod toml_schema;
 
@@ -7,9 +8,10 @@ use crate::ports::outbound::{GroupRoots, LockfileParseResult, PackageSourceMap};
 use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
-use std::collections::{HashMap, HashSet, VecDeque};
+use graph::{bfs_reachable, collect_all_deps};
+use std::collections::HashMap;
 use std::path::Path;
-use toml_schema::{UvDependency, UvLock};
+use toml_schema::UvLock;
 
 /// Parse uv.lock TOML content into (packages, dependency_map).
 ///
@@ -189,46 +191,6 @@ pub fn parse_package_sources(content: &str, project_path: &Path) -> Result<Packa
         }
     }
     Ok(map)
-}
-
-/// Collect all dependency names from a package (runtime + dev).
-fn collect_all_deps(
-    dependencies: &[UvDependency],
-    dev_group: Option<&[UvDependency]>,
-) -> Vec<String> {
-    let mut deps: Vec<String> = dependencies.iter().map(|d| d.name.clone()).collect();
-    if let Some(dev_deps) = dev_group {
-        for dep in dev_deps {
-            deps.push(dep.name.clone());
-        }
-    }
-    deps
-}
-
-/// BFS traversal starting from `seeds`, returning all transitively reachable package names.
-fn bfs_reachable(dep_map: &HashMap<String, Vec<String>>, seeds: Vec<String>) -> HashSet<String> {
-    let mut visited: HashSet<String> = HashSet::new();
-    let mut queue: VecDeque<String> = VecDeque::new();
-
-    for dep in seeds {
-        if !visited.contains(&dep) {
-            visited.insert(dep.clone());
-            queue.push_back(dep);
-        }
-    }
-
-    while let Some(current) = queue.pop_front() {
-        if let Some(deps) = dep_map.get(&current) {
-            for dep in deps {
-                if !visited.contains(dep) {
-                    visited.insert(dep.clone());
-                    queue.push_back(dep.clone());
-                }
-            }
-        }
-    }
-
-    visited
 }
 
 #[cfg(test)]
