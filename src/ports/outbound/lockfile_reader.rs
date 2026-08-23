@@ -147,3 +147,62 @@ pub trait LockfileReader {
     /// `[[package]]` entry has no `source` field are omitted from the map.
     fn read_and_parse_package_sources(&self, project_path: &Path) -> Result<PackageSourceMap>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_package_source_kind_is_non_pypi_external() {
+        assert!(!PackageSourceKind::PyPi.is_non_pypi_external());
+        assert!(PackageSourceKind::PrivateRegistry("url".to_string()).is_non_pypi_external());
+        assert!(PackageSourceKind::Git("url".to_string()).is_non_pypi_external());
+        assert!(!PackageSourceKind::LocalPath("path".to_string()).is_non_pypi_external());
+        assert!(PackageSourceKind::DirectUrl("url".to_string()).is_non_pypi_external());
+        assert!(!PackageSourceKind::WorkspaceMember.is_non_pypi_external());
+    }
+
+    #[test]
+    fn test_package_source_kind_label() {
+        assert_eq!(PackageSourceKind::PyPi.label(), "PyPI");
+        assert_eq!(
+            PackageSourceKind::PrivateRegistry("url".to_string()).label(),
+            "Private Registry"
+        );
+        assert_eq!(PackageSourceKind::Git("url".to_string()).label(), "Git");
+        assert_eq!(
+            PackageSourceKind::LocalPath("path".to_string()).label(),
+            "Local Path"
+        );
+        assert_eq!(
+            PackageSourceKind::DirectUrl("url".to_string()).label(),
+            "Direct URL"
+        );
+        assert_eq!(
+            PackageSourceKind::WorkspaceMember.label(),
+            "Workspace Member"
+        );
+    }
+
+    #[test]
+    fn test_package_source_kind_value() {
+        assert_eq!(PackageSourceKind::PyPi.value(), "");
+        assert_eq!(
+            PackageSourceKind::PrivateRegistry("https://example.com".to_string()).value(),
+            "https://example.com"
+        );
+        assert_eq!(
+            PackageSourceKind::Git("https://github.com/u/r".to_string()).value(),
+            "https://github.com/u/r"
+        );
+        assert_eq!(
+            PackageSourceKind::LocalPath("/path/to/pkg".to_string()).value(),
+            "/path/to/pkg"
+        );
+        assert_eq!(
+            PackageSourceKind::DirectUrl("https://example.com/pkg.tar.gz".to_string()).value(),
+            "https://example.com/pkg.tar.gz"
+        );
+        assert_eq!(PackageSourceKind::WorkspaceMember.value(), "");
+    }
+}
