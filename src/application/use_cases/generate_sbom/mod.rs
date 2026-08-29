@@ -665,9 +665,3 @@ mod tests {
         }
     }
 }
-
-// Transitional: content still moves out to filtering.rs/checks.rs/response.rs/upgrade.rs
-// in #756-#759, then this module is deleted entirely in #760 (parent split: #740).
-#[cfg(test)]
-#[path = "tests.rs"]
-mod tests_legacy;

@@ -256,6 +256,44 @@ mod tests {
     }
 
     #[test]
+    fn test_build_with_project_carries_python_compatibility_report() {
+        use super::super::python_compatibility::PythonIncompatibilityView;
+
+        let packages = vec![th::package("legacy-lib", "1.0.0")];
+        let metadata = th::metadata();
+        let report = PythonCompatibilityReport {
+            target_python: "3.13".to_string(),
+            incompatible: vec![PythonIncompatibilityView {
+                name: "legacy-lib".to_string(),
+                version: "1.0.0".to_string(),
+                requires_python: Some(">=3.8,<3.12".to_string()),
+                is_direct: true,
+            }],
+        };
+
+        let read_model = SbomReadModelBuilder::build_with_project(
+            packages,
+            &metadata,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&report),
+            &[],
+        );
+
+        let carried = read_model
+            .python_compatibility
+            .expect("python_compatibility_report must be carried into the read model");
+        assert_eq!(carried.target_python, "3.13");
+        assert_eq!(carried.incompatible.len(), 1);
+        assert_eq!(carried.incompatible[0].name, "legacy-lib");
+    }
+
+    #[test]
     fn test_build_full_read_model_with_vulnerabilities() {
         let packages = vec![th::package("requests", "2.31.0")];
         let metadata = th::metadata();
