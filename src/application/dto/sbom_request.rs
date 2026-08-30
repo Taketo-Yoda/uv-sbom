@@ -50,8 +50,6 @@ pub struct SbomRequest {
     pub target_python: Option<String>,
     /// Package name to trace dependency paths to (`--explain`).
     /// `None` disables path tracing.
-    #[allow(dead_code)]
-    // WIRE(#768): remove when GenerateSbomUseCase reads explain_package to build ExplainView
     pub explain_package: Option<String>,
     /// Output locale for human-readable formats
     pub locale: Locale,

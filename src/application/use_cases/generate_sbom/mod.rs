@@ -158,6 +158,11 @@ where
             )
             .await?;
 
+        // Step 11.5: Build the --explain dependency-path view if requested.
+        // Must run before build_response, which takes ownership of dependency_graph.
+        let explain_view =
+            self.build_explain_view_if_requested(&request, dependency_graph.as_ref());
+
         // Step 12: Build and return response
         Ok(self.build_response(
             enriched_packages,
@@ -168,6 +173,7 @@ where
             abandoned_packages_report,
             non_pypi_packages_report,
             python_compatibility_report,
+            explain_view,
             request.exclude_groups.clone(),
         ))
     }
@@ -490,6 +496,52 @@ mod tests {
 
             assert_eq!(response.enriched_packages.len(), 1);
             assert!(response.vulnerability_check_result.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_execute_with_explain_package_populates_response_view() {
+            let packages = vec![
+                pkg("myproject", "1.0.0"),
+                pkg("requests", "2.31.0"),
+                pkg("urllib3", "1.26.0"),
+            ];
+            let deps = HashMap::from([
+                ("myproject".to_string(), vec!["requests".to_string()]),
+                ("requests".to_string(), vec!["urllib3".to_string()]),
+                ("urllib3".to_string(), vec![]),
+            ]);
+            let use_case = UseCaseBuilder::default()
+                .with_lockfile_and_deps(packages, deps)
+                .with_project_name("myproject")
+                .build();
+
+            let request = SbomRequest::builder()
+                .project_path("/test/project")
+                .include_dependency_info(true)
+                .explain_package(Some("urllib3".to_string()))
+                .build()
+                .unwrap();
+
+            let response = use_case.execute(request).await.unwrap();
+
+            let view = response.explain_view.expect("explain_package set → Some");
+            assert!(view.found);
+            assert!(!view.is_direct);
+            assert_eq!(
+                view.paths,
+                vec![vec!["requests".to_string(), "urllib3".to_string()]]
+            );
+        }
+
+        #[tokio::test]
+        async fn test_execute_without_explain_package_leaves_view_none() {
+            let use_case = UseCaseBuilder::default()
+                .with_lockfile(vec![pkg("certifi", "2024.8.30")])
+                .build();
+
+            let response = use_case.execute(default_request()).await.unwrap();
+
+            assert!(response.explain_view.is_none());
         }
 
         #[tokio::test]
