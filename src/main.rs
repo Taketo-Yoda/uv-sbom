@@ -201,12 +201,19 @@ fn print_startup_warnings(args: &Args, msgs: &Messages) {
 /// since each varies between the two call sites: `exclude_groups` requires I/O
 /// rooted at a different path per mode, workspace mode always passes
 /// `suggest_fix(false)`, and only normal mode supports `--dry-run`.
+///
+/// `explain_package` is likewise an explicit parameter rather than sourced
+/// from `&MergedConfig`: it comes straight from the raw `Args.explain` field,
+/// not `MergedConfig`, because it intentionally has no config-file tier
+/// (see Issue #767) — `MergedConfig` only exists to express the CLI > env >
+/// config file > defaults merge, which doesn't apply to a CLI-only value.
 fn build_sbom_request(
     project_path: PathBuf,
     merged: &MergedConfig,
     exclude_groups: Vec<String>,
     suggest_fix: bool,
     dry_run: bool,
+    explain_package: Option<String>,
     locale: Locale,
 ) -> Result<SbomRequest> {
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
@@ -227,6 +234,7 @@ fn build_sbom_request(
         .check_non_pypi(merged.check_non_pypi)
         .exclude_groups(exclude_groups)
         .target_python(merged.target_python.clone())
+        .explain_package(explain_package)
         .locale(locale)
         .build()
 }
@@ -484,6 +492,7 @@ async fn run(args: Args) -> Result<bool> {
         exclude_groups,
         suggest_fix,
         args.dry_run,
+        args.explain.clone(),
         locale,
     )?;
 
@@ -590,6 +599,9 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             workspace_exclude_groups.clone(),
             false,
             false,
+            // --explain is conflicts_with = "workspace"; clap rejects the
+            // combination at parse time, so this is provably always None here.
+            None,
             locale,
         )?;
 
