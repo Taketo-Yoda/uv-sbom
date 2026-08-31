@@ -3,6 +3,7 @@ use crate::application::dto::SbomRequest;
 use crate::application::read_models::abandoned_package::{
     AbandonedPackageView, AbandonedPackagesReport,
 };
+use crate::application::read_models::explain_view::ExplainView;
 use crate::application::read_models::non_pypi_package::{
     NonPyPiPackageView, NonPyPiPackagesReport,
 };
@@ -18,7 +19,9 @@ use crate::ports::outbound::{
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::{LicenseComplianceChecker, ThresholdConfig};
-use crate::sbom_generation::domain::{DependencyGraph, EnrichedPackage, Package, UvLockSimulator};
+use crate::sbom_generation::domain::{
+    DependencyGraph, EnrichedPackage, Package, PackageName, UvLockSimulator,
+};
 use crate::shared::Result;
 use chrono::Utc;
 use std::cmp::Reverse;
@@ -216,6 +219,50 @@ where
         }
 
         Ok(Some(report))
+    }
+
+    /// Builds the `--explain` dependency-path view when `explain_package` is set.
+    ///
+    /// Returns `None` when the flag is absent, or when no dependency graph was
+    /// built (`include_dependency_info` was false, e.g. non-Markdown output):
+    /// with no graph the question is unanswerable, and reporting `found: false`
+    /// would wrongly claim the package is absent from the project.
+    ///
+    /// An invalid package name yields `Some(found: false)` rather than an error —
+    /// a bad `--explain` argument must never abort SBOM generation. No new
+    /// BFS/traversal logic is written here; `DependencyGraph::find_paths_to` is
+    /// reused exactly as `ResolutionAnalyzer::analyze` does for CVE-affected
+    /// packages.
+    pub(super) fn build_explain_view_if_requested(
+        &self,
+        request: &SbomRequest,
+        dependency_graph: Option<&DependencyGraph>,
+    ) -> Option<ExplainView> {
+        let target = request.explain_package.as_ref()?;
+        let graph = dependency_graph?;
+
+        let Ok(pkg_name) = PackageName::new(target.clone()) else {
+            return Some(ExplainView {
+                target_package: target.clone(),
+                found: false,
+                is_direct: false,
+                paths: Vec::new(),
+            });
+        };
+
+        let is_direct = graph.direct_dependencies().contains(&pkg_name);
+        let paths: Vec<Vec<String>> = graph
+            .find_paths_to(&pkg_name)
+            .into_iter()
+            .map(|path| path.iter().map(|p| p.as_str().to_string()).collect())
+            .collect();
+
+        Some(ExplainView {
+            target_package: target.clone(),
+            found: is_direct || !paths.is_empty(),
+            is_direct,
+            paths,
+        })
     }
 
     /// Returns the set of direct dependency names from the graph.
@@ -918,6 +965,137 @@ mod tests {
             assert_eq!(result.direct_count(), 1);
             assert_eq!(result.transitive_count(), 0);
             assert!(result.packages[0].is_direct);
+        }
+    }
+
+    mod tests_explain {
+        use super::*;
+        use crate::sbom_generation::domain::{DependencyGraph, PackageName};
+        use std::collections::HashMap;
+
+        fn pn(name: &str) -> PackageName {
+            PackageName::new(name.to_string()).unwrap()
+        }
+
+        fn make_graph(direct: Vec<&str>, edges: Vec<(&str, Vec<&str>)>) -> DependencyGraph {
+            let direct_deps = direct.into_iter().map(pn).collect();
+            let package_edges: HashMap<PackageName, Vec<PackageName>> = edges
+                .into_iter()
+                .map(|(parent, children)| (pn(parent), children.into_iter().map(pn).collect()))
+                .collect();
+            DependencyGraph::new(direct_deps, HashMap::new(), package_edges)
+        }
+
+        fn explain_request(target: &str) -> SbomRequest {
+            SbomRequest::builder()
+                .project_path("/test/project")
+                .include_dependency_info(true)
+                .explain_package(Some(target.to_string()))
+                .build()
+                .unwrap()
+        }
+
+        #[test]
+        fn test_explain_disabled_returns_none() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(vec!["requests"], vec![]);
+
+            let result = use_case.build_explain_view_if_requested(&default_request(), Some(&graph));
+
+            assert!(result.is_none());
+        }
+
+        #[test]
+        fn test_explain_no_dependency_graph_returns_none() {
+            let use_case = UseCaseBuilder::default().build();
+
+            let result =
+                use_case.build_explain_view_if_requested(&explain_request("requests"), None);
+
+            assert!(result.is_none());
+        }
+
+        #[test]
+        fn test_explain_direct_dependency() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(vec!["requests"], vec![]);
+
+            let view = use_case
+                .build_explain_view_if_requested(&explain_request("requests"), Some(&graph))
+                .expect("explain_package set → Some");
+
+            assert_eq!(view.target_package, "requests");
+            assert!(view.found);
+            assert!(view.is_direct);
+            assert!(view.paths.is_empty());
+        }
+
+        #[test]
+        fn test_explain_transitive_single_path() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(vec!["requests"], vec![("requests", vec!["urllib3"])]);
+
+            let view = use_case
+                .build_explain_view_if_requested(&explain_request("urllib3"), Some(&graph))
+                .expect("explain_package set → Some");
+
+            assert!(view.found);
+            assert!(!view.is_direct);
+            assert_eq!(
+                view.paths,
+                vec![vec!["requests".to_string(), "urllib3".to_string()]]
+            );
+        }
+
+        #[test]
+        fn test_explain_transitive_diamond_multi_path() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(
+                vec!["requests", "httpx"],
+                vec![("requests", vec!["urllib3"]), ("httpx", vec!["urllib3"])],
+            );
+
+            let view = use_case
+                .build_explain_view_if_requested(&explain_request("urllib3"), Some(&graph))
+                .expect("explain_package set → Some");
+
+            assert!(view.found);
+            assert!(!view.is_direct);
+            assert_eq!(view.paths.len(), 2);
+            assert!(view
+                .paths
+                .contains(&vec!["requests".to_string(), "urllib3".to_string()]));
+            assert!(view
+                .paths
+                .contains(&vec!["httpx".to_string(), "urllib3".to_string()]));
+        }
+
+        #[test]
+        fn test_explain_not_found() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(vec!["requests"], vec![("requests", vec!["urllib3"])]);
+
+            let view = use_case
+                .build_explain_view_if_requested(&explain_request("nonexistent"), Some(&graph))
+                .expect("explain_package set → Some");
+
+            assert!(!view.found);
+            assert!(!view.is_direct);
+            assert!(view.paths.is_empty());
+        }
+
+        #[test]
+        fn test_explain_invalid_package_name_does_not_abort() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(vec!["requests"], vec![]);
+
+            let view = use_case
+                .build_explain_view_if_requested(&explain_request(""), Some(&graph))
+                .expect("explain_package set → Some");
+
+            assert!(!view.found);
+            assert!(!view.is_direct);
+            assert!(view.paths.is_empty());
         }
     }
 }
