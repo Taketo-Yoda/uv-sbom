@@ -58,6 +58,7 @@
 //!     None, // No abandoned-package report in this example
 //!     None, // No non-PyPI packages report in this example
 //!     None, // No Python compatibility report in this example
+//!     None, // No explain view in this example
 //!     &[], // No group filter in this example
 //! );
 //! let formatter = CycloneDxFormatter::new();

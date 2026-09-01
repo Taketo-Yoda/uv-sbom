@@ -46,8 +46,6 @@ pub struct SbomResponse {
     /// Dependency path trace for `--explain`.
     /// Populated only when `explain_package` was set in the request AND a
     /// dependency graph was built (`include_dependency_info` was true).
-    #[allow(dead_code)]
-    // WIRE(#769): remove when the Markdown formatter renders this field
     pub explain_view: Option<ExplainView>,
     /// Dependency groups that were excluded during SBOM generation.
     /// Empty when no group filter was applied.

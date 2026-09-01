@@ -70,6 +70,7 @@ async fn test_non_pypi_section_rendered_when_check_non_pypi_enabled() {
         None,
         response.non_pypi_packages_report.as_ref(),
         None,
+        None,
         &applied_group_filter,
     );
 
@@ -147,6 +148,7 @@ async fn test_non_pypi_section_absent_when_check_non_pypi_disabled() {
         None,
         None,
         response.non_pypi_packages_report.as_ref(),
+        None,
         None,
         &applied_group_filter,
     );

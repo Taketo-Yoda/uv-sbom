@@ -109,6 +109,7 @@ mod tests {
             abandoned_packages: None,
             non_pypi_packages: None,
             python_compatibility: None,
+            explain_view: None,
             applied_group_filter: vec![],
         }
     }

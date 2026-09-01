@@ -6,6 +6,7 @@
 use super::abandoned_package::AbandonedPackagesReport;
 use super::component_view::ComponentView;
 use super::dependency_view::DependencyView;
+use super::explain_view::ExplainView;
 use super::license_compliance_view::LicenseComplianceView;
 use super::non_pypi_package::NonPyPiPackagesReport;
 use super::python_compatibility::PythonCompatibilityReport;
@@ -43,6 +44,10 @@ pub struct SbomReadModel {
     /// Python version compatibility report.
     /// Populated only when `target_python` was set in the request.
     pub python_compatibility: Option<PythonCompatibilityReport>,
+    /// Dependency path trace for `--explain`.
+    /// Populated only when `explain_package` was set in the request AND a
+    /// dependency graph was built.
+    pub explain_view: Option<ExplainView>,
     /// Dependency groups that were excluded during generation. Empty = no filter.
     pub applied_group_filter: Vec<String>,
 }
