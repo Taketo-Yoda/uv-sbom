@@ -296,6 +296,7 @@ async fn render_and_present(
         response.abandoned_packages_report.as_ref(),
         response.non_pypi_packages_report.as_ref(),
         response.python_compatibility_report.as_ref(),
+        response.explain_view.as_ref(),
         &applied_group_filter,
     );
 

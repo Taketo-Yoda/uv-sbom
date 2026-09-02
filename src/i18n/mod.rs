@@ -202,6 +202,13 @@ pub struct Messages {
     pub label_python_compat_all_clear: &'static str,
     pub col_requires_python: &'static str,
 
+    // Dependency explanation section
+    pub section_explain: &'static str,
+    pub summary_explain_paths: &'static str,
+    pub summary_explain_direct: &'static str,
+    pub summary_explain_also_transitive: &'static str,
+    pub summary_explain_not_found: &'static str,
+
     // Diff Markdown formatter strings
     pub diff_section_title: &'static str,
     pub diff_compared_line: &'static str,
@@ -428,6 +435,13 @@ static EN_MESSAGES: Messages = Messages {
     label_python_compat_all_clear: "All packages are compatible with the target Python version.",
     col_requires_python: "Requires-Python",
 
+    // Dependency explanation section
+    section_explain: "## Dependency Explanation",
+    summary_explain_paths: "**{}** is included via {} path(s):",
+    summary_explain_direct: "**{}** is a direct dependency of this project.",
+    summary_explain_also_transitive: "It is also reachable through {} transitive path(s):",
+    summary_explain_not_found: "Package **{}** was not found in this project's dependencies.",
+
     // Diff Markdown formatter strings
     diff_section_title: "## Dependency Diff Report",
     diff_compared_line: "Compared: `{}` vs current `uv.lock`",
@@ -624,6 +638,13 @@ static JA_MESSAGES: Messages = Messages {
     summary_python_compat_issues: "{}個のパッケージがターゲットPythonバージョンと非互換です（直接依存 {}件、間接依存 {}件）。",
     label_python_compat_all_clear: "すべてのパッケージがターゲットPythonバージョンと互換性があります。",
     col_requires_python: "Requires-Python",
+
+    // Dependency explanation section
+    section_explain: "## 依存関係の説明",
+    summary_explain_paths: "**{}** は {} 個の経路で含まれています:",
+    summary_explain_direct: "**{}** はこのプロジェクトの直接依存パッケージです。",
+    summary_explain_also_transitive: "さらに {} 個の間接経路からも到達可能です:",
+    summary_explain_not_found: "パッケージ **{}** はこのプロジェクトの依存関係に見つかりませんでした。",
 
     // Diff Markdown formatter strings
     diff_section_title: "## 依存関係差分レポート",
@@ -1207,6 +1228,50 @@ mod tests {
             "All packages are compatible with the target Python version."
         );
         assert_eq!(msgs.col_requires_python, "Requires-Python");
+    }
+
+    #[test]
+    fn test_messages_explain_section_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(msgs.section_explain, "## Dependency Explanation");
+        assert_eq!(
+            Messages::format(msgs.summary_explain_paths, &["requests", "2"]),
+            "**requests** is included via 2 path(s):"
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_explain_direct, &["requests"]),
+            "**requests** is a direct dependency of this project."
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_explain_also_transitive, &["2"]),
+            "It is also reachable through 2 transitive path(s):"
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_explain_not_found, &["nope"]),
+            "Package **nope** was not found in this project's dependencies."
+        );
+    }
+
+    #[test]
+    fn test_messages_explain_section_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(msgs.section_explain, "## 依存関係の説明");
+        assert_eq!(
+            Messages::format(msgs.summary_explain_paths, &["requests", "2"]),
+            "**requests** は 2 個の経路で含まれています:"
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_explain_direct, &["requests"]),
+            "**requests** はこのプロジェクトの直接依存パッケージです。"
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_explain_also_transitive, &["2"]),
+            "さらに 2 個の間接経路からも到達可能です:"
+        );
+        assert_eq!(
+            Messages::format(msgs.summary_explain_not_found, &["nope"]),
+            "パッケージ **nope** はこのプロジェクトの依存関係に見つかりませんでした。"
+        );
     }
 
     #[test]

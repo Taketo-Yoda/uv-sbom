@@ -110,6 +110,7 @@ async fn test_e2e_json_format() {
         None,
         None,
         None,
+        None,
         &applied_group_filter,
     );
     let formatter = CycloneDxFormatter::new();
@@ -164,6 +165,7 @@ async fn test_e2e_markdown_format() {
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
         None,
         None,
         None,
@@ -532,6 +534,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         response.dependency_graph.as_ref(),
         response.vulnerability_check_result.as_ref(),
         response.license_compliance_result.as_ref(),
+        None,
         None,
         None,
         None,
