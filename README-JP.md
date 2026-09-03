@@ -586,6 +586,81 @@ uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdow
 target_python: "3.8"
 ```
 
+### 依存関係の説明（`--explain`）
+
+`--explain <PACKAGE_NAME>` オプションを使用すると、指定したパッケージがどの経路で依存ツリーに含まれているかを追跡できます。直接依存パッケージから対象パッケージまでのすべての経路を出力し、「なぜこのパッケージが含まれているのか」を明らかにします。
+
+```bash
+# idna が含まれている理由を追跡
+uv-sbom --explain idna --format markdown
+
+# 他のオプションと組み合わせる
+uv-sbom --explain idna --no-check-cve --format markdown
+```
+
+**仕組み:**
+- Markdownレポート生成時にすでに構築済みの依存関係グラフを再利用します（ネットワークアクセスも追加の探索も不要）
+- 対象パッケージが `[project.dependencies]` に含まれる場合は**直接依存**として報告し、それ以外の場合はすべての間接経路を一覧表示します（両方に該当する場合もあります）
+- 経路は直接依存パッケージから対象パッケージへ向かって左から右に読みます。表記は「依存チェーン」サブセクションと同じバッククォートと矢印の形式です
+- 存在しないパッケージ名や不正なパッケージ名は「見つかりませんでした」と報告され、SBOM生成が中断されることはありません
+- グラフは `[project.dependencies]` からのみ構築されます。`[dependency-groups]`（dev、test、lint など）経由でしか到達できないパッケージは、コンポーネント一覧やライセンス表には表示されても `--explain` では「見つかりませんでした」となります
+
+**出力:**
+- **依存関係の説明セクション**: Markdown出力にセクションが1つ表示され、「間接経路」「直接依存」「見つかりません」の3つの状態のいずれかで描画されます
+- `--explain` を指定しない場合、セクション自体が省略されます
+
+**出力例（複数経路を持つ間接依存パッケージ、`--lang ja` 指定時）:**
+```markdown
+## 依存関係の説明
+
+**idna** は 3 個の経路で含まれています:
+
+- `httpx` → `idna`
+- `requests` → `idna`
+- `httpx` → `httpcore` → `anyio` → `idna`
+```
+
+[`examples/suggest-fix-project`](examples/suggest-fix-project) に対して実行した例:
+
+```bash
+uv-sbom -p examples/suggest-fix-project --explain idna --no-check-cve -f markdown --lang ja
+```
+
+**出力例（直接依存パッケージ）:**
+```markdown
+## 依存関係の説明
+
+**requests** はこのプロジェクトの直接依存パッケージです。
+```
+
+```bash
+uv-sbom -p examples/suggest-fix-project --explain requests --no-check-cve -f markdown --lang ja
+```
+
+**出力例（パッケージが見つからない場合）:**
+```markdown
+## 依存関係の説明
+
+パッケージ **definitely-not-a-real-package** はこのプロジェクトの依存関係に見つかりませんでした。
+```
+
+```bash
+uv-sbom -p examples/suggest-fix-project --explain definitely-not-a-real-package --no-check-cve -f markdown --lang ja
+```
+
+> **注:** これらの例では、本READMEの他の箇所で使用している `examples/sample-project` ではなく `examples/suggest-fix-project` を使用しています。同梱のサンプルの中で、実際にダイヤモンド依存（`idna` が `httpx` と `requests` の両方から要求される）を持つのがこのプロジェクトだからです。
+
+**設定ファイルでの指定:**
+
+ありません。`--explain` は意図的にCLI専用としています。これは `check_non_pypi` や `target_python` のような永続的なポリシー設定ではなく、単一パッケージに対する一回限りの診断クエリだからです。`uv-sbom.config.yml` のキーは存在せず、設定ファイルスキーマリファレンスの表にも記載されません。
+
+**オプションの組み合わせ:**
+- **`--workspace` との同時使用は不可。** 引数解析の時点でエラーになります:
+  ```
+  error: the argument '--explain <PACKAGE_NAME>' cannot be used with '--workspace'
+  ```
+- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係の説明データは含まれず、`--check-cve`・`--check-license`・`--verify-links` とは異なり「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--explain` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
+
 ### 脆弱性しきい値オプション
 
 しきい値オプションを使用して、どの脆弱性が終了コード1をトリガーするかを制御できます：
@@ -1027,6 +1102,8 @@ Options:
       --production-only              すべての非デフォルト依存関係グループを除外（プロダクションのみモード）
                                      --exclude-groupsとの同時使用は不可
       --target-python <VERSION>      互換性チェック対象のPythonバージョン（PEP 440形式、例: 3.8）
+      --explain <PACKAGE_NAME>       指定したパッケージへの依存経路を出力（Markdownフォーマットのみ）
+                                     --workspaceとの同時使用は不可
   -h, --help                         ヘルプを表示
   -V, --version                      バージョンを表示
 ```
