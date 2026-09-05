@@ -34,11 +34,6 @@ pub struct Args {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// [DEPRECATED] CVE checking is now enabled by default. This flag has no effect.
-    /// Use --no-check-cve to opt out. This flag will be removed in a future release.
-    #[arg(long, hide = false)]
-    pub check_cve: bool,
-
     /// Disable CVE vulnerability checking (enabled by default)
     /// Vulnerability data provided by OSV (https://osv.dev) under CC-BY 4.0
     #[arg(long)]

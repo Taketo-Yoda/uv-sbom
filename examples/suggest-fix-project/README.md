@@ -61,7 +61,7 @@ CVEs require upgrading urllib3 directly — something outside the scope of what 
 
 ```bash
 # From the repository root
-uv-sbom -p examples/suggest-fix-project --check-cve -f markdown
+uv-sbom -p examples/suggest-fix-project -f markdown
 ```
 
 **What you will see:**
@@ -72,7 +72,7 @@ uv-sbom -p examples/suggest-fix-project --check-cve -f markdown
 ### Step 2: With Upgrade Advisor (`--suggest-fix`)
 
 ```bash
-uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f markdown
+uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 ```
 
 **What you will see in the Resolution Guide:**
@@ -85,7 +85,7 @@ uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f markdown
 ### Step 3: CycloneDX output with upgrade properties
 
 ```bash
-uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f cyclonedx
+uv-sbom -p examples/suggest-fix-project --suggest-fix -f cyclonedx
 ```
 
 **What you will see:**
@@ -97,7 +97,7 @@ uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f cyclonedx
 
 ```bash
 # Only show HIGH and CRITICAL vulnerabilities
-uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix \
+uv-sbom -p examples/suggest-fix-project --suggest-fix \
   --severity-threshold high -f markdown
 ```
 

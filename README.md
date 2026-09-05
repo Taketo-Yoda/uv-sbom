@@ -663,7 +663,7 @@ None. `--explain` is intentionally CLI-only: it is a one-off diagnostic query ab
   ```
   error: the argument '--explain <PACKAGE_NAME>' cannot be used with '--workspace'
   ```
-- **`--format json` silently produces nothing.** CycloneDX JSON output never includes explain data, and unlike `--check-cve`, `--check-license`, and `--verify-links`, no "no effect" warning is printed for this combination. Since `json` is the default format, always pass `--format markdown` (or `-f markdown`) with `--explain`.
+- **`--format json` silently produces nothing.** CycloneDX JSON output never includes explain data, and unlike CVE checking, `--check-license`, and `--verify-links`, no "no effect" warning is printed for this combination. Since `json` is the default format, always pass `--format markdown` (or `-f markdown`) with `--explain`.
 
 ### Vulnerability Threshold Options
 
@@ -1086,7 +1086,6 @@ Options:
       --init                         Generate a uv-sbom.config.yml template file
       --dry-run                      Validate configuration without network communication or output generation
       --verify-links                 Verify PyPI links exist before generating hyperlinks (Markdown format only)
-      --check-cve                    [DEPRECATED] CVE checking is now enabled by default. This flag has no effect. Use --no-check-cve to opt out
       --no-check-cve                 Disable CVE vulnerability checking (enabled by default)
       --severity-threshold <LEVEL>   Severity threshold for vulnerability check (low/medium/high/critical)
                                      Cannot be used with --no-check-cve

@@ -8,7 +8,7 @@
 #   which is denied by the license_policy below.
 #
 # Usage (CVE + license check):
-#   cargo run -- -p examples/sample-project --check-cve --check-license \
+#   cargo run -- -p examples/sample-project --check-license \
 #     -f markdown -c examples/sample-project/config/uv-sbom.config.yml
 #
 # Usage (all checks via config — CVE + license + abandoned package detection):

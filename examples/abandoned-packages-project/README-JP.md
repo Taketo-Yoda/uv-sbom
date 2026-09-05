@@ -63,7 +63,7 @@ uv-sbom -p examples/abandoned-packages-project --check-abandoned \
 ### Step 3: CVEチェックとの組み合わせ
 
 ```bash
-uv-sbom -p examples/abandoned-packages-project --check-cve --check-abandoned -f markdown
+uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
 ```
 
 ## なぜ `sample-project` を使わないのか？

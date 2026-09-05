@@ -406,8 +406,6 @@ uv-sbom --format markdown --no-check-cve
 uv-sbom --no-check-cve
 ```
 
-> **注:** `--check-cve`フラグは非推奨です。CVEチェックはデフォルトで有効になったため、このフラグは不要です。後方互換性のために引き続き動作しますが、将来のリリースで削除される予定です。使用するとstderrに非推奨警告が表示されます。
-
 ### ライセンスコンプライアンスチェック
 
 `--check-license`オプションを使用して、設定可能なライセンスポリシーに対してパッケージをチェックできます：
@@ -659,7 +657,7 @@ uv-sbom -p examples/suggest-fix-project --explain definitely-not-a-real-package 
   ```
   error: the argument '--explain <PACKAGE_NAME>' cannot be used with '--workspace'
   ```
-- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係の説明データは含まれず、`--check-cve`・`--check-license`・`--verify-links` とは異なり「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--explain` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
+- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係の説明データは含まれず、CVEチェック・`--check-license`・`--verify-links` とは異なり「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--explain` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
 
 ### 脆弱性しきい値オプション
 
@@ -1080,8 +1078,6 @@ Options:
       --dry-run                      ネットワーク通信や出力生成を行わずに設定を検証
       --verify-links                 ハイパーリンク生成前にPyPIリンクの存在を検証（Markdownフォーマットのみ）
       --no-check-cve                 OSV APIによる既知の脆弱性チェックを無効化（デフォルトは有効）
-      --check-cve                    [非推奨] CVEチェックはデフォルトで有効になりました。このフラグは不要です。
-                                     後方互換性のために動作しますが、将来のリリースで削除される予定です。
       --severity-threshold <LEVEL>   脆弱性チェックの深刻度しきい値（low/medium/high/critical）
                                      --no-check-cveとの同時使用は不可
       --cvss-threshold <SCORE>       脆弱性チェックのCVSSしきい値（0.0-10.0）
