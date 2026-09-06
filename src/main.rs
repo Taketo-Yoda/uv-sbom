@@ -163,11 +163,6 @@ fn build_use_case<LR: LockfileReader>(
 /// flag) will not suppress these warnings, since `args.format` stays at its
 /// default; that pre-existing quirk is out of scope for this extraction.
 fn print_startup_warnings(args: &Args, msgs: &Messages) {
-    // Warn if deprecated --check-cve flag is used
-    if args.check_cve {
-        eprintln!("Warning: --check-cve is deprecated and will be removed in a future release. CVE checking is now enabled by default. Use --no-check-cve to opt out.");
-    }
-
     // Warn if CVE check is active with JSON format
     if !args.no_check_cve && args.format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_check_cve_no_effect);

@@ -64,7 +64,7 @@ This writes `sbom.md` files instead of `sbom.json`.
 ### With CVE check
 
 ```bash
-uv-sbom --workspace --path examples/workspace --check-cve
+uv-sbom --workspace --path examples/workspace
 ```
 
 ## Member Dependencies

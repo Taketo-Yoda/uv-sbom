@@ -60,7 +60,7 @@ uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f 
 ### Step 2: Combined with other checks
 
 ```bash
-uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --check-cve -f markdown
+uv-sbom -p examples/non-pypi-sources-project --check-non-pypi -f markdown
 ```
 
 `requests==2.32.3` is a real, currently-installable PyPI release and may carry real,

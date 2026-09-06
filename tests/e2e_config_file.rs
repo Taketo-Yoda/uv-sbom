@@ -337,7 +337,7 @@ ignore_cves:
 
     #[test]
     #[ignore = "requires network access to OSV API"]
-    fn test_ignore_cve_via_config_with_check_cve_flag() {
+    fn test_ignore_cve_via_config_without_check_cve_key() {
         let dir = TempDir::new().unwrap();
 
         let vuln_project = fixtures_path().join("vulnerable_project");
@@ -358,15 +358,9 @@ ignore_cves:
 "#,
         );
 
-        // CLI provides --check-cve flag
+        // No check_cve key in config — relies on default-on CVE checking
         let output = cargo_bin_cmd!("uv-sbom")
-            .args([
-                "-p",
-                dir.path().to_str().unwrap(),
-                "--check-cve",
-                "-f",
-                "markdown",
-            ])
+            .args(["-p", dir.path().to_str().unwrap(), "-f", "markdown"])
             .output()
             .unwrap();
 
@@ -394,7 +388,6 @@ mod cve_ignore_cli_tests {
             .args([
                 "-p",
                 project_path.to_str().unwrap(),
-                "--check-cve",
                 "-i",
                 "CVE-2023-37920",
                 "-i",
@@ -443,7 +436,6 @@ ignore_cves:
             .args([
                 "-p",
                 dir.path().to_str().unwrap(),
-                "--check-cve",
                 "-i",
                 "PYSEC-2023-135",
                 "-f",
@@ -466,13 +458,7 @@ ignore_cves:
 
         // Without ignoring CVEs, vulnerable project should return exit code 1
         cargo_bin_cmd!("uv-sbom")
-            .args([
-                "-p",
-                project_path.to_str().unwrap(),
-                "--check-cve",
-                "-f",
-                "markdown",
-            ])
+            .args(["-p", project_path.to_str().unwrap(), "-f", "markdown"])
             .assert()
             .code(1); // VulnerabilitiesDetected
     }

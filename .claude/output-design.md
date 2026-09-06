@@ -28,7 +28,7 @@ Markdown output MUST follow this top-to-bottom order:
 2. **Summary block** — Key counts at a glance (packages, vulnerabilities, license violations)
 3. **Direct Dependencies** — Packages explicitly declared in `pyproject.toml`
 4. **Transitive Dependencies** — Grouped by which direct dependency introduces them
-5. **Vulnerability Report** — Only when `--check-cve` is used
+5. **Vulnerability Report** — Only when CVE checking is enabled (default; disabled via `--no-check-cve`)
 6. **Vulnerability Resolution Guide** — Only for transitive vulnerabilities
 7. **License Compliance Report** — Only when `--check-license` is used
 
@@ -57,7 +57,7 @@ It provides a scannable overview before the reader commits to reading detail sec
 ```
 
 Show only rows that are relevant:
-- Omit vulnerability rows if `--check-cve` was not used.
+- Omit vulnerability rows if CVE checking was disabled via `--no-check-cve`.
 - Omit license violation row if `--check-license` was not used.
 
 ### Placement rule
