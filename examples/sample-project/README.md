@@ -10,7 +10,7 @@ realistic uv-sbom output for all three major opt-in analysis features:
 
 | Feature | CLI flag | What this example shows |
 |---------|----------|------------------------|
-| CVE detection | `--check-cve` (default on) | Multiple known vulnerabilities in locked packages |
+| CVE detection | (enabled by default; `--no-check-cve` to opt out) | Multiple known vulnerabilities in locked packages |
 | License compliance | `--check-license` | `chardet 3.0.4` uses LGPL-2.1-only (denied) |
 | Abandoned package detection | `--check-abandoned` | Some packages may be flagged depending on PyPI state; see `examples/abandoned-packages-project/` for a focused demo |
 | Python version compatibility | `--target-python` | Several transitive dependencies declare `Requires-Python` constraints incompatible with older Python versions (e.g. 3.8) |

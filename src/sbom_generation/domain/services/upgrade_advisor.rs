@@ -5,53 +5,37 @@ use pep440_rs::Version;
 
 use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
 use crate::sbom_generation::domain::upgrade_recommendation::UpgradeRecommendation;
-use crate::sbom_generation::domain::{SimulationResult, UvLockSimulator};
+use crate::sbom_generation::domain::SimulationResult;
 
-/// Stateless domain service that orchestrates upgrade simulations and produces
-/// `UpgradeRecommendation` results by comparing resolved transitive versions
-/// against OSV fixed versions.
+/// Pre-computed simulation outcomes keyed by direct dependency name.
+///
+/// The error variant is flattened to `String` rather than the port's
+/// `anyhow::Error` because the domain layer must not depend on the port's
+/// error type; `SimulateUpgradesUseCase` (application layer) is responsible
+/// for running the simulations and building this map.
+pub type SimulationOutcomes = HashMap<String, Result<SimulationResult, String>>;
+
+/// Stateless domain service that compares pre-computed upgrade simulation
+/// outcomes against OSV fixed versions to produce `UpgradeRecommendation`s.
 pub struct UpgradeAdvisor;
 
 impl UpgradeAdvisor {
-    /// For each ResolutionEntry, simulate upgrading the introducing direct dependency
-    /// and check if the transitive vulnerability is resolved.
+    /// For each ResolutionEntry, look up the simulation outcome for the
+    /// introducing direct dependency and check if the transitive
+    /// vulnerability is resolved.
     ///
     /// # Algorithm
-    /// 1. Group ResolutionEntries by direct_dep_name to deduplicate simulations
-    /// 2. For each unique direct dep, call `simulator.simulate_upgrade()`
-    /// 3. For each vulnerable transitive dep introduced by that direct dep:
-    ///    a. Look up resolved version in SimulationResult
-    ///    b. Compare with fixed_version from OSV using PEP 440 comparison
-    ///    c. resolved >= fixed → Upgradable
-    ///    d. resolved < fixed → Unresolvable
-    /// 4. On simulation error → SimulationFailed
-    pub async fn advise<S: UvLockSimulator>(
-        simulator: &S,
+    /// For each vulnerable transitive dep introduced by a direct dep:
+    /// 1. Look up the pre-computed outcome in `simulation_outcomes`
+    /// 2. On `Ok`, compare the resolved version with `fixed_version` from OSV
+    ///    using PEP 440 comparison — resolved >= fixed → Upgradable,
+    ///    resolved < fixed → Unresolvable
+    /// 3. On `Err` → SimulationFailed
+    /// 4. Missing entry (simulation was never run for that dependency) → skipped
+    pub fn advise(
         resolution_entries: &[ResolutionEntry],
-        project_path: &std::path::Path,
+        simulation_outcomes: &SimulationOutcomes,
     ) -> Vec<UpgradeRecommendation> {
-        // Collect unique direct deps and their current versions
-        let mut direct_dep_versions: HashMap<String, String> = HashMap::new();
-        for entry in resolution_entries {
-            for introduced in entry.introduced_by() {
-                direct_dep_versions
-                    .entry(introduced.package_name().to_string())
-                    .or_insert_with(|| introduced.version().to_string());
-            }
-        }
-
-        // Run deduplicated simulations for each unique direct dep
-        let mut simulation_outcomes: HashMap<String, Result<SimulationResult, String>> =
-            HashMap::new();
-        for direct_dep_name in direct_dep_versions.keys() {
-            let outcome = simulator
-                .simulate_upgrade(direct_dep_name, project_path)
-                .await
-                .map_err(|e| e.to_string());
-            simulation_outcomes.insert(direct_dep_name.clone(), outcome);
-        }
-
-        // Build recommendations for each (entry, introduced_by) pair
         let mut recommendations = Vec::new();
         for entry in resolution_entries {
             let fixed_version = match entry.fixed_version() {
@@ -148,66 +132,6 @@ mod tests {
     use super::*;
     use crate::sbom_generation::domain::resolution_guide::{IntroducedBy, ResolutionEntry};
     use crate::sbom_generation::domain::vulnerability::Severity;
-    use anyhow::Result;
-    use async_trait::async_trait;
-    use std::collections::HashMap;
-    use std::path::Path;
-
-    // ---------------------------------------------------------------------------
-    // Mock simulator
-    // ---------------------------------------------------------------------------
-
-    struct MockSimulator {
-        results: HashMap<String, SimulationResult>,
-        errors: HashMap<String, String>,
-    }
-
-    impl MockSimulator {
-        fn with_result(package: &str, result: SimulationResult) -> Self {
-            let mut results = HashMap::new();
-            results.insert(package.to_string(), result);
-            Self {
-                results,
-                errors: HashMap::new(),
-            }
-        }
-
-        fn with_error(package: &str, error: &str) -> Self {
-            let mut errors = HashMap::new();
-            errors.insert(package.to_string(), error.to_string());
-            Self {
-                results: HashMap::new(),
-                errors,
-            }
-        }
-
-        fn with_results_and_errors(
-            results: HashMap<String, SimulationResult>,
-            errors: HashMap<String, String>,
-        ) -> Self {
-            Self { results, errors }
-        }
-    }
-
-    #[async_trait]
-    impl UvLockSimulator for MockSimulator {
-        async fn simulate_upgrade(
-            &self,
-            package_name: &str,
-            _project_path: &Path,
-        ) -> Result<SimulationResult> {
-            if let Some(error) = self.errors.get(package_name) {
-                return Err(anyhow::anyhow!("{}", error));
-            }
-            if let Some(result) = self.results.get(package_name) {
-                return Ok(result.clone());
-            }
-            Err(anyhow::anyhow!(
-                "package not configured in mock: {}",
-                package_name
-            ))
-        }
-    }
 
     // ---------------------------------------------------------------------------
     // Helper builders
@@ -235,11 +159,7 @@ mod tests {
         )
     }
 
-    fn make_sim_result(
-        _upgraded_package: &str,
-        upgraded_to: &str,
-        resolved: Vec<(&str, &str)>,
-    ) -> SimulationResult {
+    fn make_sim_result(upgraded_to: &str, resolved: Vec<(&str, &str)>) -> SimulationResult {
         let resolved_versions = resolved
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -250,14 +170,23 @@ mod tests {
         }
     }
 
+    fn outcomes(pairs: Vec<(&str, Result<SimulationResult, &str>)>) -> SimulationOutcomes {
+        pairs
+            .into_iter()
+            .map(|(name, outcome)| (name.to_string(), outcome.map_err(|e| e.to_string())))
+            .collect()
+    }
+
     // ---------------------------------------------------------------------------
     // UpgradeAdvisor::advise tests
     // ---------------------------------------------------------------------------
 
-    #[tokio::test]
-    async fn test_upgradable_when_resolved_version_satisfies_fixed() {
-        let sim_result = make_sim_result("requests", "2.32.3", vec![("urllib3", "2.2.1")]);
-        let simulator = MockSimulator::with_result("requests", sim_result);
+    #[test]
+    fn test_upgradable_when_resolved_version_satisfies_fixed() {
+        let sim_outcomes = outcomes(vec![(
+            "requests",
+            Ok(make_sim_result("2.32.3", vec![("urllib3", "2.2.1")])),
+        )]);
 
         let entries = vec![make_entry(
             "urllib3",
@@ -267,8 +196,7 @@ mod tests {
             vec![("requests", "2.31.0")],
         )];
 
-        let recommendations =
-            UpgradeAdvisor::advise(&simulator, &entries, Path::new("/project")).await;
+        let recommendations = UpgradeAdvisor::advise(&entries, &sim_outcomes);
 
         assert_eq!(recommendations.len(), 1);
         match &recommendations[0] {
@@ -290,10 +218,12 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_unresolvable_when_resolved_version_below_fixed() {
-        let sim_result = make_sim_result("httpx", "0.28.0", vec![("idna", "3.6")]);
-        let simulator = MockSimulator::with_result("httpx", sim_result);
+    #[test]
+    fn test_unresolvable_when_resolved_version_below_fixed() {
+        let sim_outcomes = outcomes(vec![(
+            "httpx",
+            Ok(make_sim_result("0.28.0", vec![("idna", "3.6")])),
+        )]);
 
         let entries = vec![make_entry(
             "idna",
@@ -303,8 +233,7 @@ mod tests {
             vec![("httpx", "0.25.0")],
         )];
 
-        let recommendations =
-            UpgradeAdvisor::advise(&simulator, &entries, Path::new("/project")).await;
+        let recommendations = UpgradeAdvisor::advise(&entries, &sim_outcomes);
 
         assert_eq!(recommendations.len(), 1);
         match &recommendations[0] {
@@ -320,9 +249,9 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_simulation_failed_on_error() {
-        let simulator = MockSimulator::with_error("requests", "uv command timed out");
+    #[test]
+    fn test_simulation_failed_on_error() {
+        let sim_outcomes = outcomes(vec![("requests", Err("uv command timed out"))]);
 
         let entries = vec![make_entry(
             "urllib3",
@@ -332,8 +261,7 @@ mod tests {
             vec![("requests", "2.31.0")],
         )];
 
-        let recommendations =
-            UpgradeAdvisor::advise(&simulator, &entries, Path::new("/project")).await;
+        let recommendations = UpgradeAdvisor::advise(&entries, &sim_outcomes);
 
         assert_eq!(recommendations.len(), 1);
         match &recommendations[0] {
@@ -348,10 +276,12 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_entry_without_fixed_version_is_skipped() {
-        let sim_result = make_sim_result("requests", "2.32.3", vec![("urllib3", "2.2.1")]);
-        let simulator = MockSimulator::with_result("requests", sim_result);
+    #[test]
+    fn test_entry_without_fixed_version_is_skipped() {
+        let sim_outcomes = outcomes(vec![(
+            "requests",
+            Ok(make_sim_result("2.32.3", vec![("urllib3", "2.2.1")])),
+        )]);
 
         let entries = vec![make_entry(
             "urllib3",
@@ -361,21 +291,21 @@ mod tests {
             vec![("requests", "2.31.0")],
         )];
 
-        let recommendations =
-            UpgradeAdvisor::advise(&simulator, &entries, Path::new("/project")).await;
+        let recommendations = UpgradeAdvisor::advise(&entries, &sim_outcomes);
 
         assert!(recommendations.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_simulations_are_deduplicated_for_multiple_entries() {
-        // Two ResolutionEntries share the same direct dep "requests"
-        let sim_result = make_sim_result(
+    #[test]
+    fn test_shared_outcome_produces_recommendation_for_each_entry() {
+        // Two ResolutionEntries share the same direct dep "requests" outcome
+        let sim_outcomes = outcomes(vec![(
             "requests",
-            "2.32.3",
-            vec![("urllib3", "2.2.1"), ("certifi", "2024.1.1")],
-        );
-        let simulator = MockSimulator::with_result("requests", sim_result);
+            Ok(make_sim_result(
+                "2.32.3",
+                vec![("urllib3", "2.2.1"), ("certifi", "2024.1.1")],
+            )),
+        )]);
 
         let entries = vec![
             make_entry(
@@ -394,29 +324,26 @@ mod tests {
             ),
         ];
 
-        let recommendations =
-            UpgradeAdvisor::advise(&simulator, &entries, Path::new("/project")).await;
+        let recommendations = UpgradeAdvisor::advise(&entries, &sim_outcomes);
 
-        // Both should be Upgradable; simulate_upgrade called only once for "requests"
         assert_eq!(recommendations.len(), 2);
         assert!(recommendations
             .iter()
             .all(|r| matches!(r, UpgradeRecommendation::Upgradable { .. })));
     }
 
-    #[tokio::test]
-    async fn test_multiple_direct_deps_produce_separate_recommendations() {
-        let mut results = HashMap::new();
-        results.insert(
-            "requests".to_string(),
-            make_sim_result("requests", "2.32.3", vec![("urllib3", "2.2.1")]),
-        );
-        results.insert(
-            "httpx".to_string(),
-            make_sim_result("httpx", "0.28.0", vec![("urllib3", "1.26.15")]),
-        );
-
-        let simulator = MockSimulator::with_results_and_errors(results, HashMap::new());
+    #[test]
+    fn test_multiple_direct_deps_produce_separate_recommendations() {
+        let sim_outcomes = outcomes(vec![
+            (
+                "requests",
+                Ok(make_sim_result("2.32.3", vec![("urllib3", "2.2.1")])),
+            ),
+            (
+                "httpx",
+                Ok(make_sim_result("0.28.0", vec![("urllib3", "1.26.15")])),
+            ),
+        ]);
 
         let entries = vec![make_entry(
             "urllib3",
@@ -426,8 +353,7 @@ mod tests {
             vec![("requests", "2.31.0"), ("httpx", "0.25.0")],
         )];
 
-        let recommendations =
-            UpgradeAdvisor::advise(&simulator, &entries, Path::new("/project")).await;
+        let recommendations = UpgradeAdvisor::advise(&entries, &sim_outcomes);
 
         assert_eq!(recommendations.len(), 2);
         let upgradable_count = recommendations
@@ -442,18 +368,71 @@ mod tests {
         assert_eq!(unresolvable_count, 1); // httpx → urllib3 1.26.15 < 2.0.7
     }
 
-    #[tokio::test]
-    async fn test_empty_resolution_entries_returns_empty_vec() {
-        // Simulator would fail if called — verify it is never invoked for empty input
-        let simulator = MockSimulator::with_error("any-package", "should not be called");
-        let recommendations = UpgradeAdvisor::advise(&simulator, &[], Path::new("/project")).await;
+    #[test]
+    fn test_empty_resolution_entries_returns_empty_vec() {
+        let sim_outcomes = outcomes(vec![("any-package", Err("should not be looked up"))]);
+        let recommendations = UpgradeAdvisor::advise(&[], &sim_outcomes);
         assert!(recommendations.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_operator_prefixed_fixed_version_is_stripped() {
-        let sim_result = make_sim_result("requests", "2.32.3", vec![("urllib3", "2.2.1")]);
-        let simulator = MockSimulator::with_result("requests", sim_result);
+    #[test]
+    fn test_missing_outcome_for_direct_dep_is_skipped() {
+        // No entry in `simulation_outcomes` for "requests" — e.g. because the
+        // caller never ran a simulation for it. Must not panic; the entry is
+        // silently skipped (no recommendation emitted).
+        let sim_outcomes: SimulationOutcomes = HashMap::new();
+
+        let entries = vec![make_entry(
+            "urllib3",
+            "1.26.5",
+            Some("2.0.7"),
+            "CVE-2024-006",
+            vec![("requests", "2.31.0")],
+        )];
+
+        let recommendations = UpgradeAdvisor::advise(&entries, &sim_outcomes);
+
+        assert!(recommendations.is_empty());
+    }
+
+    #[test]
+    fn test_vulnerable_package_absent_from_resolved_versions_is_upgradable() {
+        // The upgrade removed the vulnerable transitive dependency entirely —
+        // it no longer appears in `resolved_versions` — which is treated as
+        // resolved (Upgradable with an empty resolved-version string).
+        let sim_outcomes = outcomes(vec![(
+            "requests",
+            Ok(make_sim_result("2.32.3", vec![("certifi", "2024.1.1")])),
+        )]);
+
+        let entries = vec![make_entry(
+            "urllib3",
+            "1.26.5",
+            Some("2.0.7"),
+            "CVE-2024-007",
+            vec![("requests", "2.31.0")],
+        )];
+
+        let recommendations = UpgradeAdvisor::advise(&entries, &sim_outcomes);
+
+        assert_eq!(recommendations.len(), 1);
+        match &recommendations[0] {
+            UpgradeRecommendation::Upgradable {
+                transitive_resolved_version,
+                ..
+            } => {
+                assert!(transitive_resolved_version.is_empty());
+            }
+            other => panic!("expected Upgradable, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_operator_prefixed_fixed_version_is_stripped() {
+        let sim_outcomes = outcomes(vec![(
+            "requests",
+            Ok(make_sim_result("2.32.3", vec![("urllib3", "2.2.1")])),
+        )]);
 
         let entries = vec![make_entry(
             "urllib3",
@@ -463,8 +442,7 @@ mod tests {
             vec![("requests", "2.31.0")],
         )];
 
-        let recommendations =
-            UpgradeAdvisor::advise(&simulator, &entries, Path::new("/project")).await;
+        let recommendations = UpgradeAdvisor::advise(&entries, &sim_outcomes);
 
         assert_eq!(recommendations.len(), 1);
         assert!(matches!(

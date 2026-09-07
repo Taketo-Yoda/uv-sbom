@@ -59,7 +59,7 @@ uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f 
 ### Step 2: 他のチェックと組み合わせ
 
 ```bash
-uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --check-cve -f markdown
+uv-sbom -p examples/non-pypi-sources-project --check-non-pypi -f markdown
 ```
 
 `requests==2.32.3` は実在の、現在インストール可能なPyPIリリースであり、実際に現時点で

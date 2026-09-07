@@ -1,6 +1,7 @@
 use super::progress_bar::ProgressBarHandle;
 use crate::application::read_models::{PythonCompatibilityReport, PythonIncompatibilityView};
 use crate::ports::outbound::{PythonCompatibilityInfo, PythonCompatibilityRepository};
+use crate::sbom_generation::domain::services::PythonCompatibilityChecker;
 use crate::sbom_generation::domain::Package;
 use crate::shared::Result;
 use futures::stream::{self, StreamExt};
@@ -101,7 +102,10 @@ impl<PR: PythonCompatibilityRepository> CheckPythonCompatibilityUseCase<PR> {
             .into_iter()
             .filter_map(|(package, result)| {
                 let info = result.ok()?;
-                if !info.is_incompatible_with(target_python) {
+                if !PythonCompatibilityChecker::is_incompatible(
+                    info.requires_python.as_deref(),
+                    target_python,
+                ) {
                     return None;
                 }
                 Some(PythonIncompatibilityView {

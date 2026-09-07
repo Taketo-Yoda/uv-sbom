@@ -48,6 +48,9 @@ pub struct SbomRequest {
     /// Target Python version for compatibility checking (PEP 440 format, e.g. "3.13").
     /// `None` disables the check.
     pub target_python: Option<String>,
+    /// Package name to trace dependency paths to (`--explain`).
+    /// `None` disables path tracing.
+    pub explain_package: Option<String>,
     /// Output locale for human-readable formats
     pub locale: Locale,
 }
@@ -115,6 +118,7 @@ pub struct SbomRequestBuilder {
     check_non_pypi: bool,
     exclude_groups: Vec<String>,
     target_python: Option<String>,
+    explain_package: Option<String>,
     locale: Locale,
 }
 
@@ -147,6 +151,7 @@ impl SbomRequestBuilder {
             check_non_pypi: false,
             exclude_groups: Vec::new(),
             target_python: None,
+            explain_package: None,
             locale: Locale::default(),
         }
     }
@@ -255,6 +260,12 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets the package name to trace dependency paths to (`--explain`).
+    pub fn explain_package(mut self, package: Option<String>) -> Self {
+        self.explain_package = package;
+        self
+    }
+
     /// Sets the output locale for human-readable formats.
     pub fn locale(mut self, locale: Locale) -> Self {
         self.locale = locale;
@@ -288,6 +299,7 @@ impl SbomRequestBuilder {
             check_non_pypi: self.check_non_pypi,
             exclude_groups: self.exclude_groups,
             target_python: self.target_python,
+            explain_package: self.explain_package,
             locale: self.locale,
         })
     }
@@ -320,6 +332,7 @@ mod tests {
         assert!(request.cvss_threshold.is_none());
         assert!(request.ignore_cves.is_empty());
         assert!(request.exclude_groups.is_empty());
+        assert!(request.explain_package.is_none());
     }
 
     #[test]
@@ -479,5 +492,26 @@ mod tests {
             .unwrap();
 
         assert_eq!(request.project_path, path);
+    }
+
+    #[test]
+    fn test_explain_package_builder() {
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .explain_package(Some("requests".to_string()))
+            .build()
+            .unwrap();
+
+        assert_eq!(request.explain_package.as_deref(), Some("requests"));
+    }
+
+    #[test]
+    fn test_explain_package_defaults_to_none() {
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .build()
+            .unwrap();
+
+        assert!(request.explain_package.is_none());
     }
 }

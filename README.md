@@ -590,6 +590,81 @@ uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdow
 target_python: "3.8"
 ```
 
+### Dependency Explanation (`--explain`)
+
+Use the `--explain <PACKAGE_NAME>` option to trace how a package ended up in your dependency tree. It answers "why is this package here?" by printing every path from a direct dependency down to the target package.
+
+```bash
+# Trace why idna is included
+uv-sbom --explain idna --format markdown
+
+# Combine with other options
+uv-sbom --explain idna --no-check-cve --format markdown
+```
+
+**How it works:**
+- Reuses the dependency graph already built for the Markdown report — no network access and no additional traversal
+- Reports the package as a **direct dependency** when it appears in `[project.dependencies]`, and lists every transitive path otherwise (a package can be both)
+- Paths read left to right, from the direct dependency to the target, using the same backtick-and-arrow notation as the Dependency Chains subsection
+- An unknown or invalid package name is reported as "not found"; it never aborts SBOM generation
+- The graph is built only from `[project.dependencies]`. Packages reachable only through `[dependency-groups]` (dev, test, lint, …) are reported as not found, even though they still appear in the component inventory and license tables
+
+**Output:**
+- **Dependency Explanation section**: a single `## Dependency Explanation` section in the Markdown output, rendered in one of three states — transitive paths, direct dependency, or not found
+- When `--explain` is not passed, the section is omitted entirely
+
+**Example output (transitive package reached by several paths):**
+```markdown
+## Dependency Explanation
+
+**idna** is included via 3 path(s):
+
+- `httpx` → `idna`
+- `requests` → `idna`
+- `httpx` → `httpcore` → `anyio` → `idna`
+```
+
+Produced by running against [`examples/suggest-fix-project`](examples/suggest-fix-project):
+
+```bash
+uv-sbom -p examples/suggest-fix-project --explain idna --no-check-cve -f markdown
+```
+
+**Example output (direct dependency):**
+```markdown
+## Dependency Explanation
+
+**requests** is a direct dependency of this project.
+```
+
+```bash
+uv-sbom -p examples/suggest-fix-project --explain requests --no-check-cve -f markdown
+```
+
+**Example output (package not found):**
+```markdown
+## Dependency Explanation
+
+Package **definitely-not-a-real-package** was not found in this project's dependencies.
+```
+
+```bash
+uv-sbom -p examples/suggest-fix-project --explain definitely-not-a-real-package --no-check-cve -f markdown
+```
+
+> **Note:** These examples use `examples/suggest-fix-project` rather than `examples/sample-project` (used elsewhere in this README) because it is the shipped example that actually contains a diamond dependency — `idna` is required by both `httpx` and `requests`.
+
+**Config file equivalent:**
+
+None. `--explain` is intentionally CLI-only: it is a one-off diagnostic query about a single package, not a persistent policy setting like `check_non_pypi` or `target_python`. It has no `uv-sbom.config.yml` key and does not appear in the Config File Schema Reference table.
+
+**Flag interactions:**
+- **`--workspace` is rejected.** The combination is a hard error at argument-parsing time:
+  ```
+  error: the argument '--explain <PACKAGE_NAME>' cannot be used with '--workspace'
+  ```
+- **`--format json` silently produces nothing.** CycloneDX JSON output never includes explain data, and unlike CVE checking, `--check-license`, and `--verify-links`, no "no effect" warning is printed for this combination. Since `json` is the default format, always pass `--format markdown` (or `-f markdown`) with `--explain`.
+
 ### Vulnerability Threshold Options
 
 You can control which vulnerabilities trigger a non-zero exit code using threshold options:
@@ -1011,7 +1086,6 @@ Options:
       --init                         Generate a uv-sbom.config.yml template file
       --dry-run                      Validate configuration without network communication or output generation
       --verify-links                 Verify PyPI links exist before generating hyperlinks (Markdown format only)
-      --check-cve                    [DEPRECATED] CVE checking is now enabled by default. This flag has no effect. Use --no-check-cve to opt out
       --no-check-cve                 Disable CVE vulnerability checking (enabled by default)
       --severity-threshold <LEVEL>   Severity threshold for vulnerability check (low/medium/high/critical)
                                      Cannot be used with --no-check-cve
@@ -1033,6 +1107,8 @@ Options:
       --production-only              Exclude all non-default dependency groups (production-only mode)
                                      Cannot be used with --exclude-groups
       --target-python <VERSION>      Target Python version for compatibility checking (PEP 440 format, e.g. 3.8)
+      --explain <PACKAGE_NAME>       Trace the dependency path(s) to the given package (Markdown format only)
+                                     Cannot be used with --workspace
   -h, --help                         Print help
   -V, --version                      Print version
 ```

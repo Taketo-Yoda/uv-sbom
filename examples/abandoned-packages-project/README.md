@@ -70,7 +70,7 @@ All 4 packages still appear (their last releases are 3000+ days ago).
 ### Step 3: Combined with CVE check
 
 ```bash
-uv-sbom -p examples/abandoned-packages-project --check-cve --check-abandoned -f markdown
+uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
 ```
 
 ## Why Not Just Use `sample-project`?

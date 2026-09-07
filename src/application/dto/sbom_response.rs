@@ -1,4 +1,5 @@
 use crate::application::read_models::abandoned_package::AbandonedPackagesReport;
+use crate::application::read_models::explain_view::ExplainView;
 use crate::application::read_models::non_pypi_package::NonPyPiPackagesReport;
 use crate::application::read_models::python_compatibility::PythonCompatibilityReport;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
@@ -42,6 +43,10 @@ pub struct SbomResponse {
     /// Python version compatibility report.
     /// Populated only when `target_python` was set in the request.
     pub python_compatibility_report: Option<PythonCompatibilityReport>,
+    /// Dependency path trace for `--explain`.
+    /// Populated only when `explain_package` was set in the request AND a
+    /// dependency graph was built (`include_dependency_info` was true).
+    pub explain_view: Option<ExplainView>,
     /// Dependency groups that were excluded during SBOM generation.
     /// Empty when no group filter was applied.
     pub applied_group_filter: Vec<String>,
@@ -65,6 +70,7 @@ pub struct SbomResponseBuilder {
     abandoned_packages_report: Option<AbandonedPackagesReport>,
     non_pypi_packages_report: Option<NonPyPiPackagesReport>,
     python_compatibility_report: Option<PythonCompatibilityReport>,
+    explain_view: Option<ExplainView>,
     applied_group_filter: Vec<String>,
 }
 
@@ -82,6 +88,7 @@ impl SbomResponseBuilder {
             abandoned_packages_report: None,
             non_pypi_packages_report: None,
             python_compatibility_report: None,
+            explain_view: None,
             applied_group_filter: Vec::new(),
         }
     }
@@ -148,6 +155,12 @@ impl SbomResponseBuilder {
         self
     }
 
+    /// Sets the `--explain` dependency-path view.
+    pub fn explain_view(mut self, view: ExplainView) -> Self {
+        self.explain_view = Some(view);
+        self
+    }
+
     pub fn applied_group_filter(mut self, groups: Vec<String>) -> Self {
         self.applied_group_filter = groups;
         self
@@ -170,6 +183,7 @@ impl SbomResponseBuilder {
             abandoned_packages_report: self.abandoned_packages_report,
             non_pypi_packages_report: self.non_pypi_packages_report,
             python_compatibility_report: self.python_compatibility_report,
+            explain_view: self.explain_view,
             applied_group_filter: self.applied_group_filter,
         })
     }
@@ -206,6 +220,7 @@ mod tests {
         assert!(response.vulnerability_check_result.is_none());
         assert!(response.license_compliance_result.is_none());
         assert!(!response.has_license_violations);
+        assert!(response.explain_view.is_none());
     }
 
     #[test]

@@ -169,9 +169,9 @@ uv-sbom [OPTIONS]
   -o, --output <OUTPUT>            Output file path (stdout if omitted)
   -e, --exclude <PATTERN>          Exclude pattern (wildcard * supported, repeatable)
       --dry-run                    Validate config only (skip network/output)
-      --check-cve                  Check known vulnerabilities via OSV API (Markdown only)
-      --severity-threshold <LEVEL> Severity threshold (low/medium/high/critical, requires --check-cve)
-      --cvss-threshold <SCORE>     CVSS score threshold (0.0-10.0, requires --check-cve)
+      --no-check-cve                Disable CVE vulnerability checking via OSV API (enabled by default)
+      --severity-threshold <LEVEL> Severity threshold (low/medium/high/critical, cannot be used with --no-check-cve)
+      --cvss-threshold <SCORE>     CVSS score threshold (0.0-10.0, cannot be used with --no-check-cve)
       --verify-links               Verify PyPI links (Markdown only)
   -c, --config <PATH>              Explicit config file path
   -i, --ignore-cve <CVE_ID>       CVE IDs to ignore (repeatable)

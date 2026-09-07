@@ -1,6 +1,7 @@
 pub(super) mod abandoned_packages;
 pub(super) mod components;
 pub(super) mod dependencies;
+pub(super) mod explain;
 pub(super) mod header;
 pub(super) mod license_compliance;
 pub(super) mod non_pypi_packages;

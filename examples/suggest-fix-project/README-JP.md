@@ -53,7 +53,7 @@ requests 2.32.5  →  urllib3 >=1.21.1,<3     (2.0.4 のままでも許容され
 
 ```bash
 # リポジトリルートから実行
-uv-sbom -p examples/suggest-fix-project --check-cve -f markdown
+uv-sbom -p examples/suggest-fix-project -f markdown
 ```
 
 **表示される内容:**
@@ -64,7 +64,7 @@ uv-sbom -p examples/suggest-fix-project --check-cve -f markdown
 ### ステップ 2: アップグレードアドバイザー（`--suggest-fix`）の使用
 
 ```bash
-uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f markdown
+uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 ```
 
 **Resolution Guide に表示される内容:**
@@ -77,7 +77,7 @@ uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f markdown
 ### ステップ 3: CycloneDX 形式でアップグレード情報を出力
 
 ```bash
-uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f cyclonedx
+uv-sbom -p examples/suggest-fix-project --suggest-fix -f cyclonedx
 ```
 
 **表示される内容:**
@@ -89,7 +89,7 @@ uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix -f cyclonedx
 
 ```bash
 # HIGH および CRITICAL の脆弱性のみ表示
-uv-sbom -p examples/suggest-fix-project --check-cve --suggest-fix \
+uv-sbom -p examples/suggest-fix-project --suggest-fix \
   --severity-threshold high -f markdown
 ```
 

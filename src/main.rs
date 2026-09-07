@@ -163,11 +163,6 @@ fn build_use_case<LR: LockfileReader>(
 /// flag) will not suppress these warnings, since `args.format` stays at its
 /// default; that pre-existing quirk is out of scope for this extraction.
 fn print_startup_warnings(args: &Args, msgs: &Messages) {
-    // Warn if deprecated --check-cve flag is used
-    if args.check_cve {
-        eprintln!("Warning: --check-cve is deprecated and will be removed in a future release. CVE checking is now enabled by default. Use --no-check-cve to opt out.");
-    }
-
     // Warn if CVE check is active with JSON format
     if !args.no_check_cve && args.format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_check_cve_no_effect);
@@ -201,12 +196,19 @@ fn print_startup_warnings(args: &Args, msgs: &Messages) {
 /// since each varies between the two call sites: `exclude_groups` requires I/O
 /// rooted at a different path per mode, workspace mode always passes
 /// `suggest_fix(false)`, and only normal mode supports `--dry-run`.
+///
+/// `explain_package` is likewise an explicit parameter rather than sourced
+/// from `&MergedConfig`: it comes straight from the raw `Args.explain` field,
+/// not `MergedConfig`, because it intentionally has no config-file tier
+/// (see Issue #767) — `MergedConfig` only exists to express the CLI > env >
+/// config file > defaults merge, which doesn't apply to a CLI-only value.
 fn build_sbom_request(
     project_path: PathBuf,
     merged: &MergedConfig,
     exclude_groups: Vec<String>,
     suggest_fix: bool,
     dry_run: bool,
+    explain_package: Option<String>,
     locale: Locale,
 ) -> Result<SbomRequest> {
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
@@ -227,6 +229,7 @@ fn build_sbom_request(
         .check_non_pypi(merged.check_non_pypi)
         .exclude_groups(exclude_groups)
         .target_python(merged.target_python.clone())
+        .explain_package(explain_package)
         .locale(locale)
         .build()
 }
@@ -288,6 +291,7 @@ async fn render_and_present(
         response.abandoned_packages_report.as_ref(),
         response.non_pypi_packages_report.as_ref(),
         response.python_compatibility_report.as_ref(),
+        response.explain_view.as_ref(),
         &applied_group_filter,
     );
 
@@ -484,6 +488,7 @@ async fn run(args: Args) -> Result<bool> {
         exclude_groups,
         suggest_fix,
         args.dry_run,
+        args.explain.clone(),
         locale,
     )?;
 
@@ -590,6 +595,9 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             workspace_exclude_groups.clone(),
             false,
             false,
+            // --explain is conflicts_with = "workspace"; clap rejects the
+            // combination at parse time, so this is provably always None here.
+            None,
             locale,
         )?;
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-07
+
+### Breaking Changes
+- **Removed the deprecated `--check-cve` CLI flag**: Deprecated in v2.0.0 (#307) when CVE checking became enabled by default, it had been a no-op that only printed a deprecation warning. Passing `--check-cve` now fails with a clap "unexpected argument" error (exit code 2). Remove it from your invocations — CVE checking remains on by default; use `--no-check-cve` to opt out, or set `check_cve: false` in `uv-sbom.config.yml`. The `check_cve` config key and `--no-check-cve` flag are unaffected (#304)
+
+### Added
+- **Dependency Explanation Markdown section**: When `--explain <PACKAGE>` is set, Markdown output now renders a `## Dependency Explanation` section reporting how the target package is included in the project — every direct-dependency path to it (rendered as a bullet list, one per path, all paths shown for diamond dependencies), a direct-dependency notice, or a not-found notice, including the compound case where a package is both a direct dependency and reachable via other paths. The section is omitted entirely when `--explain` is not set. Fully localized for EN and JA (#769)
+
 ## [2.8.1] - 2026-08-09
 
 ### Fixed

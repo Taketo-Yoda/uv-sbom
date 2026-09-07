@@ -34,11 +34,6 @@ pub struct Args {
     #[arg(long)]
     pub dry_run: bool,
 
-    /// [DEPRECATED] CVE checking is now enabled by default. This flag has no effect.
-    /// Use --no-check-cve to opt out. This flag will be removed in a future release.
-    #[arg(long, hide = false)]
-    pub check_cve: bool,
-
     /// Disable CVE vulnerability checking (enabled by default)
     /// Vulnerability data provided by OSV (https://osv.dev) under CC-BY 4.0
     #[arg(long)]
@@ -123,6 +118,14 @@ pub struct Args {
     /// Target Python version for compatibility checking (PEP 440 format, e.g. 3.13)
     #[arg(long, value_name = "VERSION")]
     pub target_python: Option<String>,
+
+    /// Trace the dependency path(s) from direct dependencies to the given package
+    /// (Markdown format only)
+    ///
+    /// Intentionally has no config-file key: this is a one-off diagnostic query,
+    /// not a persistent policy setting (see Issue #767).
+    #[arg(long, value_name = "PACKAGE_NAME", conflicts_with = "workspace")]
+    pub explain: Option<String>,
 }
 
 fn parse_lang(s: &str) -> Result<Locale, String> {
@@ -253,5 +256,33 @@ mod tests {
     fn test_target_python_flag_absent_by_default() {
         let args = Args::parse_from(["uv-sbom"]);
         assert!(args.target_python.is_none());
+    }
+
+    #[test]
+    fn test_explain_flag_parses() {
+        let args = Args::parse_from(["uv-sbom", "--explain", "requests"]);
+        assert_eq!(args.explain.as_deref(), Some("requests"));
+    }
+
+    #[test]
+    fn test_explain_flag_absent_by_default() {
+        let args = Args::parse_from(["uv-sbom"]);
+        assert!(args.explain.is_none());
+    }
+
+    #[test]
+    fn test_explain_conflicts_with_workspace() {
+        use clap::error::ErrorKind;
+
+        let result = Args::try_parse_from(["uv-sbom", "--explain", "requests", "--workspace"]);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn test_explain_allowed_with_format_markdown() {
+        let result =
+            Args::try_parse_from(["uv-sbom", "--format", "markdown", "--explain", "requests"]);
+        assert!(result.is_ok());
     }
 }

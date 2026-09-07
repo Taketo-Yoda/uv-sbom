@@ -66,9 +66,9 @@ impl MarkdownFormatter {
         );
     }
 
-    /// Renders the conditional sections when present: dependencies, vulnerabilities,
-    /// license compliance, abandoned packages, non-PyPI packages, Python compatibility,
-    /// and resolution guide.
+    /// Renders the conditional sections when present: dependencies, dependency
+    /// explanation, vulnerabilities, license compliance, abandoned packages,
+    /// non-PyPI packages, Python compatibility, and resolution guide.
     fn render_optional_sections(&self, output: &mut String, model: &SbomReadModel) {
         if let Some(deps) = &model.dependencies {
             sections::dependencies::render(
@@ -78,6 +78,9 @@ impl MarkdownFormatter {
                 deps,
                 &model.components,
             );
+        }
+        if let Some(view) = &model.explain_view {
+            sections::explain::render(self.messages, output, view);
         }
         if let Some(vulns) = &model.vulnerabilities {
             vuln_render::render_vulnerabilities(
@@ -185,6 +188,7 @@ mod tests {
                 abandoned_packages: None,
                 non_pypi_packages: None,
                 python_compatibility: None,
+                explain_view: None,
                 applied_group_filter: vec![],
             }
         }
@@ -1057,5 +1061,84 @@ mod tests {
                 "## Vulnerability Resolution Guide",
             ],
         );
+    }
+
+    // ===== Dependency explanation section tests =====
+
+    #[test]
+    fn test_explain_section_absent_when_none() {
+        let model = test_fixtures::base_model(); // explain_view: None
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(!markdown.contains("## Dependency Explanation"));
+    }
+
+    #[test]
+    fn test_explain_section_present_for_transitive_view() {
+        use crate::application::read_models::ExplainView;
+
+        let mut model = test_fixtures::base_model();
+        model.explain_view = Some(ExplainView {
+            target_package: "urllib3".to_string(),
+            found: true,
+            is_direct: false,
+            paths: vec![vec!["requests".to_string(), "urllib3".to_string()]],
+        });
+
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(markdown.contains("## Dependency Explanation"));
+        assert!(markdown.contains("**urllib3** is included via 1 path(s):"));
+        assert!(markdown.contains("- `requests` → `urllib3`"));
+    }
+
+    #[test]
+    fn test_explain_section_order_after_dependencies_before_vulnerabilities() {
+        use crate::application::read_models::ExplainView;
+
+        let mut model = test_fixtures::with_critical_vuln();
+        let mut transitive = HashMap::new();
+        transitive.insert(
+            "pkg:pypi/requests@2.31.0".to_string(),
+            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
+        );
+        model.dependencies = Some(DependencyView {
+            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
+            transitive,
+        });
+        model.explain_view = Some(ExplainView {
+            target_package: "urllib3".to_string(),
+            found: true,
+            is_direct: false,
+            paths: vec![vec!["requests".to_string(), "urllib3".to_string()]],
+        });
+
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert_section_order(
+            &markdown,
+            &[
+                "## Transitive Dependencies",
+                "## Dependency Explanation",
+                "## Vulnerability Report",
+            ],
+        );
+    }
+
+    #[test]
+    fn test_explain_section_ja_locale() {
+        use crate::application::read_models::ExplainView;
+
+        let mut model = test_fixtures::base_model();
+        model.explain_view = Some(ExplainView {
+            target_package: "nonexistent".to_string(),
+            found: false,
+            is_direct: false,
+            paths: vec![],
+        });
+
+        let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
+        assert!(markdown.contains("## 依存関係の説明"));
+        assert!(markdown.contains(
+            "パッケージ **nonexistent** はこのプロジェクトの依存関係に見つかりませんでした。"
+        ));
+        assert!(!markdown.contains("## Dependency Explanation"));
     }
 }

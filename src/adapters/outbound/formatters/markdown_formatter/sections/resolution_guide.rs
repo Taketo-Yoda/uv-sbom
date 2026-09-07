@@ -37,13 +37,7 @@ pub(in super::super) fn render(
 
     for entry in &guide.entries {
         let fixed = entry.fixed_version.as_deref().unwrap_or("N/A");
-        let severity_emoji = match entry.severity {
-            crate::application::read_models::SeverityView::Critical => "🔴",
-            crate::application::read_models::SeverityView::High => "🟠",
-            crate::application::read_models::SeverityView::Medium => "🟡",
-            crate::application::read_models::SeverityView::Low => "🟢",
-            crate::application::read_models::SeverityView::None => "⚪",
-        };
+        let severity_emoji = entry.severity.emoji();
 
         let introduced_by = entry
             .introduced_by
@@ -192,6 +186,7 @@ mod tests {
             abandoned_packages: None,
             non_pypi_packages: None,
             python_compatibility: None,
+            explain_view: None,
             applied_group_filter: vec![],
         }
     }

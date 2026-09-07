@@ -2,7 +2,9 @@ use crate::ports::outbound::{
     MaintenanceInfo, MaintenanceRepository, ProgressCallback, PythonCompatibilityInfo,
     PythonCompatibilityRepository, VulnerabilityRepository,
 };
-use crate::sbom_generation::domain::{Package, PackageVulnerabilities};
+use crate::sbom_generation::domain::{
+    Package, PackageVulnerabilities, SimulationResult, UvLockSimulator,
+};
 use crate::shared::Result;
 use async_trait::async_trait;
 use std::collections::{HashMap, VecDeque};
@@ -163,5 +165,85 @@ impl VulnerabilityRepository for MockVulnerabilityRepository {
         _progress_callback: ProgressCallback<'static>,
     ) -> Result<Vec<PackageVulnerabilities>> {
         Ok(self.vulnerabilities.clone())
+    }
+}
+
+/// Configurable in-memory mock implementing `UvLockSimulator`.
+///
+/// Responses are keyed by package name rather than a FIFO queue, because
+/// `SimulateUpgradesUseCase::run` deduplicates and iterates direct
+/// dependencies via a `HashSet` — a FIFO queue would make test assertions
+/// depend on nondeterministic iteration order, matching the reasoning behind
+/// `MockPythonCompatibilityRepository` above. Shared between
+/// `simulate_upgrades`'s own tests and `generate_sbom/tests.rs` now that both
+/// are consumers (previously kept local to `generate_sbom/tests.rs`, back
+/// when it was the only consumer).
+///
+/// Records every `simulate_upgrade` call in `calls` so tests can assert on
+/// deduplication (e.g. that a package shared by multiple resolution entries
+/// is only simulated once).
+#[derive(Default)]
+pub(crate) struct MockUvLockSimulator {
+    results: HashMap<String, SimulationResult>,
+    errors: HashMap<String, String>,
+    calls: Mutex<Vec<String>>,
+}
+
+impl MockUvLockSimulator {
+    pub(crate) fn with_result(package: &str, result: SimulationResult) -> Self {
+        let mut results = HashMap::new();
+        results.insert(package.to_string(), result);
+        Self {
+            results,
+            errors: HashMap::new(),
+            calls: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub(crate) fn with_error(package: &str, error: &str) -> Self {
+        let mut errors = HashMap::new();
+        errors.insert(package.to_string(), error.to_string());
+        Self {
+            results: HashMap::new(),
+            errors,
+            calls: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub(crate) fn with_results_and_errors(
+        results: HashMap<String, SimulationResult>,
+        errors: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            results,
+            errors,
+            calls: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Returns the package names passed to `simulate_upgrade`, in call order.
+    pub(crate) fn call_log(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl UvLockSimulator for MockUvLockSimulator {
+    async fn simulate_upgrade(
+        &self,
+        package_name: &str,
+        _project_path: &std::path::Path,
+    ) -> Result<SimulationResult> {
+        self.calls.lock().unwrap().push(package_name.to_string());
+
+        if let Some(error) = self.errors.get(package_name) {
+            anyhow::bail!("{}", error);
+        }
+        self.results.get(package_name).cloned().ok_or_else(|| {
+            anyhow::anyhow!(
+                "MockUvLockSimulator: no response configured for {}",
+                package_name
+            )
+        })
     }
 }
