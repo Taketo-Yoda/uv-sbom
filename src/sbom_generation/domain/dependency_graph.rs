@@ -46,6 +46,15 @@ impl DependencyGraph {
         self.transitive_dependencies.values().map(|v| v.len()).sum()
     }
 
+    /// Returns the immediate children of `pkg` in the dependency graph, if any.
+    ///
+    /// `None` means no adjacency entry was recorded for `pkg` (a leaf, or a
+    /// package not present in the graph) — it is not an error condition.
+    #[allow(dead_code)] // WIRE(#781): remove when DependencyTreeBuilder is wired into GenerateSbomUseCase
+    pub fn children_of(&self, pkg: &PackageName) -> Option<&[PackageName]> {
+        self.package_edges.get(pkg).map(|v| v.as_slice())
+    }
+
     /// Returns all paths from any direct dependency to `target`.
     /// Each path is ordered `[direct_dep, ..., target]`.
     /// Returns an empty Vec if `target` is itself a direct dependency (one-hop not shown).
@@ -131,6 +140,28 @@ mod tests {
 
         assert_eq!(graph.direct_dependency_count(), 0);
         assert_eq!(graph.transitive_dependency_count(), 0);
+    }
+
+    #[test]
+    fn test_children_of_returns_children() {
+        let graph = make_graph(
+            vec!["requests"],
+            vec![("requests", vec!["urllib3", "certifi"])],
+        );
+        let children = graph.children_of(&pkg("requests")).unwrap();
+        assert_eq!(children, &[pkg("urllib3"), pkg("certifi")]);
+    }
+
+    #[test]
+    fn test_children_of_leaf_returns_none() {
+        let graph = make_graph(vec!["requests"], vec![("requests", vec!["urllib3"])]);
+        assert!(graph.children_of(&pkg("urllib3")).is_none());
+    }
+
+    #[test]
+    fn test_children_of_absent_package_returns_none() {
+        let graph = make_graph(vec!["requests"], vec![("requests", vec!["urllib3"])]);
+        assert!(graph.children_of(&pkg("zzz")).is_none());
     }
 
     #[test]
