@@ -1,4 +1,5 @@
 use crate::application::read_models::abandoned_package::AbandonedPackagesReport;
+use crate::application::read_models::dependency_tree_view::DependencyTreeView;
 use crate::application::read_models::explain_view::ExplainView;
 use crate::application::read_models::non_pypi_package::NonPyPiPackagesReport;
 use crate::application::read_models::python_compatibility::PythonCompatibilityReport;
@@ -47,6 +48,11 @@ pub struct SbomResponse {
     /// Populated only when `explain_package` was set in the request AND a
     /// dependency graph was built (`include_dependency_info` was true).
     pub explain_view: Option<ExplainView>,
+    /// Dependency tree visualization for `--show-dependency-tree`.
+    /// Populated only when `show_dependency_tree` was true in the request AND a
+    /// dependency graph was built (`include_dependency_info` was true).
+    #[allow(dead_code)] // WIRE(#782): remove once the Markdown formatter renders this
+    pub dependency_tree: Option<DependencyTreeView>,
     /// Dependency groups that were excluded during SBOM generation.
     /// Empty when no group filter was applied.
     pub applied_group_filter: Vec<String>,
@@ -71,6 +77,7 @@ pub struct SbomResponseBuilder {
     non_pypi_packages_report: Option<NonPyPiPackagesReport>,
     python_compatibility_report: Option<PythonCompatibilityReport>,
     explain_view: Option<ExplainView>,
+    dependency_tree: Option<DependencyTreeView>,
     applied_group_filter: Vec<String>,
 }
 
@@ -89,6 +96,7 @@ impl SbomResponseBuilder {
             non_pypi_packages_report: None,
             python_compatibility_report: None,
             explain_view: None,
+            dependency_tree: None,
             applied_group_filter: Vec::new(),
         }
     }
@@ -161,6 +169,12 @@ impl SbomResponseBuilder {
         self
     }
 
+    /// Sets the `--show-dependency-tree` visualization.
+    pub fn dependency_tree(mut self, tree: DependencyTreeView) -> Self {
+        self.dependency_tree = Some(tree);
+        self
+    }
+
     pub fn applied_group_filter(mut self, groups: Vec<String>) -> Self {
         self.applied_group_filter = groups;
         self
@@ -184,6 +198,7 @@ impl SbomResponseBuilder {
             non_pypi_packages_report: self.non_pypi_packages_report,
             python_compatibility_report: self.python_compatibility_report,
             explain_view: self.explain_view,
+            dependency_tree: self.dependency_tree,
             applied_group_filter: self.applied_group_filter,
         })
     }
@@ -221,6 +236,7 @@ mod tests {
         assert!(response.license_compliance_result.is_none());
         assert!(!response.has_license_violations);
         assert!(response.explain_view.is_none());
+        assert!(response.dependency_tree.is_none());
     }
 
     #[test]

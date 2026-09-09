@@ -3,8 +3,9 @@ use crate::sbom_generation::domain::package::PackageName;
 use std::collections::HashSet;
 
 /// One node in a dependency tree. Mirrors graph shape only — no version,
-/// license, or hash metadata (see #781 for version enrichment).
-#[allow(dead_code)] // WIRE(#781): remove when DependencyTreeBuilder is wired into GenerateSbomUseCase
+/// license, or hash metadata. `DependencyGraph` has no version data to draw
+/// from; version enrichment happens in the application layer's
+/// `DependencyTreeView` (built from `TreeNode` plus `EnrichedPackage`), not here.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TreeNode {
     /// Package name.
@@ -19,7 +20,6 @@ pub struct TreeNode {
 }
 
 /// Builds depth-limited, cycle-safe dependency trees from a `DependencyGraph`.
-#[allow(dead_code)] // WIRE(#781): remove when DependencyTreeBuilder is wired into GenerateSbomUseCase
 pub struct DependencyTreeBuilder;
 
 impl DependencyTreeBuilder {
@@ -28,7 +28,6 @@ impl DependencyTreeBuilder {
     /// `max_depth` counts levels *below* each root: `0` yields roots only,
     /// `1` yields roots plus their immediate children. Roots are returned in
     /// `direct_dependencies()` order; children in `package_edges` order.
-    #[allow(dead_code)] // WIRE(#781): remove when DependencyTreeBuilder is wired into GenerateSbomUseCase
     pub fn build(graph: &DependencyGraph, max_depth: usize) -> Vec<TreeNode> {
         graph
             .direct_dependencies()
@@ -42,7 +41,6 @@ impl DependencyTreeBuilder {
     }
 }
 
-#[allow(dead_code)] // WIRE(#781): remove when DependencyTreeBuilder is wired into GenerateSbomUseCase
 fn build_node(
     graph: &DependencyGraph,
     pkg: &PackageName,

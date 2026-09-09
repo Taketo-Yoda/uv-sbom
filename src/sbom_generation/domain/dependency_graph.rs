@@ -50,7 +50,6 @@ impl DependencyGraph {
     ///
     /// `None` means no adjacency entry was recorded for `pkg` (a leaf, or a
     /// package not present in the graph) — it is not an error condition.
-    #[allow(dead_code)] // WIRE(#781): remove when DependencyTreeBuilder is wired into GenerateSbomUseCase
     pub fn children_of(&self, pkg: &PackageName) -> Option<&[PackageName]> {
         self.package_edges.get(pkg).map(|v| v.as_slice())
     }

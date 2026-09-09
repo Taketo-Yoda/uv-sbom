@@ -10,8 +10,6 @@ pub mod vulnerability_checker;
 
 #[allow(unused_imports)]
 pub use dependency_diff_analyzer::DependencyDiffAnalyzer;
-// Note: Will be consumed by the application layer in Issue #781
-#[allow(unused_imports)]
 pub use dependency_tree_builder::{DependencyTreeBuilder, TreeNode};
 pub use group_reachability_analyzer::GroupReachabilityAnalyzer;
 pub use license_compliance_checker::LicenseComplianceChecker;
