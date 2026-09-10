@@ -163,6 +163,15 @@ where
         let explain_view =
             self.build_explain_view_if_requested(&request, dependency_graph.as_ref());
 
+        // Step 11.6: Build the --show-dependency-tree visualization if requested.
+        // Must also run before build_response, which takes ownership of both
+        // dependency_graph and enriched_packages.
+        let dependency_tree = self.build_dependency_tree_if_requested(
+            &request,
+            dependency_graph.as_ref(),
+            &enriched_packages,
+        );
+
         // Step 12: Build and return response
         Ok(self.build_response(
             enriched_packages,
@@ -174,6 +183,7 @@ where
             non_pypi_packages_report,
             python_compatibility_report,
             explain_view,
+            dependency_tree,
             request.exclude_groups.clone(),
         ))
     }
@@ -542,6 +552,52 @@ mod tests {
             let response = use_case.execute(default_request()).await.unwrap();
 
             assert!(response.explain_view.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_execute_with_show_dependency_tree_populates_response() {
+            let packages = vec![
+                pkg("myproject", "1.0.0"),
+                pkg("requests", "2.31.0"),
+                pkg("urllib3", "1.26.0"),
+            ];
+            let deps = HashMap::from([
+                ("myproject".to_string(), vec!["requests".to_string()]),
+                ("requests".to_string(), vec!["urllib3".to_string()]),
+                ("urllib3".to_string(), vec![]),
+            ]);
+            let use_case = UseCaseBuilder::default()
+                .with_lockfile_and_deps(packages, deps)
+                .with_project_name("myproject")
+                .build();
+
+            let request = SbomRequest::builder()
+                .project_path("/test/project")
+                .include_dependency_info(true)
+                .show_dependency_tree(true)
+                .dependency_tree_depth(3)
+                .build()
+                .unwrap();
+
+            let response = use_case.execute(request).await.unwrap();
+
+            let tree = response
+                .dependency_tree
+                .expect("show_dependency_tree set → Some");
+            assert_eq!(tree.roots.len(), 1);
+            assert_eq!(tree.roots[0].name, "requests");
+            assert_eq!(tree.roots[0].version.as_deref(), Some("2.31.0"));
+        }
+
+        #[tokio::test]
+        async fn test_execute_without_show_dependency_tree_leaves_field_none() {
+            let use_case = UseCaseBuilder::default()
+                .with_lockfile(vec![pkg("certifi", "2024.8.30")])
+                .build();
+
+            let response = use_case.execute(default_request()).await.unwrap();
+
+            assert!(response.dependency_tree.is_none());
         }
 
         #[tokio::test]

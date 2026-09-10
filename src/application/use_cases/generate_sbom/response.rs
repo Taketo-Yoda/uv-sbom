@@ -1,6 +1,7 @@
 use super::GenerateSbomUseCase;
 use crate::application::dto::SbomResponse;
 use crate::application::read_models::abandoned_package::AbandonedPackagesReport;
+use crate::application::read_models::dependency_tree_view::DependencyTreeView;
 use crate::application::read_models::explain_view::ExplainView;
 use crate::application::read_models::non_pypi_package::NonPyPiPackagesReport;
 use crate::application::read_models::python_compatibility::PythonCompatibilityReport;
@@ -52,6 +53,7 @@ where
         non_pypi_packages_report: Option<NonPyPiPackagesReport>,
         python_compatibility_report: Option<PythonCompatibilityReport>,
         explain_view: Option<ExplainView>,
+        dependency_tree: Option<DependencyTreeView>,
         exclude_groups: Vec<String>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata();
@@ -98,6 +100,9 @@ where
         if let Some(view) = explain_view {
             builder = builder.explain_view(view);
         }
+        if let Some(tree) = dependency_tree {
+            builder = builder.dependency_tree(tree);
+        }
 
         builder.build().expect("response build should not fail")
     }
@@ -130,6 +135,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
                 vec![],
             );
 
@@ -139,6 +145,7 @@ mod tests {
             assert!(!response.metadata.serial_number().is_empty());
             assert!(!response.metadata.timestamp().is_empty());
             assert!(response.explain_view.is_none());
+            assert!(response.dependency_tree.is_none());
         }
 
         #[test]
@@ -176,6 +183,7 @@ mod tests {
                 enriched_packages,
                 None,
                 Some(check_result),
+                None,
                 None,
                 None,
                 None,
@@ -229,6 +237,7 @@ mod tests {
                 enriched_packages,
                 None,
                 Some(check_result),
+                None,
                 None,
                 None,
                 None,

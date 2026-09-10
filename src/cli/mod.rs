@@ -126,7 +126,24 @@ pub struct Args {
     /// not a persistent policy setting (see Issue #767).
     #[arg(long, value_name = "PACKAGE_NAME", conflicts_with = "workspace")]
     pub explain: Option<String>,
+
+    /// Render an ASCII tree visualization of the direct→transitive dependency
+    /// structure (Markdown format only)
+    ///
+    /// Intentionally has no config-file key: this is a one-off visualization
+    /// request, not a persistent policy setting (same rationale as `--explain`,
+    /// see Issue #767).
+    #[arg(long)]
+    pub show_dependency_tree: bool,
+
+    /// Maximum depth for the dependency tree visualization (default: 3)
+    #[arg(long, value_name = "DEPTH", requires = "show_dependency_tree")]
+    pub dependency_tree_depth: Option<u32>,
 }
+
+/// Default depth limit for `--show-dependency-tree` when `--dependency-tree-depth`
+/// is not explicitly provided.
+pub const DEFAULT_DEPENDENCY_TREE_DEPTH: u32 = 3;
 
 fn parse_lang(s: &str) -> Result<Locale, String> {
     Locale::from_str(s)
@@ -284,5 +301,42 @@ mod tests {
         let result =
             Args::try_parse_from(["uv-sbom", "--format", "markdown", "--explain", "requests"]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_dependency_tree_flag_absent_by_default() {
+        let args = Args::parse_from(["uv-sbom"]);
+        assert!(!args.show_dependency_tree);
+        assert!(args.dependency_tree_depth.is_none());
+    }
+
+    #[test]
+    fn test_show_dependency_tree_flag_parses() {
+        let args = Args::parse_from(["uv-sbom", "--show-dependency-tree"]);
+        assert!(args.show_dependency_tree);
+    }
+
+    #[test]
+    fn test_dependency_tree_depth_parses_with_show_dependency_tree() {
+        let args = Args::parse_from([
+            "uv-sbom",
+            "--show-dependency-tree",
+            "--dependency-tree-depth",
+            "5",
+        ]);
+        assert!(args.show_dependency_tree);
+        assert_eq!(args.dependency_tree_depth, Some(5));
+    }
+
+    #[test]
+    fn test_dependency_tree_depth_requires_show_dependency_tree() {
+        use clap::error::ErrorKind;
+
+        let result = Args::try_parse_from(["uv-sbom", "--dependency-tree-depth", "5"]);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().kind(),
+            ErrorKind::MissingRequiredArgument
+        );
     }
 }
