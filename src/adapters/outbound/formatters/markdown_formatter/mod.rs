@@ -67,8 +67,9 @@ impl MarkdownFormatter {
     }
 
     /// Renders the conditional sections when present: dependencies, dependency
-    /// explanation, vulnerabilities, license compliance, abandoned packages,
-    /// non-PyPI packages, Python compatibility, and resolution guide.
+    /// tree, dependency explanation, vulnerabilities, license compliance,
+    /// abandoned packages, non-PyPI packages, Python compatibility, and
+    /// resolution guide.
     fn render_optional_sections(&self, output: &mut String, model: &SbomReadModel) {
         if let Some(deps) = &model.dependencies {
             sections::dependencies::render(
@@ -78,6 +79,9 @@ impl MarkdownFormatter {
                 deps,
                 &model.components,
             );
+        }
+        if let Some(tree) = &model.dependency_tree {
+            sections::dependency_tree::render(self.messages, output, tree);
         }
         if let Some(view) = &model.explain_view {
             sections::explain::render(self.messages, output, view);
@@ -189,6 +193,7 @@ mod tests {
                 non_pypi_packages: None,
                 python_compatibility: None,
                 explain_view: None,
+                dependency_tree: None,
                 applied_group_filter: vec![],
             }
         }
@@ -1140,5 +1145,95 @@ mod tests {
             "パッケージ **nonexistent** はこのプロジェクトの依存関係に見つかりませんでした。"
         ));
         assert!(!markdown.contains("## Dependency Explanation"));
+    }
+
+    #[test]
+    fn test_dependency_tree_section_absent_when_none() {
+        let model = test_fixtures::base_model(); // dependency_tree: None
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(!markdown.contains("## Dependency Tree"));
+    }
+
+    #[test]
+    fn test_dependency_tree_section_present_when_some() {
+        use crate::application::read_models::{DependencyTreeNodeView, DependencyTreeView};
+
+        let mut model = test_fixtures::base_model();
+        model.dependency_tree = Some(DependencyTreeView {
+            roots: vec![DependencyTreeNodeView {
+                name: "requests".to_string(),
+                version: Some("2.31.0".to_string()),
+                children: vec![],
+                truncated: false,
+            }],
+            max_depth: 3,
+        });
+
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(markdown.contains("## Dependency Tree"));
+        assert!(markdown.contains("└── requests (2.31.0)"));
+    }
+
+    #[test]
+    fn test_dependency_tree_section_order_after_dependencies_before_explain() {
+        use crate::application::read_models::{
+            DependencyTreeNodeView, DependencyTreeView, ExplainView,
+        };
+
+        let mut model = test_fixtures::base_model();
+        let mut transitive = HashMap::new();
+        transitive.insert(
+            "pkg:pypi/requests@2.31.0".to_string(),
+            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
+        );
+        model.dependencies = Some(DependencyView {
+            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
+            transitive,
+        });
+        model.dependency_tree = Some(DependencyTreeView {
+            roots: vec![DependencyTreeNodeView {
+                name: "requests".to_string(),
+                version: Some("2.31.0".to_string()),
+                children: vec![],
+                truncated: false,
+            }],
+            max_depth: 3,
+        });
+        model.explain_view = Some(ExplainView {
+            target_package: "urllib3".to_string(),
+            found: true,
+            is_direct: false,
+            paths: vec![vec!["requests".to_string(), "urllib3".to_string()]],
+        });
+
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert_section_order(
+            &markdown,
+            &[
+                "## Transitive Dependencies",
+                "## Dependency Tree",
+                "## Dependency Explanation",
+            ],
+        );
+    }
+
+    #[test]
+    fn test_dependency_tree_section_ja_locale() {
+        use crate::application::read_models::{DependencyTreeNodeView, DependencyTreeView};
+
+        let mut model = test_fixtures::base_model();
+        model.dependency_tree = Some(DependencyTreeView {
+            roots: vec![DependencyTreeNodeView {
+                name: "requests".to_string(),
+                version: Some("2.31.0".to_string()),
+                children: vec![],
+                truncated: false,
+            }],
+            max_depth: 3,
+        });
+
+        let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
+        assert!(markdown.contains("## 依存関係ツリー"));
+        assert!(!markdown.contains("## Dependency Tree"));
     }
 }

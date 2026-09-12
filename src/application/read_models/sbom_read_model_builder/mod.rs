@@ -12,6 +12,7 @@ mod upgrade_recommendation_builder;
 mod vulnerability_builder;
 
 use super::abandoned_package::AbandonedPackagesReport;
+use super::dependency_tree_view::DependencyTreeView;
 use super::explain_view::ExplainView;
 use super::non_pypi_package::NonPyPiPackagesReport;
 use super::python_compatibility::PythonCompatibilityReport;
@@ -46,6 +47,7 @@ impl SbomReadModelBuilder {
         non_pypi_packages_report: Option<&NonPyPiPackagesReport>,
         python_compatibility_report: Option<&PythonCompatibilityReport>,
         explain_view: Option<&ExplainView>,
+        dependency_tree: Option<&DependencyTreeView>,
         applied_group_filter: &[String],
     ) -> SbomReadModel {
         let metadata_view = metadata_builder::build_metadata(metadata, project_component);
@@ -71,6 +73,7 @@ impl SbomReadModelBuilder {
         let non_pypi_packages = non_pypi_packages_report.cloned();
         let python_compatibility = python_compatibility_report.cloned();
         let explain_view = explain_view.cloned();
+        let dependency_tree = dependency_tree.cloned();
 
         SbomReadModel {
             metadata: metadata_view,
@@ -84,6 +87,7 @@ impl SbomReadModelBuilder {
             non_pypi_packages,
             python_compatibility,
             explain_view,
+            dependency_tree,
             applied_group_filter: applied_group_filter.to_vec(),
         }
     }
@@ -199,6 +203,7 @@ pub(crate) mod test_helpers {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::read_models::dependency_tree_view::DependencyTreeNodeView;
     use crate::sbom_generation::domain::vulnerability::Severity;
     use crate::sbom_generation::domain::PackageName;
     use std::collections::HashMap;
@@ -218,6 +223,7 @@ mod tests {
             packages,
             &metadata,
             Some(&graph),
+            None,
             None,
             None,
             None,
@@ -246,6 +252,7 @@ mod tests {
         let read_model = SbomReadModelBuilder::build_with_project(
             packages,
             &metadata,
+            None,
             None,
             None,
             None,
@@ -289,6 +296,7 @@ mod tests {
             None,
             Some(&report),
             None,
+            None,
             &[],
         );
 
@@ -323,6 +331,7 @@ mod tests {
             None,
             None,
             Some(&view),
+            None,
             &[],
         );
 
@@ -333,6 +342,44 @@ mod tests {
         assert!(carried.found);
         assert!(!carried.is_direct);
         assert_eq!(carried.paths.len(), 1);
+    }
+
+    #[test]
+    fn test_build_with_project_carries_dependency_tree() {
+        let packages = vec![th::package("requests", "2.31.0")];
+        let metadata = th::metadata();
+        let tree = DependencyTreeView {
+            roots: vec![DependencyTreeNodeView {
+                name: "requests".to_string(),
+                version: Some("2.31.0".to_string()),
+                children: vec![],
+                truncated: false,
+            }],
+            max_depth: 3,
+        };
+
+        let read_model = SbomReadModelBuilder::build_with_project(
+            packages,
+            &metadata,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&tree),
+            &[],
+        );
+
+        let carried = read_model
+            .dependency_tree
+            .expect("dependency_tree must be carried into the read model");
+        assert_eq!(carried.roots.len(), 1);
+        assert_eq!(carried.roots[0].name, "requests");
+        assert_eq!(carried.max_depth, 3);
     }
 
     #[test]
@@ -354,6 +401,7 @@ mod tests {
             &metadata,
             None,
             Some(&vuln_result),
+            None,
             None,
             None,
             None,
@@ -409,6 +457,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &[],
         );
 
@@ -444,6 +493,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &[],
         );
 
@@ -460,6 +510,7 @@ mod tests {
             packages,
             &metadata,
             Some(&graph),
+            None,
             None,
             None,
             None,
@@ -500,6 +551,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &[],
         );
 
@@ -519,6 +571,7 @@ mod tests {
             None,
             None,
             Some(("my-project", "1.0.0")),
+            None,
             None,
             None,
             None,

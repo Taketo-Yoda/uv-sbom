@@ -51,7 +51,6 @@ pub struct SbomResponse {
     /// Dependency tree visualization for `--show-dependency-tree`.
     /// Populated only when `show_dependency_tree` was true in the request AND a
     /// dependency graph was built (`include_dependency_info` was true).
-    #[allow(dead_code)] // WIRE(#782): remove once the Markdown formatter renders this
     pub dependency_tree: Option<DependencyTreeView>,
     /// Dependency groups that were excluded during SBOM generation.
     /// Empty when no group filter was applied.

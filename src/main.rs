@@ -308,6 +308,7 @@ async fn render_and_present(
         response.non_pypi_packages_report.as_ref(),
         response.python_compatibility_report.as_ref(),
         response.explain_view.as_ref(),
+        response.dependency_tree.as_ref(),
         &applied_group_filter,
     );
 

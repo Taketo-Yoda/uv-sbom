@@ -5,6 +5,7 @@
 
 use super::abandoned_package::AbandonedPackagesReport;
 use super::component_view::ComponentView;
+use super::dependency_tree_view::DependencyTreeView;
 use super::dependency_view::DependencyView;
 use super::explain_view::ExplainView;
 use super::license_compliance_view::LicenseComplianceView;
@@ -48,6 +49,10 @@ pub struct SbomReadModel {
     /// Populated only when `explain_package` was set in the request AND a
     /// dependency graph was built.
     pub explain_view: Option<ExplainView>,
+    /// Dependency tree visualization for `--show-dependency-tree`.
+    /// Populated only when `show_dependency_tree` was true in the request AND a
+    /// dependency graph was built.
+    pub dependency_tree: Option<DependencyTreeView>,
     /// Dependency groups that were excluded during generation. Empty = no filter.
     pub applied_group_filter: Vec<String>,
 }

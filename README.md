@@ -665,6 +665,99 @@ None. `--explain` is intentionally CLI-only: it is a one-off diagnostic query ab
   ```
 - **`--format json` silently produces nothing.** CycloneDX JSON output never includes explain data, and unlike CVE checking, `--check-license`, and `--verify-links`, no "no effect" warning is printed for this combination. Since `json` is the default format, always pass `--format markdown` (or `-f markdown`) with `--explain`.
 
+### Dependency Tree Visualization (`--show-dependency-tree`)
+
+Use `--show-dependency-tree` to render your project's dependency graph as an ASCII tree in the Markdown output. Use `--dependency-tree-depth <DEPTH>` (default: 3) to control how many levels below each direct dependency are expanded.
+
+```bash
+# Show the full dependency tree
+uv-sbom --show-dependency-tree --format markdown
+
+# Limit the tree to 2 levels below each root
+uv-sbom --show-dependency-tree --dependency-tree-depth 2 --format markdown
+```
+
+**How it works:**
+- Reuses the dependency graph already built for the Markdown report — no network access and no additional traversal
+- One root per direct dependency, in the same order as the Direct Dependencies list; children follow the lock file's own dependency order
+- Diamond dependencies (a package reachable through more than one path) are shown once under each parent, not deduplicated — the tree mirrors graph shape, not a flattened package list
+- `--dependency-tree-depth` counts levels *below* each root: `0` shows roots only, `1` shows roots plus their immediate children, and so on
+- When a branch has children that were not expanded because the depth limit was reached, a `... (truncated)` marker is shown in their place, followed by a note naming the depth that was applied
+
+**Output:**
+- **Dependency Tree section**: a single `## Dependency Tree` section in the Markdown output, containing only package name and version — license, description, and hash data are not repeated here since they already appear in the Component Inventory
+- When `--show-dependency-tree` is not passed, the section is omitted entirely
+
+**Example output (full tree, no truncation):**
+
+Produced by running against [`examples/suggest-fix-project`](examples/suggest-fix-project):
+
+```bash
+uv-sbom -p examples/suggest-fix-project --show-dependency-tree --no-check-cve -f markdown
+```
+
+````markdown
+## Dependency Tree
+
+```text
+├── httpx (0.24.1)
+│   ├── certifi (2023.7.22)
+│   ├── httpcore (0.17.3)
+│   │   ├── anyio (4.0.0)
+│   │   │   ├── idna (3.4)
+│   │   │   └── sniffio (1.3.0)
+│   │   ├── certifi (2023.7.22)
+│   │   ├── h11 (0.14.0)
+│   │   └── sniffio (1.3.0)
+│   ├── idna (3.4)
+│   └── sniffio (1.3.0)
+└── requests (2.31.0)
+    ├── certifi (2023.7.22)
+    ├── charset-normalizer (3.2.0)
+    ├── idna (3.4)
+    └── urllib3 (2.0.4)
+```
+````
+
+**Example output (truncated at depth 2):**
+
+```bash
+uv-sbom -p examples/suggest-fix-project --show-dependency-tree --dependency-tree-depth 2 --no-check-cve -f markdown
+```
+
+````markdown
+## Dependency Tree
+
+```text
+├── httpx (0.24.1)
+│   ├── certifi (2023.7.22)
+│   ├── httpcore (0.17.3)
+│   │   ├── anyio (4.0.0)
+│   │   │   └── ... (truncated)
+│   │   ├── certifi (2023.7.22)
+│   │   ├── h11 (0.14.0)
+│   │   └── sniffio (1.3.0)
+│   ├── idna (3.4)
+│   └── sniffio (1.3.0)
+└── requests (2.31.0)
+    ├── certifi (2023.7.22)
+    ├── charset-normalizer (3.2.0)
+    ├── idna (3.4)
+    └── urllib3 (2.0.4)
+```
+
+_Tree truncated at depth 2. Use `--dependency-tree-depth <DEPTH>` to show more levels._
+````
+
+> **Note:** These examples use `examples/suggest-fix-project` rather than `examples/sample-project` (used elsewhere in this README) because it is the shipped example with a chain deep enough (`httpx` → `httpcore` → `anyio` → `idna`/`sniffio`) to actually demonstrate truncation at a reduced depth.
+
+**Config file equivalent:**
+
+None. `--show-dependency-tree` is intentionally CLI-only: it is a one-off visualization request, not a persistent policy setting like `check_non_pypi` or `target_python`. It has no `uv-sbom.config.yml` key and does not appear in the Config File Schema Reference table.
+
+**Flag interactions:**
+- **`--format json` silently produces nothing.** CycloneDX JSON output never includes the dependency tree, and no "no effect" warning is printed for this combination. Since `json` is the default format, always pass `--format markdown` (or `-f markdown`) with `--show-dependency-tree`.
+
 ### Vulnerability Threshold Options
 
 You can control which vulnerabilities trigger a non-zero exit code using threshold options:
@@ -1109,6 +1202,9 @@ Options:
       --target-python <VERSION>      Target Python version for compatibility checking (PEP 440 format, e.g. 3.8)
       --explain <PACKAGE_NAME>       Trace the dependency path(s) to the given package (Markdown format only)
                                      Cannot be used with --workspace
+      --show-dependency-tree        Render the dependency graph as an ASCII tree (Markdown format only)
+      --dependency-tree-depth <DEPTH>  Maximum depth for the dependency tree visualization (default: 3)
+                                     Requires --show-dependency-tree
   -h, --help                         Print help
   -V, --version                      Print version
 ```
