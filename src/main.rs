@@ -21,6 +21,7 @@ use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase};
 use clap::Parser;
 use cli::config_resolver::{load_config, merge_config, MergedConfig};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
+use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFindings};
 use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
 use i18n::{Locale, Messages};
 use ports::outbound::{
@@ -599,6 +600,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     };
 
     let mut summary: Vec<(String, PathBuf)> = Vec::new();
+    let mut member_findings: Vec<MemberFindings> = Vec::new();
 
     for member in &members {
         eprintln!(
@@ -628,6 +630,8 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
 
         let response = use_case.execute(request).await?;
 
+        member_findings.push(MemberFindings::from_response(&member.name, &response));
+
         let output_path = member.absolute_path.join(format!("sbom.{}", format_ext));
         let presenter_type = PresenterType::File(output_path.clone());
 
@@ -650,6 +654,15 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
         eprintln!("{:<20} {}", name, path.display());
     }
     eprintln!("{}", "─".repeat(60));
+
+    let enabled_checks = EnabledChecks::from_merged(&merged);
+    let aggregate_lines = render_workspace_aggregate(&member_findings, &enabled_checks, msgs);
+    if !aggregate_lines.is_empty() {
+        eprintln!();
+        for line in aggregate_lines {
+            eprintln!("{}", line);
+        }
+    }
 
     Ok(())
 }
