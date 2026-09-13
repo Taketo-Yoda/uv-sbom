@@ -101,6 +101,25 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix \
   --severity-threshold high -f markdown
 ```
 
+### Step 5: Dependency tree visualization (`--show-dependency-tree`)
+
+This project's `httpx` → `httpcore` → `anyio` → `idna`/`sniffio` chain is 3 levels deep,
+which makes it the shipped example that can actually demonstrate the truncation indicator
+at a reduced depth — see the [main README](../../README.md)'s "Dependency Tree Visualization"
+section for the full, real output of both commands below.
+
+```bash
+# Full tree (default depth 3 — no truncation)
+uv-sbom -p examples/suggest-fix-project --show-dependency-tree --no-check-cve -f markdown
+
+# Truncated at depth 2 — anyio's children are cut off
+uv-sbom -p examples/suggest-fix-project --show-dependency-tree --dependency-tree-depth 2 --no-check-cve -f markdown
+```
+
+**What you will see:**
+- `## Dependency Tree` section with one root per direct dependency (`httpx`, `requests`)
+- At depth 2, `anyio`'s children are replaced with a `... (truncated)` marker and a trailing note naming the applied depth
+
 ## Expected Output Excerpt
 
 ```markdown

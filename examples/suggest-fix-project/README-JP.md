@@ -93,6 +93,24 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix \
   --severity-threshold high -f markdown
 ```
 
+### ステップ 5: 依存関係ツリーの可視化（`--show-dependency-tree`）
+
+このプロジェクトの `httpx` → `httpcore` → `anyio` → `idna`/`sniffio` という依存チェーンは3階層の深さがあり、
+同梱サンプルの中で縮小した深さでの省略表示（truncation）を実際に再現できる唯一のプロジェクトです。
+以下2コマンドの実際の出力全体は、[メインREADME](../../README-JP.md)の「依存関係ツリーの可視化」の節を参照してください。
+
+```bash
+# ツリー全体（デフォルトの深さ3 — 省略なし）
+uv-sbom -p examples/suggest-fix-project --show-dependency-tree --no-check-cve -f markdown --lang ja
+
+# 深さ2で省略 — anyio の子ノードが省略される
+uv-sbom -p examples/suggest-fix-project --show-dependency-tree --dependency-tree-depth 2 --no-check-cve -f markdown --lang ja
+```
+
+**表示される内容:**
+- 直接依存パッケージ（`httpx`、`requests`）ごとに1つのルートを持つ `## 依存関係ツリー` セクション
+- 深さ2の場合、`anyio` の子ノードが `... (省略)` マーカーに置き換えられ、適用された深さを明記した注記が続く
+
 ## 出力例
 
 ```markdown

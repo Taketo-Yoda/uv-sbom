@@ -209,6 +209,12 @@ pub struct Messages {
     pub summary_explain_also_transitive: &'static str,
     pub summary_explain_not_found: &'static str,
 
+    // Dependency tree section
+    pub section_dependency_tree: &'static str,
+    pub label_dependency_tree_truncated: &'static str,
+    pub note_dependency_tree_truncated: &'static str,
+    pub label_dependency_tree_empty: &'static str,
+
     // Diff Markdown formatter strings
     pub diff_section_title: &'static str,
     pub diff_compared_line: &'static str,
@@ -442,6 +448,12 @@ static EN_MESSAGES: Messages = Messages {
     summary_explain_also_transitive: "It is also reachable through {} transitive path(s):",
     summary_explain_not_found: "Package **{}** was not found in this project's dependencies.",
 
+    // Dependency tree section
+    section_dependency_tree: "## Dependency Tree",
+    label_dependency_tree_truncated: "... (truncated)",
+    note_dependency_tree_truncated: "_Tree truncated at depth {}. Use `--dependency-tree-depth <DEPTH>` to show more levels._",
+    label_dependency_tree_empty: "_No direct dependencies found._",
+
     // Diff Markdown formatter strings
     diff_section_title: "## Dependency Diff Report",
     diff_compared_line: "Compared: `{}` vs current `uv.lock`",
@@ -645,6 +657,12 @@ static JA_MESSAGES: Messages = Messages {
     summary_explain_direct: "**{}** はこのプロジェクトの直接依存パッケージです。",
     summary_explain_also_transitive: "さらに {} 個の間接経路からも到達可能です:",
     summary_explain_not_found: "パッケージ **{}** はこのプロジェクトの依存関係に見つかりませんでした。",
+
+    // Dependency tree section
+    section_dependency_tree: "## 依存関係ツリー",
+    label_dependency_tree_truncated: "... (省略)",
+    note_dependency_tree_truncated: "_深さ {} で省略されています。さらに深い階層を表示するには `--dependency-tree-depth <DEPTH>` を使用してください。_",
+    label_dependency_tree_empty: "_直接依存パッケージが見つかりません。_",
 
     // Diff Markdown formatter strings
     diff_section_title: "## 依存関係差分レポート",
@@ -1271,6 +1289,36 @@ mod tests {
         assert_eq!(
             Messages::format(msgs.summary_explain_not_found, &["nope"]),
             "パッケージ **nope** はこのプロジェクトの依存関係に見つかりませんでした。"
+        );
+    }
+
+    #[test]
+    fn test_messages_dependency_tree_section_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(msgs.section_dependency_tree, "## Dependency Tree");
+        assert_eq!(msgs.label_dependency_tree_truncated, "... (truncated)");
+        assert_eq!(
+            Messages::format(msgs.note_dependency_tree_truncated, &["2"]),
+            "_Tree truncated at depth 2. Use `--dependency-tree-depth <DEPTH>` to show more levels._"
+        );
+        assert_eq!(
+            msgs.label_dependency_tree_empty,
+            "_No direct dependencies found._"
+        );
+    }
+
+    #[test]
+    fn test_messages_dependency_tree_section_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(msgs.section_dependency_tree, "## 依存関係ツリー");
+        assert_eq!(msgs.label_dependency_tree_truncated, "... (省略)");
+        assert_eq!(
+            Messages::format(msgs.note_dependency_tree_truncated, &["2"]),
+            "_深さ 2 で省略されています。さらに深い階層を表示するには `--dependency-tree-depth <DEPTH>` を使用してください。_"
+        );
+        assert_eq!(
+            msgs.label_dependency_tree_empty,
+            "_直接依存パッケージが見つかりません。_"
         );
     }
 
