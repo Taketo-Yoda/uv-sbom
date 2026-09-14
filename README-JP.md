@@ -1063,9 +1063,16 @@ Member               Output File
 api                  /path/to/workspace/packages/api/sbom.json
 worker               /path/to/workspace/packages/worker/sbom.json
 ────────────────────────────────────────────────────────────
+
+📊 Workspace Aggregate Summary
+────────────────────────────────────────────────────────────
+Total actionable CVEs: 17
+────────────────────────────────────────────────────────────
 ```
 
 各メンバーは、そのメンバーから到達可能なパッケージのみを含む独自の `sbom.json` を取得します。推移的依存関係は含まれますが、他のメンバーに属するパッケージは除外されます。
+
+**メンバー横断の集計サマリー:** メンバーごとのテーブルの後に、`--workspace` は各メンバーの SBOM ファイルを開かなくてもモノレポ全体の健全性が分かる集計サマリーも出力します — CVE の合計件数、ライセンスポリシー違反があるメンバー、メンテナンス停止／非PyPI／Python非互換パッケージが検出されたメンバーです。この行は、その実行で実際に有効化されたチェック（例: `--check-license`）についてのみ表示されます。実行されなかったチェックの行は、空であっても一切表示されません。
 
 **他のオプションとの組み合わせ:**
 
@@ -1075,6 +1082,14 @@ uv-sbom --workspace --path examples/workspace --format markdown
 
 # ライセンスコンプライアンスチェックを追加
 uv-sbom --workspace --path examples/workspace --check-license
+```
+
+```
+📊 Workspace Aggregate Summary
+────────────────────────────────────────────────────────────
+Total actionable CVEs: 17
+Members with license policy violations: none
+────────────────────────────────────────────────────────────
 ```
 
 > **注意:** `--workspace` と `--output` は同時に使用できません。ワークスペースモードでは、各メンバーの SBOM は自動的にメンバー自身のディレクトリ内の `sbom.json`（Markdown の場合は `sbom.md`）に書き込まれます。

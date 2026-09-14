@@ -1,5 +1,6 @@
 pub mod config_resolver;
 pub mod runner;
+pub mod workspace_summary;
 
 use clap::Parser;
 

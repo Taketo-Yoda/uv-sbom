@@ -1070,10 +1070,22 @@ Member               Output File
 api                  /path/to/workspace/packages/api/sbom.json
 worker               /path/to/workspace/packages/worker/sbom.json
 ────────────────────────────────────────────────────────────
+
+📊 Workspace Aggregate Summary
+────────────────────────────────────────────────────────────
+Total actionable CVEs: 17
+────────────────────────────────────────────────────────────
 ```
 
 Each member gets its own `sbom.json` containing only the packages reachable from that member.
 Transitive dependencies are included, but packages belonging to other members are excluded.
+
+**Aggregate summary across members:** After the per-member table, `--workspace` also prints an
+aggregate summary showing monorepo-wide health without opening every member's SBOM file — total
+CVE count, which members have license policy violations, and which members have abandoned /
+non-PyPI / Python-incompatible packages flagged. A line only appears for a check that was actually
+enabled for the run (e.g. `--check-license`); a check that wasn't run never prints a line, even an
+empty one.
 
 **With other options:**
 
@@ -1083,6 +1095,14 @@ uv-sbom --workspace --path examples/workspace --format markdown
 
 # With license compliance check
 uv-sbom --workspace --path examples/workspace --check-license
+```
+
+```
+📊 Workspace Aggregate Summary
+────────────────────────────────────────────────────────────
+Total actionable CVEs: 17
+Members with license policy violations: none
+────────────────────────────────────────────────────────────
 ```
 
 > **Note:** `--workspace` and `--output` are mutually exclusive. In workspace mode, each member's SBOM is

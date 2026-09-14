@@ -159,6 +159,13 @@ pub struct Messages {
     pub workspace_summary_header: &'static str,
     pub workspace_col_member: &'static str,
     pub workspace_col_output_file: &'static str,
+    pub workspace_aggregate_header: &'static str,
+    pub workspace_aggregate_total_cves: &'static str,
+    pub workspace_aggregate_license_violations: &'static str,
+    pub workspace_aggregate_abandoned: &'static str,
+    pub workspace_aggregate_non_pypi: &'static str,
+    pub workspace_aggregate_python_incompatible: &'static str,
+    pub workspace_aggregate_none: &'static str,
 
     // Executive summary section
     pub section_summary: &'static str,
@@ -398,6 +405,13 @@ static EN_MESSAGES: Messages = Messages {
     workspace_summary_header: "📦 Workspace SBOM Summary",
     workspace_col_member: "Member",
     workspace_col_output_file: "Output File",
+    workspace_aggregate_header: "📊 Workspace Aggregate Summary",
+    workspace_aggregate_total_cves: "Total actionable CVEs: {}",
+    workspace_aggregate_license_violations: "Members with license policy violations: {}",
+    workspace_aggregate_abandoned: "Members with abandoned packages: {}",
+    workspace_aggregate_non_pypi: "Members with non-PyPI packages: {}",
+    workspace_aggregate_python_incompatible: "Members with Python-incompatible packages: {}",
+    workspace_aggregate_none: "none",
 
     // Executive summary section
     section_summary: "## Summary",
@@ -608,6 +622,13 @@ static JA_MESSAGES: Messages = Messages {
     workspace_summary_header: "📦 ワークスペース SBOM サマリー",
     workspace_col_member: "メンバー",
     workspace_col_output_file: "出力ファイル",
+    workspace_aggregate_header: "📊 ワークスペース集計サマリー",
+    workspace_aggregate_total_cves: "対応が必要なCVE合計: {}",
+    workspace_aggregate_license_violations: "ライセンスポリシー違反があるメンバー: {}",
+    workspace_aggregate_abandoned: "メンテナンス停止パッケージがあるメンバー: {}",
+    workspace_aggregate_non_pypi: "非PyPIパッケージがあるメンバー: {}",
+    workspace_aggregate_python_incompatible: "Python非互換パッケージがあるメンバー: {}",
+    workspace_aggregate_none: "なし",
 
     // Executive summary section
     section_summary: "## サマリー",
@@ -978,6 +999,31 @@ mod tests {
         assert_eq!(msgs.workspace_summary_header, "📦 Workspace SBOM Summary");
         assert_eq!(msgs.workspace_col_member, "Member");
         assert_eq!(msgs.workspace_col_output_file, "Output File");
+        assert_eq!(
+            msgs.workspace_aggregate_header,
+            "📊 Workspace Aggregate Summary"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_total_cves,
+            "Total actionable CVEs: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_license_violations,
+            "Members with license policy violations: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_abandoned,
+            "Members with abandoned packages: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_non_pypi,
+            "Members with non-PyPI packages: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_python_incompatible,
+            "Members with Python-incompatible packages: {}"
+        );
+        assert_eq!(msgs.workspace_aggregate_none, "none");
     }
 
     #[test]
@@ -995,6 +1041,31 @@ mod tests {
         );
         assert_eq!(msgs.workspace_col_member, "メンバー");
         assert_eq!(msgs.workspace_col_output_file, "出力ファイル");
+        assert_eq!(
+            msgs.workspace_aggregate_header,
+            "📊 ワークスペース集計サマリー"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_total_cves,
+            "対応が必要なCVE合計: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_license_violations,
+            "ライセンスポリシー違反があるメンバー: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_abandoned,
+            "メンテナンス停止パッケージがあるメンバー: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_non_pypi,
+            "非PyPIパッケージがあるメンバー: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_python_incompatible,
+            "Python非互換パッケージがあるメンバー: {}"
+        );
+        assert_eq!(msgs.workspace_aggregate_none, "なし");
     }
 
     #[test]
