@@ -192,7 +192,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | Path | Responsibility |
 |------|----------------|
 | `src/cli/` | CLI entrypoint, argument parsing, config resolution |
-| `src/cli/config_resolver.rs` | Merges CLI args / env vars / config file into `MergedConfig` |
+| `src/cli/config_resolver/` | Merges CLI args / env vars / config file into `MergedConfig`; split into `mod.rs` (struct + orchestrator + field resolvers), `loader.rs` (config file I/O), `list_merge.rs` (generic list-merge helpers) since #788 |
 | `src/application/` | Use cases, DTOs, factories, read models |
 | `src/sbom_generation/` | Pure domain logic (no I/O dependencies) |
 | `src/ports/` | Trait definitions for infrastructure (inbound/outbound) |
@@ -212,7 +212,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 
 | Type | Location | Role |
 |------|----------|------|
-| `MergedConfig` | `src/cli/config_resolver.rs` | Final resolved config (CLI > env > file > default) |
+| `MergedConfig` | `src/cli/config_resolver/mod.rs` | Final resolved config (CLI > env > file > default); `load_config` re-exported from `loader.rs` via `pub use` since #788 |
 | `ConfigFile` | `src/config.rs` | Raw deserialized config file struct |
 | `SbomRequest` / `SbomResponse` | `src/application/dto/` | Input/output for the main use case |
 | `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO,PCREPO=(),USIM=()>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555; 7th param `PCREPO: PythonCompatibilityRepository` (defaults to `()`) added in #681; 8th param `USIM: UvLockSimulator` (defaults to `()`, no `+ Clone` bound — only ever borrowed) added in #704, replacing a direct `UvLockAdapter` construction inside `advise_upgrades_if_requested`; `mod.rs` holds only the struct, `new()`, and `execute()` — methods live in sibling `impl` blocks split by responsibility across `filtering.rs`, `checks.rs`, `upgrade.rs`, `response.rs` (all `pub(super)`) since #711 |
@@ -240,7 +240,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 ### Important Invariants
 
 - **Config resolution order**: CLI args > environment variables > config file > defaults.
-  This order is enforced in `config_resolver.rs` and must not be changed without updating tests.
+  This order is enforced in `config_resolver/mod.rs` and must not be changed without updating tests.
 - **Domain layer has no I/O**: `src/sbom_generation/` must never import from `adapters` or `ports`.
   `UpgradeAdvisor` was historically the one exception — it consumed `UvLockSimulator` as a generic
   bound and awaited it directly — but as of #716 it is a pure, synchronous comparator like every
