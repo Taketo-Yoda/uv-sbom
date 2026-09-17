@@ -1,3 +1,4 @@
+mod field_resolvers;
 mod list_merge;
 mod loader;
 
@@ -5,9 +6,12 @@ use crate::application::dto::OutputFormat;
 use crate::sbom_generation::domain::license_policy::{LicensePolicy, UnknownLicenseHandling};
 use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::Result;
+use field_resolvers::{
+    resolve_abandoned_threshold_days, resolve_check_cve, resolve_cvss_threshold,
+    resolve_exclude_groups, resolve_flag, resolve_format, resolve_severity_threshold,
+    resolve_target_python,
+};
 use list_merge::{merge_ignore_cves, merge_string_lists};
-use pep440_rs::Version;
-use std::str::FromStr;
 use uv_sbom::config::{self, ConfigFile, IgnoreCve};
 
 use super::Args;
@@ -37,82 +41,6 @@ pub struct MergedConfig {
     /// Target Python version for compatibility checking (PEP 440 format).
     /// Populated from `--target-python` (CLI) or `target_python` (config file).
     pub target_python: Option<String>,
-}
-
-/// Resolve `target_python` from CLI (highest priority) or config file, then validate
-/// that the resolved value parses as a PEP 440 version. This is the single point where
-/// CLI-supplied and config-file-supplied values converge, so it catches typos from
-/// either source with one code path, before any network calls are made.
-///
-/// # Errors
-/// Returns an error if the resolved value does not parse as a valid PEP 440 version.
-fn resolve_target_python(cli: Option<&String>, config: Option<&String>) -> Result<Option<String>> {
-    let resolved = cli.or(config).cloned();
-    if let Some(ref version) = resolved {
-        Version::from_str(version).map_err(|e| {
-            anyhow::anyhow!(
-                "Invalid Python version: '{}': {}. Example: --target-python 3.13",
-                version,
-                e
-            )
-        })?;
-    }
-    Ok(resolved)
-}
-
-/// Resolve a boolean opt-in flag: CLI flag wins if set, otherwise the config value
-/// (defaulting to `false` if the config doesn't specify it).
-///
-/// Shared by `check_license`, `suggest_fix`, `check_abandoned`, and `check_non_pypi`,
-/// which all follow this exact `cli || config.unwrap_or(false)` shape.
-fn resolve_flag(cli_flag: bool, config_value: Option<bool>) -> bool {
-    cli_flag || config_value.unwrap_or(false)
-}
-
-/// Resolve `format`: CLI > config > default (json).
-///
-/// clap always provides a default value for `--format` (default "json"), so we can't
-/// distinguish "user explicitly passed --format json" from "user passed nothing" —
-/// `cli` is always populated. Convention: CLI wins whenever it differs from the clap
-/// default; when it equals the default, config is allowed to override it. This means
-/// an explicit `--format json` loses to a config value other than json.
-fn resolve_format(cli: OutputFormat, config: Option<&str>) -> OutputFormat {
-    let Some(config_format) = config else {
-        return cli;
-    };
-    if cli != OutputFormat::Json {
-        cli
-    } else {
-        config_format.parse::<OutputFormat>().unwrap_or(cli)
-    }
-}
-
-/// Resolve `check_cve`: CLI opt-out (`--no-check-cve`) takes highest priority;
-/// otherwise use the config value (default `true`).
-fn resolve_check_cve(cli_opt_out: bool, config: Option<bool>) -> bool {
-    if cli_opt_out {
-        false
-    } else {
-        config.unwrap_or(true)
-    }
-}
-
-/// Resolve `severity_threshold`: CLI > config > `None`.
-fn resolve_severity_threshold(cli: Option<Severity>, config: Option<&str>) -> Option<Severity> {
-    cli.or_else(|| {
-        config.and_then(|s| match s.to_lowercase().as_str() {
-            "low" => Some(Severity::Low),
-            "medium" => Some(Severity::Medium),
-            "high" => Some(Severity::High),
-            "critical" => Some(Severity::Critical),
-            _ => None,
-        })
-    })
-}
-
-/// Resolve `cvss_threshold`: CLI > config > `None`.
-fn resolve_cvss_threshold(cli: Option<f32>, config: Option<f64>) -> Option<f32> {
-    cli.or(config.map(|v| v as f32))
 }
 
 /// Resolve the `unknown` license handling from its config string representation.
@@ -165,32 +93,6 @@ fn resolve_license_policy(
         &[],
         UnknownLicenseHandling::default(),
     ))
-}
-
-/// Default inactivity threshold (in days) for abandoned-package detection when
-/// neither CLI nor config specifies one.
-const DEFAULT_ABANDONED_THRESHOLD_DAYS: u64 = 730;
-
-/// Resolve `abandoned_threshold_days`: CLI > config > default.
-///
-/// `cli` is `None` when the flag was not passed and `Some` when the user explicitly
-/// provided a value, cleanly expressing "not provided" vs. "provided."
-fn resolve_abandoned_threshold_days(cli: Option<u64>, config: Option<u64>) -> u64 {
-    cli.or(config).unwrap_or(DEFAULT_ABANDONED_THRESHOLD_DAYS)
-}
-
-/// Resolve `exclude_groups`: CLI overrides config entirely (not merged/deduplicated
-/// like `exclude_patterns`).
-///
-/// `--production-only` is resolved in `main.rs` after lockfile I/O; when it is set,
-/// `cli` is guaranteed empty by clap's `conflicts_with`, so this resolves to the
-/// config value or empty.
-fn resolve_exclude_groups(cli: &[String], config: Option<&[String]>) -> Vec<String> {
-    if !cli.is_empty() {
-        cli.to_vec()
-    } else {
-        config.map(<[String]>::to_vec).unwrap_or_default()
-    }
 }
 
 /// Merge CLI arguments with config file values.
