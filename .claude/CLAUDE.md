@@ -192,7 +192,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | Path | Responsibility |
 |------|----------------|
 | `src/cli/` | CLI entrypoint, argument parsing, config resolution |
-| `src/cli/config_resolver/` | Merges CLI args / env vars / config file into `MergedConfig`; split into `mod.rs` (struct + orchestrator + license-policy resolvers) since #788, `loader.rs` (config file I/O), `list_merge.rs` (generic list-merge helpers), `field_resolvers.rs` (the eight simple per-field resolvers + `DEFAULT_ABANDONED_THRESHOLD_DAYS`, extracted from `mod.rs` in #789) |
+| `src/cli/config_resolver/` | Merges CLI args / env vars / config file into `MergedConfig`; split into `mod.rs` (struct + orchestrator only) since #788, `loader.rs` (config file I/O), `list_merge.rs` (generic list-merge helpers), `field_resolvers.rs` (the eight simple per-field resolvers + `DEFAULT_ABANDONED_THRESHOLD_DAYS`, extracted from `mod.rs` in #789), `license_policy_resolver.rs` (`resolve_unknown_license_handling`, `resolve_license_policy`, extracted from `mod.rs` in #790); `MergedConfig`, `merge_config`, and `load_config` are the only items visible outside the module |
 | `src/application/` | Use cases, DTOs, factories, read models |
 | `src/sbom_generation/` | Pure domain logic (no I/O dependencies) |
 | `src/ports/` | Trait definitions for infrastructure (inbound/outbound) |
