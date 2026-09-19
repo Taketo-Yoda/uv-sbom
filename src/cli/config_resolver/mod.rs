@@ -1,9 +1,10 @@
 mod field_resolvers;
+mod license_policy_resolver;
 mod list_merge;
 mod loader;
 
 use crate::application::dto::OutputFormat;
-use crate::sbom_generation::domain::license_policy::{LicensePolicy, UnknownLicenseHandling};
+use crate::sbom_generation::domain::license_policy::LicensePolicy;
 use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::Result;
 use field_resolvers::{
@@ -11,8 +12,9 @@ use field_resolvers::{
     resolve_exclude_groups, resolve_flag, resolve_format, resolve_severity_threshold,
     resolve_target_python,
 };
+use license_policy_resolver::resolve_license_policy;
 use list_merge::{merge_ignore_cves, merge_string_lists};
-use uv_sbom::config::{self, ConfigFile, IgnoreCve};
+use uv_sbom::config::{ConfigFile, IgnoreCve};
 
 use super::Args;
 
@@ -43,61 +45,10 @@ pub struct MergedConfig {
     pub target_python: Option<String>,
 }
 
-/// Resolve the `unknown` license handling from its config string representation.
-/// Unrecognized or unspecified values default to `Warn`. Config-file values are
-/// already validated at load time (`config.rs`), so the fallback here is defensive.
-fn resolve_unknown_license_handling(config: Option<&str>) -> UnknownLicenseHandling {
-    config
-        .map(|s| match s.to_lowercase().as_str() {
-            "deny" => UnknownLicenseHandling::Deny,
-            "allow" => UnknownLicenseHandling::Allow,
-            _ => UnknownLicenseHandling::Warn,
-        })
-        .unwrap_or_default()
-}
-
-/// Resolve `license_policy`. `check_license` must be the already-resolved merged
-/// value (not re-derived here), since config-only activation
-/// (`config.check_license = true`) must also pick up the CLI-supplied lists.
-///
-/// If `check_license` is enabled and CLI allow/deny lists are non-empty, they
-/// override the config policy entirely. Otherwise, the config policy is used if
-/// present, falling back to an empty policy (default `Warn` unknown-handling).
-fn resolve_license_policy(
-    check_license: bool,
-    cli_allow: &[String],
-    cli_deny: &[String],
-    config: Option<&config::LicensePolicyConfig>,
-) -> Option<LicensePolicy> {
-    if !check_license {
-        return None;
-    }
-    if !cli_allow.is_empty() || !cli_deny.is_empty() {
-        // CLI provides policy — override config entirely
-        return Some(LicensePolicy::new(
-            cli_allow,
-            cli_deny,
-            UnknownLicenseHandling::default(),
-        ));
-    }
-    if let Some(lp_config) = config {
-        // Use config policy
-        let unknown = resolve_unknown_license_handling(lp_config.unknown.as_deref());
-        let allow = lp_config.allow.clone().unwrap_or_default();
-        let deny = lp_config.deny.clone().unwrap_or_default();
-        return Some(LicensePolicy::new(&allow, &deny, unknown));
-    }
-    // check_license enabled but no policy specified
-    Some(LicensePolicy::new(
-        &[],
-        &[],
-        UnknownLicenseHandling::default(),
-    ))
-}
-
 /// Merge CLI arguments with config file values.
 ///
-/// Priority: CLI > config file > defaults.
+/// Priority: CLI > config file > defaults. There is no environment-variable layer:
+/// `uv-sbom` reads no environment variables during config resolution.
 /// List fields (exclude_patterns, ignore_cves) are merged and deduplicated.
 /// Scalar fields use CLI value if present, otherwise config value, otherwise default.
 ///
@@ -175,6 +126,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedCo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sbom_generation::domain::license_policy::UnknownLicenseHandling;
     use clap::Parser;
 
     // --- merge_config tests ---
