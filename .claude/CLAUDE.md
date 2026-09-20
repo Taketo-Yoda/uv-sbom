@@ -14,6 +14,10 @@ backing Issue.
 - Fixing a typo or formatting error explicitly requested inline by the user
 - Updating `## Architecture Overview` in this file after an implementation
   (covered by the `/implement` skill's Step 7)
+- Invoking `/issue` itself — creating a GitHub Issue is not a file change;
+  `/issue` IS the Issue-First gate, so it has no prior Issue of its own to
+  wait on (applies equally to `/code-review` Step 3.5 and `/implement`
+  Step 3.6, both of which invoke `/issue` on the project's behalf)
 
 ### Why This Rule Exists
 
@@ -64,6 +68,12 @@ Skills contain mandatory pre-flight checks and language requirements that preven
 - **2026-04-18**: v2.2.0 release promoted an empty `[Unreleased]` section. Features added in PRs #441–#483 were never recorded in CHANGELOG. Fixed by Issue #491 (added gate in `/release` Step 3.6 and `/pr` Step 4.5).
 - **2026-05-09 (Issue #511)**: `--check-abandoned` CLI flag was added without updating README.md, README-JP.md, `examples/sample-project/config/uv-sbom.config.yml`, or any example project README. Root cause: `/implement` Step 4 said "update docs as needed" without a concrete gate; `/pr` had no documentation backstop. Fixed by Issue #568 (`/implement` Step 4.3 CLI Flag Documentation Gate) and Issue #569 (`/pr` Step 4.6 CLI Flag Documentation Backstop).
 - **2026-07-08 (Issue #669)**: The `--check-non-pypi` flag (Issue #627) satisfied `/implement` Step 4.3.D with a README paragraph and a hand-fabricated example-output block, but no shipped example project's `uv.lock` contains a non-PyPI source, so running the flag against any example produces empty output. Root cause: Step 4.3.D only required a README *mention*, not *proof* of non-empty output. Fixed by Issue #669 (Step 4.3.D now requires actually running the flag against example data and producing real, non-empty output; a missing trigger is a blocker, not a gap). Note: `/pr` Step 4.6.D has the same weakness and should be hardened in a follow-up Issue.
+- **2026-09-19**: During #790's implementation, a `/code-review` 🟡 finding on an
+  untouched file (`loader.rs` i18n bypass) and an Architect-flagged, user-confirmed
+  documentation fix (CLAUDE.md's false env-var precedence claim) were both reported
+  in prose but never turned into tracked Issues — a human had to ask before Issues
+  #795/#796 were created. Fixed by Issue #797 (`/code-review` Step 3.5 and
+  `/implement` Step 3.6 Follow-up Issue Gates).
 
 ### Enforcement
 
