@@ -202,7 +202,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | Path | Responsibility |
 |------|----------------|
 | `src/cli/` | CLI entrypoint, argument parsing, config resolution |
-| `src/cli/config_resolver/` | Merges CLI args / env vars / config file into `MergedConfig`; split into `mod.rs` (struct + orchestrator only) since #788, `loader.rs` (config file I/O), `list_merge.rs` (generic list-merge helpers), `field_resolvers.rs` (the eight simple per-field resolvers + `DEFAULT_ABANDONED_THRESHOLD_DAYS`, extracted from `mod.rs` in #789), `license_policy_resolver.rs` (`resolve_unknown_license_handling`, `resolve_license_policy`, extracted from `mod.rs` in #790); `MergedConfig`, `merge_config`, and `load_config` are the only items visible outside the module |
+| `src/cli/config_resolver/` | Merges CLI args / config file into `MergedConfig` (no environment-variable layer — `uv-sbom` reads no environment variables during config resolution); split into `mod.rs` (struct + orchestrator only) since #788, `loader.rs` (config file I/O), `list_merge.rs` (generic list-merge helpers), `field_resolvers.rs` (the eight simple per-field resolvers + `DEFAULT_ABANDONED_THRESHOLD_DAYS`, extracted from `mod.rs` in #789), `license_policy_resolver.rs` (`resolve_unknown_license_handling`, `resolve_license_policy`, extracted from `mod.rs` in #790); `MergedConfig`, `merge_config`, and `load_config` are the only items visible outside the module |
 | `src/application/` | Use cases, DTOs, factories, read models |
 | `src/sbom_generation/` | Pure domain logic (no I/O dependencies) |
 | `src/ports/` | Trait definitions for infrastructure (inbound/outbound) |
@@ -222,7 +222,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 
 | Type | Location | Role |
 |------|----------|------|
-| `MergedConfig` | `src/cli/config_resolver/mod.rs` | Final resolved config (CLI > env > file > default); `load_config` re-exported from `loader.rs` via `pub use` since #788 |
+| `MergedConfig` | `src/cli/config_resolver/mod.rs` | Final resolved config (CLI > config file > default; no env-var layer); `load_config` re-exported from `loader.rs` via `pub use` since #788 |
 | `ConfigFile` | `src/config.rs` | Raw deserialized config file struct |
 | `SbomRequest` / `SbomResponse` | `src/application/dto/` | Input/output for the main use case |
 | `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO,PCREPO=(),USIM=()>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555; 7th param `PCREPO: PythonCompatibilityRepository` (defaults to `()`) added in #681; 8th param `USIM: UvLockSimulator` (defaults to `()`, no `+ Clone` bound — only ever borrowed) added in #704, replacing a direct `UvLockAdapter` construction inside `advise_upgrades_if_requested`; `mod.rs` holds only the struct, `new()`, and `execute()` — methods live in sibling `impl` blocks split by responsibility across `filtering.rs`, `checks.rs`, `upgrade.rs`, `response.rs` (all `pub(super)`) since #711 |
@@ -249,8 +249,11 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 
 ### Important Invariants
 
-- **Config resolution order**: CLI args > environment variables > config file > defaults.
-  This order is enforced in `config_resolver/mod.rs` and must not be changed without updating tests.
+- **Config resolution order**: CLI args > config file > defaults. There is no
+  environment-variable layer — `uv-sbom` reads no environment variables during config
+  resolution (clap's `env` feature is not enabled in `Cargo.toml`, and no `#[arg(env = ...)]`
+  attributes exist anywhere in `src/cli/`). This order is enforced in
+  `config_resolver/mod.rs` and must not be changed without updating tests.
 - **Domain layer has no I/O**: `src/sbom_generation/` must never import from `adapters` or `ports`.
   `UpgradeAdvisor` was historically the one exception — it consumed `UvLockSimulator` as a generic
   bound and awaited it directly — but as of #716 it is a pure, synchronous comparator like every
