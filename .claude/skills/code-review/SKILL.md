@@ -103,7 +103,8 @@ Port/Adapter structure:
 
 Config resolution:
 - Is MergedConfig only constructed in src/cli/config_resolver.rs?
-- Is the priority order (CLI > env vars > config file > defaults) maintained?
+- Is the priority order (CLI > config file > defaults) maintained, with no
+  environment-variable layer introduced?
 
 ### 2. Separation of Concerns
 
