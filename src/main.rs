@@ -477,7 +477,7 @@ async fn run(args: Args) -> Result<bool> {
     validate_project_path(&project_path)?;
 
     // Load config file (explicit path or auto-discovery)
-    let config = load_config(&args, &project_path)?;
+    let config = load_config(&args, &project_path, locale)?;
 
     // Merge CLI and config values
     let merged = merge_config(&args, &config)?;
@@ -580,7 +580,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
         )
     );
 
-    let config = load_config(&args, &workspace_root)?;
+    let config = load_config(&args, &workspace_root, locale)?;
     let merged = merge_config(&args, &config)?;
 
     // Resolve exclude_groups for workspace mode: --production-only reads group roots from
@@ -679,7 +679,7 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     let project_path = PathBuf::from(project_dir);
     validate_project_path(&project_path)?;
 
-    let config = load_config(&args, &project_path)?;
+    let config = load_config(&args, &project_path, locale)?;
     let merged = merge_config(&args, &config)?;
 
     let check_cve = merged.check_cve;

@@ -100,6 +100,35 @@ exclude_packages:
     }
 
     #[test]
+    fn test_auto_discovery_message_localized_to_japanese() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            r#"
+exclude_packages:
+  - certifi
+"#,
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("プロジェクトディレクトリ内の設定ファイルを自動検出しました。"));
+    }
+
+    #[test]
     fn test_auto_discovery_applies_format() {
         let dir = TempDir::new().unwrap();
         create_test_project(dir.path());
