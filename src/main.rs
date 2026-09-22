@@ -212,8 +212,8 @@ struct CliOnlyRequestOptions {
 /// `suggest_fix(false)`, and only normal mode supports `--dry-run`.
 ///
 /// `cli_only` groups fields sourced straight from the raw `Args`, not
-/// `MergedConfig`: `MergedConfig` only exists to express the CLI > env >
-/// config file > defaults merge, which doesn't apply to CLI-only values.
+/// `MergedConfig`: `MergedConfig` only exists to express the CLI > config
+/// file > defaults merge, which doesn't apply to CLI-only values.
 fn build_sbom_request(
     project_path: PathBuf,
     merged: &MergedConfig,
