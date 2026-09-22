@@ -61,6 +61,10 @@ pub struct Messages {
     pub progress_diff_checking_base: &'static str,
     pub progress_diff_checking_current: &'static str,
 
+    // Config loading messages (CLI layer)
+    pub info_config_loaded_from: &'static str,
+    pub info_config_auto_discovered: &'static str,
+
     // Progress messages (use case layer)
     pub progress_loading_lockfile: &'static str,
     pub progress_detected_packages: &'static str,
@@ -307,6 +311,10 @@ static EN_MESSAGES: Messages = Messages {
     progress_diff_checking_base: "🔍 Checking vulnerabilities in base lockfile...",
     progress_diff_checking_current: "🔍 Checking vulnerabilities in current lockfile...",
 
+    // Config loading messages (CLI layer)
+    info_config_loaded_from: "📄 Loaded config from: {}",
+    info_config_auto_discovered: "📄 Auto-discovered config file in project directory.",
+
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
     progress_detected_packages: "✅ Detected {} package(s)",
@@ -521,6 +529,10 @@ static JA_MESSAGES: Messages = Messages {
     progress_fetching_vulns: "🔍 脆弱性情報を取得中...",
     progress_diff_checking_base: "🔍 ベースロックファイルの脆弱性をチェック中...",
     progress_diff_checking_current: "🔍 現在のロックファイルの脆弱性をチェック中...",
+
+    // Config loading messages (CLI layer)
+    info_config_loaded_from: "📄 設定ファイルを読み込みました: {}",
+    info_config_auto_discovered: "📄 プロジェクトディレクトリ内の設定ファイルを自動検出しました。",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -860,6 +872,32 @@ mod tests {
         assert_eq!(
             msgs.progress_diff_checking_current,
             "🔍 現在のロックファイルの脆弱性をチェック中..."
+        );
+    }
+
+    #[test]
+    fn test_messages_config_loading_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            Messages::format(msgs.info_config_loaded_from, &["/tmp/uv-sbom.config.yml"]),
+            "📄 Loaded config from: /tmp/uv-sbom.config.yml"
+        );
+        assert_eq!(
+            msgs.info_config_auto_discovered,
+            "📄 Auto-discovered config file in project directory."
+        );
+    }
+
+    #[test]
+    fn test_messages_config_loading_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            Messages::format(msgs.info_config_loaded_from, &["/tmp/uv-sbom.config.yml"]),
+            "📄 設定ファイルを読み込みました: /tmp/uv-sbom.config.yml"
+        );
+        assert_eq!(
+            msgs.info_config_auto_discovered,
+            "📄 プロジェクトディレクトリ内の設定ファイルを自動検出しました。"
         );
     }
 
