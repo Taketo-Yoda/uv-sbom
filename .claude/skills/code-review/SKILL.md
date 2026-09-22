@@ -102,7 +102,7 @@ Port/Adapter structure:
 - Does every new async trait method have #[async_trait] and Send + Sync bounds?
 
 Config resolution:
-- Is MergedConfig only constructed in src/cli/config_resolver.rs?
+- Is MergedConfig only constructed in src/cli/config_resolver/mod.rs?
 - Is the priority order (CLI > config file > defaults) maintained, with no
   environment-variable layer introduced?
 
@@ -415,7 +415,7 @@ those belong to the current change and must be fixed now (Step 3's FAIL path).
   File is now 1,043 lines. Suggested refactoring: extract the vulnerability section
   renderer (~lines 620–780) into a new `vulnerability_section.rs` submodule.
 
-- 🔵 CONSIDER **GoF: Strategy** `src/cli/config_resolver.rs:155-180`:
+- 🔵 CONSIDER **GoF: Strategy** `src/cli/config_resolver/field_resolvers.rs:47-54`:
   The format selection logic (match on OutputFormat) could be expressed as a Strategy
   trait to simplify future format additions.
 
