@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-09-23
+
 ### Fixed
 - **Config-load status messages bypassed the i18n catalog**: `--config <path>` and config file auto-discovery printed hardcoded English status messages regardless of `--lang`. Both messages are now routed through `EN_MESSAGES`/`JA_MESSAGES`, so `--lang ja` users see the localized text (#795)
 

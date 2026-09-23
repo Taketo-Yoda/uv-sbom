@@ -2106,7 +2106,7 @@ dependencies = [
 
 [[package]]
 name = "uv-sbom"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
