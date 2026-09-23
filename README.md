@@ -663,7 +663,7 @@ None. `--explain` is intentionally CLI-only: it is a one-off diagnostic query ab
   ```
   error: the argument '--explain <PACKAGE_NAME>' cannot be used with '--workspace'
   ```
-- **`--format json` silently produces nothing.** CycloneDX JSON output never includes explain data, and unlike CVE checking, `--check-license`, and `--verify-links`, no "no effect" warning is printed for this combination. Since `json` is the default format, always pass `--format markdown` (or `-f markdown`) with `--explain`.
+- **`--format json` silently produces nothing.** CycloneDX JSON output never includes explain data, and unlike `--check-license` and `--verify-links`, no "no effect" warning is printed for this combination. Since `json` is the default format, always pass `--format markdown` (or `-f markdown`) with `--explain`.
 
 ### Dependency Tree Visualization (`--show-dependency-tree`)
 

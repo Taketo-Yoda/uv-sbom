@@ -164,14 +164,6 @@ fn build_use_case<LR: LockfileReader>(
 /// flag) will not suppress these warnings, since `args.format` stays at its
 /// default; that pre-existing quirk is out of scope for this extraction.
 fn print_startup_warnings(args: &Args, msgs: &Messages) {
-    // Warn if CVE check is active with JSON format
-    if !args.no_check_cve && args.format == OutputFormat::Json {
-        eprintln!("{}", msgs.warn_check_cve_no_effect);
-        eprintln!("   Vulnerability data is not included in JSON output.");
-        eprintln!("   Use --format markdown to see vulnerability report.");
-        eprintln!();
-    }
-
     // Warn if check_license is used with JSON format
     if args.check_license && args.format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_check_license_no_effect);
