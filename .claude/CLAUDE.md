@@ -14,6 +14,10 @@ backing Issue.
 - Fixing a typo or formatting error explicitly requested inline by the user
 - Updating `## Architecture Overview` in this file after an implementation
   (covered by the `/implement` skill's Step 7)
+- Invoking `/issue` itself — creating a GitHub Issue is not a file change;
+  `/issue` IS the Issue-First gate, so it has no prior Issue of its own to
+  wait on (applies equally to `/code-review` Step 3.5 and `/implement`
+  Step 3.6, both of which invoke `/issue` on the project's behalf)
 
 ### Why This Rule Exists
 
@@ -64,6 +68,12 @@ Skills contain mandatory pre-flight checks and language requirements that preven
 - **2026-04-18**: v2.2.0 release promoted an empty `[Unreleased]` section. Features added in PRs #441–#483 were never recorded in CHANGELOG. Fixed by Issue #491 (added gate in `/release` Step 3.6 and `/pr` Step 4.5).
 - **2026-05-09 (Issue #511)**: `--check-abandoned` CLI flag was added without updating README.md, README-JP.md, `examples/sample-project/config/uv-sbom.config.yml`, or any example project README. Root cause: `/implement` Step 4 said "update docs as needed" without a concrete gate; `/pr` had no documentation backstop. Fixed by Issue #568 (`/implement` Step 4.3 CLI Flag Documentation Gate) and Issue #569 (`/pr` Step 4.6 CLI Flag Documentation Backstop).
 - **2026-07-08 (Issue #669)**: The `--check-non-pypi` flag (Issue #627) satisfied `/implement` Step 4.3.D with a README paragraph and a hand-fabricated example-output block, but no shipped example project's `uv.lock` contains a non-PyPI source, so running the flag against any example produces empty output. Root cause: Step 4.3.D only required a README *mention*, not *proof* of non-empty output. Fixed by Issue #669 (Step 4.3.D now requires actually running the flag against example data and producing real, non-empty output; a missing trigger is a blocker, not a gap). Note: `/pr` Step 4.6.D has the same weakness and should be hardened in a follow-up Issue.
+- **2026-09-19**: During #790's implementation, a `/code-review` 🟡 finding on an
+  untouched file (`loader.rs` i18n bypass) and an Architect-flagged, user-confirmed
+  documentation fix (CLAUDE.md's false env-var precedence claim) were both reported
+  in prose but never turned into tracked Issues — a human had to ask before Issues
+  #795/#796 were created. Fixed by Issue #797 (`/code-review` Step 3.5 and
+  `/implement` Step 3.6 Follow-up Issue Gates).
 
 ### Enforcement
 
@@ -192,7 +202,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | Path | Responsibility |
 |------|----------------|
 | `src/cli/` | CLI entrypoint, argument parsing, config resolution |
-| `src/cli/config_resolver.rs` | Merges CLI args / env vars / config file into `MergedConfig` |
+| `src/cli/config_resolver/` | Merges CLI args / config file into `MergedConfig` (no environment-variable layer — `uv-sbom` reads no environment variables during config resolution); split into `mod.rs` (struct + orchestrator only) since #788, `loader.rs` (config file I/O), `list_merge.rs` (generic list-merge helpers), `field_resolvers.rs` (the eight simple per-field resolvers + `DEFAULT_ABANDONED_THRESHOLD_DAYS`, extracted from `mod.rs` in #789), `license_policy_resolver.rs` (`resolve_unknown_license_handling`, `resolve_license_policy`, extracted from `mod.rs` in #790); `MergedConfig`, `merge_config`, and `load_config` are the only items visible outside the module |
 | `src/application/` | Use cases, DTOs, factories, read models |
 | `src/sbom_generation/` | Pure domain logic (no I/O dependencies) |
 | `src/ports/` | Trait definitions for infrastructure (inbound/outbound) |
@@ -212,7 +222,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 
 | Type | Location | Role |
 |------|----------|------|
-| `MergedConfig` | `src/cli/config_resolver.rs` | Final resolved config (CLI > env > file > default) |
+| `MergedConfig` | `src/cli/config_resolver/mod.rs` | Final resolved config (CLI > config file > default; no env-var layer); `load_config` re-exported from `loader.rs` via `pub use` since #788 |
 | `ConfigFile` | `src/config.rs` | Raw deserialized config file struct |
 | `SbomRequest` / `SbomResponse` | `src/application/dto/` | Input/output for the main use case |
 | `GenerateSbomUseCase<LR,PCR,LREPO,PR,VREPO,MREPO,PCREPO=(),USIM=()>` | `src/application/use_cases/generate_sbom/` | Orchestrates SBOM generation; 6th param `MREPO: MaintenanceRepository` added in #555; 7th param `PCREPO: PythonCompatibilityRepository` (defaults to `()`) added in #681; 8th param `USIM: UvLockSimulator` (defaults to `()`, no `+ Clone` bound — only ever borrowed) added in #704, replacing a direct `UvLockAdapter` construction inside `advise_upgrades_if_requested`; `mod.rs` holds only the struct, `new()`, and `execute()` — methods live in sibling `impl` blocks split by responsibility across `filtering.rs`, `checks.rs`, `upgrade.rs`, `response.rs` (all `pub(super)`) since #711 |
@@ -233,11 +243,17 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `PythonCompatibilityChecker` | `src/sbom_generation/domain/services/python_compatibility_checker.rs` | Stateless domain service evaluating PEP 440 `Requires-Python` constraints against a target Python version; moved out of `ports/outbound/python_compatibility_repository.rs` in #705 (it was pure logic with no I/O, so it never belonged in `ports/`); takes `Option<&str>` rather than the `PythonCompatibilityInfo` DTO to avoid a domain→ports import |
 | `ProgressBarHandle` | `src/application/use_cases/progress_bar.rs` | Shared indicatif progress-bar helper (background-thread polling an `AtomicUsize` counter) used by `CheckAbandonedPackagesUseCase` and `CheckPythonCompatibilityUseCase` to avoid duplicating the spawn/poll/finish pattern |
 | `ExplainView` | `src/application/read_models/explain_view.rs` | Read model for the `--explain <PACKAGE>` dependency-path query (`target_package`, `found`, `is_direct`, `paths`); populated by `GenerateSbomUseCase::build_explain_view_if_requested` (`checks.rs`) by reusing `DependencyGraph::find_paths_to` (no new traversal logic — same pattern as `ResolutionAnalyzer::analyze`); added in #768. `None` when no dependency graph was built (non-Markdown output) or `explain_package` is unset; `Some(found: false)` for an invalid/nonexistent package name. Carried into `SbomReadModel.explain_view` by `SbomReadModelBuilder::build_with_project` and rendered by the Markdown formatter's `explain` section (single `## Dependency Explanation` heading covering all three states — transitive, direct, not-found — plus the compound direct-and-transitive case) in #769; CycloneDX JSON is out of scope |
+| `DependencyTreeBuilder` / `TreeNode` | `src/sbom_generation/domain/services/dependency_tree_builder.rs` | Pure domain service building a depth-limited, cycle-safe dependency tree (`TreeNode { name, children, truncated }`) from `DependencyGraph::children_of` (new accessor added alongside it); per-path visited-set with backtracking (same cycle-safety strategy as `find_paths_to`), diamond dependencies intentionally not deduplicated; added in #780 as the foundational data layer for the dependency tree visualization feature (parent #736). `TreeNode` deliberately has no `version` field — `DependencyGraph` has no version data to draw from; wired into `GenerateSbomUseCase` in #781 via `--show-dependency-tree`/`--dependency-tree-depth` |
+| `DependencyTreeView` / `DependencyTreeNodeView` | `src/application/read_models/dependency_tree_view.rs` | Read model for the `--show-dependency-tree` visualization; converts the domain `TreeNode` tree into `DependencyTreeNodeView` (all `String`/`Option<String>`, formatter-ready) and joins each node's `version` from `enriched_packages` — the domain `TreeNode` has no version data. Populated by `GenerateSbomUseCase::build_dependency_tree_if_requested` (`checks.rs`, same shape as `build_explain_view_if_requested`) only when `show_dependency_tree` is true and a dependency graph was built; added in #781. Carried into `SbomReadModel.dependency_tree` by `SbomReadModelBuilder::build_with_project` and rendered by the Markdown formatter's `dependency_tree` section as an ASCII-connector tree (`├──`/`└──`/`│`, wrapped in a ` ```text ` fence, package name + version only) in #782; the former `SbomResponse.dependency_tree` `#[allow(dead_code)] // WIRE(#782)` annotation was removed once this consumer landed. CycloneDX JSON is out of scope |
+| `MemberFindings` / `EnabledChecks` | `src/cli/workspace_summary.rs` | CLI-presentation-layer types (binary-only, not part of `lib.rs`) for `--workspace` mode's aggregate summary, added in #737. `MemberFindings::from_response` extracts per-member check results from a completed `SbomResponse` before it is moved into `render_and_present` (which consumes it by value). `EnabledChecks::from_merged` reads which checks were actually requested from `MergedConfig`; aggregate-line visibility is gated on this rather than on per-member `Option` report presence, since a check can be enabled but still yield `Ok(None)` for a given member — deriving visibility from report presence would silently drop an enabled check's line (the inverse of the #669 failure mode). `render_workspace_aggregate` is a pure function producing the printable lines, wired into `run_workspace` in `src/main.rs` |
 
 ### Important Invariants
 
-- **Config resolution order**: CLI args > environment variables > config file > defaults.
-  This order is enforced in `config_resolver.rs` and must not be changed without updating tests.
+- **Config resolution order**: CLI args > config file > defaults. There is no
+  environment-variable layer — `uv-sbom` reads no environment variables during config
+  resolution (clap's `env` feature is not enabled in `Cargo.toml`, and no `#[arg(env = ...)]`
+  attributes exist anywhere in `src/cli/`). This order is enforced in
+  `config_resolver/mod.rs` and must not be changed without updating tests.
 - **Domain layer has no I/O**: `src/sbom_generation/` must never import from `adapters` or `ports`.
   `UpgradeAdvisor` was historically the one exception — it consumed `UvLockSimulator` as a generic
   bound and awaited it directly — but as of #716 it is a pure, synchronous comparator like every

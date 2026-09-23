@@ -1,5 +1,6 @@
 pub mod cve_filter;
 pub mod dependency_diff_analyzer;
+pub mod dependency_tree_builder;
 pub mod group_reachability_analyzer;
 pub mod license_compliance_checker;
 pub mod python_compatibility_checker;
@@ -9,6 +10,7 @@ pub mod vulnerability_checker;
 
 #[allow(unused_imports)]
 pub use dependency_diff_analyzer::DependencyDiffAnalyzer;
+pub use dependency_tree_builder::{DependencyTreeBuilder, TreeNode};
 pub use group_reachability_analyzer::GroupReachabilityAnalyzer;
 pub use license_compliance_checker::LicenseComplianceChecker;
 pub use python_compatibility_checker::PythonCompatibilityChecker;

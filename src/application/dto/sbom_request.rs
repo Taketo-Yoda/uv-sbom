@@ -51,6 +51,11 @@ pub struct SbomRequest {
     /// Package name to trace dependency paths to (`--explain`).
     /// `None` disables path tracing.
     pub explain_package: Option<String>,
+    /// Whether to build the `--show-dependency-tree` visualization.
+    pub show_dependency_tree: bool,
+    /// Resolved depth limit for the dependency tree visualization.
+    /// Only meaningful when `show_dependency_tree` is true. Defaults to 3.
+    pub dependency_tree_depth: usize,
     /// Output locale for human-readable formats
     pub locale: Locale,
 }
@@ -119,6 +124,8 @@ pub struct SbomRequestBuilder {
     exclude_groups: Vec<String>,
     target_python: Option<String>,
     explain_package: Option<String>,
+    show_dependency_tree: bool,
+    dependency_tree_depth: usize,
     locale: Locale,
 }
 
@@ -152,6 +159,8 @@ impl SbomRequestBuilder {
             exclude_groups: Vec::new(),
             target_python: None,
             explain_package: None,
+            show_dependency_tree: false,
+            dependency_tree_depth: 3,
             locale: Locale::default(),
         }
     }
@@ -266,6 +275,18 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets whether to build the `--show-dependency-tree` visualization.
+    pub fn show_dependency_tree(mut self, show: bool) -> Self {
+        self.show_dependency_tree = show;
+        self
+    }
+
+    /// Sets the depth limit for the dependency tree visualization.
+    pub fn dependency_tree_depth(mut self, depth: usize) -> Self {
+        self.dependency_tree_depth = depth;
+        self
+    }
+
     /// Sets the output locale for human-readable formats.
     pub fn locale(mut self, locale: Locale) -> Self {
         self.locale = locale;
@@ -300,6 +321,8 @@ impl SbomRequestBuilder {
             exclude_groups: self.exclude_groups,
             target_python: self.target_python,
             explain_package: self.explain_package,
+            show_dependency_tree: self.show_dependency_tree,
+            dependency_tree_depth: self.dependency_tree_depth,
             locale: self.locale,
         })
     }
@@ -513,5 +536,29 @@ mod tests {
             .unwrap();
 
         assert!(request.explain_package.is_none());
+    }
+
+    #[test]
+    fn test_show_dependency_tree_defaults_to_false_with_depth_3() {
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .build()
+            .unwrap();
+
+        assert!(!request.show_dependency_tree);
+        assert_eq!(request.dependency_tree_depth, 3);
+    }
+
+    #[test]
+    fn test_show_dependency_tree_builder() {
+        let request = SbomRequest::builder()
+            .project_path("/test/project")
+            .show_dependency_tree(true)
+            .dependency_tree_depth(5)
+            .build()
+            .unwrap();
+
+        assert!(request.show_dependency_tree);
+        assert_eq!(request.dependency_tree_depth, 5);
     }
 }

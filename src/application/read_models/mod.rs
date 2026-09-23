@@ -6,6 +6,7 @@
 pub mod abandoned_package;
 pub mod component_view;
 pub mod cve_delta_view;
+pub mod dependency_tree_view;
 pub mod dependency_view;
 pub mod explain_view;
 pub mod license_compliance_view;
@@ -23,6 +24,8 @@ pub use abandoned_package::{AbandonedPackageView, AbandonedPackagesReport};
 pub use component_view::{ComponentView, LicenseView};
 #[allow(unused_imports)]
 pub use cve_delta_view::{CveDeltaEntry, CveDeltaView};
+#[allow(unused_imports)]
+pub use dependency_tree_view::{DependencyTreeNodeView, DependencyTreeView};
 #[allow(unused_imports)]
 pub use dependency_view::DependencyView;
 #[allow(unused_imports)]

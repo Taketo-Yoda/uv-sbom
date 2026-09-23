@@ -21,7 +21,8 @@ use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase};
 use clap::Parser;
 use cli::config_resolver::{load_config, merge_config, MergedConfig};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
-use cli::Args;
+use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFindings};
+use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
 use i18n::{Locale, Messages};
 use ports::outbound::{
     DiffSource, GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap,
@@ -188,6 +189,19 @@ fn print_startup_warnings(args: &Args, msgs: &Messages) {
     }
 }
 
+/// CLI-only `SbomRequest` fields that intentionally have no config-file tier
+/// (see Issue #767 for `explain_package`; `--show-dependency-tree` /
+/// `--dependency-tree-depth` follow the same rationale — one-off diagnostic/
+/// visualization requests, not persistent policy settings). Grouped into a
+/// struct rather than passed as separate `build_sbom_request` parameters to
+/// keep that function's argument count from growing unbounded as more such
+/// flags are added.
+struct CliOnlyRequestOptions {
+    explain_package: Option<String>,
+    show_dependency_tree: bool,
+    dependency_tree_depth: Option<u32>,
+}
+
 /// Builds an `SbomRequest` via the builder pattern, shared between normal mode
 /// (`run()`) and workspace mode (`run_workspace()`'s per-member loop).
 ///
@@ -197,21 +211,22 @@ fn print_startup_warnings(args: &Args, msgs: &Messages) {
 /// rooted at a different path per mode, workspace mode always passes
 /// `suggest_fix(false)`, and only normal mode supports `--dry-run`.
 ///
-/// `explain_package` is likewise an explicit parameter rather than sourced
-/// from `&MergedConfig`: it comes straight from the raw `Args.explain` field,
-/// not `MergedConfig`, because it intentionally has no config-file tier
-/// (see Issue #767) — `MergedConfig` only exists to express the CLI > env >
-/// config file > defaults merge, which doesn't apply to a CLI-only value.
+/// `cli_only` groups fields sourced straight from the raw `Args`, not
+/// `MergedConfig`: `MergedConfig` only exists to express the CLI > config
+/// file > defaults merge, which doesn't apply to CLI-only values.
 fn build_sbom_request(
     project_path: PathBuf,
     merged: &MergedConfig,
     exclude_groups: Vec<String>,
     suggest_fix: bool,
     dry_run: bool,
-    explain_package: Option<String>,
+    cli_only: CliOnlyRequestOptions,
     locale: Locale,
 ) -> Result<SbomRequest> {
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
+    let dependency_tree_depth = cli_only
+        .dependency_tree_depth
+        .unwrap_or(DEFAULT_DEPENDENCY_TREE_DEPTH) as usize;
     SbomRequest::builder()
         .project_path(project_path)
         .include_dependency_info(include_dependency_info)
@@ -229,7 +244,9 @@ fn build_sbom_request(
         .check_non_pypi(merged.check_non_pypi)
         .exclude_groups(exclude_groups)
         .target_python(merged.target_python.clone())
-        .explain_package(explain_package)
+        .explain_package(cli_only.explain_package)
+        .show_dependency_tree(cli_only.show_dependency_tree)
+        .dependency_tree_depth(dependency_tree_depth)
         .locale(locale)
         .build()
 }
@@ -292,6 +309,7 @@ async fn render_and_present(
         response.non_pypi_packages_report.as_ref(),
         response.python_compatibility_report.as_ref(),
         response.explain_view.as_ref(),
+        response.dependency_tree.as_ref(),
         &applied_group_filter,
     );
 
@@ -459,7 +477,7 @@ async fn run(args: Args) -> Result<bool> {
     validate_project_path(&project_path)?;
 
     // Load config file (explicit path or auto-discovery)
-    let config = load_config(&args, &project_path)?;
+    let config = load_config(&args, &project_path, locale)?;
 
     // Merge CLI and config values
     let merged = merge_config(&args, &config)?;
@@ -488,7 +506,11 @@ async fn run(args: Args) -> Result<bool> {
         exclude_groups,
         suggest_fix,
         args.dry_run,
-        args.explain.clone(),
+        CliOnlyRequestOptions {
+            explain_package: args.explain.clone(),
+            show_dependency_tree: args.show_dependency_tree,
+            dependency_tree_depth: args.dependency_tree_depth,
+        },
         locale,
     )?;
 
@@ -558,7 +580,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
         )
     );
 
-    let config = load_config(&args, &workspace_root)?;
+    let config = load_config(&args, &workspace_root, locale)?;
     let merged = merge_config(&args, &config)?;
 
     // Resolve exclude_groups for workspace mode: --production-only reads group roots from
@@ -578,6 +600,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     };
 
     let mut summary: Vec<(String, PathBuf)> = Vec::new();
+    let mut member_findings: Vec<MemberFindings> = Vec::new();
 
     for member in &members {
         eprintln!(
@@ -595,13 +618,19 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             workspace_exclude_groups.clone(),
             false,
             false,
-            // --explain is conflicts_with = "workspace"; clap rejects the
-            // combination at parse time, so this is provably always None here.
-            None,
+            CliOnlyRequestOptions {
+                // --explain is conflicts_with = "workspace"; clap rejects the
+                // combination at parse time, so this is provably always None here.
+                explain_package: None,
+                show_dependency_tree: args.show_dependency_tree,
+                dependency_tree_depth: args.dependency_tree_depth,
+            },
             locale,
         )?;
 
         let response = use_case.execute(request).await?;
+
+        member_findings.push(MemberFindings::from_response(&member.name, &response));
 
         let output_path = member.absolute_path.join(format!("sbom.{}", format_ext));
         let presenter_type = PresenterType::File(output_path.clone());
@@ -626,6 +655,15 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     }
     eprintln!("{}", "─".repeat(60));
 
+    let enabled_checks = EnabledChecks::from_merged(&merged);
+    let aggregate_lines = render_workspace_aggregate(&member_findings, &enabled_checks, msgs);
+    if !aggregate_lines.is_empty() {
+        eprintln!();
+        for line in aggregate_lines {
+            eprintln!("{}", line);
+        }
+    }
+
     Ok(())
 }
 
@@ -641,7 +679,7 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     let project_path = PathBuf::from(project_dir);
     validate_project_path(&project_path)?;
 
-    let config = load_config(&args, &project_path)?;
+    let config = load_config(&args, &project_path, locale)?;
     let merged = merge_config(&args, &config)?;
 
     let check_cve = merged.check_cve;

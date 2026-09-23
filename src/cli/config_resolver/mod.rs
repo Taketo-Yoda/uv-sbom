@@ -1,13 +1,24 @@
+mod field_resolvers;
+mod license_policy_resolver;
+mod list_merge;
+mod loader;
+
 use crate::application::dto::OutputFormat;
-use crate::sbom_generation::domain::license_policy::{LicensePolicy, UnknownLicenseHandling};
+use crate::sbom_generation::domain::license_policy::LicensePolicy;
 use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::Result;
-use pep440_rs::Version;
-use std::collections::HashSet;
-use std::str::FromStr;
-use uv_sbom::config::{self, ConfigFile, IgnoreCve};
+use field_resolvers::{
+    resolve_abandoned_threshold_days, resolve_check_cve, resolve_cvss_threshold,
+    resolve_exclude_groups, resolve_flag, resolve_format, resolve_severity_threshold,
+    resolve_target_python,
+};
+use license_policy_resolver::resolve_license_policy;
+use list_merge::{merge_ignore_cves, merge_string_lists};
+use uv_sbom::config::{ConfigFile, IgnoreCve};
 
 use super::Args;
+
+pub use loader::load_config;
 
 /// Merged configuration after combining CLI arguments and config file values.
 #[derive(Debug)]
@@ -34,227 +45,10 @@ pub struct MergedConfig {
     pub target_python: Option<String>,
 }
 
-/// Load a config file from an explicit path or via auto-discovery.
-pub fn load_config(args: &Args, project_path: &std::path::Path) -> Result<Option<ConfigFile>> {
-    if let Some(ref config_path) = args.config {
-        let path = std::path::Path::new(config_path);
-        let cfg = config::load_config_from_path(path)?;
-        eprintln!("📄 Loaded config from: {}", path.display());
-        Ok(Some(cfg))
-    } else {
-        let cfg = config::discover_config(project_path)?;
-        if cfg.is_some() {
-            eprintln!("📄 Auto-discovered config file in project directory.");
-        }
-        Ok(cfg)
-    }
-}
-
-/// Merge two string lists and deduplicate.
-pub fn merge_string_lists(cli: &[String], config: &Option<Vec<String>>) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut result = Vec::new();
-
-    // CLI values first (higher priority)
-    for item in cli {
-        if seen.insert(item.clone()) {
-            result.push(item.clone());
-        }
-    }
-
-    // Then config values
-    if let Some(config_items) = config {
-        for item in config_items {
-            if seen.insert(item.clone()) {
-                result.push(item.clone());
-            }
-        }
-    }
-
-    result
-}
-
-/// Merge two ignore_cves lists and deduplicate by ID (CLI entries take precedence).
-pub fn merge_ignore_cves(cli: &[IgnoreCve], config: &Option<Vec<IgnoreCve>>) -> Vec<IgnoreCve> {
-    let mut seen = HashSet::new();
-    let mut result = Vec::new();
-
-    // CLI values first (higher priority)
-    for cve in cli {
-        if seen.insert(cve.id.clone()) {
-            result.push(cve.clone());
-        }
-    }
-
-    // Then config values
-    if let Some(config_cves) = config {
-        for cve in config_cves {
-            if seen.insert(cve.id.clone()) {
-                result.push(cve.clone());
-            }
-        }
-    }
-
-    result
-}
-
-/// Resolve `target_python` from CLI (highest priority) or config file, then validate
-/// that the resolved value parses as a PEP 440 version. This is the single point where
-/// CLI-supplied and config-file-supplied values converge, so it catches typos from
-/// either source with one code path, before any network calls are made.
-///
-/// # Errors
-/// Returns an error if the resolved value does not parse as a valid PEP 440 version.
-fn resolve_target_python(cli: Option<&String>, config: Option<&String>) -> Result<Option<String>> {
-    let resolved = cli.or(config).cloned();
-    if let Some(ref version) = resolved {
-        Version::from_str(version).map_err(|e| {
-            anyhow::anyhow!(
-                "Invalid Python version: '{}': {}. Example: --target-python 3.13",
-                version,
-                e
-            )
-        })?;
-    }
-    Ok(resolved)
-}
-
-/// Resolve a boolean opt-in flag: CLI flag wins if set, otherwise the config value
-/// (defaulting to `false` if the config doesn't specify it).
-///
-/// Shared by `check_license`, `suggest_fix`, `check_abandoned`, and `check_non_pypi`,
-/// which all follow this exact `cli || config.unwrap_or(false)` shape.
-fn resolve_flag(cli_flag: bool, config_value: Option<bool>) -> bool {
-    cli_flag || config_value.unwrap_or(false)
-}
-
-/// Resolve `format`: CLI > config > default (json).
-///
-/// clap always provides a default value for `--format` (default "json"), so we can't
-/// distinguish "user explicitly passed --format json" from "user passed nothing" —
-/// `cli` is always populated. Convention: CLI wins whenever it differs from the clap
-/// default; when it equals the default, config is allowed to override it. This means
-/// an explicit `--format json` loses to a config value other than json.
-fn resolve_format(cli: OutputFormat, config: Option<&str>) -> OutputFormat {
-    let Some(config_format) = config else {
-        return cli;
-    };
-    if cli != OutputFormat::Json {
-        cli
-    } else {
-        config_format.parse::<OutputFormat>().unwrap_or(cli)
-    }
-}
-
-/// Resolve `check_cve`: CLI opt-out (`--no-check-cve`) takes highest priority;
-/// otherwise use the config value (default `true`).
-fn resolve_check_cve(cli_opt_out: bool, config: Option<bool>) -> bool {
-    if cli_opt_out {
-        false
-    } else {
-        config.unwrap_or(true)
-    }
-}
-
-/// Resolve `severity_threshold`: CLI > config > `None`.
-fn resolve_severity_threshold(cli: Option<Severity>, config: Option<&str>) -> Option<Severity> {
-    cli.or_else(|| {
-        config.and_then(|s| match s.to_lowercase().as_str() {
-            "low" => Some(Severity::Low),
-            "medium" => Some(Severity::Medium),
-            "high" => Some(Severity::High),
-            "critical" => Some(Severity::Critical),
-            _ => None,
-        })
-    })
-}
-
-/// Resolve `cvss_threshold`: CLI > config > `None`.
-fn resolve_cvss_threshold(cli: Option<f32>, config: Option<f64>) -> Option<f32> {
-    cli.or(config.map(|v| v as f32))
-}
-
-/// Resolve the `unknown` license handling from its config string representation.
-/// Unrecognized or unspecified values default to `Warn`. Config-file values are
-/// already validated at load time (`config.rs`), so the fallback here is defensive.
-fn resolve_unknown_license_handling(config: Option<&str>) -> UnknownLicenseHandling {
-    config
-        .map(|s| match s.to_lowercase().as_str() {
-            "deny" => UnknownLicenseHandling::Deny,
-            "allow" => UnknownLicenseHandling::Allow,
-            _ => UnknownLicenseHandling::Warn,
-        })
-        .unwrap_or_default()
-}
-
-/// Resolve `license_policy`. `check_license` must be the already-resolved merged
-/// value (not re-derived here), since config-only activation
-/// (`config.check_license = true`) must also pick up the CLI-supplied lists.
-///
-/// If `check_license` is enabled and CLI allow/deny lists are non-empty, they
-/// override the config policy entirely. Otherwise, the config policy is used if
-/// present, falling back to an empty policy (default `Warn` unknown-handling).
-fn resolve_license_policy(
-    check_license: bool,
-    cli_allow: &[String],
-    cli_deny: &[String],
-    config: Option<&config::LicensePolicyConfig>,
-) -> Option<LicensePolicy> {
-    if !check_license {
-        return None;
-    }
-    if !cli_allow.is_empty() || !cli_deny.is_empty() {
-        // CLI provides policy — override config entirely
-        return Some(LicensePolicy::new(
-            cli_allow,
-            cli_deny,
-            UnknownLicenseHandling::default(),
-        ));
-    }
-    if let Some(lp_config) = config {
-        // Use config policy
-        let unknown = resolve_unknown_license_handling(lp_config.unknown.as_deref());
-        let allow = lp_config.allow.clone().unwrap_or_default();
-        let deny = lp_config.deny.clone().unwrap_or_default();
-        return Some(LicensePolicy::new(&allow, &deny, unknown));
-    }
-    // check_license enabled but no policy specified
-    Some(LicensePolicy::new(
-        &[],
-        &[],
-        UnknownLicenseHandling::default(),
-    ))
-}
-
-/// Default inactivity threshold (in days) for abandoned-package detection when
-/// neither CLI nor config specifies one.
-const DEFAULT_ABANDONED_THRESHOLD_DAYS: u64 = 730;
-
-/// Resolve `abandoned_threshold_days`: CLI > config > default.
-///
-/// `cli` is `None` when the flag was not passed and `Some` when the user explicitly
-/// provided a value, cleanly expressing "not provided" vs. "provided."
-fn resolve_abandoned_threshold_days(cli: Option<u64>, config: Option<u64>) -> u64 {
-    cli.or(config).unwrap_or(DEFAULT_ABANDONED_THRESHOLD_DAYS)
-}
-
-/// Resolve `exclude_groups`: CLI overrides config entirely (not merged/deduplicated
-/// like `exclude_patterns`).
-///
-/// `--production-only` is resolved in `main.rs` after lockfile I/O; when it is set,
-/// `cli` is guaranteed empty by clap's `conflicts_with`, so this resolves to the
-/// config value or empty.
-fn resolve_exclude_groups(cli: &[String], config: Option<&[String]>) -> Vec<String> {
-    if !cli.is_empty() {
-        cli.to_vec()
-    } else {
-        config.map(<[String]>::to_vec).unwrap_or_default()
-    }
-}
-
 /// Merge CLI arguments with config file values.
 ///
-/// Priority: CLI > config file > defaults.
+/// Priority: CLI > config file > defaults. There is no environment-variable layer:
+/// `uv-sbom` reads no environment variables during config resolution.
 /// List fields (exclude_patterns, ignore_cves) are merged and deduplicated.
 /// Scalar fields use CLI value if present, otherwise config value, otherwise default.
 ///
@@ -332,6 +126,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedCo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sbom_generation::domain::license_policy::UnknownLicenseHandling;
     use clap::Parser;
 
     // --- merge_config tests ---
@@ -736,88 +531,6 @@ mod tests {
         });
         let result = merge_config(&args, &config).unwrap();
         assert!(!result.suggest_fix);
-    }
-
-    // --- Merge logic tests ---
-
-    #[test]
-    fn test_merge_string_lists_both_empty() {
-        let result = merge_string_lists(&[], &None);
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_merge_string_lists_cli_only() {
-        let cli = vec!["a".to_string(), "b".to_string()];
-        let result = merge_string_lists(&cli, &None);
-        assert_eq!(result, vec!["a", "b"]);
-    }
-
-    #[test]
-    fn test_merge_string_lists_config_only() {
-        let config = Some(vec!["x".to_string(), "y".to_string()]);
-        let result = merge_string_lists(&[], &config);
-        assert_eq!(result, vec!["x", "y"]);
-    }
-
-    #[test]
-    fn test_merge_string_lists_deduplication() {
-        let cli = vec!["a".to_string(), "b".to_string()];
-        let config = Some(vec!["b".to_string(), "c".to_string()]);
-        let result = merge_string_lists(&cli, &config);
-        assert_eq!(result, vec!["a", "b", "c"]);
-    }
-
-    #[test]
-    fn test_merge_ignore_cves_both_empty() {
-        let result = merge_ignore_cves(&[], &None);
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_merge_ignore_cves_cli_only() {
-        let cli = vec![IgnoreCve {
-            id: "CVE-2024-1".to_string(),
-            reason: None,
-        }];
-        let result = merge_ignore_cves(&cli, &None);
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].id, "CVE-2024-1");
-    }
-
-    #[test]
-    fn test_merge_ignore_cves_config_only() {
-        let config = Some(vec![IgnoreCve {
-            id: "CVE-2024-2".to_string(),
-            reason: Some("reason".to_string()),
-        }]);
-        let result = merge_ignore_cves(&[], &config);
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].id, "CVE-2024-2");
-        assert_eq!(result[0].reason.as_deref(), Some("reason"));
-    }
-
-    #[test]
-    fn test_merge_ignore_cves_deduplication_cli_wins() {
-        let cli = vec![IgnoreCve {
-            id: "CVE-2024-1".to_string(),
-            reason: Some("cli reason".to_string()),
-        }];
-        let config = Some(vec![
-            IgnoreCve {
-                id: "CVE-2024-1".to_string(),
-                reason: Some("config reason".to_string()),
-            },
-            IgnoreCve {
-                id: "CVE-2024-2".to_string(),
-                reason: None,
-            },
-        ]);
-        let result = merge_ignore_cves(&cli, &config);
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0].id, "CVE-2024-1");
-        assert_eq!(result[0].reason.as_deref(), Some("cli reason"));
-        assert_eq!(result[1].id, "CVE-2024-2");
     }
 
     // --- check_abandoned / abandoned_threshold_days merge tests ---

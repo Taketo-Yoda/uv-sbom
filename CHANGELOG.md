@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-09-23
+
+### Fixed
+- **Config-load status messages bypassed the i18n catalog**: `--config <path>` and config file auto-discovery printed hardcoded English status messages regardless of `--lang`. Both messages are now routed through `EN_MESSAGES`/`JA_MESSAGES`, so `--lang ja` users see the localized text (#795)
+
+### Added
+- **Workspace aggregate summary**: `--workspace` now prints an additional "Workspace Aggregate Summary" section after the existing per-member table, showing monorepo-wide health across all members without opening every member's SBOM file — total actionable CVE count, which members have license policy violations, and which members have abandoned/non-PyPI/Python-incompatible packages flagged. A line only appears for a check that was actually enabled for the run (e.g. `--check-license`); a check that was not requested never prints a line, even an empty one. Fully localized for EN and JA (#737)
+- **Dependency Tree Markdown section**: When `--show-dependency-tree` is set, Markdown output now renders a `## Dependency Tree` section showing the dependency graph as an ASCII-connector tree (`├──`/`└──`/`│`), one root per direct dependency with package name and version only (no duplicated license/description/hash data). `--dependency-tree-depth` (default: 3) controls how many levels below each root are expanded; branches cut off by the depth limit render a `... (truncated)` marker plus a trailing note naming the applied depth. The section is omitted entirely when `--show-dependency-tree` is not set. Fully localized for EN and JA (#782)
+
 ## [3.0.0] - 2026-09-07
 
 ### Breaking Changes

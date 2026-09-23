@@ -61,6 +61,10 @@ pub struct Messages {
     pub progress_diff_checking_base: &'static str,
     pub progress_diff_checking_current: &'static str,
 
+    // Config loading messages (CLI layer)
+    pub info_config_loaded_from: &'static str,
+    pub info_config_auto_discovered: &'static str,
+
     // Progress messages (use case layer)
     pub progress_loading_lockfile: &'static str,
     pub progress_detected_packages: &'static str,
@@ -159,6 +163,13 @@ pub struct Messages {
     pub workspace_summary_header: &'static str,
     pub workspace_col_member: &'static str,
     pub workspace_col_output_file: &'static str,
+    pub workspace_aggregate_header: &'static str,
+    pub workspace_aggregate_total_cves: &'static str,
+    pub workspace_aggregate_license_violations: &'static str,
+    pub workspace_aggregate_abandoned: &'static str,
+    pub workspace_aggregate_non_pypi: &'static str,
+    pub workspace_aggregate_python_incompatible: &'static str,
+    pub workspace_aggregate_none: &'static str,
 
     // Executive summary section
     pub section_summary: &'static str,
@@ -208,6 +219,12 @@ pub struct Messages {
     pub summary_explain_direct: &'static str,
     pub summary_explain_also_transitive: &'static str,
     pub summary_explain_not_found: &'static str,
+
+    // Dependency tree section
+    pub section_dependency_tree: &'static str,
+    pub label_dependency_tree_truncated: &'static str,
+    pub note_dependency_tree_truncated: &'static str,
+    pub label_dependency_tree_empty: &'static str,
 
     // Diff Markdown formatter strings
     pub diff_section_title: &'static str,
@@ -293,6 +310,10 @@ static EN_MESSAGES: Messages = Messages {
     progress_fetching_vulns: "🔍 Fetching vulnerability information...",
     progress_diff_checking_base: "🔍 Checking vulnerabilities in base lockfile...",
     progress_diff_checking_current: "🔍 Checking vulnerabilities in current lockfile...",
+
+    // Config loading messages (CLI layer)
+    info_config_loaded_from: "📄 Loaded config from: {}",
+    info_config_auto_discovered: "📄 Auto-discovered config file in project directory.",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
@@ -392,6 +413,13 @@ static EN_MESSAGES: Messages = Messages {
     workspace_summary_header: "📦 Workspace SBOM Summary",
     workspace_col_member: "Member",
     workspace_col_output_file: "Output File",
+    workspace_aggregate_header: "📊 Workspace Aggregate Summary",
+    workspace_aggregate_total_cves: "Total actionable CVEs: {}",
+    workspace_aggregate_license_violations: "Members with license policy violations: {}",
+    workspace_aggregate_abandoned: "Members with abandoned packages: {}",
+    workspace_aggregate_non_pypi: "Members with non-PyPI packages: {}",
+    workspace_aggregate_python_incompatible: "Members with Python-incompatible packages: {}",
+    workspace_aggregate_none: "none",
 
     // Executive summary section
     section_summary: "## Summary",
@@ -441,6 +469,12 @@ static EN_MESSAGES: Messages = Messages {
     summary_explain_direct: "**{}** is a direct dependency of this project.",
     summary_explain_also_transitive: "It is also reachable through {} transitive path(s):",
     summary_explain_not_found: "Package **{}** was not found in this project's dependencies.",
+
+    // Dependency tree section
+    section_dependency_tree: "## Dependency Tree",
+    label_dependency_tree_truncated: "... (truncated)",
+    note_dependency_tree_truncated: "_Tree truncated at depth {}. Use `--dependency-tree-depth <DEPTH>` to show more levels._",
+    label_dependency_tree_empty: "_No direct dependencies found._",
 
     // Diff Markdown formatter strings
     diff_section_title: "## Dependency Diff Report",
@@ -495,6 +529,10 @@ static JA_MESSAGES: Messages = Messages {
     progress_fetching_vulns: "🔍 脆弱性情報を取得中...",
     progress_diff_checking_base: "🔍 ベースロックファイルの脆弱性をチェック中...",
     progress_diff_checking_current: "🔍 現在のロックファイルの脆弱性をチェック中...",
+
+    // Config loading messages (CLI layer)
+    info_config_loaded_from: "📄 設定ファイルを読み込みました: {}",
+    info_config_auto_discovered: "📄 プロジェクトディレクトリ内の設定ファイルを自動検出しました。",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -596,6 +634,13 @@ static JA_MESSAGES: Messages = Messages {
     workspace_summary_header: "📦 ワークスペース SBOM サマリー",
     workspace_col_member: "メンバー",
     workspace_col_output_file: "出力ファイル",
+    workspace_aggregate_header: "📊 ワークスペース集計サマリー",
+    workspace_aggregate_total_cves: "対応が必要なCVE合計: {}",
+    workspace_aggregate_license_violations: "ライセンスポリシー違反があるメンバー: {}",
+    workspace_aggregate_abandoned: "メンテナンス停止パッケージがあるメンバー: {}",
+    workspace_aggregate_non_pypi: "非PyPIパッケージがあるメンバー: {}",
+    workspace_aggregate_python_incompatible: "Python非互換パッケージがあるメンバー: {}",
+    workspace_aggregate_none: "なし",
 
     // Executive summary section
     section_summary: "## サマリー",
@@ -645,6 +690,12 @@ static JA_MESSAGES: Messages = Messages {
     summary_explain_direct: "**{}** はこのプロジェクトの直接依存パッケージです。",
     summary_explain_also_transitive: "さらに {} 個の間接経路からも到達可能です:",
     summary_explain_not_found: "パッケージ **{}** はこのプロジェクトの依存関係に見つかりませんでした。",
+
+    // Dependency tree section
+    section_dependency_tree: "## 依存関係ツリー",
+    label_dependency_tree_truncated: "... (省略)",
+    note_dependency_tree_truncated: "_深さ {} で省略されています。さらに深い階層を表示するには `--dependency-tree-depth <DEPTH>` を使用してください。_",
+    label_dependency_tree_empty: "_直接依存パッケージが見つかりません。_",
 
     // Diff Markdown formatter strings
     diff_section_title: "## 依存関係差分レポート",
@@ -825,6 +876,32 @@ mod tests {
     }
 
     #[test]
+    fn test_messages_config_loading_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            Messages::format(msgs.info_config_loaded_from, &["/tmp/uv-sbom.config.yml"]),
+            "📄 Loaded config from: /tmp/uv-sbom.config.yml"
+        );
+        assert_eq!(
+            msgs.info_config_auto_discovered,
+            "📄 Auto-discovered config file in project directory."
+        );
+    }
+
+    #[test]
+    fn test_messages_config_loading_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            Messages::format(msgs.info_config_loaded_from, &["/tmp/uv-sbom.config.yml"]),
+            "📄 設定ファイルを読み込みました: /tmp/uv-sbom.config.yml"
+        );
+        assert_eq!(
+            msgs.info_config_auto_discovered,
+            "📄 プロジェクトディレクトリ内の設定ファイルを自動検出しました。"
+        );
+    }
+
+    #[test]
     fn test_messages_format_no_placeholders() {
         assert_eq!(
             Messages::format("No placeholders here", &[]),
@@ -960,6 +1037,31 @@ mod tests {
         assert_eq!(msgs.workspace_summary_header, "📦 Workspace SBOM Summary");
         assert_eq!(msgs.workspace_col_member, "Member");
         assert_eq!(msgs.workspace_col_output_file, "Output File");
+        assert_eq!(
+            msgs.workspace_aggregate_header,
+            "📊 Workspace Aggregate Summary"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_total_cves,
+            "Total actionable CVEs: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_license_violations,
+            "Members with license policy violations: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_abandoned,
+            "Members with abandoned packages: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_non_pypi,
+            "Members with non-PyPI packages: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_python_incompatible,
+            "Members with Python-incompatible packages: {}"
+        );
+        assert_eq!(msgs.workspace_aggregate_none, "none");
     }
 
     #[test]
@@ -977,6 +1079,31 @@ mod tests {
         );
         assert_eq!(msgs.workspace_col_member, "メンバー");
         assert_eq!(msgs.workspace_col_output_file, "出力ファイル");
+        assert_eq!(
+            msgs.workspace_aggregate_header,
+            "📊 ワークスペース集計サマリー"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_total_cves,
+            "対応が必要なCVE合計: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_license_violations,
+            "ライセンスポリシー違反があるメンバー: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_abandoned,
+            "メンテナンス停止パッケージがあるメンバー: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_non_pypi,
+            "非PyPIパッケージがあるメンバー: {}"
+        );
+        assert_eq!(
+            msgs.workspace_aggregate_python_incompatible,
+            "Python非互換パッケージがあるメンバー: {}"
+        );
+        assert_eq!(msgs.workspace_aggregate_none, "なし");
     }
 
     #[test]
@@ -1271,6 +1398,36 @@ mod tests {
         assert_eq!(
             Messages::format(msgs.summary_explain_not_found, &["nope"]),
             "パッケージ **nope** はこのプロジェクトの依存関係に見つかりませんでした。"
+        );
+    }
+
+    #[test]
+    fn test_messages_dependency_tree_section_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(msgs.section_dependency_tree, "## Dependency Tree");
+        assert_eq!(msgs.label_dependency_tree_truncated, "... (truncated)");
+        assert_eq!(
+            Messages::format(msgs.note_dependency_tree_truncated, &["2"]),
+            "_Tree truncated at depth 2. Use `--dependency-tree-depth <DEPTH>` to show more levels._"
+        );
+        assert_eq!(
+            msgs.label_dependency_tree_empty,
+            "_No direct dependencies found._"
+        );
+    }
+
+    #[test]
+    fn test_messages_dependency_tree_section_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(msgs.section_dependency_tree, "## 依存関係ツリー");
+        assert_eq!(msgs.label_dependency_tree_truncated, "... (省略)");
+        assert_eq!(
+            Messages::format(msgs.note_dependency_tree_truncated, &["2"]),
+            "_深さ 2 で省略されています。さらに深い階層を表示するには `--dependency-tree-depth <DEPTH>` を使用してください。_"
+        );
+        assert_eq!(
+            msgs.label_dependency_tree_empty,
+            "_直接依存パッケージが見つかりません。_"
         );
     }
 

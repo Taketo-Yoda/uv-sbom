@@ -659,6 +659,99 @@ uv-sbom -p examples/suggest-fix-project --explain definitely-not-a-real-package 
   ```
 - **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係の説明データは含まれず、CVEチェック・`--check-license`・`--verify-links` とは異なり「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--explain` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
 
+### 依存関係ツリーの可視化（`--show-dependency-tree`）
+
+`--show-dependency-tree` を使用すると、プロジェクトの依存関係グラフをMarkdown出力内にASCIIツリーとして描画できます。`--dependency-tree-depth <DEPTH>`（デフォルト: 3）で、各直接依存パッケージから何階層下まで展開するかを制御できます。
+
+```bash
+# 依存関係ツリー全体を表示
+uv-sbom --show-dependency-tree --format markdown
+
+# 各ルートから2階層までに制限
+uv-sbom --show-dependency-tree --dependency-tree-depth 2 --format markdown
+```
+
+**仕組み:**
+- Markdownレポート生成時にすでに構築済みの依存関係グラフを再利用します（ネットワークアクセスも追加の探索も不要）
+- 「直接依存パッケージ」一覧と同じ順序で、直接依存パッケージごとに1つのルートが作られます。子ノードはロックファイル自体の依存関係の順序に従います
+- ダイヤモンド依存（複数の経路から到達可能なパッケージ）は、親ごとに個別に表示され、重複排除されません — このツリーはグラフの形状をそのまま反映するものであり、平坦化されたパッケージ一覧ではありません
+- `--dependency-tree-depth` は各ルートより**下**の階層数を数えます。`0` はルートのみ、`1` はルートとその直接の子まで、というように展開されます
+- 深さ制限に達して展開されなかった子を持つ分岐には、その位置に `... (省略)` というマーカーが表示され、適用された深さを明記した注記が続きます
+
+**出力:**
+- **依存関係ツリーセクション**: Markdown出力に `## 依存関係ツリー` セクションが1つ表示され、パッケージ名とバージョンのみを含みます — ライセンス・説明文・ハッシュ値はコンポーネント一覧に既に表示されているため、ここでは重複させません
+- `--show-dependency-tree` を指定しない場合、セクション自体が省略されます
+
+**出力例（完全なツリー、省略なし、`--lang ja` 指定時）:**
+
+[`examples/suggest-fix-project`](examples/suggest-fix-project) に対して実行した例:
+
+```bash
+uv-sbom -p examples/suggest-fix-project --show-dependency-tree --no-check-cve -f markdown --lang ja
+```
+
+````markdown
+## 依存関係ツリー
+
+```text
+├── httpx (0.24.1)
+│   ├── certifi (2023.7.22)
+│   ├── httpcore (0.17.3)
+│   │   ├── anyio (4.0.0)
+│   │   │   ├── idna (3.4)
+│   │   │   └── sniffio (1.3.0)
+│   │   ├── certifi (2023.7.22)
+│   │   ├── h11 (0.14.0)
+│   │   └── sniffio (1.3.0)
+│   ├── idna (3.4)
+│   └── sniffio (1.3.0)
+└── requests (2.31.0)
+    ├── certifi (2023.7.22)
+    ├── charset-normalizer (3.2.0)
+    ├── idna (3.4)
+    └── urllib3 (2.0.4)
+```
+````
+
+**出力例（深さ2で省略される場合）:**
+
+```bash
+uv-sbom -p examples/suggest-fix-project --show-dependency-tree --dependency-tree-depth 2 --no-check-cve -f markdown --lang ja
+```
+
+````markdown
+## 依存関係ツリー
+
+```text
+├── httpx (0.24.1)
+│   ├── certifi (2023.7.22)
+│   ├── httpcore (0.17.3)
+│   │   ├── anyio (4.0.0)
+│   │   │   └── ... (省略)
+│   │   ├── certifi (2023.7.22)
+│   │   ├── h11 (0.14.0)
+│   │   └── sniffio (1.3.0)
+│   ├── idna (3.4)
+│   └── sniffio (1.3.0)
+└── requests (2.31.0)
+    ├── certifi (2023.7.22)
+    ├── charset-normalizer (3.2.0)
+    ├── idna (3.4)
+    └── urllib3 (2.0.4)
+```
+
+_深さ 2 で省略されています。さらに深い階層を表示するには `--dependency-tree-depth <DEPTH>` を使用してください。_
+````
+
+> **注:** これらの例では、本READMEの他の箇所で使用している `examples/sample-project` ではなく `examples/suggest-fix-project` を使用しています。同梱のサンプルの中で、縮小した深さで省略表示を実際に再現できるだけの深い依存チェーン（`httpx` → `httpcore` → `anyio` → `idna`/`sniffio`）を持つのがこのプロジェクトだからです。
+
+**設定ファイルでの指定:**
+
+ありません。`--show-dependency-tree` は意図的にCLI専用としています。これは `check_non_pypi` や `target_python` のような永続的なポリシー設定ではなく、一回限りの可視化リクエストだからです。`uv-sbom.config.yml` のキーは存在せず、設定ファイルスキーマリファレンスの表にも記載されません。
+
+**オプションの組み合わせ:**
+- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係ツリーは含まれず、「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--show-dependency-tree` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
+
 ### 脆弱性しきい値オプション
 
 しきい値オプションを使用して、どの脆弱性が終了コード1をトリガーするかを制御できます：
@@ -970,9 +1063,16 @@ Member               Output File
 api                  /path/to/workspace/packages/api/sbom.json
 worker               /path/to/workspace/packages/worker/sbom.json
 ────────────────────────────────────────────────────────────
+
+📊 Workspace Aggregate Summary
+────────────────────────────────────────────────────────────
+Total actionable CVEs: 17
+────────────────────────────────────────────────────────────
 ```
 
 各メンバーは、そのメンバーから到達可能なパッケージのみを含む独自の `sbom.json` を取得します。推移的依存関係は含まれますが、他のメンバーに属するパッケージは除外されます。
+
+**メンバー横断の集計サマリー:** メンバーごとのテーブルの後に、`--workspace` は各メンバーの SBOM ファイルを開かなくてもモノレポ全体の健全性が分かる集計サマリーも出力します — CVE の合計件数、ライセンスポリシー違反があるメンバー、メンテナンス停止／非PyPI／Python非互換パッケージが検出されたメンバーです。この行は、その実行で実際に有効化されたチェック（例: `--check-license`）についてのみ表示されます。実行されなかったチェックの行は、空であっても一切表示されません。
 
 **他のオプションとの組み合わせ:**
 
@@ -982,6 +1082,14 @@ uv-sbom --workspace --path examples/workspace --format markdown
 
 # ライセンスコンプライアンスチェックを追加
 uv-sbom --workspace --path examples/workspace --check-license
+```
+
+```
+📊 Workspace Aggregate Summary
+────────────────────────────────────────────────────────────
+Total actionable CVEs: 17
+Members with license policy violations: none
+────────────────────────────────────────────────────────────
 ```
 
 > **注意:** `--workspace` と `--output` は同時に使用できません。ワークスペースモードでは、各メンバーの SBOM は自動的にメンバー自身のディレクトリ内の `sbom.json`（Markdown の場合は `sbom.md`）に書き込まれます。
@@ -1100,6 +1208,9 @@ Options:
       --target-python <VERSION>      互換性チェック対象のPythonバージョン（PEP 440形式、例: 3.8）
       --explain <PACKAGE_NAME>       指定したパッケージへの依存経路を出力（Markdownフォーマットのみ）
                                      --workspaceとの同時使用は不可
+      --show-dependency-tree        依存関係グラフをASCIIツリーとして描画（Markdownフォーマットのみ）
+      --dependency-tree-depth <DEPTH>  依存関係ツリー可視化の最大深度（デフォルト: 3）
+                                     --show-dependency-treeが必要
   -h, --help                         ヘルプを表示
   -V, --version                      バージョンを表示
 ```

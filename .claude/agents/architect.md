@@ -21,8 +21,8 @@ Before responding to any architecture question, read:
   adapters, shared)
 - Enforce the hexagonal architecture invariants, particularly:
   - `src/sbom_generation/` must never import from `adapters/` or `ports/`
-  - Config resolution order (CLI args > env vars > config file > defaults) must not change
-    without updating tests
+  - Config resolution order (CLI args > config file > defaults; no environment-variable
+    layer) must not change without updating tests
 - Identify when a proposed change would introduce an inappropriate dependency between layers
 - Recommend the correct module or file for new types, traits, and implementations
 - Flag when a change affects key public types (`MergedConfig`, `ConfigFile`, `SbomRequest`,

@@ -3,6 +3,9 @@ use crate::application::dto::SbomRequest;
 use crate::application::read_models::abandoned_package::{
     AbandonedPackageView, AbandonedPackagesReport,
 };
+use crate::application::read_models::dependency_tree_view::{
+    DependencyTreeNodeView, DependencyTreeView,
+};
 use crate::application::read_models::explain_view::ExplainView;
 use crate::application::read_models::non_pypi_package::{
     NonPyPiPackageView, NonPyPiPackagesReport,
@@ -18,14 +21,16 @@ use crate::ports::outbound::{
     ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
-use crate::sbom_generation::domain::services::{LicenseComplianceChecker, ThresholdConfig};
+use crate::sbom_generation::domain::services::{
+    DependencyTreeBuilder, LicenseComplianceChecker, ThresholdConfig, TreeNode,
+};
 use crate::sbom_generation::domain::{
     DependencyGraph, EnrichedPackage, Package, PackageName, UvLockSimulator,
 };
 use crate::shared::Result;
 use chrono::Utc;
 use std::cmp::Reverse;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
     GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
@@ -263,6 +268,58 @@ where
             is_direct,
             paths,
         })
+    }
+
+    /// Builds the `--show-dependency-tree` visualization when `show_dependency_tree` is set.
+    ///
+    /// Returns `None` when the flag is off, or when no dependency graph was built
+    /// (`include_dependency_info` was false, e.g. non-Markdown output) — same
+    /// rationale as `build_explain_view_if_requested`: with no graph there is
+    /// nothing to render.
+    ///
+    /// `DependencyGraph` carries no version data, so each node's `version` is
+    /// joined here from `enriched_packages` (the domain `TreeNode` has no such
+    /// field — see its doc comment). A package absent from `enriched_packages`
+    /// (e.g. excluded by an earlier filter) yields `version: None` rather than
+    /// dropping the node, matching the "graph-faithful" behavior of `--explain`.
+    pub(super) fn build_dependency_tree_if_requested(
+        &self,
+        request: &SbomRequest,
+        dependency_graph: Option<&DependencyGraph>,
+        enriched_packages: &[EnrichedPackage],
+    ) -> Option<DependencyTreeView> {
+        if !request.show_dependency_tree {
+            return None;
+        }
+        let graph = dependency_graph?;
+
+        let versions: HashMap<&str, &str> = enriched_packages
+            .iter()
+            .map(|ep| (ep.package.name(), ep.package.version()))
+            .collect();
+
+        let max_depth = request.dependency_tree_depth;
+        let roots = DependencyTreeBuilder::build(graph, max_depth)
+            .into_iter()
+            .map(|node| Self::convert_tree_node(node, &versions))
+            .collect();
+
+        Some(DependencyTreeView { roots, max_depth })
+    }
+
+    /// Recursively converts a domain `TreeNode` into a `DependencyTreeNodeView`,
+    /// joining in the resolved version for each node's name.
+    fn convert_tree_node(node: TreeNode, versions: &HashMap<&str, &str>) -> DependencyTreeNodeView {
+        DependencyTreeNodeView {
+            version: versions.get(node.name.as_str()).map(|v| v.to_string()),
+            children: node
+                .children
+                .into_iter()
+                .map(|child| Self::convert_tree_node(child, versions))
+                .collect(),
+            truncated: node.truncated,
+            name: node.name,
+        }
     }
 
     /// Returns the set of direct dependency names from the graph.
@@ -1096,6 +1153,105 @@ mod tests {
             assert!(!view.found);
             assert!(!view.is_direct);
             assert!(view.paths.is_empty());
+        }
+    }
+
+    mod tests_dependency_tree {
+        use super::*;
+        use crate::sbom_generation::domain::{DependencyGraph, PackageName};
+        use std::collections::HashMap;
+
+        fn pn(name: &str) -> PackageName {
+            PackageName::new(name.to_string()).unwrap()
+        }
+
+        fn make_graph(direct: Vec<&str>, edges: Vec<(&str, Vec<&str>)>) -> DependencyGraph {
+            let direct_deps = direct.into_iter().map(pn).collect();
+            let package_edges: HashMap<PackageName, Vec<PackageName>> = edges
+                .into_iter()
+                .map(|(parent, children)| (pn(parent), children.into_iter().map(pn).collect()))
+                .collect();
+            DependencyGraph::new(direct_deps, HashMap::new(), package_edges)
+        }
+
+        fn tree_request(depth: usize) -> SbomRequest {
+            SbomRequest::builder()
+                .project_path("/test/project")
+                .include_dependency_info(true)
+                .show_dependency_tree(true)
+                .dependency_tree_depth(depth)
+                .build()
+                .unwrap()
+        }
+
+        fn enriched(name: &str, version: &str) -> EnrichedPackage {
+            EnrichedPackage::new(pkg(name, version), Some("MIT".to_string()), None)
+        }
+
+        #[test]
+        fn test_dependency_tree_disabled_returns_none() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(vec!["requests"], vec![]);
+
+            let result =
+                use_case.build_dependency_tree_if_requested(&default_request(), Some(&graph), &[]);
+
+            assert!(result.is_none());
+        }
+
+        #[test]
+        fn test_dependency_tree_no_dependency_graph_returns_none() {
+            let use_case = UseCaseBuilder::default().build();
+
+            let result = use_case.build_dependency_tree_if_requested(&tree_request(3), None, &[]);
+
+            assert!(result.is_none());
+        }
+
+        #[test]
+        fn test_dependency_tree_populates_roots_with_joined_version() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(vec!["requests"], vec![("requests", vec!["urllib3"])]);
+            let packages = vec![enriched("requests", "2.31.0"), enriched("urllib3", "2.0.0")];
+
+            let view = use_case
+                .build_dependency_tree_if_requested(&tree_request(3), Some(&graph), &packages)
+                .expect("show_dependency_tree set → Some");
+
+            assert_eq!(view.max_depth, 3);
+            assert_eq!(view.roots.len(), 1);
+            let root = &view.roots[0];
+            assert_eq!(root.name, "requests");
+            assert_eq!(root.version.as_deref(), Some("2.31.0"));
+            assert!(!root.truncated);
+            assert_eq!(root.children.len(), 1);
+            assert_eq!(root.children[0].name, "urllib3");
+            assert_eq!(root.children[0].version.as_deref(), Some("2.0.0"));
+        }
+
+        #[test]
+        fn test_dependency_tree_unresolved_version_is_none() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(vec!["requests"], vec![]);
+
+            let view = use_case
+                .build_dependency_tree_if_requested(&tree_request(3), Some(&graph), &[])
+                .expect("show_dependency_tree set → Some");
+
+            assert!(view.roots[0].version.is_none());
+        }
+
+        #[test]
+        fn test_dependency_tree_respects_depth_truncation() {
+            let use_case = UseCaseBuilder::default().build();
+            let graph = make_graph(vec!["requests"], vec![("requests", vec!["urllib3"])]);
+
+            let view = use_case
+                .build_dependency_tree_if_requested(&tree_request(0), Some(&graph), &[])
+                .expect("show_dependency_tree set → Some");
+
+            assert!(view.roots[0].truncated);
+            assert!(view.roots[0].children.is_empty());
         }
     }
 }

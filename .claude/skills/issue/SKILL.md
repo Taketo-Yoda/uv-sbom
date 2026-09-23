@@ -35,7 +35,7 @@ After reading the guidelines, gather the following information from the user:
 - **Context**: Why is this needed?
 - **Technical Details**: Implementation hints if available
 
-### 2. Determine Issue Template
+### 3. Determine Issue Template
 
 Based on the type, use the appropriate structure:
 
@@ -96,7 +96,7 @@ Based on the type, use the appropriate structure:
 - [ ] No new warnings from clippy
 ```
 
-### 3. Validate Completeness
+### 4. Validate Completeness
 
 Before creating the Issue, verify:
 
@@ -106,7 +106,7 @@ Before creating the Issue, verify:
 - [ ] Labels are appropriate (bug, enhancement, documentation, etc.)
 - [ ] Related Issues/PRs are referenced if applicable
 
-### 4. Create the Issue
+### 5. Create the Issue
 
 Use the `gh` CLI to create the Issue:
 
@@ -114,7 +114,7 @@ Use the `gh` CLI to create the Issue:
 gh issue create --title "TITLE" --body "BODY" --label "LABEL"
 ```
 
-### 5. Confirm Creation
+### 6. Confirm Creation
 
 After creating, output:
 
