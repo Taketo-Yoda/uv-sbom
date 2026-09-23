@@ -233,3 +233,32 @@ jobs:
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-crates-io:
+    name: Publish to crates.io
+    needs: [create-release, validate-versions]  # Wait for both GitHub Release and version validation
+    runs-on: ubuntu-latest
+
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/uv-sbom
+
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+      contents: read   # Required for checkout
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Authenticate with crates.io via OIDC
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1.0.5
+
+      - name: Publish to crates.io
+        run: cargo publish --locked  # Use committed Cargo.lock to avoid dependency drift at release time
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
