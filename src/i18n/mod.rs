@@ -64,6 +64,13 @@ pub struct Messages {
     // Config loading messages (CLI layer)
     pub info_config_loaded_from: &'static str,
     pub info_config_auto_discovered: &'static str,
+    pub warn_unknown_config_field: &'static str,
+
+    // Error reporting and --init messages (CLI layer)
+    pub error_header: &'static str,
+    pub error_caused_by: &'static str,
+    pub info_config_template_created: &'static str,
+    pub error_init_failed: &'static str,
 
     // Progress messages (use case layer)
     pub progress_loading_lockfile: &'static str,
@@ -93,7 +100,11 @@ pub struct Messages {
 
     // Warning messages
     pub warn_check_license_no_effect: &'static str,
+    pub warn_check_license_json_detail: &'static str,
+    pub warn_check_license_json_hint: &'static str,
     pub warn_verify_links_no_effect: &'static str,
+    pub warn_verify_links_json_detail: &'static str,
+    pub warn_verify_links_json_hint: &'static str,
     pub warn_abandoned_fetch_failed: &'static str,
     pub progress_fetching_abandoned: &'static str,
     pub progress_abandoned_found: &'static str,
@@ -313,6 +324,13 @@ static EN_MESSAGES: Messages = Messages {
     // Config loading messages (CLI layer)
     info_config_loaded_from: "📄 Loaded config from: {}",
     info_config_auto_discovered: "📄 Auto-discovered config file in project directory.",
+    warn_unknown_config_field: "⚠️  Warning: Unknown config field '{}' will be ignored.",
+
+    // Error reporting and --init messages (CLI layer)
+    error_header: "❌ An error occurred:",
+    error_caused_by: "Caused by: {}",
+    info_config_template_created: "Created {} in {}",
+    error_init_failed: "Error: {}",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
@@ -343,7 +361,11 @@ static EN_MESSAGES: Messages = Messages {
 
     // Warning messages
     warn_check_license_no_effect: "⚠️  Warning: --check-license has no effect with JSON format.",
+    warn_check_license_json_detail: "   License compliance data is not included in JSON output.",
+    warn_check_license_json_hint: "   Use --format markdown to see license compliance report.",
     warn_verify_links_no_effect: "⚠️  Warning: --verify-links has no effect with JSON format.",
+    warn_verify_links_json_detail: "   PyPI link verification only applies to Markdown output.",
+    warn_verify_links_json_hint: "   Use --format markdown to use link verification.",
     warn_abandoned_fetch_failed: "⚠️  Warning: Failed to fetch maintenance info for {}: {}",
     progress_fetching_abandoned: "🔍 Fetching package maintenance information...",
     progress_abandoned_found: "✅ Abandoned check complete: {} package(s) abandoned ({} direct, {} transitive), threshold: {} days",
@@ -531,6 +553,13 @@ static JA_MESSAGES: Messages = Messages {
     // Config loading messages (CLI layer)
     info_config_loaded_from: "📄 設定ファイルを読み込みました: {}",
     info_config_auto_discovered: "📄 プロジェクトディレクトリ内の設定ファイルを自動検出しました。",
+    warn_unknown_config_field: "⚠️  警告: 不明な設定項目 '{}' は無視されます。",
+
+    // Error reporting and --init messages (CLI layer)
+    error_header: "❌ エラーが発生しました:",
+    error_caused_by: "原因: {}",
+    info_config_template_created: "{} を {} に作成しました",
+    error_init_failed: "エラー: {}",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -561,7 +590,11 @@ static JA_MESSAGES: Messages = Messages {
 
     // Warning messages
     warn_check_license_no_effect: "⚠️  警告: JSON形式では --check-license は効果がありません。",
+    warn_check_license_json_detail: "   ライセンスコンプライアンス情報はJSON出力には含まれません。",
+    warn_check_license_json_hint: "   ライセンスコンプライアンスレポートを表示するには --format markdown を使用してください。",
     warn_verify_links_no_effect: "⚠️  警告: JSON形式では --verify-links は効果がありません。",
+    warn_verify_links_json_detail: "   PyPIリンク検証はMarkdown出力にのみ適用されます。",
+    warn_verify_links_json_hint: "   リンク検証を使用するには --format markdown を使用してください。",
     warn_abandoned_fetch_failed: "⚠️  警告: {}のメンテナンス情報の取得に失敗: {}",
     progress_fetching_abandoned: "🔍 パッケージのメンテナンス情報を取得中...",
     progress_abandoned_found: "✅ 廃止パッケージチェック完了: {}件廃止（直接: {}件、間接: {}件）、閾値: {}日",
@@ -895,6 +928,108 @@ mod tests {
         assert_eq!(
             msgs.info_config_auto_discovered,
             "📄 プロジェクトディレクトリ内の設定ファイルを自動検出しました。"
+        );
+    }
+
+    #[test]
+    fn test_messages_unknown_config_field_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            Messages::format(msgs.warn_unknown_config_field, &["typo_field"]),
+            "⚠️  Warning: Unknown config field 'typo_field' will be ignored."
+        );
+    }
+
+    #[test]
+    fn test_messages_unknown_config_field_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            Messages::format(msgs.warn_unknown_config_field, &["typo_field"]),
+            "⚠️  警告: 不明な設定項目 'typo_field' は無視されます。"
+        );
+    }
+
+    #[test]
+    fn test_messages_startup_warning_details_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.warn_check_license_json_detail,
+            "   License compliance data is not included in JSON output."
+        );
+        assert_eq!(
+            msgs.warn_check_license_json_hint,
+            "   Use --format markdown to see license compliance report."
+        );
+        assert_eq!(
+            msgs.warn_verify_links_json_detail,
+            "   PyPI link verification only applies to Markdown output."
+        );
+        assert_eq!(
+            msgs.warn_verify_links_json_hint,
+            "   Use --format markdown to use link verification."
+        );
+    }
+
+    #[test]
+    fn test_messages_startup_warning_details_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.warn_check_license_json_detail,
+            "   ライセンスコンプライアンス情報はJSON出力には含まれません。"
+        );
+        assert_eq!(
+            msgs.warn_check_license_json_hint,
+            "   ライセンスコンプライアンスレポートを表示するには --format markdown を使用してください。"
+        );
+        assert_eq!(
+            msgs.warn_verify_links_json_detail,
+            "   PyPIリンク検証はMarkdown出力にのみ適用されます。"
+        );
+        assert_eq!(
+            msgs.warn_verify_links_json_hint,
+            "   リンク検証を使用するには --format markdown を使用してください。"
+        );
+    }
+
+    #[test]
+    fn test_messages_error_reporting_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(msgs.error_header, "❌ An error occurred:");
+        assert_eq!(
+            Messages::format(msgs.error_caused_by, &["network timeout"]),
+            "Caused by: network timeout"
+        );
+        assert_eq!(
+            Messages::format(
+                msgs.info_config_template_created,
+                &["uv-sbom.config.yml", "/tmp/project"]
+            ),
+            "Created uv-sbom.config.yml in /tmp/project"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_init_failed, &["permission denied"]),
+            "Error: permission denied"
+        );
+    }
+
+    #[test]
+    fn test_messages_error_reporting_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(msgs.error_header, "❌ エラーが発生しました:");
+        assert_eq!(
+            Messages::format(msgs.error_caused_by, &["network timeout"]),
+            "原因: network timeout"
+        );
+        assert_eq!(
+            Messages::format(
+                msgs.info_config_template_created,
+                &["uv-sbom.config.yml", "/tmp/project"]
+            ),
+            "uv-sbom.config.yml を /tmp/project に作成しました"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_init_failed, &["permission denied"]),
+            "エラー: permission denied"
         );
     }
 

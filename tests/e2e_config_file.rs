@@ -170,6 +170,67 @@ format: markdown
 }
 
 // ============================================================================
+// Unknown Config Field Warning Tests
+// ============================================================================
+
+mod unknown_field_tests {
+    use super::*;
+
+    #[test]
+    fn test_unknown_field_warning_localized_to_english() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            r#"
+format: json
+totally_unknown_field: true
+"#,
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args(["-p", dir.path().to_str().unwrap(), "--no-check-cve"])
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr
+            .contains("Warning: Unknown config field 'totally_unknown_field' will be ignored."));
+    }
+
+    #[test]
+    fn test_unknown_field_warning_localized_to_japanese() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            r#"
+format: json
+totally_unknown_field: true
+"#,
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("警告: 不明な設定項目 'totally_unknown_field' は無視されます。"));
+    }
+}
+
+// ============================================================================
 // Explicit Config Path (`--config`) Tests
 // ============================================================================
 
