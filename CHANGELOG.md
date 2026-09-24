@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Stale `--check-cve` warning printed with `-f json`**: `print_startup_warnings` still warned about the `--check-cve` flag (removed in v3.0.0, #304) having "no effect" with JSON format and claimed vulnerability data is not included in JSON output. Both claims were false — CycloneDX JSON has included a `vulnerabilities` array since #232 — so the warning misled every default JSON-format run (CVE checking is on by default) into thinking `--format markdown` was required to see vulnerability data. The warning block and its orphaned `warn_check_cve_no_effect` i18n key are removed entirely (#811)
+
 ## [3.1.0] - 2026-09-23
 
 ### Fixed

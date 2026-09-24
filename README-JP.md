@@ -657,7 +657,7 @@ uv-sbom -p examples/suggest-fix-project --explain definitely-not-a-real-package 
   ```
   error: the argument '--explain <PACKAGE_NAME>' cannot be used with '--workspace'
   ```
-- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係の説明データは含まれず、CVEチェック・`--check-license`・`--verify-links` とは異なり「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--explain` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
+- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係の説明データは含まれず、`--check-license`・`--verify-links` とは異なり「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--explain` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
 
 ### 依存関係ツリーの可視化（`--show-dependency-tree`）
 

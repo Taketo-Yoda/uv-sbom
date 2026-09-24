@@ -92,7 +92,6 @@ pub struct Messages {
     pub label_dependency_plural: &'static str,
 
     // Warning messages
-    pub warn_check_cve_no_effect: &'static str,
     pub warn_check_license_no_effect: &'static str,
     pub warn_verify_links_no_effect: &'static str,
     pub warn_abandoned_fetch_failed: &'static str,
@@ -343,7 +342,6 @@ static EN_MESSAGES: Messages = Messages {
     label_dependency_plural: "dependencies",
 
     // Warning messages
-    warn_check_cve_no_effect: "⚠️  Warning: --check-cve has no effect with JSON format.",
     warn_check_license_no_effect: "⚠️  Warning: --check-license has no effect with JSON format.",
     warn_verify_links_no_effect: "⚠️  Warning: --verify-links has no effect with JSON format.",
     warn_abandoned_fetch_failed: "⚠️  Warning: Failed to fetch maintenance info for {}: {}",
@@ -562,7 +560,6 @@ static JA_MESSAGES: Messages = Messages {
     label_dependency_plural: "個の直接依存パッケージ",
 
     // Warning messages
-    warn_check_cve_no_effect: "⚠️  警告: JSON形式では --check-cve は効果がありません。",
     warn_check_license_no_effect: "⚠️  警告: JSON形式では --check-license は効果がありません。",
     warn_verify_links_no_effect: "⚠️  警告: JSON形式では --verify-links は効果がありません。",
     warn_abandoned_fetch_failed: "⚠️  警告: {}のメンテナンス情報の取得に失敗: {}",
