@@ -163,9 +163,21 @@ fn build_use_case<LR: LockfileReader>(
 /// flag) correctly suppresses these warnings (fixed in #822; previously gated on
 /// `args.format`, which stays at its `Json` default when no `--format` flag is
 /// passed, regardless of the config file).
-fn print_startup_warnings(args: &Args, format: OutputFormat, msgs: &Messages) {
+///
+/// `check_license` must be the resolved `MergedConfig.check_license`, not the raw
+/// CLI `args.check_license` (fixed in #828; previously gated on `args.check_license`,
+/// which stays `false` when no `--check-license` flag is passed, even if the config
+/// file enables it via `check_license: true`). `verify_links` stays sourced from the
+/// raw CLI flag since `MergedConfig` has no config-file tier for it — `args.verify_links`
+/// is already the fully resolved value.
+fn print_startup_warnings(
+    check_license: bool,
+    verify_links: bool,
+    format: OutputFormat,
+    msgs: &Messages,
+) {
     // Warn if check_license is used with JSON format
-    if args.check_license && format == OutputFormat::Json {
+    if check_license && format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_check_license_no_effect);
         eprintln!("{}", msgs.warn_check_license_json_detail);
         eprintln!("{}", msgs.warn_check_license_json_hint);
@@ -173,7 +185,7 @@ fn print_startup_warnings(args: &Args, format: OutputFormat, msgs: &Messages) {
     }
 
     // Warn if verify_links is used with JSON format
-    if args.verify_links && format == OutputFormat::Json {
+    if verify_links && format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_verify_links_no_effect);
         eprintln!("{}", msgs.warn_verify_links_json_detail);
         eprintln!("{}", msgs.warn_verify_links_json_hint);
@@ -475,9 +487,10 @@ async fn run(args: Args) -> Result<bool> {
     // Merge CLI and config values
     let merged = merge_config(&args, &config)?;
 
-    // Print startup warnings using the resolved format, so a `format: markdown`
-    // set only via config file (no `--format` flag) correctly suppresses them (#822)
-    print_startup_warnings(&args, merged.format, msgs);
+    // Print startup warnings using the resolved format and check_license, so a
+    // `format: markdown` (#822) or `check_license: true` (#828) set only via config
+    // file (no corresponding CLI flag) is still correctly reflected.
+    print_startup_warnings(merged.check_license, args.verify_links, merged.format, msgs);
 
     // Create use case with injected dependencies
     let use_case = build_use_case(FileSystemReader::new(), locale, &merged)?;

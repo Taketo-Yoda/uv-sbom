@@ -181,3 +181,24 @@ format: markdown
         stderr
     );
 }
+
+#[test]
+fn test_check_license_config_only_json_format_warns() {
+    // Regression test for #828: `check_license: true` set only via the config file
+    // (no `--check-license` flag on the CLI) combined with a resolved JSON format
+    // must still produce the "has no effect with JSON format" warning, since the
+    // resolved MergedConfig.check_license is true and the license check actually runs.
+    let dir = create_test_project();
+    let config = r#"
+check_license: true
+"#;
+    fs::write(dir.path().join("uv-sbom.config.yml"), config).unwrap();
+
+    let (_exit_code, _stdout, stderr) =
+        run_uv_sbom(&["--path", dir.path().to_str().unwrap(), "--no-check-cve"]);
+    assert!(
+        stderr.contains("--check-license has no effect with JSON format"),
+        "Should warn about JSON format when config-only check_license resolves to true: {}",
+        stderr
+    );
+}
