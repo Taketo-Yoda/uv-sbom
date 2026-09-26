@@ -4,7 +4,7 @@ mod response;
 mod upgrade;
 
 use crate::application::dto::{SbomRequest, SbomResponse};
-use crate::i18n::Locale;
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
     LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
     ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
@@ -122,6 +122,31 @@ where
             let threshold_config = Self::build_threshold_config(&request);
             VulnerabilityChecker::check(report.clone(), threshold_config, &request.ignore_cves)
         });
+
+        // Report any CVEs that were ignored via the ignore list. CveFilter/VulnerabilityChecker
+        // (domain layer) only return this as data — printing/localizing happens here, where
+        // Locale/Messages are in scope.
+        if let Some(result) = vulnerability_check_result.as_ref() {
+            let msgs = Messages::for_locale(self.locale);
+            for record in &result.ignored_cves {
+                match record.reason.as_deref() {
+                    Some(reason) => eprintln!(
+                        "{}",
+                        Messages::format(
+                            msgs.warn_ignored_cve_with_reason,
+                            &[&record.cve_id, &record.package_name, reason],
+                        )
+                    ),
+                    None => eprintln!(
+                        "{}",
+                        Messages::format(
+                            msgs.warn_ignored_cve_no_reason,
+                            &[&record.cve_id, &record.package_name],
+                        )
+                    ),
+                }
+            }
+        }
 
         // Step 7: License compliance check if requested
         let license_compliance_result =

@@ -394,6 +394,7 @@ mod tests {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let read_model = SbomReadModelBuilder::build_with_project(
@@ -443,6 +444,7 @@ mod tests {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let read_model = SbomReadModelBuilder::build_with_project(
@@ -479,6 +481,7 @@ mod tests {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let read_model = SbomReadModelBuilder::build_with_project(
@@ -537,6 +540,7 @@ mod tests {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let read_model = SbomReadModelBuilder::build_with_project(

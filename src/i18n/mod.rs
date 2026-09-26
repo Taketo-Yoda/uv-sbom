@@ -106,6 +106,8 @@ pub struct Messages {
     pub warn_verify_links_json_detail: &'static str,
     pub warn_verify_links_json_hint: &'static str,
     pub warn_abandoned_fetch_failed: &'static str,
+    pub warn_ignored_cve_with_reason: &'static str,
+    pub warn_ignored_cve_no_reason: &'static str,
     pub progress_fetching_abandoned: &'static str,
     pub progress_abandoned_found: &'static str,
     pub progress_abandoned_none: &'static str,
@@ -367,6 +369,8 @@ static EN_MESSAGES: Messages = Messages {
     warn_verify_links_json_detail: "   PyPI link verification only applies to Markdown output.",
     warn_verify_links_json_hint: "   Use --format markdown to use link verification.",
     warn_abandoned_fetch_failed: "⚠️  Warning: Failed to fetch maintenance info for {}: {}",
+    warn_ignored_cve_with_reason: "⚠ Ignored {} for package {} (reason: {})",
+    warn_ignored_cve_no_reason: "⚠ Ignored {} for package {} (no reason provided)",
     progress_fetching_abandoned: "🔍 Fetching package maintenance information...",
     progress_abandoned_found: "✅ Abandoned check complete: {} package(s) abandoned ({} direct, {} transitive), threshold: {} days",
     progress_abandoned_none: "✅ Abandoned check complete: No packages exceed {} day threshold",
@@ -596,6 +600,8 @@ static JA_MESSAGES: Messages = Messages {
     warn_verify_links_json_detail: "   PyPIリンク検証はMarkdown出力にのみ適用されます。",
     warn_verify_links_json_hint: "   リンク検証を使用するには --format markdown を使用してください。",
     warn_abandoned_fetch_failed: "⚠️  警告: {}のメンテナンス情報の取得に失敗: {}",
+    warn_ignored_cve_with_reason: "⚠ {} をパッケージ {} で無視しました (理由: {})",
+    warn_ignored_cve_no_reason: "⚠ {} をパッケージ {} で無視しました (理由の指定なし)",
     progress_fetching_abandoned: "🔍 パッケージのメンテナンス情報を取得中...",
     progress_abandoned_found: "✅ 廃止パッケージチェック完了: {}件廃止（直接: {}件、間接: {}件）、閾値: {}日",
     progress_abandoned_none: "✅ 廃止パッケージチェック完了: {}日以上更新のないパッケージはありません",
@@ -1390,6 +1396,58 @@ mod tests {
         assert_eq!(
             result,
             "### ⚠️警告 2件の脆弱性が1個のパッケージで見つかりました。"
+        );
+    }
+
+    #[test]
+    fn test_warn_ignored_cve_with_reason_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.warn_ignored_cve_with_reason,
+            &["CVE-2024-001", "requests", "False positive"],
+        );
+        assert_eq!(
+            result,
+            "⚠ Ignored CVE-2024-001 for package requests (reason: False positive)"
+        );
+    }
+
+    #[test]
+    fn test_warn_ignored_cve_no_reason_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.warn_ignored_cve_no_reason,
+            &["CVE-2024-001", "requests"],
+        );
+        assert_eq!(
+            result,
+            "⚠ Ignored CVE-2024-001 for package requests (no reason provided)"
+        );
+    }
+
+    #[test]
+    fn test_warn_ignored_cve_with_reason_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.warn_ignored_cve_with_reason,
+            &["CVE-2024-001", "requests", "誤検知"],
+        );
+        assert_eq!(
+            result,
+            "⚠ CVE-2024-001 をパッケージ requests で無視しました (理由: 誤検知)"
+        );
+    }
+
+    #[test]
+    fn test_warn_ignored_cve_no_reason_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.warn_ignored_cve_no_reason,
+            &["CVE-2024-001", "requests"],
+        );
+        assert_eq!(
+            result,
+            "⚠ CVE-2024-001 をパッケージ requests で無視しました (理由の指定なし)"
         );
     }
 
