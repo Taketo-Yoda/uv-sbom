@@ -19,11 +19,11 @@
 //! HTTP status validation is the caller's responsibility — this function only
 //! concerns itself with body size.
 //!
-//! No network client currently calls this function; each of the four outbound
-//! adapters that need it (`OsvClient`, `PyPiLicenseRepository`,
-//! `PyPiMaintenanceRepository`, `PyPiCompatibilityClient`) still carries its
-//! own inline two-stage guard. Migrating them is tracked by Issue #853's
-//! follow-up subtasks.
+//! `OsvClient` has been migrated to call this function (Issue #859). The
+//! remaining three outbound adapters (`PyPiLicenseRepository`,
+//! `PyPiMaintenanceRepository`, `PyPiCompatibilityClient`) still carry their
+//! own inline two-stage guard; migrating them is tracked by Issue #853's
+//! follow-up subtasks (#860, #861, #862).
 
 use crate::shared::Result;
 use futures::stream::StreamExt;
@@ -43,7 +43,6 @@ use futures::stream::StreamExt;
 /// - The response body, once fully read, exceeds `limit` bytes (checked
 ///   incrementally, so the buffer itself never grows past `limit`)
 /// - The underlying stream read fails (network error)
-#[allow(dead_code)] // WIRE(#859): remove when OsvClient is migrated to call this function
 pub async fn read_bounded_bytes(
     response: reqwest::Response,
     limit: usize,
@@ -74,7 +73,6 @@ pub async fn read_bounded_bytes(
     Ok(buf)
 }
 
-#[allow(dead_code)] // WIRE(#859): remove when OsvClient is migrated to call this function
 fn too_large_error(actual: u64, limit: usize, context: Option<&str>) -> anyhow::Error {
     match context {
         Some(ctx) => anyhow::anyhow!(
@@ -91,7 +89,6 @@ fn too_large_error(actual: u64, limit: usize, context: Option<&str>) -> anyhow::
     }
 }
 
-#[allow(dead_code)] // WIRE(#859): remove when OsvClient is migrated to call this function
 fn exceeded_error(limit: usize, context: Option<&str>) -> anyhow::Error {
     match context {
         Some(ctx) => anyhow::anyhow!("HTTP response for {} exceeded {} byte limit", ctx, limit),
