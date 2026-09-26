@@ -41,6 +41,7 @@ impl OsvClient {
     const TIMEOUT_SECONDS: u64 = 30;
     const RATE_LIMIT_MS: u64 = 100; // 10 req/sec
     const MAX_BATCH_SIZE: usize = 100; // OSV API limit
+    const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024; // 10 MB — well above any realistic OSV API response
 
     /// Creates a new OSV API client with default configuration
     pub fn new(locale: Locale) -> Result<Self> {
@@ -94,7 +95,8 @@ impl OsvClient {
             anyhow::bail!("OSV API returned status code {}", response.status());
         }
 
-        let batch_response: OsvBatchResponse = response.json().await?;
+        let bytes = Self::read_bounded_bytes(response, None).await?;
+        let batch_response: OsvBatchResponse = serde_json::from_slice(&bytes)?;
         Ok(batch_response.results)
     }
 
@@ -114,8 +116,57 @@ impl OsvClient {
             );
         }
 
-        let vuln: OsvVulnerability = response.json().await?;
+        let bytes = Self::read_bounded_bytes(response, Some(vuln_id)).await?;
+        let vuln: OsvVulnerability = serde_json::from_slice(&bytes)?;
         Ok(vuln)
+    }
+
+    /// Reads a response body while rejecting it if it exceeds
+    /// `MAX_RESPONSE_BYTES`, via a `content_length()` pre-check followed by a
+    /// post-download length check (the latter covers responses with no
+    /// `Content-Length` header, or one that understates the actual body size).
+    ///
+    /// `context`, when set, identifies which vulnerability ID the response
+    /// belongs to, so a rejection can be traced back to it.
+    ///
+    /// # Note on the residual chunked-response gap
+    /// This still buffers the entire body via `response.bytes()` before the
+    /// post-download check can run, so a response with no `Content-Length`
+    /// (e.g. `Transfer-Encoding: chunked`) is not bounded until after the
+    /// full payload has already been read into memory. Closing that gap
+    /// requires switching to a streaming read (`response.bytes_stream()`,
+    /// which needs reqwest's `stream` Cargo feature, not currently enabled)
+    /// across all three network clients that share this two-stage pattern
+    /// (this one, `pypi_maintenance_client.rs`, `pypi_compatibility_client.rs`)
+    /// and is tracked as a follow-up rather than solved here, to keep this
+    /// change consistent with the established, already-reviewed precedent.
+    async fn read_bounded_bytes(
+        response: reqwest::Response,
+        context: Option<&str>,
+    ) -> Result<Vec<u8>> {
+        if let Some(len) = response.content_length() {
+            if len as usize > Self::MAX_RESPONSE_BYTES {
+                if let Some(ctx) = context {
+                    anyhow::bail!("OSV API response too large for {}: {} bytes", ctx, len);
+                }
+                anyhow::bail!("OSV API response too large: {} bytes", len);
+            }
+        }
+        let bytes = response.bytes().await?;
+        if bytes.len() > Self::MAX_RESPONSE_BYTES {
+            if let Some(ctx) = context {
+                anyhow::bail!(
+                    "OSV API response for {} exceeded {} byte limit",
+                    ctx,
+                    Self::MAX_RESPONSE_BYTES
+                );
+            }
+            anyhow::bail!(
+                "OSV API response exceeded {} byte limit",
+                Self::MAX_RESPONSE_BYTES
+            );
+        }
+        Ok(bytes.to_vec())
     }
 
     /// Converts a single OSV vulnerability to domain model
@@ -376,5 +427,172 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].vulnerabilities().len(), 1);
         assert_eq!(result[0].vulnerabilities()[0].id(), "CVE-2024-0001");
+    }
+
+    /// Builds a syntactically valid OSV vulnerability-detail JSON body whose
+    /// total length is exactly `total_len` bytes, padded via the `summary`
+    /// field. The body is deliberately *valid* JSON: if the size guard were
+    /// absent, deserialization would succeed, so an error from the client
+    /// proves the guard fired rather than a parse failure.
+    fn vuln_json_of_len(total_len: usize) -> Vec<u8> {
+        let prefix: &[u8] = br#"{"id":"CVE-2024-0001","summary":""#;
+        let suffix: &[u8] = br#""}"#;
+        let mut body = Vec::with_capacity(total_len);
+        body.extend_from_slice(prefix);
+        body.resize(total_len - suffix.len(), b'x');
+        body.extend_from_slice(suffix);
+        assert_eq!(body.len(), total_len);
+        body
+    }
+
+    /// Same, for the batch-query endpoint's response shape.
+    fn batch_json_of_len(total_len: usize) -> Vec<u8> {
+        let prefix: &[u8] = br#"{"results":[{"vulns":[{"id":"CVE-2024-0001","summary":""#;
+        let suffix: &[u8] = br#""}]}]}"#;
+        let mut body = Vec::with_capacity(total_len);
+        body.extend_from_slice(prefix);
+        body.resize(total_len - suffix.len(), b'x');
+        body.extend_from_slice(suffix);
+        assert_eq!(body.len(), total_len);
+        body
+    }
+
+    #[tokio::test]
+    async fn test_fetch_batch_rejects_oversized_response() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/querybatch"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                batch_json_of_len(OsvClient::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let err = client.fetch_batch(&[test_package()]).await.unwrap_err();
+        // "too large" is the Content-Length pre-check branch specifically.
+        assert!(
+            err.to_string().contains("too large"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_batch_accepts_response_at_limit() {
+        // Exactly at the limit must pass: proves the comparison is `>`, not `>=`.
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/querybatch"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                batch_json_of_len(OsvClient::MAX_RESPONSE_BYTES),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let results = client.fetch_batch(&[test_package()]).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].vulns.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_vulnerability_details_rejects_oversized_response() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/vulns/CVE-2024-0001"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                vuln_json_of_len(OsvClient::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let err = client
+            .fetch_vulnerability_details("CVE-2024-0001")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("too large"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_vulnerability_details_accepts_response_at_limit() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/vulns/CVE-2024-0001"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                vuln_json_of_len(OsvClient::MAX_RESPONSE_BYTES),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let vuln = client
+            .fetch_vulnerability_details("CVE-2024-0001")
+            .await
+            .unwrap();
+        assert_eq!(vuln.id, "CVE-2024-0001");
+    }
+
+    /// Serves exactly one HTTP/1.1 response using `Transfer-Encoding: chunked`
+    /// and no `Content-Length`, so `Response::content_length()` is `None` on
+    /// the client side and only the post-download `bytes.len()` check can
+    /// reject it.
+    ///
+    /// wiremock cannot express this: its bodies are always backed by a
+    /// known-length buffer, so the underlying hyper server always emits an
+    /// accurate `Content-Length` (and asserts on a mismatched one under
+    /// `debug_assertions`), making a `Content-Length`/body-size mismatch
+    /// impossible to construct through it.
+    fn spawn_chunked_oversize_server(body_len: usize) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf); // drain the (small) request head
+            let _ = stream.write_all(
+                b"HTTP/1.1 200 OK\r\n\
+                  Content-Type: application/json\r\n\
+                  Transfer-Encoding: chunked\r\n\r\n",
+            );
+            let chunk = vec![b'x'; 64 * 1024];
+            let mut written = 0usize;
+            while written < body_len {
+                let _ = write!(stream, "{:x}\r\n", chunk.len());
+                let _ = stream.write_all(&chunk);
+                let _ = stream.write_all(b"\r\n");
+                written += chunk.len();
+            }
+            let _ = stream.write_all(b"0\r\n\r\n");
+            let _ = stream.flush();
+        });
+        format!("http://{}", addr)
+    }
+
+    #[tokio::test]
+    async fn test_fetch_vulnerability_details_rejects_oversized_chunked_response() {
+        // No Content-Length -> the pre-check cannot fire; only the
+        // post-download bytes.len() check can reject this. Asserting on the
+        // distinct wording proves which of the two stages actually ran.
+        let base = spawn_chunked_oversize_server(OsvClient::MAX_RESPONSE_BYTES + 64 * 1024);
+        let client = OsvClient::new_with_base_url(base, Locale::En).unwrap();
+        let err = client
+            .fetch_vulnerability_details("CVE-2024-0001")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("exceeded"),
+            "unexpected error: {err}"
+        );
     }
 }
