@@ -177,6 +177,7 @@ mod tests {
                 above_threshold: vec![pkg_vulns],
                 below_threshold: vec![],
                 threshold_exceeded: true,
+                ..Default::default()
             };
 
             let response = use_case.build_response(
@@ -231,6 +232,7 @@ mod tests {
                 above_threshold: vec![],
                 below_threshold: vec![pkg_vulns],
                 threshold_exceeded: false,
+                ..Default::default()
             };
 
             let response = use_case.build_response(

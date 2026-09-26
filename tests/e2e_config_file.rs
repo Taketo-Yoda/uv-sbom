@@ -427,6 +427,60 @@ ignore_cves:
 
     #[test]
     #[ignore = "requires network access to OSV API"]
+    fn test_ignore_cve_warning_localized_ja() {
+        let dir = TempDir::new().unwrap();
+
+        // Copy vulnerable project files
+        let vuln_project = fixtures_path().join("vulnerable_project");
+        fs::copy(vuln_project.join("uv.lock"), dir.path().join("uv.lock")).unwrap();
+        fs::copy(
+            vuln_project.join("pyproject.toml"),
+            dir.path().join("pyproject.toml"),
+        )
+        .unwrap();
+
+        // Config ignores the known CVE
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            r#"
+check_cve: true
+ignore_cves:
+  - id: CVE-2023-37920
+    reason: "Test fixture - known false positive"
+  - id: PYSEC-2023-135
+    reason: "Test fixture - duplicate of CVE-2023-37920"
+"#,
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "-f",
+                "markdown",
+                "--lang",
+                "ja",
+            ])
+            .output()
+            .unwrap();
+
+        // Should succeed because all CVEs are ignored
+        assert!(
+            output.status.success(),
+            "Expected exit code 0 but got {}. stderr: {}",
+            output.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // The ignored-CVE warning must be localized to Japanese, not the English text
+        assert!(stderr.contains("無視しました"));
+        assert!(stderr.contains("CVE-2023-37920"));
+        assert!(!stderr.contains("Ignored"));
+    }
+
+    #[test]
+    #[ignore = "requires network access to OSV API"]
     fn test_ignore_cve_via_config_without_check_cve_key() {
         let dir = TempDir::new().unwrap();
 

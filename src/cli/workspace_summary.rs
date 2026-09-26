@@ -342,6 +342,7 @@ mod tests {
             above_threshold,
             below_threshold: Vec::new(),
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let response = SbomResponse::builder()
