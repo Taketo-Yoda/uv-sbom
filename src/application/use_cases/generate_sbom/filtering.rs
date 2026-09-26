@@ -165,6 +165,10 @@ where
     ///
     /// # Returns
     /// Optional DependencyGraph if analysis was requested
+    ///
+    /// # Errors
+    /// Returns an error if the project name cannot be read, or if any package name
+    /// in `dependency_map` fails `PackageName` validation.
     pub(super) fn analyze_dependencies_if_requested(
         &self,
         request: &SbomRequest,
@@ -182,7 +186,21 @@ where
             .read_project_name(&request.project_path)?;
         let project_package_name = PackageName::new(project_name)?;
 
-        let graph = DependencyAnalyzer::analyze(&project_package_name, dependency_map)?;
+        let (graph, truncated_chains) =
+            DependencyAnalyzer::analyze(&project_package_name, dependency_map)?;
+
+        // Report any dependency chains that were truncated by the recursion-depth
+        // guard. DependencyAnalyzer (domain layer) only returns this as data —
+        // printing/localizing happens here, where Locale/Messages are in scope.
+        for record in &truncated_chains {
+            eprintln!(
+                "{}",
+                Messages::format(
+                    msgs.warn_dependency_chain_truncated,
+                    &[&record.max_depth.to_string(), &record.package_name],
+                )
+            );
+        }
 
         self.progress_reporter.report(&Messages::format(
             msgs.progress_direct_deps,

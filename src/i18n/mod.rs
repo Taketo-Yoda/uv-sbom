@@ -109,6 +109,7 @@ pub struct Messages {
     pub warn_vuln_detail_fetch_failed: &'static str,
     pub warn_ignored_cve_with_reason: &'static str,
     pub warn_ignored_cve_no_reason: &'static str,
+    pub warn_dependency_chain_truncated: &'static str,
     pub warn_suggest_fix_requires_uv: &'static str,
     pub warn_suggest_fix_requires_pyproject: &'static str,
     pub progress_fetching_abandoned: &'static str,
@@ -375,6 +376,7 @@ static EN_MESSAGES: Messages = Messages {
     warn_vuln_detail_fetch_failed: "⚠️  Warning: Failed to fetch details for {}: {}",
     warn_ignored_cve_with_reason: "⚠ Ignored {} for package {} (reason: {})",
     warn_ignored_cve_no_reason: "⚠ Ignored {} for package {} (no reason provided)",
+    warn_dependency_chain_truncated: "⚠️  Warning: Maximum recursion depth ({}) reached for package '{}'. Dependency chain may be truncated.",
     warn_suggest_fix_requires_uv: "⚠ --suggest-fix requires `uv` CLI. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh",
     warn_suggest_fix_requires_pyproject: "⚠ --suggest-fix requires pyproject.toml in the project directory.",
     progress_fetching_abandoned: "🔍 Fetching package maintenance information...",
@@ -609,6 +611,7 @@ static JA_MESSAGES: Messages = Messages {
     warn_vuln_detail_fetch_failed: "⚠️  警告: {}の詳細情報の取得に失敗: {}",
     warn_ignored_cve_with_reason: "⚠ {} をパッケージ {} で無視しました (理由: {})",
     warn_ignored_cve_no_reason: "⚠ {} をパッケージ {} で無視しました (理由の指定なし)",
+    warn_dependency_chain_truncated: "⚠️  警告: 最大再帰深度 ({}) に達しました（パッケージ: '{}'）。依存関係チェーンが切り詰められる可能性があります。",
     warn_suggest_fix_requires_uv: "⚠ --suggest-fix には `uv` CLI が必要です。インストール: curl -LsSf https://astral.sh/uv/install.sh | sh",
     warn_suggest_fix_requires_pyproject: "⚠ --suggest-fix にはプロジェクトディレクトリに pyproject.toml が必要です。",
     progress_fetching_abandoned: "🔍 パッケージのメンテナンス情報を取得中...",
@@ -1484,6 +1487,48 @@ mod tests {
             result,
             "⚠ CVE-2024-001 をパッケージ requests で無視しました (理由の指定なし)"
         );
+    }
+
+    #[test]
+    fn test_warn_dependency_chain_truncated_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.warn_dependency_chain_truncated,
+            &["100", "some-package"],
+        );
+        assert_eq!(
+            result,
+            "⚠️  Warning: Maximum recursion depth (100) reached for package 'some-package'. Dependency chain may be truncated."
+        );
+    }
+
+    #[test]
+    fn test_warn_dependency_chain_truncated_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.warn_dependency_chain_truncated,
+            &["100", "some-package"],
+        );
+        assert_eq!(
+            result,
+            "⚠️  警告: 最大再帰深度 (100) に達しました（パッケージ: 'some-package'）。依存関係チェーンが切り詰められる可能性があります。"
+        );
+    }
+
+    #[test]
+    fn test_warn_dependency_chain_truncated_placeholder_parity() {
+        // EN and JA templates must have the same number of `{}` placeholders, in the
+        // same semantic order, since Messages::format fills them positionally.
+        let en_count = EN_MESSAGES
+            .warn_dependency_chain_truncated
+            .matches("{}")
+            .count();
+        let ja_count = JA_MESSAGES
+            .warn_dependency_chain_truncated
+            .matches("{}")
+            .count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 2);
     }
 
     #[test]
