@@ -44,6 +44,14 @@ git branch --show-current
    ```
 4. After branch creation, proceed with the commit workflow
 
+> **Stacked Mode (opt-in)**: `origin/develop` is the correct base here **even when
+> Stacked Mode is active**. This is an error-recovery path that only triggers when you
+> are on `develop`/`main` — i.e. not on any stack layer — and `/commit` must never infer
+> a stack base (see `.claude/skills/implement/SKILL.md`'s "Stacked Mode (opt-in)" entry
+> rule). If these changes do belong on a stack layer, say so instead of guessing: the
+> user re-bases the new branch onto the intended sibling branch per that skill's Step 3
+> decision table before the commit proceeds.
+
 ### Error Message Template
 
 If on protected branch, display:
@@ -53,7 +61,8 @@ If on protected branch, display:
 This project uses Git Flow. Please create a feature branch first:
   git checkout -b feature/<issue>-<description> origin/develop
 
-See .claude/instructions.md for branching guidelines.
+See .claude/instructions.md for branching guidelines
+(and .claude/skills/implement/SKILL.md for Stacked Mode).
 ```
 
 ## Pre-flight Checks (MANDATORY)

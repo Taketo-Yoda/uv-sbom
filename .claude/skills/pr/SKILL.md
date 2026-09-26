@@ -55,10 +55,13 @@ All tests must pass.
 
 **Note on `$BASE_BRANCH`**: Steps 1, 4, 4.5, 4.6, and 6 below all diff or target
 against `$BASE_BRANCH`, determined by Step 3's logic (`develop`/`main` in Normal
-Mode, or the sibling stack branch in Stacked Mode). If `/pr` was invoked by
-`/implement` Step 6, the base branch is already supplied — use it immediately. If
-invoked standalone, resolve `$BASE_BRANCH` per Step 3 before running Step 1's checks
-below, so the WIRE Annotation Notice diffs the correct range from the start.
+Mode, or the sibling stack branch in Stacked Mode). If `/pr` is invoked with an
+explicit base already supplied by its caller — by `/implement` Step 6,
+`/dependabot` Step 7, or any other caller — use that supplied value immediately
+and skip Step 3's own resolution; a caller-supplied base always takes precedence.
+If invoked standalone with no base supplied, resolve `$BASE_BRANCH` per Step 3
+before running Step 1's checks below, so the WIRE Annotation Notice diffs the
+correct range from the start.
 
 ### Step 1: Run Pre-flight Checks
 
@@ -122,6 +125,9 @@ Verify:
 | Branch Type | Base Branch |
 |-------------|-------------|
 | any `feature/*` / `bugfix/*` / `docs/*` / `refactor/*` **in Stacked Mode** | the still-open sibling PR's branch recorded by `/implement` Step 3 |
+
+Exception: `bugfix/<CVE-or-GHSA-ID>` branches created by `/dependabot` always target
+`develop`, never a stack layer — see that skill's Step 3 for why.
 
 The base branch is whatever `/implement` Step 3 recorded and passed through Step 6
 (see that skill's "Stack position:" line). If `/pr` is invoked **standalone** in
