@@ -483,7 +483,7 @@ async fn run(args: Args) -> Result<bool> {
     let use_case = build_use_case(FileSystemReader::new(), locale, &merged)?;
 
     // Pre-flight check for --suggest-fix
-    let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path);
+    let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path, msgs);
 
     // Resolve exclude_groups: --production-only expands to all group names in the lockfile.
     // This requires lockfile I/O so it lives here rather than in config_resolver.

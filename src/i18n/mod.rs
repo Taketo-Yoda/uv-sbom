@@ -108,6 +108,8 @@ pub struct Messages {
     pub warn_abandoned_fetch_failed: &'static str,
     pub warn_ignored_cve_with_reason: &'static str,
     pub warn_ignored_cve_no_reason: &'static str,
+    pub warn_suggest_fix_requires_uv: &'static str,
+    pub warn_suggest_fix_requires_pyproject: &'static str,
     pub progress_fetching_abandoned: &'static str,
     pub progress_abandoned_found: &'static str,
     pub progress_abandoned_none: &'static str,
@@ -371,6 +373,8 @@ static EN_MESSAGES: Messages = Messages {
     warn_abandoned_fetch_failed: "⚠️  Warning: Failed to fetch maintenance info for {}: {}",
     warn_ignored_cve_with_reason: "⚠ Ignored {} for package {} (reason: {})",
     warn_ignored_cve_no_reason: "⚠ Ignored {} for package {} (no reason provided)",
+    warn_suggest_fix_requires_uv: "⚠ --suggest-fix requires `uv` CLI. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh",
+    warn_suggest_fix_requires_pyproject: "⚠ --suggest-fix requires pyproject.toml in the project directory.",
     progress_fetching_abandoned: "🔍 Fetching package maintenance information...",
     progress_abandoned_found: "✅ Abandoned check complete: {} package(s) abandoned ({} direct, {} transitive), threshold: {} days",
     progress_abandoned_none: "✅ Abandoned check complete: No packages exceed {} day threshold",
@@ -602,6 +606,8 @@ static JA_MESSAGES: Messages = Messages {
     warn_abandoned_fetch_failed: "⚠️  警告: {}のメンテナンス情報の取得に失敗: {}",
     warn_ignored_cve_with_reason: "⚠ {} をパッケージ {} で無視しました (理由: {})",
     warn_ignored_cve_no_reason: "⚠ {} をパッケージ {} で無視しました (理由の指定なし)",
+    warn_suggest_fix_requires_uv: "⚠ --suggest-fix には `uv` CLI が必要です。インストール: curl -LsSf https://astral.sh/uv/install.sh | sh",
+    warn_suggest_fix_requires_pyproject: "⚠ --suggest-fix にはプロジェクトディレクトリに pyproject.toml が必要です。",
     progress_fetching_abandoned: "🔍 パッケージのメンテナンス情報を取得中...",
     progress_abandoned_found: "✅ 廃止パッケージチェック完了: {}件廃止（直接: {}件、間接: {}件）、閾値: {}日",
     progress_abandoned_none: "✅ 廃止パッケージチェック完了: {}日以上更新のないパッケージはありません",
@@ -1448,6 +1454,42 @@ mod tests {
         assert_eq!(
             result,
             "⚠ CVE-2024-001 をパッケージ requests で無視しました (理由の指定なし)"
+        );
+    }
+
+    #[test]
+    fn test_warn_suggest_fix_requires_uv_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.warn_suggest_fix_requires_uv,
+            "⚠ --suggest-fix requires `uv` CLI. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        );
+    }
+
+    #[test]
+    fn test_warn_suggest_fix_requires_uv_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.warn_suggest_fix_requires_uv,
+            "⚠ --suggest-fix には `uv` CLI が必要です。インストール: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        );
+    }
+
+    #[test]
+    fn test_warn_suggest_fix_requires_pyproject_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.warn_suggest_fix_requires_pyproject,
+            "⚠ --suggest-fix requires pyproject.toml in the project directory."
+        );
+    }
+
+    #[test]
+    fn test_warn_suggest_fix_requires_pyproject_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.warn_suggest_fix_requires_pyproject,
+            "⚠ --suggest-fix にはプロジェクトディレクトリに pyproject.toml が必要です。"
         );
     }
 
