@@ -46,6 +46,10 @@ Triage Result:
 If triage result is OUT OF SCOPE or STOP: stop and explain why.
 If triage result is PASS: continue to Step 3.
 
+The triage result block goes into the AI section under `## Triage & Competitive Analysis`.
+A single human-facing line — `**Priority**: HIGH / MEDIUM / LOW` — goes at the end of
+`## Summary` in the human section.
+
 ### Step 3: Competitive Analysis (MANDATORY for HIGH/MEDIUM priority)
 
 For features that pass triage at HIGH or MEDIUM priority, briefly check:
@@ -53,7 +57,9 @@ For features that pass triage at HIGH or MEDIUM priority, briefly check:
 2. If yes: is our version differentiated enough? How?
 3. If no: note this as a potential differentiator.
 
-Include the competitive analysis finding in the Issue body.
+Include the competitive analysis finding in the AI section under
+`## Triage & Competitive Analysis`, directly below the triage result. If it is the
+Issue's main justification, also state it as one bullet in `## Why`.
 
 ### Step 4: Draft Technical Specification
 
@@ -68,8 +74,19 @@ Based on the feature idea, draft:
 3. Which new files need to be created?
 4. Are there any new port traits needed?
 5. Are there test fixtures needed?
+6. Which new or changed types result? Sketch them as a Mermaid `classDiagram`
+   (type names, key fields, trait implementations only).
 
 Reference `.claude/CLAUDE.md` Architecture Overview for architecture constraints.
+
+**Where each answer goes in the Issue body:**
+
+| Draft output | Issue section | Visibility |
+|--------------|---------------|------------|
+| Layer affected, architecture constraints, precedent Issues/PRs | `## Context & Constraints` | AI (collapsed) |
+| Chosen approach + rejected alternatives, with rationale | `## Design Decisions` | AI (collapsed) |
+| Existing files to change, new files to create, new port traits, test fixtures | `## Files to Update/Create` | AI (collapsed) |
+| New/changed types (item 6) | `## Design Sketch` | Human (visible) |
 
 ### Step 5: Draft Acceptance Criteria
 
@@ -78,7 +95,14 @@ Write specific, testable acceptance criteria. Every criterion must be:
 - Verifiable by running a command or reading output
 - Specific enough that an AI agent can verify without human input
 
-Standard criteria to always include:
+Write two sets:
+
+- **`## Acceptance Criteria`** (human section) — behavior-level and human-verifiable:
+  what a user can newly do, what the output shows, what is rejected.
+- **`## Technical Acceptance Criteria`** (AI section) — the standard toolchain and
+  documentation gates below.
+
+Standard criteria to always include in `## Technical Acceptance Criteria`:
 - [ ] All existing tests pass (`cargo test --all`)
 - [ ] No new Clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
 - [ ] Formatted with `cargo fmt --all`
@@ -87,14 +111,27 @@ Standard criteria to always include:
 
 ### Step 6: Create GitHub Issue
 
-Invoke the `/issue` skill with the complete draft.
+Invoke the `/issue` skill with the complete draft, already mapped to the two-section
+template from `.claude/issue-guidelines.md`:
 
-The Issue body MUST include:
-1. Feature Triage Result (from Step 2)
-2. Competitive Analysis finding (from Step 3)
-3. Technical implementation details (from Step 4)
-4. Acceptance criteria (from Step 5)
-5. Files to update/create
+**Human section (visible)**
+1. `## Summary` — 2–3 sentences, ending with the one-line `**Priority**:` from Step 2
+2. `## Why` — 3–5 bullets, drawn from the problem statement in Step 1 and the
+   competitive gap from Step 3
+3. `## Design Sketch` — Mermaid `classDiagram` from Step 4 item 6 (omit if no types change)
+4. `## Scope` — In / Out
+5. `## Acceptance Criteria` — the behavior-level set from Step 5
+
+**AI section (collapsed under `🤖 Implementation Spec (for AI agents)`)**
+6. `## Triage & Competitive Analysis` — the full triage block (Step 2) + competitive
+   finding (Step 3)
+7. `## Context & Constraints` — layer, architecture constraints, precedent Issues/PRs (Step 4)
+8. `## Design Decisions` — chosen approach and rejected alternatives, in prose (Step 4)
+9. `## Files to Update/Create` — existing files, new files, new port traits, fixtures (Step 4)
+10. `## Technical Acceptance Criteria` — the standard set from Step 5
+
+Do not write implementation code into the Issue body; `/implement` Step 3.5 produces
+the interface design.
 
 ### Step 7: Report Completion
 

@@ -27,8 +27,10 @@ gh issue view <issue-number>
 
 Extract:
 - Issue title and overall scope
-- Acceptance criteria
-- Files to modify
+- `Acceptance Criteria` (human section) and `Technical Acceptance Criteria` (AI section)
+- `Files to Update/Create` (inside the parent Issue's collapsed
+  `🤖 Implementation Spec (for AI agents)` block — `gh issue view` returns it in the
+  raw body)
 - Any existing dependencies or constraints
 
 ### Step 2: Analyze and Propose Decomposition
@@ -76,39 +78,71 @@ If the user cancels, stop and report "Split cancelled."
 
 **Once the user confirms in Step 3, execute all `gh issue create` commands immediately without additional prompts or pauses between issues. Do not ask for permission again.**
 
-For each confirmed subtask, create a GitHub Issue using this template:
+For each confirmed subtask, create a GitHub Issue using this template. It follows the
+same human/AI split as `.claude/issue-guidelines.md`; the parent link is human-facing,
+the inter-subtask dependency is AI-facing.
 
 ```markdown
 ## Summary
-[Brief description of this subtask]
+[1–2 sentences: what this subtask delivers.]
 
-## Parent Issue
 Part of #<parent-number>
 
-## Problem
-[What specific problem does this subtask solve?]
+## Why
+- [Why this slice exists as its own PR — module/concern/risk boundary]
 
-## Proposed Solution
-[How should this subtask be implemented?]
+## Scope
+**In**
+- [What this subtask delivers]
 
-## Technical Implementation
-- Files to modify:
-- Dependencies on other subtasks: (e.g., "Depends on #N merging first" or "None")
+**Out**
+- [Explicitly left to sibling subtasks, by number when known]
 
 ## Acceptance Criteria
-- [ ] [Specific, testable criterion]
-- [ ] Tests added
-- [ ] No new clippy warnings
+- [ ] [Behavior-level, human-verifiable outcome]
+
+<details>
+<summary>🤖 Implementation Spec (for AI agents)</summary>
+
+## Context & Constraints
+- Parent Issue: #<parent-number>
+- Dependencies on other subtasks: [e.g. "Depends on #N merging first" or "None"]
+- [Relevant invariants and existing patterns inherited from the parent Issue]
+
+## Design Decisions
+- [The slice boundary and why, in prose. Carry over the parent's decisions that
+  constrain this subtask.]
+
+## Files to Update/Create
+1. `path/to/file.rs` — [what changes]
+
+## Technical Acceptance Criteria
+- [ ] All existing tests pass (`cargo test --all`)
+- [ ] New tests added for new functionality (if applicable)
+- [ ] Formatted with `cargo fmt --all`
+- [ ] No new Clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
+
+</details>
 ```
 
-Use the `gh` CLI:
+**Placement rules**: `Part of #<parent>` is a standalone line directly under `## Summary`
+(no `## Parent Issue` heading — it is one line and does not need one). `Dependencies on
+other subtasks` is a bullet in `## Context & Constraints`, never a top-level heading, so
+that section names stay identical across all templates. Include `## Design Sketch` in the
+human section only if the subtask introduces or changes types.
+
+Use the `gh` CLI. The body contains HTML tags and backticks — pass it via a quoted
+heredoc so the shell does not mangle `<details>` or fenced blocks:
 
 ```bash
 gh issue create \
   --title "<subtask title>" \
-  --body "<subtask body>" \
   --label "<appropriate label>" \
-  --assignee "<same assignee as parent, if any>"
+  --assignee "<same assignee as parent, if any>" \
+  --body "$(cat <<'EOF'
+<subtask body>
+EOF
+)"
 ```
 
 Record each created Issue number as you go.
@@ -141,20 +175,14 @@ Output:
 
 ## Subtask Issue Template Reference
 
-```markdown
-## Summary
-## Parent Issue
-Part of #<parent>
-## Problem
-## Proposed Solution
-## Technical Implementation
-- Files to modify:
-- Dependencies on other subtasks:
-## Acceptance Criteria
-- [ ] ...
-- [ ] Tests added
-- [ ] No new clippy warnings
-```
+See Step 4 above for the canonical subtask template. It is deliberately not duplicated
+here — the previous duplicate is how this skill drifted from
+`.claude/issue-guidelines.md`.
+
+Section order at a glance:
+
+Human: `## Summary` (+ `Part of #<parent>`) → `## Why` → `## Scope` → `## Acceptance Criteria`
+AI (`<details>`): `## Context & Constraints` (parent link + dependencies) → `## Design Decisions` → `## Files to Update/Create` → `## Technical Acceptance Criteria`
 
 ## Example Usage
 
