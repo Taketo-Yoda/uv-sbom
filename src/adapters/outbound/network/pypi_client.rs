@@ -47,10 +47,13 @@ struct PyPiInfo {
 #[derive(Clone)]
 pub struct PyPiLicenseRepository {
     client: reqwest::Client,
+    base_url: String,
 }
 
 impl PyPiLicenseRepository {
     const MAX_RETRIES: u32 = 3;
+    // 10 MB — well above any realistic PyPI package metadata response
+    const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
 
     /// Creates a new PyPI license repository with default configuration
     pub fn new() -> Result<Self> {
@@ -61,7 +64,27 @@ impl PyPiLicenseRepository {
             .user_agent(user_agent)
             .build()?;
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            base_url: "https://pypi.org".to_string(),
+        })
+    }
+
+    /// Creates a client pointed at a custom base URL (e.g. a wiremock server
+    /// or a raw TCP test server), for tests only.
+    #[cfg(test)]
+    fn new_with_base_url(base_url: impl Into<String>) -> Result<Self> {
+        let version = env!("CARGO_PKG_VERSION");
+        let user_agent = format!("uv-sbom/{}", version);
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .user_agent(user_agent)
+            .build()?;
+
+        Ok(Self {
+            client,
+            base_url: base_url.into(),
+        })
     }
 
     /// Fetches package information from PyPI with retry logic (async)
@@ -83,8 +106,8 @@ impl PyPiLicenseRepository {
         let encoded_version = urlencoding::encode(version);
 
         let url = format!(
-            "https://pypi.org/pypi/{}/{}/json",
-            encoded_package, encoded_version
+            "{}/pypi/{}/{}/json",
+            self.base_url, encoded_package, encoded_version
         );
 
         let response = self.client.get(&url).send().await?;
@@ -93,7 +116,21 @@ impl PyPiLicenseRepository {
             anyhow::bail!("PyPI API returned status code {}", response.status());
         }
 
-        let package_info: PyPiPackageInfo = response.json().await?;
+        // Reject oversized responses before allocating memory
+        if let Some(len) = response.content_length() {
+            if len as usize > Self::MAX_RESPONSE_BYTES {
+                anyhow::bail!("PyPI API response too large: {} bytes", len);
+            }
+        }
+        let bytes = response.bytes().await?;
+        if bytes.len() > Self::MAX_RESPONSE_BYTES {
+            anyhow::bail!(
+                "PyPI API response exceeded {} byte limit",
+                Self::MAX_RESPONSE_BYTES
+            );
+        }
+
+        let package_info: PyPiPackageInfo = serde_json::from_slice(&bytes)?;
         Ok(package_info)
     }
 }
@@ -105,7 +142,7 @@ impl PyPiLicenseRepository {
     /// returns 200 for all requests).
     pub async fn verify_package_exists(&self, package_name: &str) -> bool {
         let normalized = package_name.to_lowercase().replace('_', "-");
-        let url = format!("https://pypi.org/pypi/{}/json", normalized);
+        let url = format!("{}/pypi/{}/json", self.base_url, normalized);
         match self
             .client
             .head(&url)
@@ -168,6 +205,8 @@ impl LicenseRepository for PyPiLicenseRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_pypi_client_creation() {
@@ -259,4 +298,137 @@ mod tests {
     //     assert!(verified.contains("requests"));
     //     assert!(!verified.contains("nonexistent-pkg-xyz-123456"));
     // }
+
+    /// Builds a syntactically valid PyPI package-info JSON body whose total
+    /// length is exactly `total_len` bytes, padded via the `summary` field.
+    /// The body is deliberately *valid* JSON: if the size guard were absent,
+    /// deserialization would succeed, so an error from the client proves the
+    /// guard fired rather than a parse failure.
+    fn package_json_of_len(total_len: usize) -> Vec<u8> {
+        let prefix: &[u8] = br#"{"info":{"license":"MIT","summary":""#;
+        let suffix: &[u8] = br#""}}"#;
+        let mut body = Vec::with_capacity(total_len);
+        body.extend_from_slice(prefix);
+        body.resize(total_len - suffix.len(), b'x');
+        body.extend_from_slice(suffix);
+        assert_eq!(body.len(), total_len);
+        body
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_success_via_mock() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "info": {"license": "MIT", "summary": "A test package"},
+                "urls": [{"digests": {"sha256": "abc123"}}]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let info = client.fetch_from_pypi("requests", "2.31.0").await.unwrap();
+        assert_eq!(info.info.license, Some("MIT".to_string()));
+        assert_eq!(info.urls[0].digests.sha256, Some("abc123".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_rejects_oversized_response() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                package_json_of_len(PyPiLicenseRepository::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let err = client
+            .fetch_from_pypi("requests", "2.31.0")
+            .await
+            .unwrap_err();
+        // "too large" is the Content-Length pre-check branch specifically.
+        assert!(
+            err.to_string().contains("too large"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_accepts_response_at_limit() {
+        // Exactly at the limit must pass: proves the comparison is `>`, not `>=`.
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                package_json_of_len(PyPiLicenseRepository::MAX_RESPONSE_BYTES),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let info = client.fetch_from_pypi("requests", "2.31.0").await.unwrap();
+        assert_eq!(info.info.license, Some("MIT".to_string()));
+    }
+
+    /// Serves exactly one HTTP/1.1 response using `Transfer-Encoding: chunked`
+    /// and no `Content-Length`, so `Response::content_length()` is `None` on
+    /// the client side and only the post-download `bytes.len()` check can
+    /// reject it.
+    ///
+    /// wiremock cannot express this: its bodies are always backed by a
+    /// known-length buffer, so the underlying hyper server always emits an
+    /// accurate `Content-Length` (and asserts on a mismatched one under
+    /// `debug_assertions`), making a `Content-Length`/body-size mismatch
+    /// impossible to construct through it.
+    fn spawn_chunked_oversize_server(body_len: usize) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf); // drain the (small) request head
+            let _ = stream.write_all(
+                b"HTTP/1.1 200 OK\r\n\
+                  Content-Type: application/json\r\n\
+                  Transfer-Encoding: chunked\r\n\r\n",
+            );
+            let chunk = vec![b'x'; 64 * 1024];
+            let mut written = 0usize;
+            while written < body_len {
+                let _ = write!(stream, "{:x}\r\n", chunk.len());
+                let _ = stream.write_all(&chunk);
+                let _ = stream.write_all(b"\r\n");
+                written += chunk.len();
+            }
+            let _ = stream.write_all(b"0\r\n\r\n");
+            let _ = stream.flush();
+        });
+        format!("http://{}", addr)
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_rejects_oversized_chunked_response() {
+        // No Content-Length -> the pre-check cannot fire; only the
+        // post-download bytes.len() check can reject this. Asserting on the
+        // distinct wording proves which of the two stages actually ran.
+        let base =
+            spawn_chunked_oversize_server(PyPiLicenseRepository::MAX_RESPONSE_BYTES + 64 * 1024);
+        let client = PyPiLicenseRepository::new_with_base_url(base).unwrap();
+        let err = client
+            .fetch_from_pypi("requests", "2.31.0")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("exceeded"),
+            "unexpected error: {err}"
+        );
+    }
 }
