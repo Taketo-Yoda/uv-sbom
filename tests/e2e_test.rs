@@ -713,6 +713,131 @@ mod suggest_fix_i18n_tests {
     }
 }
 
+/// End-to-end tests proving `DependencyAnalyzer`'s recursion-depth truncation
+/// warning is routed through the i18n catalog rather than a hardcoded `eprintln!`
+/// (Issue #830), mirroring Issue #826's `test_ignore_cve_warning_localized_ja`
+/// pattern in `tests/e2e_config_file.rs`.
+///
+/// Both tests are `#[ignore]`d because `GenerateSbomUseCase::execute` always runs
+/// license enrichment (Step 4) against the real PyPI API regardless of `--format`,
+/// and this fixture's 151-package linear chain would otherwise make ~150 real
+/// network requests on every default `cargo test` run.
+mod dependency_chain_truncation_tests {
+    use assert_cmd::cargo::cargo_bin_cmd;
+    use std::fmt::Write as _;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// Depth beyond `DependencyAnalyzer::MAX_RECURSION_DEPTH` (100) at which the
+    /// chain `test-project -> pkg-0 -> pkg-1 -> ... -> pkg-{CHAIN_LEN - 1}` triggers
+    /// the recursion-depth truncation guard.
+    const CHAIN_LEN: usize = 150;
+
+    /// Writes a `uv.lock` with a single linear dependency chain deep enough to trip
+    /// `DependencyAnalyzer::MAX_RECURSION_DEPTH`.
+    fn write_deep_chain_uv_lock(dir: &std::path::Path) {
+        let mut uv_lock = String::from(
+            r#"version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "test-project"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "pkg-0" },
+]
+"#,
+        );
+
+        for i in 0..CHAIN_LEN {
+            let deps = if i + 1 < CHAIN_LEN {
+                format!("dependencies = [\n    {{ name = \"pkg-{}\" }},\n]\n", i + 1)
+            } else {
+                String::new()
+            };
+            write!(
+                uv_lock,
+                r#"
+[[package]]
+name = "pkg-{i}"
+version = "0.1.0"
+source = {{ registry = "https://pypi.org/simple" }}
+{deps}"#
+            )
+            .unwrap();
+        }
+
+        fs::write(dir.join("uv.lock"), uv_lock).unwrap();
+    }
+
+    fn write_pyproject_toml(dir: &std::path::Path) {
+        let pyproject = r#"[project]
+name = "test-project"
+version = "0.1.0"
+requires-python = ">=3.8"
+dependencies = [
+    "pkg-0",
+]
+"#;
+        fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires network access to PyPI API for license fetching"]
+    fn test_dependency_chain_truncation_warning_default_english() {
+        let dir = TempDir::new().unwrap();
+        write_deep_chain_uv_lock(dir.path());
+        write_pyproject_toml(dir.path());
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "-f",
+                "markdown",
+                "--no-check-cve",
+            ])
+            .output()
+            .unwrap();
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("Maximum recursion depth (100) reached for package 'pkg-100'"),
+            "stderr did not contain the expected truncation warning: {stderr}"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires network access to PyPI API for license fetching"]
+    fn test_dependency_chain_truncation_warning_localized_ja() {
+        let dir = TempDir::new().unwrap();
+        write_deep_chain_uv_lock(dir.path());
+        write_pyproject_toml(dir.path());
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .output()
+            .unwrap();
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // The truncation warning must be localized to Japanese, not the English text.
+        assert!(
+            stderr.contains("最大再帰深度 (100) に達しました（パッケージ: 'pkg-100'）"),
+            "stderr did not contain the expected localized truncation warning: {stderr}"
+        );
+        assert!(!stderr.contains("Maximum recursion depth"));
+    }
+}
+
 // Helper function to create a test license repository
 // In real tests, we would use a mock to avoid network calls
 fn create_test_license_repository() -> impl LicenseRepository + Clone {

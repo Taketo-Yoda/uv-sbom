@@ -2,10 +2,26 @@ use crate::sbom_generation::domain::{DependencyGraph, PackageName};
 use crate::shared::Result;
 use std::collections::{HashMap, HashSet};
 
+/// A record describing a transitive dependency chain that was truncated because it
+/// exceeded [`DependencyAnalyzer::MAX_RECURSION_DEPTH`].
+///
+/// Pure data, no I/O: rendering/localizing this record (e.g. printing a warning) is
+/// the responsibility of the application or CLI layer, which has `Locale`/`Messages`
+/// in scope.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TruncatedChainRecord {
+    /// The name of the package whose dependency chain was truncated
+    pub package_name: String,
+    /// The recursion depth limit that was reached
+    pub max_depth: usize,
+}
+
 /// DependencyAnalyzer service for analyzing transitive dependencies
 ///
 /// This service contains pure business logic for dependency graph analysis.
-/// It has no I/O dependencies and works only with domain objects.
+/// It has no I/O dependencies and works only with domain objects: recursion-depth
+/// truncation is reported via a returned `Vec<TruncatedChainRecord>` rather than by
+/// printing directly.
 pub struct DependencyAnalyzer;
 
 impl DependencyAnalyzer {
@@ -16,11 +32,18 @@ impl DependencyAnalyzer {
     /// * `dependency_map` - Map of package name to its dependencies
     ///
     /// # Returns
-    /// A DependencyGraph containing direct dependencies and transitive dependencies
+    /// A tuple of:
+    /// * A DependencyGraph containing direct dependencies and transitive dependencies
+    /// * The list of `TruncatedChainRecord`s describing every dependency chain that hit
+    ///   the recursion-depth guard (see [`Self::MAX_RECURSION_DEPTH`])
+    ///
+    /// # Errors
+    /// Returns an error if any package name in `dependency_map` fails `PackageName`
+    /// validation.
     pub fn analyze(
         project_name: &PackageName,
         dependency_map: &HashMap<String, Vec<String>>,
-    ) -> Result<DependencyGraph> {
+    ) -> Result<(DependencyGraph, Vec<TruncatedChainRecord>)> {
         // Extract direct dependencies for the project
         let direct_deps = dependency_map
             .get(project_name.as_str())
@@ -35,6 +58,7 @@ impl DependencyAnalyzer {
         // Build transitive dependency map
         let direct_deps_set: HashSet<String> = direct_deps.iter().cloned().collect();
         let mut transitive_dependencies: HashMap<PackageName, Vec<PackageName>> = HashMap::new();
+        let mut truncated_chains: Vec<TruncatedChainRecord> = Vec::new();
 
         for direct_dep in &direct_deps {
             let mut trans_deps = Vec::new();
@@ -47,6 +71,7 @@ impl DependencyAnalyzer {
                 &mut visited,
                 &direct_deps_set,
                 0, // Start with depth 0
+                &mut truncated_chains,
             );
 
             if !trans_deps.is_empty() {
@@ -61,10 +86,9 @@ impl DependencyAnalyzer {
 
         let package_edges = Self::build_package_edges(project_name, dependency_map)?;
 
-        Ok(DependencyGraph::new(
-            direct_deps_names,
-            transitive_dependencies,
-            package_edges,
+        Ok((
+            DependencyGraph::new(direct_deps_names, transitive_dependencies, package_edges),
+            truncated_chains,
         ))
     }
 
@@ -96,7 +120,9 @@ impl DependencyAnalyzer {
 
     /// Recursively collects transitive dependencies for a package
     ///
-    /// This is a pure algorithm with no I/O operations.
+    /// This is a pure algorithm with no I/O operations. When the recursion-depth guard
+    /// trips, a [`TruncatedChainRecord`] is pushed onto `truncated` instead of printing
+    /// anything — the caller decides whether and how to report it.
     ///
     /// # Arguments
     /// * `package_name` - The package to analyze
@@ -105,6 +131,9 @@ impl DependencyAnalyzer {
     /// * `visited` - Set of already visited packages (cycle detection)
     /// * `direct_deps` - Set of direct dependencies (to exclude from transitive)
     /// * `depth` - Current recursion depth (for DoS prevention)
+    /// * `truncated` - Accumulated records of dependency chains that hit the recursion
+    ///   depth guard
+    #[allow(clippy::too_many_arguments)]
     fn collect_transitive_deps(
         package_name: &str,
         dependency_map: &HashMap<String, Vec<String>>,
@@ -112,15 +141,14 @@ impl DependencyAnalyzer {
         visited: &mut HashSet<String>,
         direct_deps: &HashSet<String>,
         depth: usize,
+        truncated: &mut Vec<TruncatedChainRecord>,
     ) {
         // Security: Prevent excessive recursion (DoS protection)
         if depth >= Self::MAX_RECURSION_DEPTH {
-            eprintln!(
-                "Warning: Maximum recursion depth ({}) reached for package '{}'. \
-                 Dependency chain may be truncated.",
-                Self::MAX_RECURSION_DEPTH,
-                package_name
-            );
+            truncated.push(TruncatedChainRecord {
+                package_name: package_name.to_string(),
+                max_depth: Self::MAX_RECURSION_DEPTH,
+            });
             return;
         }
 
@@ -143,6 +171,7 @@ impl DependencyAnalyzer {
                     visited,
                     direct_deps,
                     depth + 1,
+                    truncated,
                 );
             }
         }
@@ -160,7 +189,8 @@ mod tests {
         dependency_map.insert("requests".to_string(), vec!["urllib3".to_string()]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+        let (graph, truncated) =
+            DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         assert_eq!(graph.direct_dependency_count(), 1);
         assert_eq!(graph.direct_dependencies()[0].as_str(), "requests");
@@ -172,6 +202,9 @@ mod tests {
         assert!(trans_deps.contains_key(&requests_name));
         assert_eq!(trans_deps[&requests_name].len(), 1);
         assert_eq!(trans_deps[&requests_name][0].as_str(), "urllib3");
+
+        // No chain exceeded the recursion depth guard
+        assert!(truncated.is_empty());
     }
 
     #[test]
@@ -181,7 +214,8 @@ mod tests {
         dependency_map.insert("simple-lib".to_string(), vec![]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+        let (graph, _truncated) =
+            DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         assert_eq!(graph.direct_dependency_count(), 1);
         assert_eq!(graph.transitive_dependency_count(), 0);
@@ -198,7 +232,8 @@ mod tests {
         dependency_map.insert("numpy".to_string(), vec![]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+        let (graph, _truncated) =
+            DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         assert_eq!(graph.direct_dependency_count(), 2);
         assert_eq!(graph.transitive_dependency_count(), 1);
@@ -213,6 +248,7 @@ mod tests {
         let mut trans_deps = Vec::new();
         let mut visited = HashSet::new();
         let direct_deps = HashSet::new();
+        let mut truncated = Vec::new();
 
         DependencyAnalyzer::collect_transitive_deps(
             "pkg-a",
@@ -221,11 +257,13 @@ mod tests {
             &mut visited,
             &direct_deps,
             0, // Start with depth 0
+            &mut truncated,
         );
 
         // Should not infinite loop, visited set prevents cycles
         assert!(visited.contains("pkg-a"));
         assert!(visited.contains("pkg-b"));
+        assert!(truncated.is_empty());
     }
 
     #[test]
@@ -240,6 +278,7 @@ mod tests {
         let mut visited = HashSet::new();
         let mut direct_deps = HashSet::new();
         direct_deps.insert("pkg-c".to_string()); // pkg-c is direct, should not be in transitive
+        let mut truncated = Vec::new();
 
         DependencyAnalyzer::collect_transitive_deps(
             "pkg-a",
@@ -248,10 +287,12 @@ mod tests {
             &mut visited,
             &direct_deps,
             0, // Start with depth 0
+            &mut truncated,
         );
 
         assert!(trans_deps.contains(&"pkg-b".to_string()));
         assert!(!trans_deps.contains(&"pkg-c".to_string()));
+        assert!(truncated.is_empty());
     }
 
     #[test]
@@ -260,7 +301,8 @@ mod tests {
         dependency_map.insert("myproject".to_string(), vec![]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+        let (graph, _truncated) =
+            DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         assert_eq!(graph.direct_dependency_count(), 0);
         assert_eq!(graph.transitive_dependency_count(), 0);
@@ -276,7 +318,8 @@ mod tests {
         dependency_map.insert("c".to_string(), vec![]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+        let (graph, _truncated) =
+            DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         let target = PackageName::new("c".to_string()).unwrap();
         let paths = graph.find_paths_to(&target);
@@ -299,7 +342,8 @@ mod tests {
         dependency_map.insert("requests".to_string(), vec!["urllib3".to_string()]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+        let (graph, _truncated) =
+            DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
 
         let target = PackageName::new("urllib3".to_string()).unwrap();
         let paths = graph.find_paths_to(&target);
@@ -330,7 +374,8 @@ mod tests {
         dependency_map.insert("target".to_string(), vec![]);
 
         let project_name = PackageName::new("myproject".to_string()).unwrap();
-        let graph = DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+        let (graph, _truncated) =
+            DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
         let paths = graph.find_paths_to(&PackageName::new("target".to_string()).unwrap());
 
         assert_eq!(paths.len(), 2);
@@ -339,5 +384,104 @@ mod tests {
             assert_eq!(p[2].as_str(), "target");
             assert_eq!(p[1].as_str(), "shared");
         }
+    }
+
+    /// Builds a linear chain `project -> pkg-0 -> pkg-1 -> ... -> pkg-{len-1}`.
+    fn make_linear_chain(len: usize) -> HashMap<String, Vec<String>> {
+        let mut map = HashMap::new();
+        map.insert("myproject".to_string(), vec!["pkg-0".to_string()]);
+        for i in 0..len {
+            let next = if i + 1 < len {
+                vec![format!("pkg-{}", i + 1)]
+            } else {
+                vec![]
+            };
+            map.insert(format!("pkg-{}", i), next);
+        }
+        map
+    }
+
+    #[test]
+    fn test_collect_transitive_deps_records_truncation_beyond_max_depth() {
+        // Chain deeper than MAX_RECURSION_DEPTH (100) must be reported as truncated.
+        let dependency_map = make_linear_chain(150);
+
+        let mut trans_deps = Vec::new();
+        let mut visited = HashSet::new();
+        let direct_deps = HashSet::new();
+        let mut truncated = Vec::new();
+
+        DependencyAnalyzer::collect_transitive_deps(
+            "pkg-0",
+            &dependency_map,
+            &mut trans_deps,
+            &mut visited,
+            &direct_deps,
+            0,
+            &mut truncated,
+        );
+
+        assert_eq!(truncated.len(), 1);
+        assert_eq!(
+            truncated[0],
+            TruncatedChainRecord {
+                package_name: format!("pkg-{}", DependencyAnalyzer::MAX_RECURSION_DEPTH),
+                max_depth: DependencyAnalyzer::MAX_RECURSION_DEPTH,
+            }
+        );
+    }
+
+    #[test]
+    fn test_collect_transitive_deps_no_truncation_within_max_depth() {
+        // A chain shorter than MAX_RECURSION_DEPTH must not be reported as truncated.
+        let dependency_map = make_linear_chain(10);
+
+        let mut trans_deps = Vec::new();
+        let mut visited = HashSet::new();
+        let direct_deps = HashSet::new();
+        let mut truncated = Vec::new();
+
+        DependencyAnalyzer::collect_transitive_deps(
+            "pkg-0",
+            &dependency_map,
+            &mut trans_deps,
+            &mut visited,
+            &direct_deps,
+            0,
+            &mut truncated,
+        );
+
+        assert!(truncated.is_empty());
+    }
+
+    #[test]
+    fn test_analyze_returns_truncated_chain_record_for_deep_dependency_chain() {
+        let dependency_map = make_linear_chain(150);
+
+        let project_name = PackageName::new("myproject".to_string()).unwrap();
+        let (graph, truncated) =
+            DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+
+        assert_eq!(graph.direct_dependency_count(), 1);
+        assert_eq!(truncated.len(), 1);
+        assert_eq!(
+            truncated[0].package_name,
+            format!("pkg-{}", DependencyAnalyzer::MAX_RECURSION_DEPTH)
+        );
+        assert_eq!(
+            truncated[0].max_depth,
+            DependencyAnalyzer::MAX_RECURSION_DEPTH
+        );
+    }
+
+    #[test]
+    fn test_analyze_returns_empty_truncated_chains_for_shallow_dependency_chain() {
+        let dependency_map = make_linear_chain(10);
+
+        let project_name = PackageName::new("myproject".to_string()).unwrap();
+        let (_graph, truncated) =
+            DependencyAnalyzer::analyze(&project_name, &dependency_map).unwrap();
+
+        assert!(truncated.is_empty());
     }
 }
