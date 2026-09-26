@@ -113,16 +113,25 @@ If the `.githooks/pre-push` hook reports a failure:
 WARNING: You are on branch 'main'. Direct pushes to main are not allowed.
 ```
 
-**CRITICAL**: Always create branches from `origin/develop`:
+**CRITICAL**: In Normal Mode (the default), always create branches from `origin/develop`:
 
 ```bash
 git fetch origin
 git checkout -b feature/<issue>-<description> origin/develop
 ```
 
-1. Create a feature branch from origin/develop (not main!)
+1. Create a feature branch from `origin/develop` (not `main`!)
 2. Push the feature branch
-3. Create a PR targeting `develop`
+3. Create a PR via the `/pr` skill, which resolves the target branch (`develop` in
+   Normal Mode)
+
+> **Stacked Mode (opt-in)**: if the user has explicitly entered Stacked Mode in the
+> current session, the branch base in step 1 and the PR target in step 3 are the
+> still-open sibling stack branch, not `develop`. **Never infer Stacked Mode** from
+> branch or open-PR state. The entry rule and session scope are defined in
+> `.claude/skills/implement/SKILL.md`'s "Stacked Mode (opt-in)" section, and the
+> branch-base decision table in its Step 3; `/pr` Step 3 resolves the actual PR
+> target into `$BASE_BRANCH`. In Normal Mode, the three steps above are unchanged.
 
 ### Hook Not Active
 

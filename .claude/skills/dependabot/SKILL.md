@@ -96,12 +96,23 @@ bugfix/GHSA-xxxx-xxxx-xxxx
 # Verify current branch
 git branch --show-current
 
-# Create branch from develop
+# Create branch from develop — ALWAYS origin/develop, even in Stacked Mode
 git fetch origin
 git checkout -b bugfix/<CVE-or-GHSA-ID> origin/develop
 ```
 
 **CRITICAL**: Never include the Dependabot alert number in the branch name.
+
+**CRITICAL**: Security-fix branches are **never stacked**. `origin/develop` is the base
+even when Stacked Mode (`.claude/skills/implement/SKILL.md` → "Stacked Mode (opt-in)")
+is active for the session, because a security fix must be able to merge and close its
+alert independently of an unrelated stack's cadence, and a stacked PR loses automatic
+`pull_request` CI reporting (see `.claude/skills/pr/SKILL.md` → "Verifying CI on an
+interior stack layer").
+
+The only exception is an **explicit user instruction** to stack this particular fix
+(e.g. the patched version only resolves on top of a dependency bump in a lower layer).
+Explicit instruction wins, as always; it is never inferred and never the default.
 
 ### Step 4: Apply Fix
 
@@ -150,7 +161,13 @@ Advisory: <GHSA-ID>
 
 ### Step 7: Create Pull Request
 
-Invoke `/pr` skill with the following PR body template:
+Invoke `/pr` skill with:
+
+- **Base branch: `develop`** — pass this explicitly. A caller-supplied base takes
+  precedence over `/pr` Step 3's own resolution, which is what prevents a
+  session-sticky Stacked Mode from retargeting a security fix onto a sibling stack
+  branch (see Step 3 above).
+- the following PR body template:
 
 ```markdown
 ## Security Fix
