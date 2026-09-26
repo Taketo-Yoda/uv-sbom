@@ -345,10 +345,16 @@ After creation:
 
 ### Who merges
 
-**Claude does not perform the merge.** `/pr` creates and stacks PRs and reports
-readiness; the user decides when and how to merge. This section is reference
-documentation for that hand-off, and for the case where the user explicitly asks
-Claude to run the merge on their behalf.
+**Claude does not merge PRs into `develop`/`main` on its own judgment — neither via
+`gh pr merge` nor via the asynchronous merge REST API below.** `/pr` creates and
+stacks PRs and reports readiness (CI status, mergeability); the user reviews and
+merges. A green CI status is not, by itself, authorization to merge.
+
+If the user explicitly asks Claude to perform a merge, that authorizes **that one
+PR only** — it is never standing permission for the rest of the stack or for future
+sessions. Ask again (or wait) at each subsequent mergeable PR in the stack. This
+section is reference documentation for the user's own merge workflow, and for that
+narrow explicitly-requested case.
 
 ### Verifying CI on an interior stack layer
 
