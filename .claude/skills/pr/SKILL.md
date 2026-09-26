@@ -15,6 +15,14 @@ Create Pull Requests that pass CI before creation and target the correct branch.
 - PR body: English
 - Commit messages: English
 
+## Stacked Mode (opt-in)
+
+Entered **only** on an explicit user request in the current session — never inferred
+from branch/PR state. Full definition, entry rule, and session scope are documented
+in `.claude/skills/implement/SKILL.md`'s "Stacked Mode (opt-in)" section; this skill
+follows the same rule rather than redefining it. In Normal Mode (the default), nothing
+below changes.
+
 ## Pre-flight Checks (MANDATORY)
 
 Before creating a PR, ALL of the following checks MUST pass:
@@ -45,6 +53,13 @@ All tests must pass.
 
 ## Steps
 
+**Note on `$BASE_BRANCH`**: Steps 1, 4, 4.5, 4.6, and 6 below all diff or target
+against `$BASE_BRANCH`, determined by Step 3's logic (`develop`/`main` in Normal
+Mode, or the sibling stack branch in Stacked Mode). If `/pr` was invoked by
+`/implement` Step 6, the base branch is already supplied — use it immediately. If
+invoked standalone, resolve `$BASE_BRANCH` per Step 3 before running Step 1's checks
+below, so the WIRE Annotation Notice diffs the correct range from the start.
+
 ### Step 1: Run Pre-flight Checks
 
 Execute all three checks above. If any fail:
@@ -56,7 +71,7 @@ Execute all three checks above. If any fail:
 #### WIRE Annotation Notice (informational — does not block)
 
 ```bash
-git diff origin/develop...HEAD | grep -E '^\+.*WIRE\(#[0-9]+\)' | grep -v '^+++'
+git diff "$BASE_BRANCH"...HEAD | grep -E '^\+.*WIRE\(#[0-9]+\)' | grep -v '^+++'
 ```
 
 If the output is non-empty, print:
@@ -91,6 +106,8 @@ Verify:
 
 **CRITICAL**: This project uses `develop` as the integration branch.
 
+#### Normal Mode (default)
+
 | Branch Type | Base Branch |
 |-------------|-------------|
 | feature/*   | `develop`   |
@@ -100,21 +117,39 @@ Verify:
 | hotfix/*    | `main`      |
 | release/*   | `main`      |
 
-**Branch Creation Rule**: Always create new branches from `origin/develop`:
+#### Stacked Mode (opt-in)
+
+| Branch Type | Base Branch |
+|-------------|-------------|
+| any `feature/*` / `bugfix/*` / `docs/*` / `refactor/*` **in Stacked Mode** | the still-open sibling PR's branch recorded by `/implement` Step 3 |
+
+The base branch is whatever `/implement` Step 3 recorded and passed through Step 6
+(see that skill's "Stack position:" line). If `/pr` is invoked **standalone** in
+Stacked Mode with no base supplied, **ask the user** which open PR branch to stack
+on — offer the candidates from `gh pr list --state open --json number,headRefName,baseRefName,url`,
+with `develop` (Normal Mode) as the safe default. **Never infer it.**
+
+Set `$BASE_BRANCH` from whichever row above applies; Steps 1, 4, 4.5, 4.6, and 6 use
+this variable.
+
+**Branch Creation Rule**: In Normal Mode, create new branches from `origin/develop`:
 
 ```bash
 git fetch origin
 git checkout -b feature/<issue>-<desc> origin/develop
 ```
 
+In Stacked Mode, see `.claude/skills/implement/SKILL.md` Step 3's branch-base
+decision table instead.
+
 ### Step 4: Review Changes
 
 ```bash
 # See all commits that will be in the PR
-git log origin/develop..HEAD --oneline
+git log "$BASE_BRANCH"..HEAD --oneline
 
 # See the diff
-git diff origin/develop...HEAD
+git diff "$BASE_BRANCH"...HEAD
 ```
 
 ### Step 4.5: CHANGELOG Gate (MANDATORY)
@@ -134,11 +169,9 @@ If the prefix is unrecognized or not in the skip list, **do not skip** (fail-clo
 #### 1. Check if CHANGELOG.md was updated on this branch
 
 ```bash
-# For feature/bugfix/refactor branches (base: develop)
-git diff origin/develop...HEAD -- CHANGELOG.md
-
-# For hotfix/* branches (base: main)
-git diff origin/main...HEAD -- CHANGELOG.md
+# $BASE_BRANCH already resolves to develop/main (Normal Mode) or the sibling stack
+# branch (Stacked Mode) per Step 3
+git diff "$BASE_BRANCH"...HEAD -- CHANGELOG.md
 ```
 
 If this diff is **non-empty**, CHANGELOG.md was updated — gate passes. Proceed to Step 5.
@@ -149,10 +182,10 @@ Check for user-facing changes in the diff:
 
 ```bash
 # New CLI flags (additions of #[arg( or #[clap( lines)
-git diff origin/develop...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
+git diff "$BASE_BRANCH"...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
 
 # Changes to core behavior (application, formatters, config)
-git diff origin/develop...HEAD --stat -- src/sbom_generation/ src/application/ src/adapters/outbound/formatters/ src/cli/config_resolver.rs src/config.rs
+git diff "$BASE_BRANCH"...HEAD --stat -- src/sbom_generation/ src/application/ src/adapters/outbound/formatters/ src/cli/config_resolver.rs src/config.rs
 ```
 
 Also consider:
@@ -194,7 +227,7 @@ any CLI flag (i.e., any `#[arg(` or `#[clap(` annotation was added/changed in `s
 
 Detect via:
 ```bash
-git diff origin/develop...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
+git diff "$BASE_BRANCH"...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
 ```
 
 If the diff is **non-empty**, verify ALL of the following before proceeding to Step 5:
@@ -254,10 +287,12 @@ git push -u origin $(git branch --show-current)
 
 ### Step 6: Create Pull Request
 
-Use the following template:
+`$BASE_BRANCH` is the value determined in Step 3 (`develop`/`main` in Normal Mode,
+or the sibling stack branch in Stacked Mode). Use the following template:
 
 ```bash
-gh pr create --base develop --title "TITLE" --body "$(cat <<'EOF'
+# $BASE_BRANCH is already set from Step 3 — do not hardcode it here, even in Normal Mode
+gh pr create --base "$BASE_BRANCH" --title "TITLE" --body "$(cat <<'EOF'
 ## Summary
 [1-3 bullet points summarizing the changes]
 
@@ -283,6 +318,21 @@ EOF
 )"
 ```
 
+**Stacked PR note (only when `$BASE_BRANCH` is not `develop`/`main`)**: insert an
+additional section between `## Related Issue` and `## Changes Made`:
+
+```markdown
+## Stacked PR
+This PR is stacked on top of #<lower PR number> (`<lower branch>`) and targets that
+branch rather than `develop`. Its diff therefore excludes changes already under
+review in #<lower PR number>. GitHub will retarget this PR to `develop`
+automatically once #<lower PR number> merges.
+```
+
+Omit this section entirely in Normal Mode. Because the body heredoc above is quoted
+(`<<'EOF'`), `$BASE_BRANCH` does **not** expand inside it — write the lower PR
+number and branch name literally when composing the body, not as a shell variable.
+
 ### Step 7: Verify PR Creation
 
 After creation:
@@ -290,6 +340,75 @@ After creation:
 1. Output the PR URL
 2. Verify CI is running: `gh pr checks`
 3. Report status to user
+
+## Merging a Stacked PR (Stacked Mode only)
+
+### Who merges
+
+**Claude does not merge PRs into `develop`/`main` on its own judgment — neither via
+`gh pr merge` nor via the asynchronous merge REST API below.** `/pr` creates and
+stacks PRs and reports readiness (CI status, mergeability); the user reviews and
+merges. A green CI status is not, by itself, authorization to merge.
+
+If the user explicitly asks Claude to perform a merge, that authorizes **that one
+PR only** — it is never standing permission for the rest of the stack or for future
+sessions. Ask again (or wait) at each subsequent mergeable PR in the stack. This
+section is reference documentation for the user's own merge workflow, and for that
+narrow explicitly-requested case.
+
+### Verifying CI on an interior stack layer
+
+This project's CI workflow (`.github/workflows/ci.yml`) filters its `pull_request`
+trigger to `branches: [main, develop]`. A stacked PR based on a sibling branch
+(not `develop`/`main`) will therefore show **"no checks reported"** in
+`gh pr checks`, even though the `push` trigger still ran CI on the branch itself.
+Verify with the branch's own runs instead:
+
+```bash
+gh run list --branch <branch-name>
+gh run view <run-id> --json status,conclusion,jobs
+```
+
+### Merge procedure
+
+1. Try the normal path first:
+   ```bash
+   gh pr merge <number> --merge
+   ```
+2. A PR that is part of a stack is refused with an error to the effect of:
+   > This pull request is part of a stack and must be merged using the
+   > asynchronous merge REST API.
+3. Fall back to GitHub's asynchronous merge REST API:
+   ```bash
+   gh api --method PUT repos/{owner}/{repo}/pulls/{number}/merge-async -f merge_method=merge
+   ```
+   This is a **public-preview** endpoint — confirm the current request/response
+   shape live via `gh api` before relying on it, rather than trusting any prior
+   transcript or this document, since preview APIs may still be in flux.
+4. Poll the returned job/status identifier until the merge settles (`merged` or
+   `failed`):
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/{number}/merge-async/{uuid}
+   ```
+   Do not consider the PR merged until this returns a terminal status.
+
+### Post-merge verification of the next stack member
+
+After the bottom PR of a stack merges, GitHub automatically rebases the next PR in
+the stack to target `develop` directly. **Verify this happened — do not assume it**:
+
+```bash
+gh pr view <next-pr> --json baseRefName
+```
+
+Once its base is `develop` again, its CI re-triggers normally via the
+`pull_request` trigger.
+
+### Known limitations
+
+- Auto-merge is not supported for stacked PRs.
+- GitHub Desktop does not support stacks.
+- All stack members must live in the same repository (no cross-fork stacks).
 
 ## Error Handling
 

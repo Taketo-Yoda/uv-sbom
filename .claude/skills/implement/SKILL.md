@@ -18,6 +18,29 @@ Issue Analysis → Branch Creation → [Planning] → Implementation → Commit 
                                         ↑ Opus        ↑ Sonnet
 ```
 
+## Stacked Mode (opt-in)
+
+A PR whose base branch points at another still-open PR's branch is automatically
+recognized by GitHub as part of a dependency chain ("stack") — public preview since
+2026-07-30. Each PR in the stack shows only its own isolated diff for review, and
+merging the bottom-most PR automatically rebases the rest of the stack.
+
+**Entry rule (MANDATORY)**: Stacked Mode is entered **only** on an explicit user
+request in the current session — e.g. "スタック型PRで進めて", "stack this on top of
+#N", "implement these iteratively as a stack". **Never infer Stacked Mode** from
+branch state, open-PR state, or the fact that several Issues are being implemented in
+sequence. If in doubt, ask; the safe default is Normal Mode.
+
+**Why it's opt-in**: it changes merge mechanics (asynchronous merge REST API instead
+of `gh pr merge`, see `.claude/skills/pr/SKILL.md`) and CI visibility per layer, so it
+must be a deliberate choice, not an inferred one.
+
+**Scope**: once entered, Stacked Mode is **session-scoped and sticky** — it applies to
+every Issue implemented for the rest of the current session unless the user says
+otherwise. Step 3 still restates the resolved mode for each Issue via its
+`Stack position:` line below, so the current mode stays visible and can be corrected
+at any time.
+
 ## Steps
 
 ### Step 1: Analyze Issue (MANDATORY)
@@ -51,10 +74,51 @@ Format: `<prefix>/<issue-number>-<short-description>`
 ```bash
 # Verify not already on a feature branch for this issue
 git branch --show-current
-
-# If on develop or main, create new branch
 git fetch origin
+```
+
+**Default (Normal Mode)**: branch from `origin/develop`.
+
+```bash
 git checkout -b <branch-name> origin/develop
+```
+
+#### Stacked Mode branch base
+
+If Stacked Mode is active (see "Stacked Mode (opt-in)" above), determine the base
+per this table instead:
+
+| Mode | Base for `git checkout -b` |
+|------|------------------------------|
+| Normal (default) | `origin/develop` |
+| Stacked, this is the first Issue in the stack | `origin/develop` (this Issue becomes the stack's bottom layer) |
+| Stacked, a previous Issue's branch in this stack is still open (not yet merged) | that previous Issue's branch (fetch it first: `git fetch origin <previous-branch>`) |
+| Stacked, but the previous Issue's PR has already merged | `origin/develop` (the stack has "landed" — start a fresh bottom layer) |
+
+This is the first Issue in the stack if no earlier `Stack position: ... mode=Stacked`
+line has been printed yet in this session — if uncertain (e.g. after context
+compaction), ask the user or check `gh pr list --state open --json baseRefName` for
+an existing stack member before assuming Normal Mode.
+
+Determine whether the previous branch's PR is still open:
+
+```bash
+gh pr list --head <previous-branch> --state all --json number,state,url
+```
+
+`state: OPEN` → base on that branch. `MERGED`/`CLOSED` → base on `origin/develop`.
+
+**Record the stack position**: before continuing to Step 3.5, print exactly one line
+so Step 6 and Step 8 can pick it up:
+
+```
+Stack position: base=<branch> | stacks on #<PR> (<url>) | mode=Stacked
+```
+
+or, in Normal Mode:
+
+```
+Stack position: base=origin/develop | mode=Normal
 ```
 
 **CRITICAL**: This step cannot be skipped. If already on the correct feature branch, verify and continue.
@@ -165,9 +229,12 @@ If no matches are found, continue to Step 4 without interruption.
 **Trigger**: Run this gate if the current implementation added, removed, or renamed
 any CLI flag (i.e., any `#[arg(` or `#[clap(` annotation was added/changed in `src/cli/`).
 
-Detect via:
+Detect via (`$BASE_BRANCH` is the branch recorded by Step 3 — `origin/develop` in
+Normal Mode, or the sibling stack branch in Stacked Mode; using it here rather than
+a hardcoded `origin/develop` avoids misattributing a lower stack layer's CLI flag to
+the current Issue):
 ```bash
-git diff origin/develop...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
+git diff "$BASE_BRANCH"...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
 ```
 
 If the diff is **non-empty**, verify ALL of the following before proceeding to Step 4.5:
@@ -224,8 +291,15 @@ Invoke `/commit` skill with:
 ### Step 6: Create Pull Request
 
 Invoke `/pr` skill with:
-- Base branch: `develop`
+- Base branch: `<the branch recorded in Step 3's "Stack position:" line>` (may be
+  `develop`, or a sibling stack branch in Stacked Mode)
 - Reference to issue: `Closes #<issue-number>`
+- Stacks on (Stacked Mode only): `#<PR number>` of the lower stack layer
+
+**Re-verify before handing off (Stacked Mode only)**: time may have passed since
+Step 3. Confirm the recorded base branch still exists on the remote and its PR is
+still open (`gh pr list --head <base> --state open`). If it merged in the meantime,
+fall back to `develop` and say so.
 
 ### Step 7: Update Architecture Overview (conditional)
 
@@ -250,6 +324,8 @@ Output:
 - Files modified
 - Commit hash
 - PR URL
+- Stack position (Stacked Mode only): base branch used, and which Issue/PR this PR
+  stacks on top of
 - Follow-up Issues created during this session (including any opened by
   `/code-review` Step 3.5 or this skill's Step 3.6), with URLs — if any
 
