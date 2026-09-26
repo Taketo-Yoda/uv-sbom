@@ -8,11 +8,11 @@
 
 | Operation | Required Approach |
 |-----------|------------------|
-| New branch | `git checkout -b <prefix>/<issue>-<desc> origin/develop` |
+| New branch | `git checkout -b <prefix>/<issue>-<desc> origin/develop` (Normal Mode — see Key Invariant 1) |
 | Clippy check | `/pre-push` skill (NOT direct `cargo clippy`) |
 | Format check | `/pre-push` skill or `cargo fmt --all -- --check` |
 | Push code | `/pre-push` skill before `git push` |
-| Create PR | `/pr` skill (`--base develop`) |
+| Create PR | `/pr` skill (`--base develop` in Normal Mode — see Key Invariant 1) |
 | Create Issue | `/issue` skill (English only) |
 | Commit | `/commit` skill |
 
@@ -28,11 +28,22 @@
 
 ### Key Invariants (Never Violate)
 
-1. **Branch always from `origin/develop`** — never from `main`
+1. **Branch from `origin/develop` in Normal Mode (the default)** — never from `main`; see the Stacked Mode note below for the one exception
 2. **`cargo clippy` MUST include `-D warnings`** — CI enforces this (Issue #59)
 3. **Never bypass skills** for commit/PR/push — skills encode CI-equivalent checks
 4. **Domain layer has zero I/O** — no `std::fs`, no `reqwest`, no network
 5. **All GitHub artifacts in English** — Issues, PRs, commits, comments
+
+> **Stacked Mode (opt-in)**: when the user has explicitly entered Stacked Mode in the
+> current session, a branch and its PR are based on a **still-open sibling stack branch**
+> instead of `origin/develop`. This is the single exception to Invariant 1, and it applies
+> everywhere this file says "Normal Mode". **Never infer Stacked Mode** from branch state,
+> open-PR state, or a run of related Issues — it is entered only on explicit user request,
+> and the safe default is Normal Mode. Canonical definition, entry rule and session scope:
+> `.claude/skills/implement/SKILL.md`'s "Stacked Mode (opt-in)" section; branch-base
+> decision table: its Step 3; PR target (`$BASE_BRANCH`): `.claude/skills/pr/SKILL.md`
+> Step 3. `/dependabot` security-fix branches are never stacked. In Normal Mode, nothing
+> in this file changes.
 
 ---
 
@@ -144,12 +155,16 @@ let file_path = temp_dir.path().join("uv.lock");
 
 ### Branch Creation (CRITICAL)
 
-Always branch from `origin/develop`:
+Normal Mode (default) — always branch from `origin/develop`:
 
 ```bash
 git fetch origin
 git checkout -b feature/<issue-number>-<description> origin/develop
 ```
+
+> **Stacked Mode (opt-in)**: base on the still-open sibling stack branch instead — see
+> `.claude/skills/implement/SKILL.md` Step 3's branch-base decision table, and Key
+> Invariant 1 above.
 
 ### Branch Naming
 
@@ -178,7 +193,7 @@ git config core.hooksPath .githooks
 | `/ideate` | Feature ideation (triage → analysis → Issue) |
 | `/implement` | End-to-end implementation (branch → commit → PR) |
 | `/commit` | Commit with branch guard + format/clippy checks |
-| `/pr` | PR creation (pre-validation, base: `develop`) |
+| `/pr` | PR creation (pre-validation, base: `develop` in Normal Mode) |
 | `/pre-push` | Pre-push validation (clippy with `-D warnings`) |
 | `/issue` | Issue creation (English, full template) |
 
@@ -190,7 +205,7 @@ git config core.hooksPath .githooks
 
 ### When Starting Work
 
-1. ⚠️ **Check branch**: `git status` — if on `develop`/`main`, create feature branch from `origin/develop`
+1. ⚠️ **Check branch**: `git status` — if on `develop`/`main`, create feature branch from `origin/develop` (the default here even in Stacked Mode — say so instead if this work should join an active stack; see Key Invariant 1 and `/commit`'s Step 0)
 2. Read `.claude/project-context.md`
 
 ### During Coding
@@ -207,7 +222,7 @@ git config core.hooksPath .githooks
 
 10. Update documentation as needed
 11. Verify branch before committing
-12. `/commit` skill → `/pr` skill (base: `develop`)
+12. `/commit` skill → `/pr` skill (base: `develop` in Normal Mode; the sibling stack branch in Stacked Mode)
 
 ---
 
@@ -232,7 +247,7 @@ Read `.claude/product-vision.md` before implementing new output sections, CLI fl
 ### Before Creating a PR
 
 1. ⚠️ **Use `/pre-push` skill** — it runs all CI-equivalent checks including `-D warnings`
-2. Verify base branch is `develop` (NOT `main`)
+2. Verify base branch is `develop` (NOT `main`) — Normal Mode; in Stacked Mode verify it is the intended still-open sibling stack branch (see Key Invariant 1)
 3. Review all changes: `git status && git diff`
 
 Manual commands (if absolutely necessary — not recommended):
@@ -242,7 +257,7 @@ cargo fmt --all && cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings  # ⚠️ -D warnings MANDATORY
 cargo test
 git push
-gh pr create --base develop --title "..." --body "..."
+gh pr create --base develop --title "..." --body "..."  # Normal Mode; in Stacked Mode use the sibling stack branch
 ```
 
 ### When Responding to Review Comments
@@ -256,7 +271,7 @@ gh pr create --base develop --title "..." --body "..."
 
 | # | Mistake | Fix | Incident |
 |---|---------|-----|----------|
-| 1 | Wrong base branch (`main` instead of `develop`) | Always `--base develop` | PR #31 |
+| 1 | Wrong base branch (`main` instead of `develop`) | `--base develop` in Normal Mode (Stacked Mode: the sibling stack branch) | PR #31 |
 | 2 | Forgot `cargo fmt --all` before push | Always run formatter | PR #31 |
 | 3 | Missed review comment items | Read ALL comments, use checklist | PR #31 |
 | 4 | `cargo clippy` without `-D warnings` | Use `/pre-push` skill | Issue #59 |
@@ -308,12 +323,13 @@ Implement `LicenseRepository` trait → new adapter in `adapters/outbound/` → 
 
 ---
 
-Last Updated: 2026-03-30
+Last Updated: 2026-09-26
 
 ## Change History
 
 | Date | Change | Reference |
 |------|--------|-----------|
+| 2026-09-26 | Qualified all `develop`/`main` branch-base assertions as Normal Mode; added a single Stacked Mode cross-reference note to Key Invariants | Issue #846 |
 | 2026-03-30 | Restructured for AI context efficiency: added Quick Reference, extracted Issue Guidelines to `issue-guidelines.md`, condensed prose to tables | Issue #371 |
 | 2026-01-17 | Added pre-commit hook for automatic formatting | Issue #102 |
 | 2026-01-17 | Added "Never Bypass Skills" section, skill enforcement table, failure patterns | Issue #88 |
