@@ -74,4 +74,23 @@ mod init_tests {
             .code(0)
             .stderr(predicates::str::contains("Created uv-sbom.config.yml"));
     }
+
+    /// --init with --lang ja prints a localized confirmation message
+    #[test]
+    fn test_init_prints_confirmation_in_japanese() {
+        let dir = TempDir::new().unwrap();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--init",
+                "--path",
+                dir.path().to_str().unwrap(),
+                "--lang",
+                "ja",
+            ])
+            .assert()
+            .code(0)
+            .stderr(predicates::str::contains("uv-sbom.config.yml を"))
+            .stderr(predicates::str::contains("に作成しました"));
+    }
 }

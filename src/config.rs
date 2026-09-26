@@ -151,6 +151,11 @@ impl IgnoreCve {
 }
 
 /// Load config from an explicit path. Returns an error if the file is not found.
+///
+/// Unknown fields are captured in [`ConfigFile::unknown_fields`] but are *not*
+/// warned about here: this function has no `Locale`, so emitting a localized,
+/// user-facing warning is the caller's responsibility (see
+/// `cli::config_resolver::loader::load_config`).
 pub fn load_config_from_path(path: &Path) -> Result<ConfigFile> {
     let content = std::fs::read_to_string(path).with_context(|| {
         format!(
@@ -167,7 +172,6 @@ pub fn load_config_from_path(path: &Path) -> Result<ConfigFile> {
     })?;
 
     validate_config(&config)?;
-    warn_unknown_fields(&config);
 
     Ok(config)
 }
@@ -211,16 +215,6 @@ fn validate_config(config: &ConfigFile) -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Warn about unknown fields in the config file.
-fn warn_unknown_fields(config: &ConfigFile) {
-    for key in config.unknown_fields.keys() {
-        eprintln!(
-            "⚠️  Warning: Unknown config field '{}' will be ignored.",
-            key
-        );
-    }
 }
 
 #[cfg(test)]
@@ -359,7 +353,7 @@ ignore_cves:
     }
 
     #[test]
-    fn test_unknown_fields_warning() {
+    fn test_unknown_fields_captured() {
         let dir = TempDir::new().unwrap();
         let config_path = dir.path().join("config.yml");
         fs::write(

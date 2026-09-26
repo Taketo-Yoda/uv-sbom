@@ -167,18 +167,37 @@ fn print_startup_warnings(args: &Args, msgs: &Messages) {
     // Warn if check_license is used with JSON format
     if args.check_license && args.format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_check_license_no_effect);
-        eprintln!("   License compliance data is not included in JSON output.");
-        eprintln!("   Use --format markdown to see license compliance report.");
+        eprintln!("{}", msgs.warn_check_license_json_detail);
+        eprintln!("{}", msgs.warn_check_license_json_hint);
         eprintln!();
     }
 
     // Warn if verify_links is used with JSON format
     if args.verify_links && args.format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_verify_links_no_effect);
-        eprintln!("   PyPI link verification only applies to Markdown output.");
-        eprintln!("   Use --format markdown to use link verification.");
+        eprintln!("{}", msgs.warn_verify_links_json_detail);
+        eprintln!("{}", msgs.warn_verify_links_json_hint);
         eprintln!();
     }
+}
+
+/// Prints an error and its full `source()` chain to stderr, localized via `msgs`.
+///
+/// Extracted from three identical `Err(e)` arms in `main()` (workspace mode,
+/// diff mode, and normal mode) to avoid triplicating the same i18n-routed
+/// error-reporting logic.
+fn print_error_chain(e: &anyhow::Error, msgs: &Messages) {
+    eprintln!("\n{}\n", msgs.error_header);
+    eprintln!("{}", e);
+
+    let mut source = e.source();
+    while let Some(err) = source {
+        let cause = err.to_string();
+        eprintln!("\n{}", Messages::format(msgs.error_caused_by, &[&cause]));
+        source = err.source();
+    }
+
+    eprintln!();
 }
 
 /// CLI-only `SbomRequest` fields that intentionally have no config-file tier
@@ -360,20 +379,17 @@ async fn main() {
         }
     };
 
+    // Captured before `args` is moved into run_workspace/run_diff/run below, so
+    // the error and --init messages can still be localized.
+    let msgs = Messages::for_locale(args.lang);
+
     // Handle --workspace mode before normal flow
     if args.workspace {
         let workspace_root = PathBuf::from(args.path.as_deref().unwrap_or("."));
         match run_workspace(args, workspace_root).await {
             Ok(()) => process::exit(ExitCode::Success.as_i32()),
             Err(e) => {
-                eprintln!("\n❌ An error occurred:\n");
-                eprintln!("{}", e);
-                let mut source = e.source();
-                while let Some(err) = source {
-                    eprintln!("\nCaused by: {}", err);
-                    source = err.source();
-                }
-                eprintln!();
+                print_error_chain(&e, msgs);
                 process::exit(ExitCode::ApplicationError.as_i32());
             }
         }
@@ -385,15 +401,19 @@ async fn main() {
         let dir_path = std::path::Path::new(dir);
         match config::generate_config_template(dir_path) {
             Ok(abs_path) => {
+                let dir_display = abs_path.parent().unwrap_or(dir_path).display().to_string();
                 eprintln!(
-                    "Created {} in {}",
-                    config::CONFIG_FILENAME,
-                    abs_path.parent().unwrap_or(dir_path).display()
+                    "{}",
+                    Messages::format(
+                        msgs.info_config_template_created,
+                        &[config::CONFIG_FILENAME, &dir_display],
+                    )
                 );
                 process::exit(ExitCode::Success.as_i32());
             }
             Err(e) => {
-                eprintln!("Error: {}", e);
+                let err_text = e.to_string();
+                eprintln!("{}", Messages::format(msgs.error_init_failed, &[&err_text]));
                 process::exit(ExitCode::ApplicationError.as_i32());
             }
         }
@@ -410,14 +430,7 @@ async fn main() {
                 process::exit(ExitCode::Success.as_i32());
             }
             Err(e) => {
-                eprintln!("\n❌ An error occurred:\n");
-                eprintln!("{}", e);
-                let mut source = e.source();
-                while let Some(err) = source {
-                    eprintln!("\nCaused by: {}", err);
-                    source = err.source();
-                }
-                eprintln!();
+                print_error_chain(&e, msgs);
                 process::exit(ExitCode::ApplicationError.as_i32());
             }
         }
@@ -432,17 +445,7 @@ async fn main() {
             process::exit(ExitCode::Success.as_i32());
         }
         Err(e) => {
-            eprintln!("\n❌ An error occurred:\n");
-            eprintln!("{}", e);
-
-            // Display error chain
-            let mut source = e.source();
-            while let Some(err) = source {
-                eprintln!("\nCaused by: {}", err);
-                source = err.source();
-            }
-
-            eprintln!();
+            print_error_chain(&e, msgs);
             process::exit(ExitCode::ApplicationError.as_i32());
         }
     }
