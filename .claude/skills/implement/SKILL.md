@@ -49,11 +49,30 @@ at any time.
 gh issue view <issue-number>
 ```
 
+**Read the ENTIRE body, including the collapsed block.** Issues follow the two-section
+format in `.claude/issue-guidelines.md`: a visible human section and an AI section
+collapsed under `<details><summary>🤖 Implementation Spec (for AI agents)</summary>`.
+`gh issue view` returns the raw Markdown, so the collapsed content IS present in the
+output — but it is easy to skim past. The implementation specification lives there.
+**Never plan from the human section alone.**
+
 Extract:
-- Issue title and description
-- Labels (to determine branch prefix)
-- Acceptance criteria
-- Files to modify
+
+| From | Section | Use |
+|------|---------|-----|
+| Human | `## Summary` / `## Why` | Issue intent; PR description |
+| Human | `## Scope` (In / Out) | What must NOT be implemented |
+| Human | `## Design Sketch` | Types to create/change (Mermaid, if present) |
+| Human | `## Acceptance Criteria` | Behavior-level completion check |
+| Labels | — | Branch prefix (Step 2) |
+| AI (`<details>`) | `## Context & Constraints` | Invariants, precedent Issues/PRs, files not to touch |
+| AI (`<details>`) | `## Design Decisions` | Approach already decided — do not re-litigate |
+| AI (`<details>`) | `## Files to Update/Create` | Files to read for Step 3.5 context |
+| AI (`<details>`) | `## Technical Acceptance Criteria` | Toolchain/docs gates before `/commit` |
+
+If the Issue predates this format (flat headings such as `## Technical Implementation`
+or `## Proposed Solution`), map it by meaning and continue — older Issues are not
+rewritten.
 
 ### Step 2: Determine Branch Name
 
@@ -136,8 +155,15 @@ Agent({
 })
 ```
 
+Pass the Issue's **full body** to the Architect, collapsed AI section included. The
+Architect's job is to produce the interface design and implementation code shape —
+Issues deliberately no longer contain implementation code, so `## Design Decisions` is
+prose and the Architect turns it into signatures.
+
 Gather relevant existing code context by:
-- Reading files listed in the issue's "Files to Update / Modify" section
+- Reading every file listed in the issue's `## Files to Update/Create` section — it is
+  inside the collapsed `🤖 Implementation Spec (for AI agents)` block, not the visible
+  human section
 - Reading adjacent modules or traits that the new code must implement or extend
 - Running `git grep` for key symbols mentioned in the issue
 
@@ -277,7 +303,8 @@ If the diff is **non-empty**, verify ALL of the following before proceeding to S
 Invoke `/code-review` skill.
 
 - The skill runs a Reviewer Agent against the current `git diff HEAD`.
-- If the review **PASSES**, proceed to Step 5.
+- If the review **PASSES**, verify every box in the Issue's `## Technical Acceptance
+  Criteria` (AI section) is satisfied, then proceed to Step 5.
 - If the review **FAILS** after the maximum iteration limit (3), halt and report
   remaining issues to the user. Do **NOT** invoke `/commit` until `/code-review`
   returns PASS.
