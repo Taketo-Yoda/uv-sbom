@@ -25,7 +25,7 @@ serde_json = "1.0"
 toml = "1.1"
 anyhow = "1.0"
 thiserror = "2.0"
-reqwest = { version = "0.13", features = ["json", "blocking"] }
+reqwest = { version = "0.13", features = ["json", "blocking", "stream"] }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "macros", "process"] }
 tempfile = "3.27"
