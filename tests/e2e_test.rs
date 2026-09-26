@@ -657,6 +657,62 @@ mod lang_option_tests {
     }
 }
 
+// `--suggest-fix` pre-flight warning i18n tests (#824)
+//
+// `resolve_suggest_fix` (src/cli/runner.rs) used to print two hardcoded English
+// `eprintln!` warnings that bypassed the i18n catalog. These tests prove the
+// warnings are now routed through `Messages` and localized for `--lang ja`.
+//
+// Unix-only: the `pyproject.toml`-missing branch is only reached when the `uv`
+// CLI check passes first, and CI runners do not install `uv` by default, so a
+// stub `uv` executable is placed first on PATH to make the `uv`-available branch
+// deterministic regardless of whether the real `uv` CLI happens to be present on
+// the test runner. Reproducing this PATH-shim trick portably on Windows (where
+// `Command::new("uv")` does not resolve extension-less names the same way) is
+// out of scope here; the underlying strings are still covered cross-platform by
+// the unit tests in `src/i18n/mod.rs`.
+#[cfg(unix)]
+mod suggest_fix_i18n_tests {
+    use assert_cmd::cargo::cargo_bin_cmd;
+    use predicates::prelude::*;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::TempDir;
+
+    /// `--suggest-fix --lang ja` against a project directory missing
+    /// `pyproject.toml` prints the localized (Japanese) warning.
+    #[test]
+    fn test_suggest_fix_missing_pyproject_ja_localized() {
+        // Stub `uv` executable so `resolve_suggest_fix`'s `uv --version` check
+        // always succeeds, independent of the real test runner's PATH.
+        let fake_bin_dir = TempDir::new().unwrap();
+        let uv_stub_path = fake_bin_dir.path().join("uv");
+        fs::write(&uv_stub_path, "#!/bin/sh\nexit 0\n").unwrap();
+        fs::set_permissions(&uv_stub_path, fs::Permissions::from_mode(0o755)).unwrap();
+
+        // Empty project directory: no pyproject.toml (and no uv.lock, which is
+        // fine — resolve_suggest_fix's warning fires before the lockfile is read).
+        let project_dir = TempDir::new().unwrap();
+
+        let existing_path = std::env::var("PATH").unwrap_or_default();
+        let path_with_stub = format!("{}:{}", fake_bin_dir.path().display(), existing_path);
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                project_dir.path().to_str().unwrap(),
+                "--suggest-fix",
+                "--lang",
+                "ja",
+            ])
+            .env("PATH", path_with_stub)
+            .assert()
+            .stderr(predicate::str::contains(
+                "⚠ --suggest-fix にはプロジェクトディレクトリに pyproject.toml が必要です。",
+            ));
+    }
+}
+
 // Helper function to create a test license repository
 // In real tests, we would use a mock to avoid network calls
 fn create_test_license_repository() -> impl LicenseRepository + Clone {

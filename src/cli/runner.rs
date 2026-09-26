@@ -1,5 +1,6 @@
 use owo_colors::OwoColorize;
 
+use crate::i18n::Messages;
 use crate::shared::Result;
 
 pub fn display_banner() {
@@ -21,7 +22,11 @@ pub fn display_banner() {
 /// - `pyproject.toml` exists in the given project directory
 ///
 /// Prints a warning and returns `false` on the first failing condition.
-pub fn resolve_suggest_fix(suggest_fix: bool, project_path: &std::path::Path) -> bool {
+pub fn resolve_suggest_fix(
+    suggest_fix: bool,
+    project_path: &std::path::Path,
+    msgs: &Messages,
+) -> bool {
     if !suggest_fix {
         return false;
     }
@@ -31,14 +36,11 @@ pub fn resolve_suggest_fix(suggest_fix: bool, project_path: &std::path::Path) ->
         .map(|o| o.status.success())
         .unwrap_or(false);
     if !uv_available {
-        eprintln!(
-            "⚠ --suggest-fix requires `uv` CLI. \
-             Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"
-        );
+        eprintln!("{}", msgs.warn_suggest_fix_requires_uv);
         return false;
     }
     if !project_path.join("pyproject.toml").exists() {
-        eprintln!("⚠ --suggest-fix requires pyproject.toml in the project directory.");
+        eprintln!("{}", msgs.warn_suggest_fix_requires_pyproject);
         return false;
     }
     true
@@ -59,6 +61,7 @@ pub fn validate_project_path(path: &std::path::Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::Locale;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
@@ -105,13 +108,15 @@ mod tests {
     #[test]
     fn test_resolve_suggest_fix_disabled() {
         let temp_dir = TempDir::new().unwrap();
+        let msgs = Messages::for_locale(Locale::En);
         // When suggest_fix is false, always returns false without checking anything
-        assert!(!resolve_suggest_fix(false, temp_dir.path()));
+        assert!(!resolve_suggest_fix(false, temp_dir.path(), msgs));
     }
 
     #[test]
     fn test_resolve_suggest_fix_missing_pyproject_toml() {
         let temp_dir = TempDir::new().unwrap();
+        let msgs = Messages::for_locale(Locale::En);
         // No pyproject.toml in temp dir; only meaningful when uv is available
         let uv_available = std::process::Command::new("uv")
             .arg("--version")
@@ -119,13 +124,14 @@ mod tests {
             .map(|o| o.status.success())
             .unwrap_or(false);
         if uv_available {
-            assert!(!resolve_suggest_fix(true, temp_dir.path()));
+            assert!(!resolve_suggest_fix(true, temp_dir.path(), msgs));
         }
     }
 
     #[test]
     fn test_resolve_suggest_fix_with_pyproject_toml() {
         let temp_dir = TempDir::new().unwrap();
+        let msgs = Messages::for_locale(Locale::En);
         fs::write(
             temp_dir.path().join("pyproject.toml"),
             "[project]\nname = \"test\"\n",
@@ -137,6 +143,9 @@ mod tests {
             .map(|o| o.status.success())
             .unwrap_or(false);
         // Result should match uv availability
-        assert_eq!(resolve_suggest_fix(true, temp_dir.path()), uv_available);
+        assert_eq!(
+            resolve_suggest_fix(true, temp_dir.path(), msgs),
+            uv_available
+        );
     }
 }
