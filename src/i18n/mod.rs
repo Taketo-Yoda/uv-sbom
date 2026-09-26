@@ -106,6 +106,7 @@ pub struct Messages {
     pub warn_verify_links_json_detail: &'static str,
     pub warn_verify_links_json_hint: &'static str,
     pub warn_abandoned_fetch_failed: &'static str,
+    pub warn_vuln_detail_fetch_failed: &'static str,
     pub warn_ignored_cve_with_reason: &'static str,
     pub warn_ignored_cve_no_reason: &'static str,
     pub warn_suggest_fix_requires_uv: &'static str,
@@ -371,6 +372,7 @@ static EN_MESSAGES: Messages = Messages {
     warn_verify_links_json_detail: "   PyPI link verification only applies to Markdown output.",
     warn_verify_links_json_hint: "   Use --format markdown to use link verification.",
     warn_abandoned_fetch_failed: "⚠️  Warning: Failed to fetch maintenance info for {}: {}",
+    warn_vuln_detail_fetch_failed: "⚠️  Warning: Failed to fetch details for {}: {}",
     warn_ignored_cve_with_reason: "⚠ Ignored {} for package {} (reason: {})",
     warn_ignored_cve_no_reason: "⚠ Ignored {} for package {} (no reason provided)",
     warn_suggest_fix_requires_uv: "⚠ --suggest-fix requires `uv` CLI. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh",
@@ -604,6 +606,7 @@ static JA_MESSAGES: Messages = Messages {
     warn_verify_links_json_detail: "   PyPIリンク検証はMarkdown出力にのみ適用されます。",
     warn_verify_links_json_hint: "   リンク検証を使用するには --format markdown を使用してください。",
     warn_abandoned_fetch_failed: "⚠️  警告: {}のメンテナンス情報の取得に失敗: {}",
+    warn_vuln_detail_fetch_failed: "⚠️  警告: {}の詳細情報の取得に失敗: {}",
     warn_ignored_cve_with_reason: "⚠ {} をパッケージ {} で無視しました (理由: {})",
     warn_ignored_cve_no_reason: "⚠ {} をパッケージ {} で無視しました (理由の指定なし)",
     warn_suggest_fix_requires_uv: "⚠ --suggest-fix には `uv` CLI が必要です。インストール: curl -LsSf https://astral.sh/uv/install.sh | sh",
@@ -1428,6 +1431,32 @@ mod tests {
         assert_eq!(
             result,
             "⚠ Ignored CVE-2024-001 for package requests (no reason provided)"
+        );
+    }
+
+    #[test]
+    fn test_warn_vuln_detail_fetch_failed_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.warn_vuln_detail_fetch_failed,
+            &["CVE-2024-001", "request timed out"],
+        );
+        assert_eq!(
+            result,
+            "⚠️  Warning: Failed to fetch details for CVE-2024-001: request timed out"
+        );
+    }
+
+    #[test]
+    fn test_warn_vuln_detail_fetch_failed_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.warn_vuln_detail_fetch_failed,
+            &["CVE-2024-001", "リクエストがタイムアウトしました"],
+        );
+        assert_eq!(
+            result,
+            "⚠️  警告: CVE-2024-001の詳細情報の取得に失敗: リクエストがタイムアウトしました"
         );
     }
 

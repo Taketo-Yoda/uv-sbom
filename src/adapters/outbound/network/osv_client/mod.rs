@@ -1,6 +1,7 @@
 mod cvss;
 mod dto;
 
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{ProgressCallback, VulnerabilityRepository};
 use crate::sbom_generation::domain::vulnerability::{
     PackageVulnerabilities, Severity, Vulnerability,
@@ -25,17 +26,36 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct OsvClient {
     client: Client,
-    api_url: String,
+    base_url: String,
+    /// Locale for localizing the per-vulnerability detail-fetch soft-fail warning
+    /// (see `fetch_vulnerabilities_with_progress`). Held directly on the adapter
+    /// rather than threaded through an application-layer error-return channel,
+    /// matching the precedent in `FileSystemWriter`
+    /// (`src/adapters/outbound/filesystem/file_writer.rs`), which also holds a
+    /// `Locale` and formats/prints a localized message itself.
+    locale: Locale,
 }
 
 impl OsvClient {
-    const API_ENDPOINT: &'static str = "https://api.osv.dev/v1/querybatch";
+    const API_BASE_URL: &'static str = "https://api.osv.dev";
     const TIMEOUT_SECONDS: u64 = 30;
     const RATE_LIMIT_MS: u64 = 100; // 10 req/sec
     const MAX_BATCH_SIZE: usize = 100; // OSV API limit
 
     /// Creates a new OSV API client with default configuration
-    pub fn new() -> Result<Self> {
+    pub fn new(locale: Locale) -> Result<Self> {
+        Self::build(Self::API_BASE_URL.to_string(), locale)
+    }
+
+    /// Creates a client pointed at a custom base URL (e.g. a wiremock server),
+    /// for tests only.
+    #[cfg(test)]
+    fn new_with_base_url(base_url: impl Into<String>, locale: Locale) -> Result<Self> {
+        Self::build(base_url.into(), locale)
+    }
+
+    /// Shared constructor logic for [`Self::new`] and [`Self::new_with_base_url`].
+    fn build(base_url: String, locale: Locale) -> Result<Self> {
         let version = env!("CARGO_PKG_VERSION");
         let user_agent = format!("uv-sbom/{}", version);
         let client = Client::builder()
@@ -45,7 +65,8 @@ impl OsvClient {
 
         Ok(Self {
             client,
-            api_url: Self::API_ENDPOINT.to_string(),
+            base_url,
+            locale,
         })
     }
 
@@ -66,12 +87,8 @@ impl OsvClient {
         let batch_query = OsvBatchQuery { queries };
 
         // Send async request
-        let response = self
-            .client
-            .post(&self.api_url)
-            .json(&batch_query)
-            .send()
-            .await?;
+        let url = format!("{}/v1/querybatch", self.base_url);
+        let response = self.client.post(&url).json(&batch_query).send().await?;
 
         if !response.status().is_success() {
             anyhow::bail!("OSV API returned status code {}", response.status());
@@ -86,7 +103,7 @@ impl OsvClient {
     /// The batch API returns minimal information. To get severity and other details,
     /// we need to query each vulnerability individually.
     async fn fetch_vulnerability_details(&self, vuln_id: &str) -> Result<OsvVulnerability> {
-        let url = format!("https://api.osv.dev/v1/vulns/{}", vuln_id);
+        let url = format!("{}/v1/vulns/{}", self.base_url, vuln_id);
         let response = self.client.get(&url).send().await?;
 
         if !response.status().is_success() {
@@ -208,9 +225,13 @@ impl VulnerabilityRepository for OsvClient {
                         }
                     }
                     Err(e) => {
+                        let msgs = Messages::for_locale(self.locale);
                         eprintln!(
-                            "Warning: Failed to fetch details for {}: {}",
-                            osv_vuln.id, e
+                            "{}",
+                            Messages::format(
+                                msgs.warn_vuln_detail_fetch_failed,
+                                &[&osv_vuln.id, &e.to_string()]
+                            )
                         );
                     }
                 }
@@ -235,10 +256,12 @@ impl VulnerabilityRepository for OsvClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_osv_client_creation() {
-        let client = OsvClient::new();
+        let client = OsvClient::new(Locale::En);
         assert!(client.is_ok());
     }
 
@@ -246,11 +269,112 @@ mod tests {
     // Uncomment to run with real OSV API
     // #[test]
     // fn test_fetch_vulnerabilities_real() {
-    //     let client = OsvClient::new().unwrap();
+    //     let client = OsvClient::new(Locale::En).unwrap();
     //     let packages = vec![
     //         Package::new("requests".to_string(), "2.3.0".to_string()).unwrap(),
     //     ];
     //     let result = client.fetch_vulnerabilities(packages);
     //     assert!(result.is_ok());
     // }
+
+    fn test_package() -> Package {
+        Package::new("requests".to_string(), "2.31.0".to_string()).unwrap()
+    }
+
+    /// Mounts a batch-query response reporting exactly one vulnerability id
+    /// (`CVE-2024-0001`) for the single queried package.
+    async fn mount_batch_with_one_vuln(mock_server: &MockServer) {
+        Mock::given(method("POST"))
+            .and(path("/v1/querybatch"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "results": [
+                    { "vulns": [ { "id": "CVE-2024-0001" } ] }
+                ]
+            })))
+            .mount(mock_server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn test_fetch_vulnerabilities_detail_fetch_failure_is_soft_failed() {
+        // Regression test for the #825 fix: when the per-vulnerability detail
+        // fetch fails, the package is soft-failed (excluded from results, no
+        // panic/error propagation) rather than aborting the whole check. The
+        // exact localized warning text is covered by src/i18n/mod.rs's
+        // `test_warn_vuln_detail_fetch_failed_{en,ja}_format` tests; capturing
+        // real stderr output in-process is unreliable, so this test instead
+        // exercises the actual soft-fail code path end-to-end.
+        let mock_server = MockServer::start().await;
+        mount_batch_with_one_vuln(&mock_server).await;
+        Mock::given(method("GET"))
+            .and(path("/v1/vulns/CVE-2024-0001"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&mock_server)
+            .await;
+
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let result = client
+            .fetch_vulnerabilities(vec![test_package()])
+            .await
+            .unwrap();
+
+        // The only vulnerability failed to fetch details for, so the package
+        // has no successfully-fetched vulnerabilities and is excluded entirely.
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_vulnerabilities_detail_fetch_failure_ja_locale_soft_fails() {
+        // Same as above, but with Locale::Ja, to prove the failure path
+        // works regardless of which locale the client was constructed with
+        // (the localized string itself is verified in src/i18n/mod.rs).
+        let mock_server = MockServer::start().await;
+        mount_batch_with_one_vuln(&mock_server).await;
+        Mock::given(method("GET"))
+            .and(path("/v1/vulns/CVE-2024-0001"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&mock_server)
+            .await;
+
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::Ja).unwrap();
+        let result = client
+            .fetch_vulnerabilities(vec![test_package()])
+            .await
+            .unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_vulnerabilities_detail_fetch_success_happy_path() {
+        // Happy-path coverage for the base_url plumbing introduced alongside
+        // the #825 fix: a broken URL template would fail this test even
+        // though the failure-path tests above would still pass.
+        let mock_server = MockServer::start().await;
+        mount_batch_with_one_vuln(&mock_server).await;
+        Mock::given(method("GET"))
+            .and(path("/v1/vulns/CVE-2024-0001"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "CVE-2024-0001",
+                "summary": "Test vulnerability",
+                "severity": [
+                    {
+                        "type": "CVSS_V3",
+                        "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+                    }
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let result = client
+            .fetch_vulnerabilities(vec![test_package()])
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].vulnerabilities().len(), 1);
+        assert_eq!(result[0].vulnerabilities()[0].id(), "CVE-2024-0001");
+    }
 }

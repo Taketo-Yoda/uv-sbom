@@ -115,7 +115,7 @@ fn build_use_case<LR: LockfileReader>(
 
     // Create vulnerability repository if CVE check is requested
     let vulnerability_repository = if merged.check_cve {
-        Some(OsvClient::new()?)
+        Some(OsvClient::new(locale)?)
     } else {
         None
     };
@@ -689,7 +689,7 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     };
 
     let vulnerability_repository = if check_cve {
-        Some(OsvClient::new()?)
+        Some(OsvClient::new(locale)?)
     } else {
         None
     };
