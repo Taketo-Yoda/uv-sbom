@@ -158,14 +158,14 @@ fn build_use_case<LR: LockfileReader>(
 /// Prints deprecation/no-effect warnings for CLI flags that don't apply given the
 /// rest of the invocation (e.g. `--verify-links` combined with `--format json`).
 ///
-/// Gates on `args.format` (the raw CLI value, defaulting to `Json`) rather than
-/// the resolved `MergedConfig`, matching the pre-extraction behavior verbatim.
-/// Note this means a `format: markdown` set only via config file (no `--format`
-/// flag) will not suppress these warnings, since `args.format` stays at its
-/// default; that pre-existing quirk is out of scope for this extraction.
-fn print_startup_warnings(args: &Args, msgs: &Messages) {
+/// Gates on the resolved `format` (`MergedConfig.format`) rather than the raw CLI
+/// `args.format`, so a `format: markdown` set only via config file (no `--format`
+/// flag) correctly suppresses these warnings (fixed in #822; previously gated on
+/// `args.format`, which stays at its `Json` default when no `--format` flag is
+/// passed, regardless of the config file).
+fn print_startup_warnings(args: &Args, format: OutputFormat, msgs: &Messages) {
     // Warn if check_license is used with JSON format
-    if args.check_license && args.format == OutputFormat::Json {
+    if args.check_license && format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_check_license_no_effect);
         eprintln!("{}", msgs.warn_check_license_json_detail);
         eprintln!("{}", msgs.warn_check_license_json_hint);
@@ -173,7 +173,7 @@ fn print_startup_warnings(args: &Args, msgs: &Messages) {
     }
 
     // Warn if verify_links is used with JSON format
-    if args.verify_links && args.format == OutputFormat::Json {
+    if args.verify_links && format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_verify_links_no_effect);
         eprintln!("{}", msgs.warn_verify_links_json_detail);
         eprintln!("{}", msgs.warn_verify_links_json_hint);
@@ -463,8 +463,6 @@ async fn run(args: Args) -> Result<bool> {
     let locale = args.lang;
     let msgs = Messages::for_locale(locale);
 
-    print_startup_warnings(&args, msgs);
-
     // Validate project directory
     let project_dir = args.path.as_deref().unwrap_or(".");
     let project_path = PathBuf::from(project_dir);
@@ -476,6 +474,10 @@ async fn run(args: Args) -> Result<bool> {
 
     // Merge CLI and config values
     let merged = merge_config(&args, &config)?;
+
+    // Print startup warnings using the resolved format, so a `format: markdown`
+    // set only via config file (no `--format` flag) correctly suppresses them (#822)
+    print_startup_warnings(&args, merged.format, msgs);
 
     // Create use case with injected dependencies
     let use_case = build_use_case(FileSystemReader::new(), locale, &merged)?;
