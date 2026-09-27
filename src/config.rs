@@ -3,14 +3,79 @@
 //! Provides YAML-based configuration through `uv-sbom.config.yml` files,
 //! including data structures, file loading, and validation.
 
-use anyhow::{bail, Context};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::Path;
-
-use crate::shared::Result;
+use std::path::{Path, PathBuf};
+use thiserror::Error;
 
 pub const CONFIG_FILENAME: &str = "uv-sbom.config.yml";
+
+/// Errors produced while generating, loading, or validating a config file.
+///
+/// Variants carry structured data only; the `#[error(...)]` templates below are
+/// the English rendering and the library's `Display` contract (matched
+/// byte-for-byte by existing tests). The locale-aware rendering used by the CLI
+/// lives in `src/cli/error_display.rs`, not here — this module must stay free
+/// of any `i18n` dependency (see `.claude/CLAUDE.md` → "Error Message
+/// Localization Policy", decided in #832).
+///
+/// Defined here rather than as new `SbomError` variants in `src/shared/error.rs`
+/// because `src/main.rs` declares its own `mod shared;` while also importing
+/// `uv_sbom::config`, making `shared::error::SbomError` (binary copy) and
+/// `uv_sbom::shared::error::SbomError` (library copy) distinct types; a
+/// downcast-based renderer in the CLI layer would silently fail depending on
+/// which copy raised the error. `ConfigError` lives only in the library, with
+/// no binary-side shadow type, avoiding that pitfall entirely.
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    /// `generate_config_template` was asked to write `filename` into `dir`, but
+    /// a file with that name already exists there.
+    #[error("{filename} already exists in {dir}. Use a different directory or remove the existing file.")]
+    TemplateAlreadyExists {
+        filename: &'static str,
+        dir: PathBuf,
+    },
+
+    /// `generate_config_template` failed to write the template file to `path`.
+    #[error("Failed to write config template to: {path}")]
+    TemplateWriteFailed {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// `load_config_from_path` failed to read the config file at `path`.
+    #[error("Failed to read config file: {path}\n\n💡 Hint: Check that the file exists and is readable.")]
+    ReadFailed {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// `load_config_from_path` read `path` successfully but its contents are
+    /// not valid YAML matching [`ConfigFile`]'s schema.
+    #[error("Failed to parse config file: {path}\n\n💡 Hint: Ensure the file contains valid YAML syntax.")]
+    ParseFailed {
+        path: PathBuf,
+        #[source]
+        source: serde_yaml_ng::Error,
+    },
+
+    /// `validate_config` found an `ignore_cves` entry at `index` whose `id`
+    /// field is empty or whitespace-only.
+    #[error(
+        "Invalid config: ignore_cves[{index}].id must not be empty.\n\n\
+         💡 Hint: Each ignore_cves entry must have a non-empty 'id' field (e.g., \"CVE-2024-1234\")."
+    )]
+    EmptyIgnoreCveId { index: usize },
+
+    /// `validate_config` found a `license_policy.unknown` value that is not
+    /// one of `warn`, `deny`, or `allow`.
+    #[error(
+        "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"{value}\""
+    )]
+    InvalidUnknownLicenseHandling { value: String },
+}
 
 /// Template content for `uv-sbom.config.yml`.
 const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
@@ -81,23 +146,22 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 ///
 /// Returns the absolute path of the created file on success.
 /// Returns an error if the file already exists.
-pub fn generate_config_template(dir: &Path) -> Result<std::path::PathBuf> {
+pub fn generate_config_template(dir: &Path) -> Result<PathBuf, ConfigError> {
     let file_path = dir.join(CONFIG_FILENAME);
 
     if file_path.exists() {
         let abs_path = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
-        bail!(
-            "{} already exists in {}. Use a different directory or remove the existing file.",
-            CONFIG_FILENAME,
-            abs_path.display()
-        );
+        return Err(ConfigError::TemplateAlreadyExists {
+            filename: CONFIG_FILENAME,
+            dir: abs_path,
+        });
     }
 
-    std::fs::write(&file_path, CONFIG_TEMPLATE).with_context(|| {
-        format!(
-            "Failed to write config template to: {}",
-            file_path.display()
-        )
+    std::fs::write(&file_path, CONFIG_TEMPLATE).map_err(|source| {
+        ConfigError::TemplateWriteFailed {
+            path: file_path.clone(),
+            source,
+        }
     })?;
 
     let abs_path = file_path
@@ -156,20 +220,17 @@ impl IgnoreCve {
 /// warned about here: this function has no `Locale`, so emitting a localized,
 /// user-facing warning is the caller's responsibility (see
 /// `cli::config_resolver::loader::load_config`).
-pub fn load_config_from_path(path: &Path) -> Result<ConfigFile> {
-    let content = std::fs::read_to_string(path).with_context(|| {
-        format!(
-            "Failed to read config file: {}\n\n💡 Hint: Check that the file exists and is readable.",
-            path.display()
-        )
+pub fn load_config_from_path(path: &Path) -> Result<ConfigFile, ConfigError> {
+    let content = std::fs::read_to_string(path).map_err(|source| ConfigError::ReadFailed {
+        path: path.to_path_buf(),
+        source,
     })?;
 
-    let config: ConfigFile = serde_yaml_ng::from_str(&content).with_context(|| {
-        format!(
-            "Failed to parse config file: {}\n\n💡 Hint: Ensure the file contains valid YAML syntax.",
-            path.display()
-        )
-    })?;
+    let config: ConfigFile =
+        serde_yaml_ng::from_str(&content).map_err(|source| ConfigError::ParseFailed {
+            path: path.to_path_buf(),
+            source,
+        })?;
 
     validate_config(&config)?;
 
@@ -177,7 +238,7 @@ pub fn load_config_from_path(path: &Path) -> Result<ConfigFile> {
 }
 
 /// Auto-discover config in a directory. Returns `None` silently if not found.
-pub fn discover_config(dir: &Path) -> Result<Option<ConfigFile>> {
+pub fn discover_config(dir: &Path) -> Result<Option<ConfigFile>, ConfigError> {
     let config_path = dir.join(CONFIG_FILENAME);
 
     if !config_path.exists() {
@@ -189,15 +250,11 @@ pub fn discover_config(dir: &Path) -> Result<Option<ConfigFile>> {
 }
 
 /// Validate the loaded configuration.
-fn validate_config(config: &ConfigFile) -> Result<()> {
+fn validate_config(config: &ConfigFile) -> Result<(), ConfigError> {
     if let Some(ref ignore_cves) = config.ignore_cves {
         for (i, entry) in ignore_cves.iter().enumerate() {
             if entry.id.trim().is_empty() {
-                bail!(
-                    "Invalid config: ignore_cves[{}].id must not be empty.\n\n\
-                     💡 Hint: Each ignore_cves entry must have a non-empty 'id' field (e.g., \"CVE-2024-1234\").",
-                    i
-                );
+                return Err(ConfigError::EmptyIgnoreCveId { index: i });
             }
         }
     }
@@ -206,10 +263,9 @@ fn validate_config(config: &ConfigFile) -> Result<()> {
         if let Some(ref unknown) = lp.unknown {
             let valid = ["warn", "deny", "allow"];
             if !valid.contains(&unknown.to_lowercase().as_str()) {
-                bail!(
-                    "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"{}\"",
-                    unknown
-                );
+                return Err(ConfigError::InvalidUnknownLicenseHandling {
+                    value: unknown.clone(),
+                });
             }
         }
     }

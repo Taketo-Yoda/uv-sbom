@@ -72,6 +72,14 @@ pub struct Messages {
     pub info_config_template_created: &'static str,
     pub error_init_failed: &'static str,
 
+    // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
+    pub error_config_already_exists: &'static str,
+    pub error_config_template_write_failed: &'static str,
+    pub error_config_read_failed: &'static str,
+    pub error_config_parse_failed: &'static str,
+    pub error_config_empty_ignore_cve_id: &'static str,
+    pub error_config_invalid_unknown_license_handling: &'static str,
+
     // Progress messages (use case layer)
     pub progress_loading_lockfile: &'static str,
     pub progress_detected_packages: &'static str,
@@ -338,6 +346,14 @@ static EN_MESSAGES: Messages = Messages {
     info_config_template_created: "Created {} in {}",
     error_init_failed: "Error: {}",
 
+    // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
+    error_config_already_exists: "{} already exists in {}. Use a different directory or remove the existing file.",
+    error_config_template_write_failed: "Failed to write config template to: {}",
+    error_config_read_failed: "Failed to read config file: {}\n\n💡 Hint: Check that the file exists and is readable.",
+    error_config_parse_failed: "Failed to parse config file: {}\n\n💡 Hint: Ensure the file contains valid YAML syntax.",
+    error_config_empty_ignore_cve_id: "Invalid config: ignore_cves[{}].id must not be empty.\n\n💡 Hint: Each ignore_cves entry must have a non-empty 'id' field (e.g., \"CVE-2024-1234\").",
+    error_config_invalid_unknown_license_handling: "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"{}\"",
+
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
     progress_detected_packages: "✅ Detected {} package(s)",
@@ -572,6 +588,14 @@ static JA_MESSAGES: Messages = Messages {
     error_caused_by: "原因: {}",
     info_config_template_created: "{} を {} に作成しました",
     error_init_failed: "エラー: {}",
+
+    // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
+    error_config_already_exists: "{} は {} に既に存在します。別のディレクトリを指定するか、既存のファイルを削除してください。",
+    error_config_template_write_failed: "設定テンプレートの書き込みに失敗しました: {}",
+    error_config_read_failed: "設定ファイルの読み込みに失敗しました: {}\n\n💡 ヒント: ファイルが存在し、読み取り可能であることを確認してください。",
+    error_config_parse_failed: "設定ファイルの解析に失敗しました: {}\n\n💡 ヒント: ファイルが有効な YAML 構文であることを確認してください。",
+    error_config_empty_ignore_cve_id: "設定が不正です: ignore_cves[{}].id は空にできません。\n\n💡 ヒント: ignore_cves の各エントリには空でない 'id' フィールドが必要です（例: \"CVE-2024-1234\"）。",
+    error_config_invalid_unknown_license_handling: "設定が不正です: license_policy.unknown は warn, deny, allow のいずれかである必要があります。指定値: \"{}\"",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -1049,6 +1073,121 @@ mod tests {
             Messages::format(msgs.error_init_failed, &["permission denied"]),
             "エラー: permission denied"
         );
+    }
+
+    #[test]
+    fn test_messages_config_errors_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            Messages::format(
+                msgs.error_config_already_exists,
+                &["uv-sbom.config.yml", "/tmp/project"]
+            ),
+            "uv-sbom.config.yml already exists in /tmp/project. Use a different directory or remove the existing file."
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_template_write_failed, &["/tmp/x.yml"]),
+            "Failed to write config template to: /tmp/x.yml"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_read_failed, &["/tmp/x.yml"]),
+            "Failed to read config file: /tmp/x.yml\n\n💡 Hint: Check that the file exists and is readable."
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_parse_failed, &["/tmp/x.yml"]),
+            "Failed to parse config file: /tmp/x.yml\n\n💡 Hint: Ensure the file contains valid YAML syntax."
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_empty_ignore_cve_id, &["2"]),
+            "Invalid config: ignore_cves[2].id must not be empty.\n\n💡 Hint: Each ignore_cves entry must have a non-empty 'id' field (e.g., \"CVE-2024-1234\")."
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_invalid_unknown_license_handling, &["maybe"]),
+            "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"maybe\""
+        );
+    }
+
+    #[test]
+    fn test_messages_config_errors_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            Messages::format(
+                msgs.error_config_already_exists,
+                &["uv-sbom.config.yml", "/tmp/project"]
+            ),
+            "uv-sbom.config.yml は /tmp/project に既に存在します。別のディレクトリを指定するか、既存のファイルを削除してください。"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_template_write_failed, &["/tmp/x.yml"]),
+            "設定テンプレートの書き込みに失敗しました: /tmp/x.yml"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_read_failed, &["/tmp/x.yml"]),
+            "設定ファイルの読み込みに失敗しました: /tmp/x.yml\n\n💡 ヒント: ファイルが存在し、読み取り可能であることを確認してください。"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_parse_failed, &["/tmp/x.yml"]),
+            "設定ファイルの解析に失敗しました: /tmp/x.yml\n\n💡 ヒント: ファイルが有効な YAML 構文であることを確認してください。"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_empty_ignore_cve_id, &["2"]),
+            "設定が不正です: ignore_cves[2].id は空にできません。\n\n💡 ヒント: ignore_cves の各エントリには空でない 'id' フィールドが必要です（例: \"CVE-2024-1234\"）。"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_invalid_unknown_license_handling, &["maybe"]),
+            "設定が不正です: license_policy.unknown は warn, deny, allow のいずれかである必要があります。指定値: \"maybe\""
+        );
+    }
+
+    #[test]
+    fn test_messages_config_errors_placeholder_parity() {
+        // EN and JA templates must have the same number of `{}` placeholders,
+        // in the same semantic order, since Messages::format fills them
+        // positionally.
+        let pairs = [
+            (
+                EN_MESSAGES.error_config_already_exists,
+                JA_MESSAGES.error_config_already_exists,
+                2,
+            ),
+            (
+                EN_MESSAGES.error_config_template_write_failed,
+                JA_MESSAGES.error_config_template_write_failed,
+                1,
+            ),
+            (
+                EN_MESSAGES.error_config_read_failed,
+                JA_MESSAGES.error_config_read_failed,
+                1,
+            ),
+            (
+                EN_MESSAGES.error_config_parse_failed,
+                JA_MESSAGES.error_config_parse_failed,
+                1,
+            ),
+            (
+                EN_MESSAGES.error_config_empty_ignore_cve_id,
+                JA_MESSAGES.error_config_empty_ignore_cve_id,
+                1,
+            ),
+            (
+                EN_MESSAGES.error_config_invalid_unknown_license_handling,
+                JA_MESSAGES.error_config_invalid_unknown_license_handling,
+                1,
+            ),
+        ];
+        for (en, ja, expected_count) in pairs {
+            let en_count = en.matches("{}").count();
+            let ja_count = ja.matches("{}").count();
+            assert_eq!(
+                en_count, ja_count,
+                "EN/JA placeholder count mismatch for {en:?}"
+            );
+            assert_eq!(
+                en_count, expected_count,
+                "unexpected placeholder count for {en:?}"
+            );
+        }
     }
 
     #[test]

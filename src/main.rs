@@ -20,6 +20,7 @@ use application::read_models::SbomReadModelBuilder;
 use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase};
 use clap::Parser;
 use cli::config_resolver::{load_config, merge_config, MergedConfig};
+use cli::error_display::{render_config_error, render_error_chain};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFindings};
 use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
@@ -197,19 +198,12 @@ fn print_startup_warnings(
 ///
 /// Extracted from three identical `Err(e)` arms in `main()` (workspace mode,
 /// diff mode, and normal mode) to avoid triplicating the same i18n-routed
-/// error-reporting logic.
+/// error-reporting logic. Delegates the actual rendering to
+/// `cli::error_display::render_error_chain`, which is independently unit
+/// tested and is the only place that knows how to localize a typed error
+/// (e.g. `ConfigError`) found at the head of the chain.
 fn print_error_chain(e: &anyhow::Error, msgs: &Messages) {
-    eprintln!("\n{}\n", msgs.error_header);
-    eprintln!("{}", e);
-
-    let mut source = e.source();
-    while let Some(err) = source {
-        let cause = err.to_string();
-        eprintln!("\n{}", Messages::format(msgs.error_caused_by, &[&cause]));
-        source = err.source();
-    }
-
-    eprintln!();
+    eprint!("{}", render_error_chain(e, msgs));
 }
 
 /// CLI-only `SbomRequest` fields that intentionally have no config-file tier
@@ -424,7 +418,7 @@ async fn main() {
                 process::exit(ExitCode::Success.as_i32());
             }
             Err(e) => {
-                let err_text = e.to_string();
+                let err_text = render_config_error(&e, msgs);
                 eprintln!("{}", Messages::format(msgs.error_init_failed, &[&err_text]));
                 process::exit(ExitCode::ApplicationError.as_i32());
             }
