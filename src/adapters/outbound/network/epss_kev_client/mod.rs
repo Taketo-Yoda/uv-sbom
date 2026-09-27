@@ -22,14 +22,12 @@ use dto::{EpssApiResponse, KevCatalogResponse};
 /// A failed fetch soft-fails: affected CVEs get no exploitability data rather than
 /// aborting the run.
 #[derive(Clone)]
-#[allow(dead_code)] // WIRE(#878): remove when main.rs constructs EpssKevClient
 pub struct EpssKevClient {
     client: Client,
     epss_base_url: String,
     kev_url: String,
 }
 
-#[allow(dead_code)] // WIRE(#878): remove when main.rs constructs EpssKevClient
 impl EpssKevClient {
     const EPSS_API_BASE: &'static str = "https://api.first.org/data/v1/epss";
     const KEV_CATALOG_URL: &'static str =

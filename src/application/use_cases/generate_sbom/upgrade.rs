@@ -3,8 +3,8 @@ use crate::application::dto::SbomRequest;
 use crate::application::use_cases::SimulateUpgradesUseCase;
 use crate::i18n::Messages;
 use crate::ports::outbound::{
-    LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
-    ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
+    ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::services::{ResolutionAnalyzer, UpgradeAdvisor};
 use crate::sbom_generation::domain::{
@@ -12,8 +12,8 @@ use crate::sbom_generation::domain::{
     UvLockSimulator,
 };
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -23,6 +23,7 @@ where
     MREPO: MaintenanceRepository + Clone,
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
+    EREPO: ExploitabilityRepository,
 {
     /// Runs the UpgradeAdvisor when `suggest_fix` is true and the required context is available
     ///

@@ -10,8 +10,8 @@ use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::{determine_diff_source, FileSystemReader, GitLockfileReader};
 use adapters::outbound::formatters::{DiffJsonFormatter, DiffMarkdownFormatter};
 use adapters::outbound::network::{
-    CachingPyPiLicenseRepository, OsvClient, PyPiCompatibilityClient, PyPiLicenseRepository,
-    PyPiMaintenanceRepository,
+    CachingPyPiLicenseRepository, EpssKevClient, OsvClient, PyPiCompatibilityClient,
+    PyPiLicenseRepository, PyPiMaintenanceRepository,
 };
 use adapters::outbound::uv::{UvLockAdapter, UvWorkspaceReader};
 use application::dto::{DiffRequest, OutputFormat, SbomRequest, SbomResponse};
@@ -98,6 +98,7 @@ type WiredSbomUseCase<LR> = GenerateSbomUseCase<
     PyPiMaintenanceRepository,
     PyPiCompatibilityClient,
     UvLockAdapter,
+    EpssKevClient,
 >;
 
 /// Builds a fully-wired `GenerateSbomUseCase` from the resolved config.
@@ -143,6 +144,13 @@ fn build_use_case<LR: LockfileReader>(
     // function returns.
     let uv_lock_simulator = Some(UvLockAdapter::new());
 
+    // Create exploitability repository if exploitability enrichment is requested
+    let exploitability_repository = if merged.check_exploitability {
+        Some(EpssKevClient::new()?)
+    } else {
+        None
+    };
+
     Ok(GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
@@ -152,6 +160,7 @@ fn build_use_case<LR: LockfileReader>(
         maintenance_repository,
         compatibility_repository,
         uv_lock_simulator,
+        exploitability_repository,
         locale,
     ))
 }
@@ -259,6 +268,7 @@ fn build_sbom_request(
         .check_abandoned(merged.check_abandoned)
         .abandoned_threshold_days(merged.abandoned_threshold_days)
         .check_non_pypi(merged.check_non_pypi)
+        .check_exploitability(merged.check_exploitability)
         .exclude_groups(exclude_groups)
         .target_python(merged.target_python.clone())
         .explain_package(cli_only.explain_package)

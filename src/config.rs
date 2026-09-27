@@ -133,6 +133,9 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 # Detect packages sourced from non-PyPI origins (git, path, url, private registries)
 # check_non_pypi: false
 
+# Enrich CVE results with EPSS scores and CISA KEV status (requires check_cve: true)
+# check_exploitability: false
+
 # Dependency groups to exclude from the SBOM (e.g. dev, test, lint)
 # exclude_groups:
 #   - "dev"
@@ -185,6 +188,7 @@ pub struct ConfigFile {
     pub check_abandoned: Option<bool>,
     pub abandoned_threshold_days: Option<u64>,
     pub check_non_pypi: Option<bool>,
+    pub check_exploitability: Option<bool>,
     pub exclude_groups: Option<Vec<String>>,
     pub target_python: Option<String>,
     /// Captures unknown fields for warnings.
