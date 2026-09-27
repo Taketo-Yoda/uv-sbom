@@ -2,8 +2,8 @@ use super::GenerateSbomUseCase;
 use crate::application::dto::SbomRequest;
 use crate::i18n::Messages;
 use crate::ports::outbound::{
-    LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
-    ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
+    ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::services::GroupReachabilityAnalyzer;
 use crate::sbom_generation::domain::{DependencyGraph, Package, PackageName, UvLockSimulator};
@@ -15,8 +15,8 @@ use crate::shared::Result;
 pub(super) type PackagesWithDependencyMap =
     (Vec<Package>, std::collections::HashMap<String, Vec<String>>);
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -26,6 +26,7 @@ where
     MREPO: MaintenanceRepository + Clone,
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
+    EREPO: ExploitabilityRepository,
 {
     /// Reads and parses the lockfile, reporting progress
     ///

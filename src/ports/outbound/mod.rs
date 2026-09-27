@@ -26,8 +26,6 @@ pub mod workspace_reader;
 // `adapters::outbound::uv::UvLockAdapter`.
 
 pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
-// Note: Will be used in subsequent subtask (CLI/config wiring)
-#[allow(unused_imports)]
 pub use exploitability_repository::ExploitabilityRepository;
 pub use formatter::SbomFormatter;
 pub use license_repository::{LicenseRepository, PyPiMetadata};

@@ -17,8 +17,8 @@ use crate::application::use_cases::{
 };
 use crate::i18n::Messages;
 use crate::ports::outbound::{
-    LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
-    ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
+    ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::{
@@ -32,8 +32,8 @@ use chrono::Utc;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -43,6 +43,7 @@ where
     MREPO: MaintenanceRepository + Clone,
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
+    EREPO: ExploitabilityRepository,
 {
     /// Checks for abandoned packages if `check_abandoned` is enabled.
     ///
@@ -423,6 +424,57 @@ where
 
         // Return Some even if empty (indicates check was performed)
         Ok(Some(vulnerabilities))
+    }
+
+    /// Enriches vulnerability results with EPSS scores and CISA KEV status.
+    ///
+    /// Skipped when `check_exploitability` is disabled, no exploitability repository
+    /// is configured, or no vulnerabilities were found. Soft-fails: network errors
+    /// produce an empty result rather than aborting the run.
+    pub(super) async fn enrich_exploitability_if_requested(
+        &self,
+        request: &SbomRequest,
+        vulnerability_report: &mut Option<
+            Vec<crate::sbom_generation::domain::PackageVulnerabilities>,
+        >,
+    ) {
+        if !request.check_exploitability {
+            return;
+        }
+        let Some(repo) = &self.exploitability_repository else {
+            return;
+        };
+        let Some(report) = vulnerability_report.as_mut() else {
+            return;
+        };
+
+        let cve_ids: Vec<String> = report
+            .iter()
+            .flat_map(|pv| pv.vulnerabilities().iter())
+            .map(|v| v.id().to_string())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        if cve_ids.is_empty() {
+            return;
+        }
+
+        self.progress_reporter
+            .report("Fetching exploitability data (EPSS/KEV)...");
+
+        let exploitability_map = match repo.fetch_exploitability(cve_ids).await {
+            Ok(map) => map,
+            Err(_) => return,
+        };
+
+        for pv in report.iter_mut() {
+            for vuln in pv.vulnerabilities_mut() {
+                if let Some(info) = exploitability_map.get(vuln.id()) {
+                    vuln.set_exploitability(Some(*info));
+                }
+            }
+        }
     }
 
     /// Builds ThresholdConfig from SbomRequest options

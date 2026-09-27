@@ -81,6 +81,10 @@ pub struct Args {
     #[arg(long)]
     pub check_non_pypi: bool,
 
+    /// Enrich CVE results with EPSS scores and CISA KEV status (requires CVE checking)
+    #[arg(long, conflicts_with = "no_check_cve")]
+    pub check_exploitability: bool,
+
     /// Allowed license patterns (comma-separated, requires --check-license)
     /// Supports wildcards: "MIT,Apache-2.0,BSD-*"
     #[arg(long, value_delimiter = ',', requires = "check_license")]

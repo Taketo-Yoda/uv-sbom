@@ -6,8 +6,8 @@ mod upgrade;
 use crate::application::dto::{SbomRequest, SbomResponse};
 use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
-    LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
-    ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
+    ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::services::VulnerabilityChecker;
 use crate::sbom_generation::domain::UvLockSimulator;
@@ -27,7 +27,9 @@ use crate::shared::Result;
 /// * `MREPO` - MaintenanceRepository implementation (optional)
 /// * `PCREPO` - PythonCompatibilityRepository implementation (optional)
 /// * `USIM` - UvLockSimulator implementation (optional)
-pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = (), USIM = ()> {
+/// * `EREPO` - ExploitabilityRepository implementation (optional)
+pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = (), USIM = (), EREPO = ()>
+{
     lockfile_reader: LR,
     project_config_reader: PCR,
     license_repository: LREPO,
@@ -36,11 +38,12 @@ pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = (), US
     maintenance_repository: Option<MREPO>,
     compatibility_repository: Option<PCREPO>,
     uv_lock_simulator: Option<USIM>,
+    exploitability_repository: Option<EREPO>,
     locale: Locale,
 }
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -50,6 +53,7 @@ where
     MREPO: MaintenanceRepository + Clone,
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
+    EREPO: ExploitabilityRepository,
 {
     /// Creates a new GenerateSbomUseCase with injected dependencies
     #[allow(clippy::too_many_arguments)]
@@ -62,6 +66,7 @@ where
         maintenance_repository: Option<MREPO>,
         compatibility_repository: Option<PCREPO>,
         uv_lock_simulator: Option<USIM>,
+        exploitability_repository: Option<EREPO>,
         locale: Locale,
     ) -> Self {
         Self {
@@ -73,6 +78,7 @@ where
             maintenance_repository,
             compatibility_repository,
             uv_lock_simulator,
+            exploitability_repository,
             locale,
         }
     }
@@ -113,9 +119,13 @@ where
         let enriched_packages = self.fetch_license_info(filtered_packages.clone()).await?;
 
         // Step 5: CVE check if requested
-        let vulnerability_report = self
+        let mut vulnerability_report = self
             .check_vulnerabilities_if_requested(&request, &filtered_packages)
             .await?;
+
+        // Step 5.5: Enrich vulnerabilities with EPSS scores and CISA KEV status
+        self.enrich_exploitability_if_requested(&request, &mut vulnerability_report)
+            .await;
 
         // Step 6: Apply threshold evaluation if vulnerabilities were found
         let vulnerability_check_result = vulnerability_report.as_ref().map(|report| {
@@ -310,6 +320,7 @@ mod tests {
             MockMaintenanceRepository,
             MockPythonCompatibilityRepository,
             MockUvLockSimulator,
+            (),
         >;
 
         pub(crate) struct UseCaseBuilder {
@@ -411,6 +422,7 @@ mod tests {
                     self.maint,
                     self.pyc,
                     self.sim,
+                    None::<()>,
                     Locale::default(),
                 )
             }

@@ -35,6 +35,8 @@ pub struct MergedConfig {
     pub check_abandoned: bool,
     pub abandoned_threshold_days: u64,
     pub check_non_pypi: bool,
+    /// Whether to enrich CVE results with EPSS scores and CISA KEV status.
+    pub check_exploitability: bool,
     /// Dependency groups whose exclusively-reachable packages should be excluded from the SBOM.
     /// Populated from `--exclude-groups` (CLI) or `exclude_groups` (config file).
     /// When `--production-only` is set, `main.rs` overrides this with all group names from the
@@ -96,6 +98,10 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedCo
     let suggest_fix = resolve_flag(args.suggest_fix, cfg.and_then(|c| c.suggest_fix));
     let check_abandoned = resolve_flag(args.check_abandoned, cfg.and_then(|c| c.check_abandoned));
     let check_non_pypi = resolve_flag(args.check_non_pypi, cfg.and_then(|c| c.check_non_pypi));
+    let check_exploitability = resolve_flag(
+        args.check_exploitability,
+        cfg.and_then(|c| c.check_exploitability),
+    );
     let abandoned_threshold_days = resolve_abandoned_threshold_days(
         args.abandoned_threshold_days,
         cfg.and_then(|c| c.abandoned_threshold_days),
@@ -118,6 +124,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedCo
         check_abandoned,
         abandoned_threshold_days,
         check_non_pypi,
+        check_exploitability,
         exclude_groups,
         target_python,
     })
