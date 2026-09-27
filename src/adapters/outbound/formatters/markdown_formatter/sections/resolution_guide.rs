@@ -18,6 +18,8 @@ pub(in super::super) fn render(
     output.push_str(messages.desc_transitive_vuln_table);
     output.push_str("\n\n");
 
+    let show_exploitability = guide.entries.iter().any(|e| e.epss_percentile.is_some());
+
     // Build column list — optional "Recommended Action" column included only when
     // upgrade_recommendations is provided.
     let mut columns: Vec<&str> = vec![
@@ -31,6 +33,10 @@ pub(in super::super) fn render(
         columns.push(messages.col_recommended_action);
     }
     columns.push(messages.col_vuln_id);
+    if show_exploitability {
+        columns.push(messages.col_exploited_kev);
+        columns.push(messages.col_epss);
+    }
 
     output.push_str(&format!("| {} |\n", columns.join(" | ")));
     output.push_str(&super::super::table::make_separator(&columns));
@@ -69,6 +75,17 @@ pub(in super::super) fn render(
         cells.push(super::super::links::vulnerability_id_to_link(
             &entry.vulnerability_id,
         ));
+        if show_exploitability {
+            let kev_display = entry
+                .in_kev
+                .map_or("-", |kev| if kev { "Yes" } else { "No" });
+            let epss_display = entry
+                .epss_percentile
+                .map(super::super::vuln_render::format_epss_percentile)
+                .unwrap_or_else(|| "-".to_string());
+            cells.push(kev_display.to_string());
+            cells.push(epss_display);
+        }
 
         output.push_str(&format!("| {} |\n", cells.join(" | ")));
     }
@@ -207,6 +224,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -245,6 +264,8 @@ mod tests {
                     },
                 ],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -289,6 +310,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -315,6 +338,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
@@ -349,6 +374,8 @@ mod tests {
                     version: "0.25.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
@@ -380,6 +407,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
@@ -415,6 +444,8 @@ mod tests {
                     "httpcore".to_string(),
                     "urllib3".to_string(),
                 ]],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -441,6 +472,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![vec!["requests".to_string(), "requests".to_string()]],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -477,6 +510,8 @@ mod tests {
                         "urllib3".to_string(),
                     ],
                 ],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -503,6 +538,8 @@ mod tests {
                         version: "2.31.0".to_string(),
                     }],
                     dependency_chains: vec![vec!["requests".to_string(), "requests".to_string()]],
+                    epss_percentile: None,
+                    in_kev: None,
                 },
                 ResolutionEntryView {
                     vulnerable_package: "urllib3".to_string(),
@@ -519,6 +556,8 @@ mod tests {
                         "httpcore".to_string(),
                         "urllib3".to_string(),
                     ]],
+                    epss_percentile: None,
+                    in_kev: None,
                 },
             ],
         });
@@ -550,6 +589,8 @@ mod tests {
                     "httpcore".to_string(),
                     "urllib3".to_string(),
                 ]],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -577,6 +618,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -602,6 +645,8 @@ mod tests {
                     version: "1.26.15".to_string(),
                 }],
                 dependency_chains: vec![vec!["urllib3".to_string()]],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -627,6 +672,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
         // upgrade_recommendations is None (default in test model)

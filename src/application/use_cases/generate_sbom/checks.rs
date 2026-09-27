@@ -460,8 +460,9 @@ where
             return;
         }
 
+        let msgs = Messages::for_locale(self.locale);
         self.progress_reporter
-            .report("Fetching exploitability data (EPSS/KEV)...");
+            .report(msgs.progress_fetching_exploitability);
 
         let exploitability_map = match repo.fetch_exploitability(cve_ids).await {
             Ok(map) => map,

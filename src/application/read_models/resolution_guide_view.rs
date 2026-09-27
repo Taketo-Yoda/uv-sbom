@@ -38,6 +38,10 @@ pub struct ResolutionEntryView {
     /// Populated by the builder (Issue #498) and rendered in the Markdown
     /// "Dependency Chains" subsection when chains are multi-hop (len > 2).
     pub dependency_chains: Vec<Vec<String>>,
+    /// EPSS percentile (0.0–1.0), populated when `--check-exploitability` was used
+    pub epss_percentile: Option<f32>,
+    /// Whether this vulnerability is in the CISA Known Exploited Vulnerabilities catalog
+    pub in_kev: Option<bool>,
 }
 
 /// View representation of a direct dependency that introduces a vulnerable package
@@ -72,6 +76,8 @@ mod tests {
                 version: "2.28.0".to_string(),
             }],
             dependency_chains: vec![vec!["requests".to_string(), "urllib3".to_string()]],
+            epss_percentile: None,
+            in_kev: None,
         };
 
         assert_eq!(entry.vulnerable_package, "urllib3");
@@ -96,6 +102,8 @@ mod tests {
             vulnerability_id: "CVE-2024-0001".to_string(),
             introduced_by: vec![],
             dependency_chains: vec![],
+            epss_percentile: None,
+            in_kev: None,
         };
 
         assert_eq!(entry.fixed_version, None);

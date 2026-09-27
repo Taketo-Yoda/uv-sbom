@@ -224,6 +224,8 @@ mod tests {
                     fixed_version,
                     description: None,
                     source_url: None,
+                    epss_percentile: None,
+                    in_kev: None,
                 }],
                 informational: vec![],
                 summary: VulnerabilitySummary {
@@ -355,6 +357,8 @@ mod tests {
                 fixed_version: fixed_version.map(str::to_string),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             }
         }
     }
@@ -761,6 +765,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
@@ -892,6 +898,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -991,6 +999,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -1054,6 +1064,8 @@ mod tests {
                     version: "2.31.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
