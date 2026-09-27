@@ -25,6 +25,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - 💾 Output to stdout or file
 - 🛡️ Robust error handling with helpful error messages and suggestions
 - 📈 Progress tracking during license information retrieval
+- 🎯 **Exploitability Prioritization** - Enriches CVE results with EPSS scores (FIRST.org) and CISA KEV catalog status, helping prioritize vulnerabilities by real-world exploitation likelihood
 
 ## Scope and Key Differences from CycloneDX
 
@@ -328,6 +329,9 @@ license_policy:
   allow: ["MIT", "Apache-2.0", "BSD-*", "ISC", "PSF-2.0"]
   deny: ["GPL-3.0-only", "GPL-3.0-or-later", "AGPL-*"]
   unknown: "warn"  # "warn" | "deny" | "allow"
+
+# Enrich CVE results with EPSS scores and CISA KEV status
+# check_exploitability: false
 ```
 
 #### Config File Schema Reference
@@ -350,6 +354,7 @@ license_policy:
 | `abandoned_threshold_days` | integer | No | Inactivity threshold in days for abandoned package detection (default: 730) |
 | `check_non_pypi` | bool | No | Enable non-PyPI source detection (opt-in, default: false) |
 | `exclude_groups` | string[] | No | Dependency groups whose exclusively-reachable packages are excluded from the SBOM |
+| `check_exploitability` | bool | No | Enrich CVE results with EPSS scores and CISA KEV status (opt-in, default: false) |
 | `target_python` | string | No | Target Python version for compatibility checking (PEP 440 format, e.g. `"3.8"`). Unset disables the check |
 
 #### Priority and Merge Rules
@@ -362,6 +367,7 @@ license_policy:
 - **`--license-allow`** and **`--license-deny`** CLI options **override** config file `license_policy.allow` / `license_policy.deny` entirely (not merged)
 - **`check_abandoned`** is opt-in (default: false). Enable via CLI flag `--check-abandoned` or config file `check_abandoned: true`. The `abandoned_threshold_days` value follows CLI > config file > default (730) resolution order.
 - **`check_non_pypi`** is opt-in (default: false). Enable via CLI flag `--check-non-pypi` or config file `check_non_pypi: true`.
+- **`check_exploitability`** is opt-in (default: false). Enable via CLI flag `--check-exploitability` or config file `check_exploitability: true`. Requires CVE checking (conflicts with `--no-check-cve`).
 - **`exclude_groups`**: CLI `--exclude-groups` **overrides** the config file value entirely (not merged). `--production-only` resolves all group names from the lockfile at runtime and takes precedence over both CLI and config.
 - **`target_python`** is opt-in (default: unset, no check performed). Enable via CLI flag `--target-python 3.8` or config file `target_python: "3.8"`. CLI value takes precedence over the config file.
 
@@ -588,6 +594,55 @@ uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdow
 **Config file equivalent:**
 ```yaml
 target_python: "3.8"
+```
+
+### Exploitability Prioritization (`--check-exploitability`)
+
+Use the `--check-exploitability` option to enrich CVE results with real-world exploitation data from two authoritative sources:
+
+- **EPSS** (Exploit Prediction Scoring System) from [FIRST.org](https://www.first.org/epss/) — a percentile ranking indicating the likelihood that a CVE will be exploited in the wild within the next 30 days
+- **CISA KEV** (Known Exploited Vulnerabilities) catalog from [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — a curated list of CVEs with confirmed active exploitation
+
+```bash
+# Enrich vulnerability results with EPSS and KEV data
+uv-sbom --check-exploitability --format markdown
+
+# Combine with other checks
+uv-sbom --check-exploitability --severity-threshold high --check-license
+```
+
+**How it works:**
+- Fetches EPSS scores and percentiles from the FIRST.org EPSS API (`https://api.first.org/data/v1/epss`)
+- Downloads the CISA KEV JSON feed to check whether each CVE has confirmed active exploitation
+- Results are displayed as two additional columns in the vulnerability table and resolution guide
+- If exploitability data is not available for any CVE, the columns are omitted entirely
+
+**Output:**
+- **Exploited (KEV) column**: Shows "Yes" for CVEs in the CISA KEV catalog, "No" otherwise
+- **EPSS column**: Shows the EPSS percentile as an ordinal string (e.g., "97th percentile")
+- These columns appear only when at least one CVE has exploitability data
+
+**Example output:**
+```markdown
+## Vulnerability Report
+
+| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID | Exploited (KEV) | EPSS |
+|---------|----------------|---------------|------|----------|--------|-----------------|------|
+| urllib3 | 2.0.4 | 2.0.7 | 9.8 | 🔴 CRITICAL | CVE-2023-45803 | No | 97th percentile |
+| requests | 2.31.0 | 2.32.0 | 5.6 | 🟡 MEDIUM | CVE-2024-35195 | No | 22nd percentile |
+```
+
+**Config file equivalent:**
+```yaml
+check_exploitability: true
+```
+
+> **Note:** `--check-exploitability` requires CVE checking to be enabled and conflicts with `--no-check-cve`. It adds two network requests (FIRST.org EPSS API and CISA KEV catalog feed) per SBOM generation.
+
+For a demo with real output, run against any project with known CVEs:
+
+```bash
+uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
 ```
 
 ### Dependency Explanation (`--explain`)
@@ -1213,6 +1268,8 @@ Options:
       --check-abandoned              Check for abandoned/unmaintained packages (no upstream release within threshold days)
       --abandoned-threshold-days <DAYS>  Inactivity threshold in days for abandoned-package detection (default: 730)
       --check-non-pypi               Check for packages sourced from non-PyPI origins (git, direct URL, private registries)
+      --check-exploitability         Enrich CVE results with EPSS scores and CISA KEV status
+                                     Cannot be used with --no-check-cve
       --license-allow <LIST>         Comma-separated list of allowed license patterns (overrides config)
       --license-deny <LIST>          Comma-separated list of denied license patterns (overrides config)
       --exclude-groups <GROUPS>      Exclude packages reachable only through the specified dependency groups (comma-separated)
@@ -1456,6 +1513,18 @@ Secondary dependencies introduced by the primary packages.
      - `/v1/querybatch` - Batch query for vulnerability IDs
      - `/v1/vulns/{vuln_id}` - Detailed vulnerability information
 
+4. **FIRST.org EPSS API**
+   - Domain: `https://api.first.org`
+   - Purpose: Fetch EPSS (Exploit Prediction Scoring System) scores and percentiles for CVEs
+   - When: Only when `--check-exploitability` flag is used
+   - Endpoint: `/data/v1/epss?cve=CVE-A,CVE-B,...` (batched)
+
+5. **CISA KEV (Known Exploited Vulnerabilities) Catalog**
+   - Domain: `https://www.cisa.gov`
+   - Purpose: Check whether CVEs have confirmed active exploitation
+   - When: Only when `--check-exploitability` flag is used
+   - Endpoint: `/sites/default/files/feeds/known_exploited_vulnerabilities.json`
+
 ### Firewall Configuration
 
 If you are behind a corporate firewall or proxy, ensure the following domains are on the allowlist:
@@ -1467,6 +1536,10 @@ pypi.org
 # Optional (for --verify-links only; OSV is accessed by default unless --no-check-cve)
 pypi.org       # Also used for --verify-links
 api.osv.dev    # Disabled only with --no-check-cve
+
+# Optional (for --check-exploitability only)
+api.first.org  # EPSS scores
+www.cisa.gov   # CISA KEV catalog
 ```
 
 ### Proxy Configuration
@@ -1576,6 +1649,13 @@ By default, this tool retrieves vulnerability data from [OSV (Open Source Vulner
 - License: CC-BY 4.0
 
 The OSV database is a collaborative effort to provide comprehensive, accurate, and accessible vulnerability information for open source software.
+
+### Exploitability Data
+
+When `--check-exploitability` is used, this tool retrieves data from:
+
+- **EPSS (Exploit Prediction Scoring System)** by [FIRST.org](https://www.first.org/epss/) — probabilistic scoring of CVE exploitation likelihood
+- **CISA KEV (Known Exploited Vulnerabilities)** catalog by [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — authoritative list of CVEs with confirmed active exploitation
 
 ## License
 
