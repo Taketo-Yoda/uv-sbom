@@ -51,6 +51,31 @@ Identify subtask boundaries using these dimensions:
 - If decomposition yields more than 7 subtasks → flag over-decomposition and suggest grouping before proceeding.
 - **Line-count target**: Aim for ≤ 200 changed lines per subtask PR. If a subtask is estimated to exceed this, consider splitting it further. This is a guideline, not a hard limit.
 
+#### Shared-Dependency Convergence Check (conditional)
+
+**Trigger**: two or more proposed subtasks each change a *different* call site, and all
+of them converge on the *same* shared module, type, or helper — whether that shared item
+is introduced by the parent Issue, by an earlier sibling subtask, or already exists.
+"Migrate N call sites onto a new shared helper" is the canonical shape.
+
+When triggered, answer both questions before finalizing any subtask's file list:
+
+| Question | If yes, add the file to |
+|----------|------------------------|
+| Does the shared item's own source carry a doc comment (e.g. a `//!` module doc) enumerating which callers have adopted it? | every subtask after the one that introduces the list |
+| Does a `CHANGELOG.md` entry describe the shared item's introduction and progressively list migrated callers ("N of M migrated so far")? | every subtask, including the first |
+
+Precedent: #853 was split into #858–#862, each migrating one network client onto the new
+`src/shared/response_size_guard.rs`. Both that module's `//!` adoption list and its
+`[Unreleased] > Security` CHANGELOG entry had to be extended by every subtask, but no
+subtask Issue body listed either file — each was rediscovered from scratch during that
+subtask's own `/implement` Architect review.
+
+These shared-file edits are small (one doc-list line, one CHANGELOG clause). They count
+toward the ≤ 200-line target, but are never a reason to split a subtask further, and must
+never be broken out into a separate "update the shared docs" subtask — that would make
+every sibling depend on it and defeat the goal of independently implementable slices.
+
 Present the proposed subtasks to the user in this format:
 
 ```
@@ -63,8 +88,18 @@ Proposed split for #<parent>:
 Dependencies:
 - #2 depends on #1 (reason)
 
+Shared files every converging subtask must also update:
+- `path/to/shared_item.rs` — [which subtasks, and what each adds]
+- `CHANGELOG.md` — [which subtasks, and what each extends]
+
 Proceed? (yes / adjust / cancel)
 ```
+
+**Always print the `Shared files` block**, even when the Shared-Dependency Convergence
+Check did not trigger — in that case print `- none — no shared-dependency convergence in
+this split` under it rather than omitting the block, so the user can see the check
+actually ran. Silently omitting the block on a "no" result is indistinguishable from
+forgetting to run the check at all.
 
 ### Step 3: Wait for Explicit Confirmation
 
@@ -130,6 +165,16 @@ Part of #<parent-number>
 other subtasks` is a bullet in `## Context & Constraints`, never a top-level heading, so
 that section names stay identical across all templates. Include `## Design Sketch` in the
 human section only if the subtask introduces or changes types.
+
+**Shared-file carry-over**: if Step 2's Shared-Dependency Convergence Check listed shared
+files for this subtask, those files MUST appear as their own numbered entries under
+`## Files to Update/Create` in the real Issue body — alongside the subtask's own call
+site, not instead of it — each stating what this specific subtask does to it (e.g.
+"add `PyPiLicenseRepository` to the adoption list", "extend the migrated-clients sentence
+to 4 of 4"). A subtask body that lists only its one call site has dropped the check's
+result. Mention the same two files in `## Scope > In` so the human section reflects them
+too — they are in the AI-only `<details>` block otherwise, and a reader who never expands
+it would miss them.
 
 Use the `gh` CLI. The body contains HTML tags and backticks — pass it via a quoted
 heredoc so the shell does not mangle `<details>` or fenced blocks:
