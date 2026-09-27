@@ -3,6 +3,7 @@
 /// These ports define the interfaces that the application core uses
 /// to interact with external systems (file system, network, console, etc.).
 pub mod diff_lockfile_reader;
+pub mod exploitability_repository;
 pub mod formatter;
 pub mod license_repository;
 pub mod lockfile_reader;
@@ -25,6 +26,9 @@ pub mod workspace_reader;
 // `adapters::outbound::uv::UvLockAdapter`.
 
 pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
+// Note: Will be used in subsequent subtask (CLI/config wiring)
+#[allow(unused_imports)]
+pub use exploitability_repository::ExploitabilityRepository;
 pub use formatter::SbomFormatter;
 pub use license_repository::{LicenseRepository, PyPiMetadata};
 pub use lockfile_reader::{
