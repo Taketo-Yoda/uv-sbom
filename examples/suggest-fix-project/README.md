@@ -93,7 +93,18 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix -f cyclonedx
   - `uv-sbom:recommended-action`: human-readable recommendation
   - `uv-sbom:resolved-version`: the transitive dep version after simulated upgrade
 
-### Step 4: Filter by severity
+### Step 4: With Exploitability Prioritization (`--check-exploitability`)
+
+```bash
+uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
+```
+
+**What you will see:**
+- "Exploited (KEV)" and "EPSS" columns added to the Vulnerability Report table
+- CVEs in the CISA KEV catalog show "Yes" in the Exploited column
+- EPSS percentile shown as an ordinal string (e.g., "97th percentile")
+
+### Step 5: Filter by severity
 
 ```bash
 # Only show HIGH and CRITICAL vulnerabilities
@@ -101,7 +112,7 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix \
   --severity-threshold high -f markdown
 ```
 
-### Step 5: Dependency tree visualization (`--show-dependency-tree`)
+### Step 6: Dependency tree visualization (`--show-dependency-tree`)
 
 This project's `httpx` → `httpcore` → `anyio` → `idna`/`sniffio` chain is 3 levels deep,
 which makes it the shipped example that can actually demonstrate the truncation indicator
