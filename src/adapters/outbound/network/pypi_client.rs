@@ -1,4 +1,5 @@
 use crate::ports::outbound::{LicenseRepository, PyPiMetadata};
+use crate::shared::response_size_guard;
 use crate::shared::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -116,19 +117,12 @@ impl PyPiLicenseRepository {
             anyhow::bail!("PyPI API returned status code {}", response.status());
         }
 
-        // Reject oversized responses before allocating memory
-        if let Some(len) = response.content_length() {
-            if len as usize > Self::MAX_RESPONSE_BYTES {
-                anyhow::bail!("PyPI API response too large: {} bytes", len);
-            }
-        }
-        let bytes = response.bytes().await?;
-        if bytes.len() > Self::MAX_RESPONSE_BYTES {
-            anyhow::bail!(
-                "PyPI API response exceeded {} byte limit",
-                Self::MAX_RESPONSE_BYTES
-            );
-        }
+        let bytes = response_size_guard::read_bounded_bytes(
+            response,
+            Self::MAX_RESPONSE_BYTES,
+            Some("PyPI license metadata"),
+        )
+        .await?;
 
         let package_info: PyPiPackageInfo = serde_json::from_slice(&bytes)?;
         Ok(package_info)
@@ -350,10 +344,14 @@ mod tests {
             .fetch_from_pypi("requests", "2.31.0")
             .await
             .unwrap_err();
+        let msg = err.to_string();
         // "too large" is the Content-Length pre-check branch specifically.
+        assert!(msg.contains("too large"), "unexpected error: {msg}");
+        // Proves the "PyPI license metadata" context is actually threaded
+        // through to the shared guard, not silently dropped.
         assert!(
-            err.to_string().contains("too large"),
-            "unexpected error: {err}"
+            msg.contains("PyPI license metadata"),
+            "unexpected error: {msg}"
         );
     }
 
@@ -373,62 +371,5 @@ mod tests {
         let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
         let info = client.fetch_from_pypi("requests", "2.31.0").await.unwrap();
         assert_eq!(info.info.license, Some("MIT".to_string()));
-    }
-
-    /// Serves exactly one HTTP/1.1 response using `Transfer-Encoding: chunked`
-    /// and no `Content-Length`, so `Response::content_length()` is `None` on
-    /// the client side and only the post-download `bytes.len()` check can
-    /// reject it.
-    ///
-    /// wiremock cannot express this: its bodies are always backed by a
-    /// known-length buffer, so the underlying hyper server always emits an
-    /// accurate `Content-Length` (and asserts on a mismatched one under
-    /// `debug_assertions`), making a `Content-Length`/body-size mismatch
-    /// impossible to construct through it.
-    fn spawn_chunked_oversize_server(body_len: usize) -> String {
-        use std::io::{Read, Write};
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-        std::thread::spawn(move || {
-            let Ok((mut stream, _)) = listener.accept() else {
-                return;
-            };
-            let mut buf = [0u8; 4096];
-            let _ = stream.read(&mut buf); // drain the (small) request head
-            let _ = stream.write_all(
-                b"HTTP/1.1 200 OK\r\n\
-                  Content-Type: application/json\r\n\
-                  Transfer-Encoding: chunked\r\n\r\n",
-            );
-            let chunk = vec![b'x'; 64 * 1024];
-            let mut written = 0usize;
-            while written < body_len {
-                let _ = write!(stream, "{:x}\r\n", chunk.len());
-                let _ = stream.write_all(&chunk);
-                let _ = stream.write_all(b"\r\n");
-                written += chunk.len();
-            }
-            let _ = stream.write_all(b"0\r\n\r\n");
-            let _ = stream.flush();
-        });
-        format!("http://{}", addr)
-    }
-
-    #[tokio::test]
-    async fn test_fetch_from_pypi_rejects_oversized_chunked_response() {
-        // No Content-Length -> the pre-check cannot fire; only the
-        // post-download bytes.len() check can reject this. Asserting on the
-        // distinct wording proves which of the two stages actually ran.
-        let base =
-            spawn_chunked_oversize_server(PyPiLicenseRepository::MAX_RESPONSE_BYTES + 64 * 1024);
-        let client = PyPiLicenseRepository::new_with_base_url(base).unwrap();
-        let err = client
-            .fetch_from_pypi("requests", "2.31.0")
-            .await
-            .unwrap_err();
-        assert!(
-            err.to_string().contains("exceeded"),
-            "unexpected error: {err}"
-        );
     }
 }
