@@ -1,4 +1,5 @@
 pub mod config_resolver;
+pub mod error_display;
 pub mod runner;
 pub mod workspace_summary;
 

@@ -635,6 +635,36 @@ mod error_tests {
         assert!(stderr.contains("Failed to parse config file"));
     }
 
+    /// Same as `test_invalid_yaml_syntax_error`, but under `--lang ja`: the
+    /// `ConfigError::ParseFailed` payload must render in Japanese, not just the
+    /// surrounding error frame (#834).
+    #[test]
+    fn test_invalid_yaml_syntax_error_localized_to_japanese() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            "invalid: yaml: [[[broken",
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args(["-p", dir.path().to_str().unwrap(), "--lang", "ja"])
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(3)); // ApplicationError
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("設定ファイルの解析に失敗しました"),
+            "stderr must contain the Japanese parse-failure message, got: {stderr}"
+        );
+        assert!(
+            !stderr.contains("Failed to parse config file"),
+            "English text must not leak through under --lang ja, got: {stderr}"
+        );
+    }
+
     #[test]
     fn test_empty_cve_id_validation_error() {
         let dir = TempDir::new().unwrap();
