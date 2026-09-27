@@ -166,6 +166,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: Some("Test vulnerability".to_string()),
                 source_url: Some("https://nvd.nist.gov/vuln/detail/CVE-2024-1234".to_string()),
+                epss_percentile: None,
+                in_kev: None,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -265,6 +267,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -285,6 +289,8 @@ mod tests {
                     version: "1.0.0".to_string(),
                 }],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -315,6 +321,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -341,6 +349,8 @@ mod tests {
                     },
                 ],
                 dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
             }],
         });
 
@@ -431,6 +441,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -468,6 +480,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -512,6 +526,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -550,6 +566,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {

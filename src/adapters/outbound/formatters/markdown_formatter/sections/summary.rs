@@ -186,6 +186,8 @@ mod tests {
             fixed_version: None,
             description: None,
             source_url: None,
+            epss_percentile: None,
+            in_kev: None,
         }
     }
 

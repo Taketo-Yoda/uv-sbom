@@ -245,6 +245,11 @@ pub struct Messages {
     pub summary_explain_also_transitive: &'static str,
     pub summary_explain_not_found: &'static str,
 
+    // Exploitability columns (conditional on --check-exploitability)
+    pub col_exploited_kev: &'static str,
+    pub col_epss: &'static str,
+    pub progress_fetching_exploitability: &'static str,
+
     // Dependency tree section
     pub section_dependency_tree: &'static str,
     pub label_dependency_tree_truncated: &'static str,
@@ -520,6 +525,11 @@ static EN_MESSAGES: Messages = Messages {
     summary_explain_also_transitive: "It is also reachable through {} transitive path(s):",
     summary_explain_not_found: "Package **{}** was not found in this project's dependencies.",
 
+    // Exploitability columns
+    col_exploited_kev: "Exploited (KEV)",
+    col_epss: "EPSS",
+    progress_fetching_exploitability: "🔍 Fetching exploitability data (EPSS/KEV)...",
+
     // Dependency tree section
     section_dependency_tree: "## Dependency Tree",
     label_dependency_tree_truncated: "... (truncated)",
@@ -765,6 +775,11 @@ static JA_MESSAGES: Messages = Messages {
     summary_explain_direct: "**{}** はこのプロジェクトの直接依存パッケージです。",
     summary_explain_also_transitive: "さらに {} 個の間接経路からも到達可能です:",
     summary_explain_not_found: "パッケージ **{}** はこのプロジェクトの依存関係に見つかりませんでした。",
+
+    // Exploitability columns
+    col_exploited_kev: "悪用確認済み (KEV)",
+    col_epss: "EPSS",
+    progress_fetching_exploitability: "🔍 悪用可能性データ (EPSS/KEV) を取得中...",
 
     // Dependency tree section
     section_dependency_tree: "## 依存関係ツリー",
