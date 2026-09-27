@@ -573,15 +573,16 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
 
     validate_project_path(&workspace_root)?;
 
+    let locale = args.lang;
+    let msgs = Messages::for_locale(locale);
+
     let workspace_reader = UvWorkspaceReader::new();
     let members = workspace_reader.read_workspace_members(&workspace_root)?;
 
     if members.is_empty() {
-        anyhow::bail!("No workspace members found. Is this a uv workspace?");
+        anyhow::bail!("{}", msgs.error_no_workspace_members);
     }
 
-    let locale = args.lang;
-    let msgs = Messages::for_locale(locale);
     eprintln!(
         "{}\n",
         Messages::format(

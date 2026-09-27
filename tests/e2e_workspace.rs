@@ -103,13 +103,10 @@ mod workspace_tests {
         );
     }
 
-    /// --workspace on a non-workspace directory exits with error
-    #[test]
-    fn test_workspace_on_non_workspace_exits_with_error() {
-        let temp = TempDir::new().unwrap();
-        // Write a minimal non-workspace uv.lock (no [manifest] section)
+    /// Writes a minimal non-workspace uv.lock (no [manifest] section) into `dir`.
+    fn write_non_workspace_lockfile(dir: &std::path::Path) {
         fs::write(
-            temp.path().join("uv.lock"),
+            dir.join("uv.lock"),
             r#"version = 1
 requires-python = ">=3.11"
 
@@ -120,16 +117,50 @@ source = { virtual = "." }
 "#,
         )
         .unwrap();
+    }
 
-        cargo_bin_cmd!("uv-sbom")
-            .args([
-                "--workspace",
-                "--path",
-                temp.path().to_str().unwrap(),
-                "--no-check-cve",
-            ])
-            .assert()
-            .code(3);
+    /// --workspace on a non-workspace directory exits with error, in English by default
+    #[test]
+    fn test_workspace_on_non_workspace_exits_with_error() {
+        let temp = TempDir::new().unwrap();
+        write_non_workspace_lockfile(temp.path());
+
+        let (exit_code, _stdout, stderr) = run_uv_sbom(&[
+            "--workspace",
+            "--path",
+            temp.path().to_str().unwrap(),
+            "--no-check-cve",
+        ]);
+
+        assert_eq!(exit_code, 3);
+        assert!(
+            stderr.contains("No workspace members found. Is this a uv workspace?"),
+            "stderr must contain the English no-workspace-members message, got: {stderr}"
+        );
+    }
+
+    /// --workspace on a non-workspace directory under --lang ja localizes the error
+    #[test]
+    fn test_workspace_on_non_workspace_exits_with_error_ja() {
+        let temp = TempDir::new().unwrap();
+        write_non_workspace_lockfile(temp.path());
+
+        let (exit_code, _stdout, stderr) = run_uv_sbom(&[
+            "--workspace",
+            "--path",
+            temp.path().to_str().unwrap(),
+            "--no-check-cve",
+            "--lang",
+            "ja",
+        ]);
+
+        assert_eq!(exit_code, 3);
+        assert!(
+            stderr.contains(
+                "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？"
+            ),
+            "stderr must contain the Japanese no-workspace-members message, got: {stderr}"
+        );
     }
 
     /// --workspace --output is mutually exclusive (clap should reject it)

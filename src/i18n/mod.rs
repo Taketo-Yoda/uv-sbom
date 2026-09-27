@@ -71,6 +71,7 @@ pub struct Messages {
     pub error_caused_by: &'static str,
     pub info_config_template_created: &'static str,
     pub error_init_failed: &'static str,
+    pub error_no_workspace_members: &'static str,
 
     // Progress messages (use case layer)
     pub progress_loading_lockfile: &'static str,
@@ -337,6 +338,7 @@ static EN_MESSAGES: Messages = Messages {
     error_caused_by: "Caused by: {}",
     info_config_template_created: "Created {} in {}",
     error_init_failed: "Error: {}",
+    error_no_workspace_members: "No workspace members found. Is this a uv workspace?",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
@@ -572,6 +574,7 @@ static JA_MESSAGES: Messages = Messages {
     error_caused_by: "原因: {}",
     info_config_template_created: "{} を {} に作成しました",
     error_init_failed: "エラー: {}",
+    error_no_workspace_members: "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -1028,6 +1031,10 @@ mod tests {
             Messages::format(msgs.error_init_failed, &["permission denied"]),
             "Error: permission denied"
         );
+        assert_eq!(
+            msgs.error_no_workspace_members,
+            "No workspace members found. Is this a uv workspace?"
+        );
     }
 
     #[test]
@@ -1048,6 +1055,10 @@ mod tests {
         assert_eq!(
             Messages::format(msgs.error_init_failed, &["permission denied"]),
             "エラー: permission denied"
+        );
+        assert_eq!(
+            msgs.error_no_workspace_members,
+            "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？"
         );
     }
 
