@@ -140,6 +140,7 @@ pub struct Messages {
     pub label_no_transitive_deps: &'static str,
     pub label_no_license_violations: &'static str,
     pub label_osv_attribution: &'static str,
+    pub label_epss_kev_attribution: &'static str,
 
     // Vulnerability count templates (4 placeholders: count, unit, count, unit)
     pub warn_no_vuln_above_threshold: &'static str,
@@ -421,6 +422,7 @@ static EN_MESSAGES: Messages = Messages {
     label_no_transitive_deps: "*No transitive dependencies*",
     label_no_license_violations: "**No license violations found.**",
     label_osv_attribution: "*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*",
+    label_epss_kev_attribution: "*Exploitability data: [EPSS](https://www.first.org/epss) by FIRST.org; [KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) by CISA*",
 
     // Vulnerability count templates (4 placeholders: count, unit, count, unit)
     warn_no_vuln_above_threshold: "### ⚠️Warning No vulnerabilities found above threshold.",
@@ -670,6 +672,7 @@ static JA_MESSAGES: Messages = Messages {
     label_no_transitive_deps: "*間接依存パッケージなし*",
     label_no_license_violations: "**ライセンス違反は見つかりませんでした。**",
     label_osv_attribution: "*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*",
+    label_epss_kev_attribution: "*悪用可能性データ: [EPSS](https://www.first.org/epss)（FIRST.org 提供）; [KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)（CISA 提供）*",
 
     // Vulnerability count templates
     // JA uses 4 placeholders in order: vuln_count, vuln_unit, pkg_count, pkg_unit

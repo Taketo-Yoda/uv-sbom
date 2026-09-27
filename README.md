@@ -1654,8 +1654,8 @@ The OSV database is a collaborative effort to provide comprehensive, accurate, a
 
 When `--check-exploitability` is used, this tool retrieves data from:
 
-- **EPSS (Exploit Prediction Scoring System)** by [FIRST.org](https://www.first.org/epss/) — probabilistic scoring of CVE exploitation likelihood
-- **CISA KEV (Known Exploited Vulnerabilities)** catalog by [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — authoritative list of CVEs with confirmed active exploitation
+- **EPSS (Exploit Prediction Scoring System)** by [FIRST.org](https://www.first.org/epss/) — probabilistic scoring of CVE exploitation likelihood. See EPSS at https://www.first.org/epss
+- **CISA KEV (Known Exploited Vulnerabilities)** catalog by [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — authoritative list of CVEs with confirmed active exploitation (public domain, CC0)
 
 ## License
 

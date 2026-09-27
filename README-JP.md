@@ -1642,8 +1642,8 @@ OSVデータベースは、オープンソースソフトウェアの包括的�
 
 `--check-exploitability` 使用時、このツールは以下のソースからデータを取得します：
 
-- **EPSS（Exploit Prediction Scoring System）** [FIRST.org](https://www.first.org/epss/) 提供 — CVE悪用可能性の確率スコアリング
-- **CISA KEV（Known Exploited Vulnerabilities）** カタログ [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) 提供 — 実際に悪用が確認されたCVEの信頼できるリスト
+- **EPSS（Exploit Prediction Scoring System）** [FIRST.org](https://www.first.org/epss/) 提供 — CVE悪用可能性の確率スコアリング。EPSSについて: https://www.first.org/epss
+- **CISA KEV（Known Exploited Vulnerabilities）** カタログ [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) 提供 — 実際に悪用が確認されたCVEの信頼できるリスト（パブリックドメイン、CC0）
 
 ## ライセンス
 
