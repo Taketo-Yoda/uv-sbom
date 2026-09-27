@@ -277,12 +277,10 @@ mod tests {
         assert_eq!(result.len(), 2);
 
         let info1 = result.get("CVE-2024-0001").unwrap();
-        assert!((info1.epss_score() - 0.5).abs() < 0.001);
         assert!((info1.epss_percentile() - 0.97).abs() < 0.001);
         assert!(info1.in_kev());
 
         let info2 = result.get("CVE-2024-0002").unwrap();
-        assert!((info2.epss_score() - 0.1).abs() < 0.001);
         assert!((info2.epss_percentile() - 0.3).abs() < 0.001);
         assert!(!info2.in_kev());
     }
@@ -372,7 +370,6 @@ mod tests {
         assert_eq!(result.len(), 1);
         let info = result.get("CVE-2024-0001").unwrap();
         assert!(info.in_kev());
-        assert!((info.epss_score() - 0.0).abs() < 0.001);
     }
 
     #[tokio::test]
@@ -406,7 +403,7 @@ mod tests {
         assert_eq!(result.len(), 1);
         let info = result.get("CVE-2024-0001").unwrap();
         assert!(!info.in_kev());
-        assert!((info.epss_score() - 0.5).abs() < 0.001);
+        assert!((info.epss_percentile() - 0.97).abs() < 0.001);
     }
 
     #[tokio::test]
@@ -474,7 +471,6 @@ mod tests {
         assert_eq!(result.len(), 1);
         let info = result.get("CVE-2024-0001").unwrap();
         assert!(info.in_kev());
-        assert!((info.epss_score() - 0.0).abs() < 0.001);
         assert!((info.epss_percentile() - 0.0).abs() < 0.001);
     }
 

@@ -128,11 +128,7 @@ pub(super) fn render_actionable_vulnerabilities(
         show_exploitability,
     ));
 
-    // Sort by severity (Critical first)
-    let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
-    sorted_vulns.sort_by_key(|v| &v.severity);
-
-    for vuln in sorted_vulns {
+    for vuln in vulns {
         render_vulnerability_row(verified_packages, output, vuln, show_exploitability);
     }
     output.push('\n');
@@ -179,10 +175,7 @@ pub(super) fn render_informational_vulnerabilities(
         show_exploitability,
     ));
 
-    let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
-    sorted_vulns.sort_by_key(|v| &v.severity);
-
-    for vuln in sorted_vulns {
+    for vuln in vulns {
         render_vulnerability_row(verified_packages, output, vuln, show_exploitability);
     }
 }
