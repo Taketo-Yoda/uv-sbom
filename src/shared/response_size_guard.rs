@@ -19,11 +19,11 @@
 //! HTTP status validation is the caller's responsibility — this function only
 //! concerns itself with body size.
 //!
-//! `OsvClient` has been migrated to call this function (Issue #859). The
-//! remaining three outbound adapters (`PyPiLicenseRepository`,
-//! `PyPiMaintenanceRepository`, `PyPiCompatibilityClient`) still carry their
-//! own inline two-stage guard; migrating them is tracked by Issue #853's
-//! follow-up subtasks (#860, #861, #862).
+//! `OsvClient` and `PyPiMaintenanceRepository` have been migrated to call this
+//! function (Issues #859, #860). The remaining two outbound adapters
+//! (`PyPiLicenseRepository`, `PyPiCompatibilityClient`) still carry their own
+//! inline two-stage guard; migrating them is tracked by Issue #853's
+//! follow-up subtasks (#861, #862).
 
 use crate::shared::Result;
 use futures::stream::StreamExt;

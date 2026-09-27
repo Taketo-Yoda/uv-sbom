@@ -1,4 +1,5 @@
 use crate::ports::outbound::{MaintenanceInfo, MaintenanceRepository};
+use crate::shared::response_size_guard;
 use crate::shared::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate};
@@ -24,6 +25,7 @@ struct PyPiUploadEntry {
 #[derive(Clone)]
 pub struct PyPiMaintenanceRepository {
     client: reqwest::Client,
+    base_url: String,
 }
 
 impl PyPiMaintenanceRepository {
@@ -31,8 +33,8 @@ impl PyPiMaintenanceRepository {
     // 10 MB — well above any realistic PyPI package metadata response
     const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
 
-    /// Creates a new PyPI maintenance repository with default configuration
-    pub fn new() -> Result<Self> {
+    /// Shared constructor logic for [`Self::new`] and [`Self::new_with_base_url`].
+    fn build(base_url: String) -> Result<Self> {
         let version = env!("CARGO_PKG_VERSION");
         let user_agent = format!("uv-sbom/{}", version);
         let client = reqwest::Client::builder()
@@ -40,31 +42,36 @@ impl PyPiMaintenanceRepository {
             .user_agent(user_agent)
             .build()?;
 
-        Ok(Self { client })
+        Ok(Self { client, base_url })
+    }
+
+    /// Creates a new PyPI maintenance repository with default configuration
+    pub fn new() -> Result<Self> {
+        Self::build("https://pypi.org".to_string())
+    }
+
+    /// Creates a client pointed at a custom base URL (e.g. a wiremock server),
+    /// for tests only.
+    #[cfg(test)]
+    fn new_with_base_url(base_url: impl Into<String>) -> Result<Self> {
+        Self::build(base_url.into())
     }
 
     async fn fetch_from_pypi(&self, package_name: &str) -> Result<PyPiPackageResponse> {
         crate::shared::security::validate_url_component(package_name, "Package name")?;
         let encoded = urlencoding::encode(package_name);
-        let url = format!("https://pypi.org/pypi/{}/json", encoded);
+        let url = format!("{}/pypi/{}/json", self.base_url, encoded);
 
         let response = self.client.get(&url).send().await?;
         if !response.status().is_success() {
             anyhow::bail!("PyPI API returned status code {}", response.status());
         }
-        // Reject oversized responses before allocating memory
-        if let Some(len) = response.content_length() {
-            if len as usize > Self::MAX_RESPONSE_BYTES {
-                anyhow::bail!("PyPI API response too large: {} bytes", len);
-            }
-        }
-        let bytes = response.bytes().await?;
-        if bytes.len() > Self::MAX_RESPONSE_BYTES {
-            anyhow::bail!(
-                "PyPI API response exceeded {} byte limit",
-                Self::MAX_RESPONSE_BYTES
-            );
-        }
+        let bytes = response_size_guard::read_bounded_bytes(
+            response,
+            Self::MAX_RESPONSE_BYTES,
+            Some("PyPI maintenance metadata"),
+        )
+        .await?;
         Ok(serde_json::from_slice::<PyPiPackageResponse>(&bytes)?)
     }
 
@@ -104,6 +111,8 @@ impl MaintenanceRepository for PyPiMaintenanceRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_pypi_maintenance_client_creation() {
@@ -225,4 +234,83 @@ mod tests {
     //     let client = PyPiMaintenanceRepository::new().unwrap();
     //     assert!(client.fetch_maintenance_info("nonexistent-pkg-xyz-123456").await.is_err());
     // }
+
+    /// Builds a syntactically valid maintenance-endpoint JSON body whose total
+    /// length is exactly `total_len` bytes, padded through a field the
+    /// `PyPiPackageResponse` deserializer ignores. The body is deliberately
+    /// *valid* JSON: if the size guard were absent, deserialization would
+    /// succeed, so an error from the client proves the guard fired rather
+    /// than a parse failure.
+    fn maintenance_json_of_len(total_len: usize) -> Vec<u8> {
+        let prefix: &[u8] =
+            br#"{"urls":[{"upload_time_iso_8601":"2024-01-15T10:30:00.000000+00:00"}],"padding":""#;
+        let suffix: &[u8] = br#""}"#;
+        let mut body = Vec::with_capacity(total_len);
+        body.extend_from_slice(prefix);
+        body.resize(total_len - suffix.len(), b'x');
+        body.extend_from_slice(suffix);
+        assert_eq!(body.len(), total_len);
+        body
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_success_via_mock() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "urls": [{"upload_time_iso_8601": "2024-01-15T10:30:00.000000+00:00"}]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let resp = client.fetch_from_pypi("requests").await.unwrap();
+        assert_eq!(
+            PyPiMaintenanceRepository::parse_last_release_date(&resp),
+            Some(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_rejects_oversized_response() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                maintenance_json_of_len(PyPiMaintenanceRepository::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let err = client.fetch_from_pypi("requests").await.unwrap_err();
+        // "too large" is the Content-Length pre-check branch specifically.
+        assert!(
+            err.to_string().contains("too large"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_accepts_response_at_limit() {
+        // Exactly at the limit must pass: proves the comparison is `>`, not `>=`.
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                maintenance_json_of_len(PyPiMaintenanceRepository::MAX_RESPONSE_BYTES),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let resp = client.fetch_from_pypi("requests").await.unwrap();
+        assert_eq!(
+            PyPiMaintenanceRepository::parse_last_release_date(&resp),
+            Some(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap())
+        );
+    }
 }
