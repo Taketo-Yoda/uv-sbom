@@ -1,6 +1,7 @@
 pub mod dependency_diff;
 pub mod dependency_graph;
 pub mod enriched_package;
+pub mod exploitability;
 pub mod license_info;
 pub mod license_policy;
 pub mod package;
@@ -16,6 +17,8 @@ pub mod vulnerability;
 pub use dependency_diff::{ChangeType, DependencyDiff, DiffSummary, PackageChange};
 pub use dependency_graph::DependencyGraph;
 pub use enriched_package::EnrichedPackage;
+#[allow(unused_imports)]
+pub use exploitability::ExploitabilityInfo;
 pub use license_info::LicenseInfo;
 // Note: These types are used within the application layer via full paths
 #[allow(unused_imports)]
