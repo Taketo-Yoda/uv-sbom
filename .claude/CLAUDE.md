@@ -264,6 +264,57 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
   — see the doc comment on `sbom_generation::domain::uv_lock_simulator` for the current rationale.
 - **All GitHub artifacts (commits, PRs, Issues) must be in English** — enforced by skills in `.claude/skills/`.
 
+### Error Message Localization Policy (decided in #832, parent #821)
+
+`--lang ja` localizes the error *frame* (`error_header`, `error_caused_by`) and the
+error text of the **CLI and config layers only**. Error *payloads* originating in the
+domain, adapter, and `shared::error` layers are permanently English. This is an
+intentional, permanent limitation — not a gap to be closed later.
+
+| Layer | Error text localized? | Where rendered |
+|-------|----------------------|----------------|
+| `src/main.rs` ad-hoc `bail!` | Yes (#833) | in place; `Messages` already in scope |
+| `src/config.rs` | Yes (#834) | `src/cli/error_display.rs` renders typed `ConfigError` |
+| `src/shared/error.rs` (`SbomError`) | **No — permanent** | n/a |
+| `src/sbom_generation/` (domain `bail!`) | **No — permanent** | n/a |
+| `src/adapters/outbound/network/`, `uv/`, `shared/security.rs` | **No — permanent** | n/a |
+
+**Why `SbomError` payloads stay English (to be closed as won't-fix, see #835)**
+
+1. Every variant interpolates a field that cannot be translated by us:
+   `details` is the `Display` of a `std::io::Error` or `toml::de::Error`
+   (third-party / OS-generated), and `suggestion` / `reason` / `hint` are
+   free-form English assembled at ~25 construction sites across
+   `shared/security.rs`, `adapters/outbound/filesystem/*`, and `application/dto/*`.
+2. Localizing only the `#[error(...)]` templates would produce sentence-level
+   language mixing (`uv.lock ファイルが見つかりません: /path … 💡 ヒント: Run \`uv lock\``),
+   which is worse UX than a localized frame around consistently English internals.
+3. `SbomError` is part of the public `uv_sbom` **library** API; its `Display` is a
+   contract for downstream Rust consumers, who have no `Locale`. Localization
+   belongs at the CLI presentation boundary, not in the library's error type.
+4. `src/main.rs` declares its own `mod shared;` while also importing `uv_sbom::config`,
+   so `shared::error::SbomError` (binary copy) and `uv_sbom::shared::error::SbomError`
+   (library copy) are distinct types. Downcast-based rendering of `SbomError` would
+   silently fail depending on which copy raised the error.
+
+**Why domain-layer `bail!` text stays English**
+
+Localizing `src/sbom_generation/` would require the domain layer to import
+`crate::i18n::Messages`, introducing a domain → presentation dependency that violates
+the "Domain layer has no I/O" invariant above. These sites are defensive invariant
+checks on internally-constructed data and are rarely user-reachable. If they must ever
+be localized, the only acceptable route is typed domain errors rendered at the CLI
+boundary — never an `i18n` import inside `src/sbom_generation/`.
+
+**Invariant: error text is stringified only in the CLI layer**
+
+New user-facing error text must be produced by `src/cli/error_display.rs` (to be
+created in #834; until then, by a site that already holds `&Messages`), never by
+embedding localized strings in
+`src/config.rs`, `src/shared/`, `src/sbom_generation/`, or `src/adapters/`.
+`src/config.rs` must stay free of any `i18n` dependency (see also the doc comment on
+`warn_unknown_fields` in `src/cli/config_resolver/loader.rs`).
+
 ### Files NOT to touch unless their issue explicitly targets them
 
 - `src/adapters/outbound/network/` — HTTP client internals (unrelated to most refactors)

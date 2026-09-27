@@ -71,6 +71,7 @@ pub struct Messages {
     pub error_caused_by: &'static str,
     pub info_config_template_created: &'static str,
     pub error_init_failed: &'static str,
+    pub error_no_workspace_members: &'static str,
 
     // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
     pub error_config_already_exists: &'static str,
@@ -345,6 +346,7 @@ static EN_MESSAGES: Messages = Messages {
     error_caused_by: "Caused by: {}",
     info_config_template_created: "Created {} in {}",
     error_init_failed: "Error: {}",
+    error_no_workspace_members: "No workspace members found. Is this a uv workspace?",
 
     // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
     error_config_already_exists: "{} already exists in {}. Use a different directory or remove the existing file.",
@@ -588,6 +590,7 @@ static JA_MESSAGES: Messages = Messages {
     error_caused_by: "原因: {}",
     info_config_template_created: "{} を {} に作成しました",
     error_init_failed: "エラー: {}",
+    error_no_workspace_members: "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？",
 
     // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
     error_config_already_exists: "{} は {} に既に存在します。別のディレクトリを指定するか、既存のファイルを削除してください。",
@@ -1052,6 +1055,10 @@ mod tests {
             Messages::format(msgs.error_init_failed, &["permission denied"]),
             "Error: permission denied"
         );
+        assert_eq!(
+            msgs.error_no_workspace_members,
+            "No workspace members found. Is this a uv workspace?"
+        );
     }
 
     #[test]
@@ -1072,6 +1079,10 @@ mod tests {
         assert_eq!(
             Messages::format(msgs.error_init_failed, &["permission denied"]),
             "エラー: permission denied"
+        );
+        assert_eq!(
+            msgs.error_no_workspace_members,
+            "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？"
         );
     }
 
