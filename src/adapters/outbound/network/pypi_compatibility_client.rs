@@ -1,4 +1,5 @@
 use crate::ports::outbound::{PythonCompatibilityInfo, PythonCompatibilityRepository};
+use crate::shared::response_size_guard;
 use crate::shared::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -85,19 +86,12 @@ impl PyPiCompatibilityClient {
         if !response.status().is_success() {
             anyhow::bail!("PyPI API returned status code {}", response.status());
         }
-        // Reject oversized responses before allocating memory
-        if let Some(len) = response.content_length() {
-            if len as usize > Self::MAX_RESPONSE_BYTES {
-                anyhow::bail!("PyPI API response too large: {} bytes", len);
-            }
-        }
-        let bytes = response.bytes().await?;
-        if bytes.len() > Self::MAX_RESPONSE_BYTES {
-            anyhow::bail!(
-                "PyPI API response exceeded {} byte limit",
-                Self::MAX_RESPONSE_BYTES
-            );
-        }
+        let bytes = response_size_guard::read_bounded_bytes(
+            response,
+            Self::MAX_RESPONSE_BYTES,
+            Some("PyPI compatibility metadata"),
+        )
+        .await?;
         Ok(serde_json::from_slice::<PyPiVersionResponse>(&bytes)?)
     }
 
@@ -277,5 +271,97 @@ mod tests {
 
         let result = client.fetch_python_compatibility("slowpkg", "1.0.0").await;
         assert!(result.is_err());
+    }
+
+    /// Builds a syntactically valid version-endpoint JSON body whose total
+    /// length is exactly `total_len` bytes, padded through a field the
+    /// `PyPiVersionResponse` deserializer ignores. The body is deliberately
+    /// *valid* JSON: if the size guard were absent, deserialization would
+    /// succeed, so an error from the client proves the guard fired rather
+    /// than a parse failure.
+    fn version_json_of_len(total_len: usize) -> Vec<u8> {
+        let prefix: &[u8] = br#"{"info":{"requires_python":">=3.8"},"padding":""#;
+        let suffix: &[u8] = br#""}"#;
+        let mut body = Vec::with_capacity(total_len);
+        body.extend_from_slice(prefix);
+        body.resize(total_len - suffix.len(), b'x');
+        body.extend_from_slice(suffix);
+        assert_eq!(body.len(), total_len);
+        body
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_success_via_mock() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"info": {"requires_python": ">=3.8"}})),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiCompatibilityClient::new_with_base_url_and_timeout(
+            mock_server.uri(),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        let resp = client.fetch_from_pypi("requests", "2.31.0").await.unwrap();
+        assert_eq!(resp.info.requires_python, Some(">=3.8".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_rejects_oversized_response() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                version_json_of_len(PyPiCompatibilityClient::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiCompatibilityClient::new_with_base_url_and_timeout(
+            mock_server.uri(),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        let err = client
+            .fetch_from_pypi("requests", "2.31.0")
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        // "too large" is the Content-Length pre-check branch specifically.
+        assert!(msg.contains("too large"), "unexpected error: {msg}");
+        // Proves the "PyPI compatibility metadata" context is actually
+        // threaded through to the shared guard, not silently dropped.
+        assert!(
+            msg.contains("PyPI compatibility metadata"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_accepts_response_at_limit() {
+        // Exactly at the limit must pass: proves the comparison is `>`, not `>=`.
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                version_json_of_len(PyPiCompatibilityClient::MAX_RESPONSE_BYTES),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiCompatibilityClient::new_with_base_url_and_timeout(
+            mock_server.uri(),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        let resp = client.fetch_from_pypi("requests", "2.31.0").await.unwrap();
+        assert_eq!(resp.info.requires_python, Some(">=3.8".to_string()));
     }
 }
