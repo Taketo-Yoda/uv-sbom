@@ -74,6 +74,14 @@ Skills contain mandatory pre-flight checks and language requirements that preven
   in prose but never turned into tracked Issues — a human had to ask before Issues
   #795/#796 were created. Fixed by Issue #797 (`/code-review` Step 3.5 and
   `/implement` Step 3.6 Follow-up Issue Gates).
+- **2026-09-27 (Issue #867)**: `/split`'s decomposition of #853 into subtasks
+  #858–#862 (each migrating a network client onto the new shared
+  `src/shared/response_size_guard.rs`) recurringly omitted that module's `//!`
+  adoption-list doc comment and the parent CHANGELOG entry from every subtask's
+  `Files to Update/Create` — the gap was independently rediscovered by the
+  Architect Agent in #859, #860, and #861 in turn. Fixed by Issue #867 (`/split`
+  Step 2 Shared-Dependency Convergence Check, surfaced in the user-facing proposal,
+  plus a Step 4 carry-over backstop).
 
 ### Enforcement
 
