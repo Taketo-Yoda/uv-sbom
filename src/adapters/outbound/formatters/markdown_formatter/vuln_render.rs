@@ -57,6 +57,10 @@ pub(super) fn render_vulnerabilities(
     output.push_str("\n---\n\n");
     output.push_str(messages.label_osv_attribution);
     output.push('\n');
+    if show_exploitability {
+        output.push_str(messages.label_epss_kev_attribution);
+        output.push('\n');
+    }
 }
 
 /// Renders vulnerability summary statistics
