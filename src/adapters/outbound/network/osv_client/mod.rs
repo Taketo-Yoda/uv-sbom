@@ -178,6 +178,7 @@ impl OsvClient {
             severity,
             fixed_version,
             osv_vuln.summary.clone(),
+            osv_vuln.aliases.clone(),
         )
     }
 }

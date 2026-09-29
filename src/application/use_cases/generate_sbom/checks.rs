@@ -448,15 +448,23 @@ where
             return;
         };
 
-        let cve_ids: Vec<String> = report
-            .iter()
-            .flat_map(|pv| pv.vulnerabilities().iter())
-            .map(|v| v.id().to_string())
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
+        let mut all_cve_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-        if cve_ids.is_empty() {
+        for pv in report.iter() {
+            for vuln in pv.vulnerabilities() {
+                let id = vuln.id().to_string();
+                if id.starts_with("CVE-") {
+                    all_cve_ids.insert(id);
+                }
+                for alias in vuln.aliases() {
+                    if alias.starts_with("CVE-") {
+                        all_cve_ids.insert(alias.clone());
+                    }
+                }
+            }
+        }
+
+        if all_cve_ids.is_empty() {
             return;
         }
 
@@ -464,6 +472,7 @@ where
         self.progress_reporter
             .report(msgs.progress_fetching_exploitability);
 
+        let cve_ids: Vec<String> = all_cve_ids.into_iter().collect();
         let exploitability_map = match repo.fetch_exploitability(cve_ids).await {
             Ok(map) => map,
             Err(_) => return,
@@ -473,6 +482,13 @@ where
             for vuln in pv.vulnerabilities_mut() {
                 if let Some(info) = exploitability_map.get(vuln.id()) {
                     vuln.set_exploitability(Some(*info));
+                    continue;
+                }
+                for alias in vuln.aliases() {
+                    if let Some(info) = exploitability_map.get(alias.as_str()) {
+                        vuln.set_exploitability(Some(*info));
+                        break;
+                    }
                 }
             }
         }

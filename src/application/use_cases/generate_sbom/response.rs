@@ -167,6 +167,7 @@ mod tests {
                 Severity::Critical,
                 None,
                 None,
+                vec![],
             )
             .unwrap();
             let pkg_vulns = crate::sbom_generation::domain::PackageVulnerabilities::new(
@@ -222,6 +223,7 @@ mod tests {
                 Severity::Low,
                 None,
                 None,
+                vec![],
             )
             .unwrap();
             let pkg_vulns = crate::sbom_generation::domain::PackageVulnerabilities::new(
