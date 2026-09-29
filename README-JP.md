@@ -617,14 +617,26 @@ uv-sbom --check-exploitability --severity-threshold high --check-license
 - 少なくとも1つのCVEに悪用可能性データがある場合のみ、これらの列が表示されます
 
 **出力例:**
+
+[`examples/suggest-fix-project`](examples/suggest-fix-project) に対して実行した結果：
+
+```bash
+uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
+```
+
 ```markdown
 ## Vulnerability Report
 
-| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID | Exploited (KEV) | EPSS |
-|---------|----------------|---------------|------|----------|--------|-----------------|------|
-| urllib3 | 2.0.4 | 2.0.7 | 9.8 | 🔴 CRITICAL | CVE-2023-45803 | No | 97th percentile |
-| requests | 2.31.0 | 2.32.0 | 5.6 | 🟡 MEDIUM | CVE-2024-35195 | No | 22nd percentile |
+| Package | Current Version | Fixed Version | CVSS | Severity | Vulnerability ID | Exploited (KEV) | EPSS |
+|---------|-----------------|---------------|------|----------|------------------|-----------------|------|
+| urllib3 | 2.0.4 | 2.6.3 | 7.5 | 🟠 HIGH | GHSA-38jv-5279-wg99 | No | 87th percentile |
+| certifi | 2023.7.22 | 2024.7.4 | N/A | 🟢 LOW | GHSA-248v-346w-9cwc | No | 63rd percentile |
+| h11 | 0.14.0 | 0.16.0 | 9.1 | 🔴 CRITICAL | GHSA-vqfr-h8mv-ghfj | No | 46th percentile |
+| urllib3 | 2.0.4 | 2.0.7 | 4.2 | 🟡 MEDIUM | GHSA-g4mx-q9vg-27p4 | No | 43rd percentile |
+| anyio | 4.0.0 | 4.14.2 | N/A | 🔴 CRITICAL | GHSA-82r6-8w77-94w6 | No | 19th percentile |
 ```
+
+_（全32件中、EPSSパーセンタイル順の抜粋。EPSS値はライブデータのため変動する可能性があります。）_
 
 **設定ファイルでの指定:**
 ```yaml
@@ -632,12 +644,6 @@ check_exploitability: true
 ```
 
 > **注:** `--check-exploitability` はCVEチェックが有効である必要があり、`--no-check-cve` と競合します。SBOM生成ごとに2つのネットワークリクエスト（FIRST.org EPSS APIとCISA KEVカタログフィード）が追加されます。
-
-実際の出力を確認するには、既知のCVEを持つプロジェクトに対して実行してください：
-
-```bash
-uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
-```
 
 ### 依存関係の説明（`--explain`）
 
