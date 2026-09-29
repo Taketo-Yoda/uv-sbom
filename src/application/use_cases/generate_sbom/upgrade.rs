@@ -166,6 +166,7 @@ mod tests {
                 Severity::High,
                 Some("2.0.0".to_string()),
                 None,
+                vec![],
             )
             .unwrap();
             let vulns = vec![PackageVulnerabilities::new(

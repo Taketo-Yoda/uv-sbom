@@ -119,6 +119,7 @@ mod tests {
             severity,
             fixed.map(|v| v.to_string()),
             None,
+            vec![],
         )
         .unwrap()
     }

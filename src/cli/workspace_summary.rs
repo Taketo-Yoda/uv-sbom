@@ -331,6 +331,7 @@ mod tests {
             Severity::High,
             None,
             None,
+            vec![],
         )
         .expect("valid vulnerability");
         let above_threshold = vec![PackageVulnerabilities::new(

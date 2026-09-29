@@ -91,7 +91,7 @@ mod tests {
     };
 
     fn make_vuln(id: &str) -> Vulnerability {
-        Vulnerability::new(id.to_string(), None, Severity::High, None, None).unwrap()
+        Vulnerability::new(id.to_string(), None, Severity::High, None, None, vec![]).unwrap()
     }
 
     fn make_pkg(name: &str, vulns: Vec<Vulnerability>) -> PackageVulnerabilities {

@@ -141,6 +141,7 @@ mod tests {
             severity,
             None,
             Some(format!("Test vulnerability {}", id)),
+            vec![],
         )
         .unwrap()
     }

@@ -202,7 +202,7 @@ mod tests {
     }
 
     fn make_vuln(id: &str, severity: Severity) -> Vulnerability {
-        Vulnerability::new(id.to_string(), None, severity, None, None).unwrap()
+        Vulnerability::new(id.to_string(), None, severity, None, None, vec![]).unwrap()
     }
 
     fn make_pkg_vulns(
@@ -512,6 +512,7 @@ mod tests {
             severity,
             None,
             None,
+            vec![],
         )
         .unwrap()
     }

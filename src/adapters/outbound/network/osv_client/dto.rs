@@ -34,6 +34,8 @@ pub(super) struct OsvResult {
 pub(super) struct OsvVulnerability {
     pub(super) id: String,
     #[serde(default)]
+    pub(super) aliases: Vec<String>,
+    #[serde(default)]
     pub(super) summary: Option<String>,
     #[serde(default)]
     pub(super) severity: Option<Vec<OsvSeverity>>,
@@ -187,5 +189,34 @@ mod tests {
         let vuln = result.unwrap();
         assert_eq!(vuln.id, "CVE-2024-1234");
         assert!(vuln.database_specific.is_none());
+    }
+
+    #[test]
+    fn test_osv_vulnerability_with_aliases() {
+        let json = r#"{
+            "id": "GHSA-9wx4-h78v-vm56",
+            "aliases": ["CVE-2023-45803"],
+            "summary": "urllib3 request body not stripped after redirect",
+            "database_specific": {
+                "severity": "MODERATE"
+            }
+        }"#;
+        let result = serde_json::from_str::<OsvVulnerability>(json);
+        assert!(result.is_ok());
+        let vuln = result.unwrap();
+        assert_eq!(vuln.id, "GHSA-9wx4-h78v-vm56");
+        assert_eq!(vuln.aliases, vec!["CVE-2023-45803"]);
+    }
+
+    #[test]
+    fn test_osv_vulnerability_without_aliases() {
+        let json = r#"{
+            "id": "CVE-2024-1234",
+            "summary": "Test vulnerability"
+        }"#;
+        let result = serde_json::from_str::<OsvVulnerability>(json);
+        assert!(result.is_ok());
+        let vuln = result.unwrap();
+        assert!(vuln.aliases.is_empty());
     }
 }
