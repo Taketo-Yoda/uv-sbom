@@ -623,14 +623,26 @@ uv-sbom --check-exploitability --severity-threshold high --check-license
 - These columns appear only when at least one CVE has exploitability data
 
 **Example output:**
+
+Produced by running against [`examples/suggest-fix-project`](examples/suggest-fix-project):
+
+```bash
+uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
+```
+
 ```markdown
 ## Vulnerability Report
 
-| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID | Exploited (KEV) | EPSS |
-|---------|----------------|---------------|------|----------|--------|-----------------|------|
-| urllib3 | 2.0.4 | 2.0.7 | 9.8 | 🔴 CRITICAL | CVE-2023-45803 | No | 97th percentile |
-| requests | 2.31.0 | 2.32.0 | 5.6 | 🟡 MEDIUM | CVE-2024-35195 | No | 22nd percentile |
+| Package | Current Version | Fixed Version | CVSS | Severity | Vulnerability ID | Exploited (KEV) | EPSS |
+|---------|-----------------|---------------|------|----------|------------------|-----------------|------|
+| urllib3 | 2.0.4 | 2.6.3 | 7.5 | 🟠 HIGH | GHSA-38jv-5279-wg99 | No | 87th percentile |
+| certifi | 2023.7.22 | 2024.7.4 | N/A | 🟢 LOW | GHSA-248v-346w-9cwc | No | 63rd percentile |
+| h11 | 0.14.0 | 0.16.0 | 9.1 | 🔴 CRITICAL | GHSA-vqfr-h8mv-ghfj | No | 46th percentile |
+| urllib3 | 2.0.4 | 2.0.7 | 4.2 | 🟡 MEDIUM | GHSA-g4mx-q9vg-27p4 | No | 43rd percentile |
+| anyio | 4.0.0 | 4.14.2 | N/A | 🔴 CRITICAL | GHSA-82r6-8w77-94w6 | No | 19th percentile |
 ```
+
+_(32 vulnerabilities total — excerpt sorted by EPSS percentile. EPSS values are live data and may change over time.)_
 
 **Config file equivalent:**
 ```yaml
@@ -638,12 +650,6 @@ check_exploitability: true
 ```
 
 > **Note:** `--check-exploitability` requires CVE checking to be enabled and conflicts with `--no-check-cve`. It adds two network requests (FIRST.org EPSS API and CISA KEV catalog feed) per SBOM generation.
-
-For a demo with real output, run against any project with known CVEs:
-
-```bash
-uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
-```
 
 ### Dependency Explanation (`--explain`)
 

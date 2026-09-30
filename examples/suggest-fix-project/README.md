@@ -100,9 +100,23 @@ uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
 ```
 
 **What you will see:**
-- "Exploited (KEV)" and "EPSS" columns added to the Vulnerability Report table
+- "Exploited (KEV)" and "EPSS" columns added to the Vulnerability Report table and Resolution Guide
 - CVEs in the CISA KEV catalog show "Yes" in the Exploited column
-- EPSS percentile shown as an ordinal string (e.g., "97th percentile")
+- EPSS percentile shown as an ordinal string (e.g., "87th percentile")
+- Vulnerabilities sorted by EPSS percentile (highest first), helping you prioritize which CVEs to fix
+
+**Output excerpt (Vulnerability Resolution Guide):**
+
+```markdown
+| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID | Exploited (KEV) | EPSS |
+|--------------------|---------|---------------|----------|----------------------------|------------------|-----------------|------|
+| urllib3 | 2.0.4 | 2.6.3 | 🟠 HIGH | requests (2.31.0) | GHSA-38jv-5279-wg99 | No | 87th percentile |
+| certifi | 2023.7.22 | 2024.7.4 | 🟢 LOW | httpx (0.24.1), requests (2.31.0) | GHSA-248v-346w-9cwc | No | 63rd percentile |
+| h11 | 0.14.0 | 0.16.0 | 🔴 CRITICAL | httpx (0.24.1) | GHSA-vqfr-h8mv-ghfj | No | 46th percentile |
+| anyio | 4.0.0 | 4.14.2 | 🔴 CRITICAL | httpx (0.24.1) | GHSA-82r6-8w77-94w6 | No | 19th percentile |
+```
+
+_(32 vulnerabilities total — excerpt sorted by EPSS percentile. EPSS values are live data and may change over time.)_
 
 ### Step 5: Filter by severity
 
