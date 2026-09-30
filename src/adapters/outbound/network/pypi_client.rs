@@ -99,8 +99,10 @@ impl PyPiLicenseRepository {
     /// Fetches package information from PyPI API (async)
     async fn fetch_from_pypi(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
         // Security: Validate URL components before using them
-        crate::shared::security::validate_url_component(package_name, "Package name")?;
-        crate::shared::security::validate_url_component(version, "Version")?;
+        crate::shared::security::validate_url_component(package_name, "Package name")
+            .map_err(crate::shared::http_retry::permanent)?;
+        crate::shared::security::validate_url_component(version, "Version")
+            .map_err(crate::shared::http_retry::permanent)?;
 
         // URL encode components to handle special characters safely
         let encoded_package = urlencoding::encode(package_name);
@@ -352,6 +354,30 @@ mod tests {
         assert!(
             msg.contains("PyPI license metadata"),
             "unexpected error: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_oversized_response_not_retried() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                package_json_of_len(PyPiLicenseRepository::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let err = client
+            .fetch_with_retry("requests", "2.31.0")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("too large"),
+            "unexpected error: {err}"
         );
     }
 

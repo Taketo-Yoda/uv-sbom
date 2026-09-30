@@ -58,7 +58,8 @@ impl PyPiMaintenanceRepository {
     }
 
     async fn fetch_from_pypi(&self, package_name: &str) -> Result<PyPiPackageResponse> {
-        crate::shared::security::validate_url_component(package_name, "Package name")?;
+        crate::shared::security::validate_url_component(package_name, "Package name")
+            .map_err(crate::shared::http_retry::permanent)?;
         let encoded = urlencoding::encode(package_name);
         let url = format!("{}/pypi/{}/json", self.base_url, encoded);
 
@@ -287,6 +288,27 @@ mod tests {
         let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri()).unwrap();
         let err = client.fetch_from_pypi("requests").await.unwrap_err();
         // "too large" is the Content-Length pre-check branch specifically.
+        assert!(
+            err.to_string().contains("too large"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_oversized_response_not_retried() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                maintenance_json_of_len(PyPiMaintenanceRepository::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let err = client.fetch_with_retry("requests").await.unwrap_err();
         assert!(
             err.to_string().contains("too large"),
             "unexpected error: {err}"

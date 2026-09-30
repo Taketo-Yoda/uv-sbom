@@ -73,8 +73,10 @@ impl PyPiCompatibilityClient {
         package_name: &str,
         package_version: &str,
     ) -> Result<PyPiVersionResponse> {
-        crate::shared::security::validate_url_component(package_name, "Package name")?;
-        crate::shared::security::validate_url_component(package_version, "Package version")?;
+        crate::shared::security::validate_url_component(package_name, "Package name")
+            .map_err(crate::shared::http_retry::permanent)?;
+        crate::shared::security::validate_url_component(package_version, "Package version")
+            .map_err(crate::shared::http_retry::permanent)?;
         let encoded_name = urlencoding::encode(package_name);
         let encoded_version = urlencoding::encode(package_version);
         let url = format!(
@@ -340,6 +342,34 @@ mod tests {
         assert!(
             msg.contains("PyPI compatibility metadata"),
             "unexpected error: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_oversized_response_not_retried() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                version_json_of_len(PyPiCompatibilityClient::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiCompatibilityClient::new_with_base_url_and_timeout(
+            mock_server.uri(),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        let err = client
+            .fetch_with_retry("requests", "2.31.0")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("too large"),
+            "unexpected error: {err}"
         );
     }
 
