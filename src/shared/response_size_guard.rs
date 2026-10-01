@@ -53,7 +53,9 @@ pub async fn read_bounded_bytes(
         .content_length()
         .filter(|&len| len as usize > limit)
     {
-        return Err(too_large_error(len, limit, context));
+        return Err(crate::shared::http_retry::permanent(too_large_error(
+            len, limit, context,
+        )));
     }
 
     // Slow path: stream the body, aborting as soon as the running total
@@ -66,7 +68,9 @@ pub async fn read_bounded_bytes(
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         if buf.len().saturating_add(chunk.len()) > limit {
-            return Err(exceeded_error(limit, context));
+            return Err(crate::shared::http_retry::permanent(exceeded_error(
+                limit, context,
+            )));
         }
         buf.extend_from_slice(&chunk);
     }
