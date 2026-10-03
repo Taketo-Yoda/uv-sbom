@@ -3,7 +3,8 @@ use super::lockfile_parser::{
     parse_package_sources,
 };
 use crate::ports::outbound::{
-    GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap, ProjectConfigReader,
+    GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap, ProjectConfigError,
+    ProjectConfigReader,
 };
 use crate::shared::error::SbomError;
 use crate::shared::security::{read_file_with_security, MAX_FILE_SIZE};
@@ -99,7 +100,7 @@ impl ProjectConfigReader for FileSystemReader {
         let pyproject_path = project_path.join("pyproject.toml");
 
         if !pyproject_path.exists() {
-            anyhow::bail!("pyproject.toml not found in project directory");
+            return Err(ProjectConfigError::PyprojectNotFound.into());
         }
 
         // Read with security checks
@@ -176,9 +177,15 @@ version = "1.0.0"
         let reader = FileSystemReader::new();
         let result = reader.read_project_name(temp_dir.path());
 
-        assert!(result.is_err());
-        let err_string = format!("{}", result.unwrap_err());
-        assert!(err_string.contains("pyproject.toml not found"));
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<ProjectConfigError>(),
+            Some(&ProjectConfigError::PyprojectNotFound)
+        );
+        assert_eq!(
+            err.to_string(),
+            "pyproject.toml not found in project directory"
+        );
     }
 
     #[test]

@@ -73,6 +73,10 @@ pub struct Messages {
     pub error_init_failed: &'static str,
     pub error_no_workspace_members: &'static str,
 
+    // SBOM generation error messages (application layer, GenerateSbomUseCase)
+    pub error_all_packages_excluded: &'static str,
+    pub error_pyproject_not_found: &'static str,
+
     // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
     pub error_config_already_exists: &'static str,
     pub error_config_template_write_failed: &'static str,
@@ -354,6 +358,10 @@ static EN_MESSAGES: Messages = Messages {
     error_init_failed: "Error: {}",
     error_no_workspace_members: "No workspace members found. Is this a uv workspace?",
 
+    // SBOM generation error messages (application layer, GenerateSbomUseCase)
+    error_all_packages_excluded: "All {} package(s) were excluded by the provided filters. The SBOM would be empty. Please adjust your exclusion patterns.",
+    error_pyproject_not_found: "pyproject.toml not found in project directory",
+
     // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
     error_config_already_exists: "{} already exists in {}. Use a different directory or remove the existing file.",
     error_config_template_write_failed: "Failed to write config template to: {}",
@@ -603,6 +611,10 @@ static JA_MESSAGES: Messages = Messages {
     info_config_template_created: "{} を {} に作成しました",
     error_init_failed: "エラー: {}",
     error_no_workspace_members: "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？",
+
+    // SBOM generation error messages (application layer, GenerateSbomUseCase)
+    error_all_packages_excluded: "指定されたフィルターにより {} 個のパッケージがすべて除外されました。SBOM が空になります。除外パターンを見直してください。",
+    error_pyproject_not_found: "プロジェクトディレクトリに pyproject.toml が見つかりません。",
 
     // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
     error_config_already_exists: "{} は {} に既に存在します。別のディレクトリを指定するか、既存のファイルを削除してください。",
@@ -1101,6 +1113,42 @@ mod tests {
         assert_eq!(
             msgs.error_no_workspace_members,
             "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？"
+        );
+    }
+
+    #[test]
+    fn test_error_all_packages_excluded_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            Messages::format(msgs.error_all_packages_excluded, &["3"]),
+            "All 3 package(s) were excluded by the provided filters. The SBOM would be empty. Please adjust your exclusion patterns."
+        );
+    }
+
+    #[test]
+    fn test_error_all_packages_excluded_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            Messages::format(msgs.error_all_packages_excluded, &["3"]),
+            "指定されたフィルターにより 3 個のパッケージがすべて除外されました。SBOM が空になります。除外パターンを見直してください。"
+        );
+    }
+
+    #[test]
+    fn test_error_pyproject_not_found_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.error_pyproject_not_found,
+            "pyproject.toml not found in project directory"
+        );
+    }
+
+    #[test]
+    fn test_error_pyproject_not_found_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.error_pyproject_not_found,
+            "プロジェクトディレクトリに pyproject.toml が見つかりません。"
         );
     }
 

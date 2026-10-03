@@ -37,7 +37,7 @@ pub use lockfile_reader::{
 pub use maintenance_repository::{MaintenanceInfo, MaintenanceRepository};
 pub use output_presenter::OutputPresenter;
 pub use progress_reporter::{ProgressCallback, ProgressReporter};
-pub use project_config_reader::ProjectConfigReader;
+pub use project_config_reader::{ProjectConfigError, ProjectConfigReader};
 pub use python_compatibility_repository::{PythonCompatibilityInfo, PythonCompatibilityRepository};
 // Note: This will be used in subsequent subtasks (Subtask 3-8)
 #[allow(unused_imports)]
