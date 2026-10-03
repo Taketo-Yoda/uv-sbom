@@ -3,7 +3,8 @@ use crate::application::dto::SbomRequest;
 use crate::i18n::Messages;
 use crate::ports::outbound::{
     ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
-    ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    ProgressReporter, ProjectConfigError, ProjectConfigReader, PythonCompatibilityRepository,
+    VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::services::GroupReachabilityAnalyzer;
 use crate::sbom_generation::domain::{DependencyGraph, Package, PackageName, UvLockSimulator};
@@ -96,10 +97,13 @@ where
 
         // Check if all packages were excluded
         if filtered_pkgs.is_empty() {
+            let msgs = Messages::for_locale(self.locale);
             anyhow::bail!(
-                "All {} package(s) were excluded by the provided filters. \
-                     The SBOM would be empty. Please adjust your exclusion patterns.",
-                original_count
+                "{}",
+                Messages::format(
+                    msgs.error_all_packages_excluded,
+                    &[&original_count.to_string()]
+                )
             );
         }
 
@@ -182,9 +186,18 @@ where
         let msgs = Messages::for_locale(self.locale);
         self.progress_reporter.report(msgs.progress_parsing_deps);
 
+        // The adapter returns a typed ProjectConfigError rather than localized text;
+        // localize it here, where Locale/Messages are in scope. Replace (not wrap
+        // with .context()) so the English Display text is not printed as a cause.
         let project_name = self
             .project_config_reader
-            .read_project_name(&request.project_path)?;
+            .read_project_name(&request.project_path)
+            .map_err(|e| match e.downcast_ref::<ProjectConfigError>() {
+                Some(ProjectConfigError::PyprojectNotFound) => {
+                    anyhow::anyhow!("{}", msgs.error_pyproject_not_found)
+                }
+                None => e,
+            })?;
         let project_package_name = PackageName::new(project_name)?;
 
         let (graph, truncated_chains) =
@@ -220,6 +233,7 @@ where
 mod tests {
     use super::*;
     use crate::application::use_cases::generate_sbom::tests::test_helpers::*;
+    use crate::i18n::Locale;
     use crate::ports::outbound::GroupRoots;
     use std::collections::HashMap;
 
@@ -272,11 +286,28 @@ mod tests {
 
             let result = use_case.apply_exclusion_filters(packages, &request);
 
-            assert!(result.is_err());
-            assert!(result
-                .unwrap_err()
-                .to_string()
-                .contains("All 1 package(s) were excluded"));
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "All 1 package(s) were excluded by the provided filters. The SBOM would be empty. Please adjust your exclusion patterns."
+            );
+        }
+
+        #[test]
+        fn test_apply_exclusion_filters_all_excluded_error_ja() {
+            let use_case = UseCaseBuilder::default().with_locale(Locale::Ja).build();
+            let packages = vec![pkg("pkg1", "1.0.0")];
+            let request = SbomRequest::builder()
+                .project_path("/test/project")
+                .exclude_patterns(vec!["pkg1".to_string()])
+                .build()
+                .unwrap();
+
+            let result = use_case.apply_exclusion_filters(packages, &request);
+
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "指定されたフィルターにより 1 個のパッケージがすべて除外されました。SBOM が空になります。除外パターンを見直してください。"
+            );
         }
     }
 
@@ -316,6 +347,41 @@ mod tests {
 
             assert!(result.is_some());
             assert_eq!(result.unwrap().direct_dependency_count(), 1);
+        }
+
+        fn missing_pyproject_error(locale: Locale) -> String {
+            let use_case = UseCaseBuilder::default()
+                .with_missing_pyproject()
+                .with_locale(locale)
+                .build();
+            let request = SbomRequest::builder()
+                .project_path("/test/project")
+                .include_dependency_info(true)
+                .build()
+                .unwrap();
+
+            let err = use_case
+                .analyze_dependencies_if_requested(&request, &HashMap::new())
+                .unwrap_err();
+            // No English cause should be chained under the localized message.
+            assert_eq!(err.chain().count(), 1);
+            err.to_string()
+        }
+
+        #[test]
+        fn test_analyze_dependencies_missing_pyproject_en() {
+            assert_eq!(
+                missing_pyproject_error(Locale::En),
+                "pyproject.toml not found in project directory"
+            );
+        }
+
+        #[test]
+        fn test_analyze_dependencies_missing_pyproject_ja() {
+            assert_eq!(
+                missing_pyproject_error(Locale::Ja),
+                "プロジェクトディレクトリに pyproject.toml が見つかりません。"
+            );
         }
     }
 
