@@ -83,21 +83,21 @@ where
             return Ok(packages);
         }
 
+        let msgs = Messages::for_locale(self.locale);
         let filter = PackageFilter::new(request.exclude_patterns.clone())?;
         let original_count = packages.len();
         let filtered_pkgs = filter.filter_packages(packages);
 
         let excluded_count = original_count - filtered_pkgs.len();
         if excluded_count > 0 {
-            self.progress_reporter.report(&format!(
-                "🚫 Excluded {} package(s) based on filters",
-                excluded_count
+            self.progress_reporter.report(&Messages::format(
+                msgs.progress_packages_excluded,
+                &[&excluded_count.to_string()],
             ));
         }
 
         // Check if all packages were excluded
         if filtered_pkgs.is_empty() {
-            let msgs = Messages::for_locale(self.locale);
             anyhow::bail!(
                 "{}",
                 Messages::format(
@@ -110,9 +110,9 @@ where
         // Warn about unmatched patterns
         let unmatched_patterns = filter.get_unmatched_patterns();
         for pattern in unmatched_patterns {
-            self.progress_reporter.report_error(&format!(
-                "⚠️  Warning: Exclude pattern '{}' did not match any dependencies.",
-                pattern
+            self.progress_reporter.report_error(&Messages::format(
+                msgs.warn_exclude_pattern_unmatched,
+                &[&pattern],
             ));
         }
 
