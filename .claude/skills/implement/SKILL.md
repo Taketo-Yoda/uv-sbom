@@ -20,26 +20,12 @@ Issue Analysis → Branch Creation → [Planning] → Implementation → Commit 
 
 ## Stacked Mode (opt-in)
 
-A PR whose base branch points at another still-open PR's branch is automatically
-recognized by GitHub as part of a dependency chain ("stack") — public preview since
-2026-07-30. Each PR in the stack shows only its own isolated diff for review, and
-merging the bottom-most PR automatically rebases the rest of the stack.
-
-**Entry rule (MANDATORY)**: Stacked Mode is entered **only** on an explicit user
-request in the current session — e.g. "スタック型PRで進めて", "stack this on top of
-#N", "implement these iteratively as a stack". **Never infer Stacked Mode** from
-branch state, open-PR state, or the fact that several Issues are being implemented in
-sequence. If in doubt, ask; the safe default is Normal Mode.
-
-**Why it's opt-in**: it changes merge mechanics (asynchronous merge REST API instead
-of `gh pr merge`, see `.claude/skills/pr/SKILL.md`) and CI visibility per layer, so it
-must be a deliberate choice, not an inferred one.
-
-**Scope**: once entered, Stacked Mode is **session-scoped and sticky** — it applies to
-every Issue implemented for the rest of the current session unless the user says
-otherwise. Step 3 still restates the resolved mode for each Issue via its
-`Stack position:` line below, so the current mode stays visible and can be corrected
-at any time.
+Stacked Mode (each PR based on the previous still-open PR's branch) is defined —
+including its **entry rule (explicit user request only; never inferred)**, why it is
+opt-in, and its session-scoped, sticky scope — in
+`.claude/conventions/branching.md` → "Stacked Mode (opt-in)". **Read that section
+before Step 3** whenever the user has mentioned stacking in this session. The safe
+default is Normal Mode.
 
 ## Steps
 
@@ -76,15 +62,8 @@ rewritten.
 
 ### Step 2: Determine Branch Name
 
-Based on issue labels:
-
-| Issue Label | Branch Prefix |
-|-------------|---------------|
-| `enhancement` | `feature/` |
-| `bug` | `bugfix/` |
-| `refactor` | `refactor/` |
-| `documentation` | `docs/` |
-| (no label) | `feature/` |
+Read `.claude/conventions/branching.md` → "Branch Naming (label → prefix)" and
+pick the prefix from the Issue's labels (multiple labels: highest-priority row wins).
 
 Format: `<prefix>/<issue-number>-<short-description>`
 
@@ -104,15 +83,8 @@ git checkout -b <branch-name> origin/develop
 
 #### Stacked Mode branch base
 
-If Stacked Mode is active (see "Stacked Mode (opt-in)" above), determine the base
-per this table instead:
-
-| Mode | Base for `git checkout -b` |
-|------|------------------------------|
-| Normal (default) | `origin/develop` |
-| Stacked, this is the first Issue in the stack | `origin/develop` (this Issue becomes the stack's bottom layer) |
-| Stacked, a previous Issue's branch in this stack is still open (not yet merged) | that previous Issue's branch (fetch it first: `git fetch origin <previous-branch>`) |
-| Stacked, but the previous Issue's PR has already merged | `origin/develop` (the stack has "landed" — start a fresh bottom layer) |
+If Stacked Mode is active, read `.claude/conventions/branching.md` → "Branch Base"
+and choose the base from its Stacked Mode decision table instead of `origin/develop`.
 
 This is the first Issue in the stack if no earlier `Stack position: ... mode=Stacked`
 line has been printed yet in this session — if uncertain (e.g. after context

@@ -1,5 +1,13 @@
 # Project Instructions
 
+> **Charter (what this file owns)**: architecture (`## Architecture Overview`), skill
+> routing (`## Skill Invocation Rules` — the authoritative skill-routing table),
+> the Issue-First rule, and the dead-code policy. Branching, CI-check commands, and
+> test placement are owned by `.claude/conventions/` (`branching.md`, `ci-checks.md`,
+> `testing.md`); `.claude/instructions.md` is a quick-reference/FAQ layer that links
+> here rather than restating. When adding a convention, give it one owner and link to
+> it — do not restate it in another file (see Issue #849).
+
 ## Issue-First Rule
 
 **Before making any file change — code, configuration, skill, or documentation —
@@ -40,7 +48,7 @@ When the user requests any of the following operations, ALWAYS invoke the corres
 
 | User Request | Skill to Invoke | Key Requirements |
 |--------------|-----------------|------------------|
-| Commit changes | /commit | Run `cargo fmt`, `cargo clippy`, English message |
+| Commit changes | /commit | Branch guard, secrets check, English message (fmt/clippy via `.githooks/`) |
 | Create PR | /pr | Run pre-flight checks, English title/body |
 | Push to remote | /pre-push | Run all validations before push |
 | Create Issue | /issue | English title/body, proper template |
@@ -378,18 +386,12 @@ If you identify that a future issue will need a field/method that doesn't exist 
 
 ### Clippy Requirement
 
-CI and all local checks MUST use `--all-targets --all-features`:
-
-```bash
-# ✅ CORRECT — catches dead code in binary and integration-test targets
-cargo clippy --all-targets --all-features -- -D warnings
-
-# ❌ WRONG — misses dead code visible only from binary/integration targets
-cargo clippy --lib -- -D warnings
-```
-
-This is already enforced in `.claude/skills/commit/SKILL.md` and
-`.claude/skills/pr/SKILL.md`. Do not weaken this to `--lib` only.
+CI and all local checks MUST use `cargo clippy --all-targets --all-features -- -D warnings`
+— `--lib` alone misses dead code visible only from binary and integration-test
+targets. The canonical command block, and why each flag is required, lives in
+`.claude/conventions/ci-checks.md`; it is enforced by `.githooks/pre-push` and
+`.github/workflows/ci.yml`, and mirrored by `/pr`'s pre-flight. Do not weaken this to
+`--lib` only.
 
 ### Recent Incidents
 

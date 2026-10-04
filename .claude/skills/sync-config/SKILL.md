@@ -140,10 +140,11 @@ cargo test --lib merge_config
 
 ### Step 8: Verify
 
+<!-- derived: .claude/conventions/ci-checks.md -->
 ```bash
 cargo fmt --all -- --check
-cargo clippy -- -D warnings
-cargo test
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all
 ```
 
 If any check fails, fix before committing.

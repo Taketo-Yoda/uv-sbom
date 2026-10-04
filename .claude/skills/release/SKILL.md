@@ -37,16 +37,21 @@ This separation ensures human oversight for the irreversible release action (tag
 
 ## Pre-flight Checks (MANDATORY)
 
-Before proceeding with version updates, ALL of the following checks MUST pass:
+Before proceeding with version updates, ALL of the following checks MUST pass. The
+commands below are a derived copy of `.claude/conventions/ci-checks.md`; this skill
+intentionally uses the write-mode `cargo fmt --all` (format, then verify) instead of
+`--check`.
 
 ### 1. Format Code
 
+<!-- derived: .claude/conventions/ci-checks.md -->
 ```bash
 cargo fmt --all
 ```
 
 ### 2. Clippy Check
 
+<!-- derived: .claude/conventions/ci-checks.md -->
 ```bash
 cargo clippy --all-targets --all-features -- -D warnings
 ```
@@ -55,6 +60,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 ### 3. Test Suite
 
+<!-- derived: .claude/conventions/ci-checks.md -->
 ```bash
 cargo test --all
 ```
@@ -97,6 +103,7 @@ Ask the user for the target version number (e.g., "1.1.0").
 
 Execute ALL pre-flight checks:
 
+<!-- derived: .claude/conventions/ci-checks.md -->
 ```bash
 cargo fmt --all
 cargo clippy --all-targets --all-features -- -D warnings
