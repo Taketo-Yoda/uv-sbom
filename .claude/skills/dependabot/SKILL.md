@@ -104,7 +104,7 @@ git checkout -b bugfix/<CVE-or-GHSA-ID> origin/develop
 **CRITICAL**: Never include the Dependabot alert number in the branch name.
 
 **CRITICAL**: Security-fix branches are **never stacked**. `origin/develop` is the base
-even when Stacked Mode (`.claude/skills/implement/SKILL.md` → "Stacked Mode (opt-in)")
+even when Stacked Mode (`.claude/conventions/branching.md` → "Stacked Mode (opt-in)")
 is active for the session, because a security fix must be able to merge and close its
 alert independently of an unrelated stack's cadence, and a stacked PR loses automatic
 `pull_request` CI reporting (see `.claude/skills/pr/SKILL.md` → "Verifying CI on an
@@ -135,8 +135,9 @@ If code modifications are required:
 
 ### Step 5: Run Tests
 
+<!-- derived: .claude/conventions/ci-checks.md -->
 ```bash
-cargo test
+cargo test --all
 ```
 
 **Note**: No additional security-specific tests required. Standard test suite is sufficient.
@@ -185,7 +186,7 @@ Invoke `/pr` skill with:
 
 ## Test Plan
 
-- [ ] `cargo test` passes
+- [ ] `cargo test --all` passes
 - [ ] Vulnerability is resolved (Dependabot will auto-close alert)
 ```
 
@@ -245,7 +246,7 @@ Claude executes /dependabot skill:
 3. Creates branch `bugfix/CVE-2026-25541`
 4. Runs `cargo update -p bytes`
 5. Verifies update with `cargo tree -p bytes`
-6. Runs `cargo test`
+6. Runs `cargo test --all`
 7. Invokes `/commit` skill with security fix message
 8. Invokes `/pr` skill with security fix template
 9. Reports: "Created PR #XX for CVE-2026-25541 (bytes vulnerability)"

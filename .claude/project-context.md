@@ -65,7 +65,7 @@ sed -i '' 's/Current Version: 1.0.0/Current Version: 1.1.0/' .claude/project-con
 
 # 4. Build and test
 cargo build
-cargo test
+cargo test --all
 
 # 5. Commit
 git add Cargo.toml python-wrapper/ .claude/project-context.md

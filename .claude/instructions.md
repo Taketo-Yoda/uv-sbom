@@ -1,6 +1,13 @@
 # Instructions for Claude Code
 
-> **See CLAUDE.md → ## Skill Invocation Rules and ## Architecture Overview for authoritative guidance on skills and module structure.**
+> **Charter (what this file owns)**: this file is the quick-reference / FAQ layer only.
+> It must not restate a table or rule owned elsewhere — link to it instead.
+> - `.claude/CLAUDE.md` owns architecture, skill routing (`## Skill Invocation Rules` —
+>   the authoritative skill-routing table), and the dead-code policy.
+> - `.claude/conventions/` owns branching (`branching.md`), CI-check commands
+>   (`ci-checks.md`), and test placement (`testing.md`).
+> - The one exception is a table explicitly labelled as a summary (e.g. Layer Rules
+>   below); on conflict, the owning file wins.
 
 ## Quick Reference
 
@@ -8,15 +15,18 @@
 
 | Operation | Required Approach |
 |-----------|------------------|
-| New branch | `git checkout -b <prefix>/<issue>-<desc> origin/develop` (Normal Mode — see Key Invariant 1) |
+| New branch | Per `.claude/conventions/branching.md` → "Branch Base" (Normal Mode: from `origin/develop`) |
 | Clippy check | `/pre-push` skill (NOT direct `cargo clippy`) |
 | Format check | `/pre-push` skill or `cargo fmt --all -- --check` |
 | Push code | `/pre-push` skill before `git push` |
-| Create PR | `/pr` skill (`--base develop` in Normal Mode — see Key Invariant 1) |
+| Create PR | `/pr` skill (base resolved per `.claude/conventions/branching.md` → "PR Base") |
 | Create Issue | `/issue` skill (English only) |
 | Commit | `/commit` skill |
 
 ### Layer Rules
+
+> Summary for quick context; `.claude/CLAUDE.md` → `## Architecture Overview` is
+> authoritative and wins on conflict.
 
 | Layer | Allowed | Prohibited |
 |-------|---------|------------|
@@ -28,22 +38,11 @@
 
 ### Key Invariants (Never Violate)
 
-1. **Branch from `origin/develop` in Normal Mode (the default)** — never from `main`; see the Stacked Mode note below for the one exception
-2. **`cargo clippy` MUST include `-D warnings`** — CI enforces this (Issue #59)
+1. **Branch from `origin/develop` in Normal Mode (the default)** — never from `main`; Stacked Mode (opt-in, never inferred) is the one exception — see `.claude/conventions/branching.md`
+2. **`cargo clippy` MUST include `--all-targets --all-features -- -D warnings`** — CI enforces this (Issue #59); see `.claude/conventions/ci-checks.md`
 3. **Never bypass skills** for commit/PR/push — skills encode CI-equivalent checks
 4. **Domain layer has zero I/O** — no `std::fs`, no `reqwest`, no network
 5. **All GitHub artifacts in English** — Issues, PRs, commits, comments
-
-> **Stacked Mode (opt-in)**: when the user has explicitly entered Stacked Mode in the
-> current session, a branch and its PR are based on a **still-open sibling stack branch**
-> instead of `origin/develop`. This is the single exception to Invariant 1, and it applies
-> everywhere this file says "Normal Mode". **Never infer Stacked Mode** from branch state,
-> open-PR state, or a run of related Issues — it is entered only on explicit user request,
-> and the safe default is Normal Mode. Canonical definition, entry rule and session scope:
-> `.claude/skills/implement/SKILL.md`'s "Stacked Mode (opt-in)" section; branch-base
-> decision table: its Step 3; PR target (`$BASE_BRANCH`): `.claude/skills/pr/SKILL.md`
-> Step 3. `/dependabot` security-fix branches are never stacked. In Normal Mode, nothing
-> in this file changes.
 
 ---
 
@@ -153,30 +152,10 @@ let file_path = temp_dir.path().join("uv.lock");
 
 > **See CLAUDE.md → ## Skill Invocation Rules for the full skill routing table.**
 
-### Branch Creation (CRITICAL)
+### Branch Creation, Naming, and PR Base (CRITICAL)
 
-Normal Mode (default) — always branch from `origin/develop`:
-
-```bash
-git fetch origin
-git checkout -b feature/<issue-number>-<description> origin/develop
-```
-
-> **Stacked Mode (opt-in)**: base on the still-open sibling stack branch instead — see
-> `.claude/skills/implement/SKILL.md` Step 3's branch-base decision table, and Key
-> Invariant 1 above.
-
-### Branch Naming
-
-| Priority | Label | Prefix | Example |
-|----------|-------|--------|---------|
-| 1 | `enhancement` | `feature/` | `feature/88-add-new-feature` |
-| 2 | `bug` | `bugfix/` | `bugfix/42-fix-parsing` |
-| 3 | `refactor` | `refactor/` | `refactor/30-cleanup` |
-| 4 | `documentation` | `docs/` | `docs/50-update-readme` |
-| 5 | (none) | `feature/` | `feature/99-misc` |
-
-Hotfix (critical production fixes): `hotfix/<issue-number>-<description>`
+See `.claude/conventions/branching.md` — branch base (Normal vs. Stacked Mode),
+label → prefix table, PR base table, and Stacked Mode's entry rule.
 
 ### Pre-commit Hook
 
@@ -185,17 +164,6 @@ Runs `cargo fmt --all` automatically. Setup (once after cloning):
 ```bash
 git config core.hooksPath .githooks
 ```
-
-### Agent Skills
-
-| Skill | Purpose |
-|-------|---------|
-| `/ideate` | Feature ideation (triage → analysis → Issue) |
-| `/implement` | End-to-end implementation (branch → commit → PR) |
-| `/commit` | Commit with branch guard + format/clippy checks |
-| `/pr` | PR creation (pre-validation, base: `develop` in Normal Mode) |
-| `/pre-push` | Pre-push validation (clippy with `-D warnings`) |
-| `/issue` | Issue creation (English, full template) |
 
 **⚠️ CRITICAL (Issue #59)**: Never run `cargo clippy` directly — always use `/pre-push`. Without `-D warnings`, warnings pass locally but fail CI.
 
@@ -215,14 +183,14 @@ git config core.hooksPath .githooks
 5. Apply GoF patterns for duplicate code or complex conditionals (Strategy, Factory, Template Method)
 6. Security review: file ops use `shared/security.rs`; network ops implement timeouts/retries
 7. Add tests for new features
-8. `cargo build` && `cargo test`
+8. `cargo build` && `cargo test --all`
 9. ⚠️ **Use `/pre-push` skill** — NOT manual `cargo clippy`
 
 ### When Completing Work
 
 10. Update documentation as needed
 11. Verify branch before committing
-12. `/commit` skill → `/pr` skill (base: `develop` in Normal Mode; the sibling stack branch in Stacked Mode)
+12. `/commit` skill → `/pr` skill (base per `.claude/conventions/branching.md` → "PR Base")
 
 ---
 
@@ -247,18 +215,13 @@ Read `.claude/product-vision.md` before implementing new output sections, CLI fl
 ### Before Creating a PR
 
 1. ⚠️ **Use `/pre-push` skill** — it runs all CI-equivalent checks including `-D warnings`
-2. Verify base branch is `develop` (NOT `main`) — Normal Mode; in Stacked Mode verify it is the intended still-open sibling stack branch (see Key Invariant 1)
+2. Verify base branch per `.claude/conventions/branching.md` → "PR Base" (Normal Mode: `develop`, NOT `main`)
 3. Review all changes: `git status && git diff`
 
 Manual commands (if absolutely necessary — not recommended):
 
-```bash
-cargo fmt --all && cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings  # ⚠️ -D warnings MANDATORY
-cargo test
-git push
-gh pr create --base develop --title "..." --body "..."  # Normal Mode; in Stacked Mode use the sibling stack branch
-```
+- Checks: the canonical block in `.claude/conventions/ci-checks.md`
+- Then `git push`, and `gh pr create --base <base per branching.md → "PR Base"> ...`
 
 ### When Responding to Review Comments
 
@@ -271,7 +234,7 @@ gh pr create --base develop --title "..." --body "..."  # Normal Mode; in Stacke
 
 | # | Mistake | Fix | Incident |
 |---|---------|-----|----------|
-| 1 | Wrong base branch (`main` instead of `develop`) | `--base develop` in Normal Mode (Stacked Mode: the sibling stack branch) | PR #31 |
+| 1 | Wrong base branch (`main` instead of `develop`) | Base per `.claude/conventions/branching.md` → "PR Base" | PR #31 |
 | 2 | Forgot `cargo fmt --all` before push | Always run formatter | PR #31 |
 | 3 | Missed review comment items | Read ALL comments, use checklist | PR #31 |
 | 4 | `cargo clippy` without `-D warnings` | Use `/pre-push` skill | Issue #59 |
@@ -293,9 +256,7 @@ gh pr create --base develop --title "..." --body "..."  # Normal Mode; in Stacke
 - [ ] File ops use `shared/security.rs` (symlink, size, type checks)
 - [ ] Network ops implement timeouts, retries, rate limiting
 - [ ] No sensitive info in error messages (paths, internal structures)
-- [ ] `cargo fmt --all -- --check` passes
-- [ ] `cargo clippy --all-targets --all-features -- -D warnings` — zero warnings
-- [ ] `cargo test` passes
+- [ ] The canonical check block in `.claude/conventions/ci-checks.md` passes (fmt / clippy with zero warnings / tests)
 - [ ] Tests added for new features
 - [ ] Public APIs have documentation comments (`///`)
 
@@ -323,12 +284,13 @@ Implement `LicenseRepository` trait → new adapter in `adapters/outbound/` → 
 
 ---
 
-Last Updated: 2026-09-26
+Last Updated: 2026-10-04
 
 ## Change History
 
 | Date | Change | Reference |
 |------|--------|-----------|
+| 2026-10-04 | Added non-overlap charter; replaced branching/CI-check restatements with pointers to `.claude/conventions/`; removed the duplicate "Agent Skills" table (CLAUDE.md's Skill Invocation Rules is the only routing table) | Issue #849 |
 | 2026-09-26 | Qualified all `develop`/`main` branch-base assertions as Normal Mode; added a single Stacked Mode cross-reference note to Key Invariants | Issue #846 |
 | 2026-03-30 | Restructured for AI context efficiency: added Quick Reference, extracted Issue Guidelines to `issue-guidelines.md`, condensed prose to tables | Issue #371 |
 | 2026-01-17 | Added pre-commit hook for automatic formatting | Issue #102 |

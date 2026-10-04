@@ -18,17 +18,19 @@ Create Pull Requests that pass CI before creation and target the correct branch.
 ## Stacked Mode (opt-in)
 
 Entered **only** on an explicit user request in the current session — never inferred
-from branch/PR state. Full definition, entry rule, and session scope are documented
-in `.claude/skills/implement/SKILL.md`'s "Stacked Mode (opt-in)" section; this skill
-follows the same rule rather than redefining it. In Normal Mode (the default), nothing
-below changes.
+from branch/PR state. Full definition, entry rule, and session scope live in
+`.claude/conventions/branching.md` → "Stacked Mode (opt-in)"; this skill follows that
+rule rather than redefining it. In Normal Mode (the default), nothing below changes.
 
 ## Pre-flight Checks (MANDATORY)
 
-Before creating a PR, ALL of the following checks MUST pass:
+Before creating a PR, ALL of the following checks MUST pass. The three commands
+below are a derived copy of `.claude/conventions/ci-checks.md` (the canonical block);
+if they ever disagree, that file wins.
 
 ### 1. Format Check
 
+<!-- derived: .claude/conventions/ci-checks.md -->
 ```bash
 cargo fmt --all -- --check
 ```
@@ -37,6 +39,7 @@ If this fails, run `cargo fmt --all` to fix and commit the changes.
 
 ### 2. Clippy Check
 
+<!-- derived: .claude/conventions/ci-checks.md -->
 ```bash
 cargo clippy --all-targets --all-features -- -D warnings
 ```
@@ -45,6 +48,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 ### 3. Test Suite
 
+<!-- derived: .claude/conventions/ci-checks.md -->
 ```bash
 cargo test --all
 ```
@@ -98,33 +102,14 @@ git status
 Verify:
 
 - [ ] Not on `main` branch (direct commits to main are forbidden)
-- [ ] Branch follows naming convention:
-  - `feature/<issue-number>-<description>` for features
-  - `bugfix/<issue-number>-<description>` for bug fixes
-  - `hotfix/<issue-number>-<description>` for hotfixes
-  - `docs/<issue-number>-<description>` for documentation
-  - `refactor/<issue-number>-<description>` for refactoring
+- [ ] Branch follows the naming convention in `.claude/conventions/branching.md` →
+  "Branch Naming (label → prefix)"
 
 ### Step 3: Determine Base Branch
 
-**CRITICAL**: This project uses `develop` as the integration branch.
-
-#### Normal Mode (default)
-
-| Branch Type | Base Branch |
-|-------------|-------------|
-| feature/*   | `develop`   |
-| bugfix/*    | `develop`   |
-| docs/*      | `develop`   |
-| refactor/*  | `develop`   |
-| hotfix/*    | `main`      |
-| release/*   | `main`      |
-
-#### Stacked Mode (opt-in)
-
-| Branch Type | Base Branch |
-|-------------|-------------|
-| any `feature/*` / `bugfix/*` / `docs/*` / `refactor/*` **in Stacked Mode** | the still-open sibling PR's branch recorded by `/implement` Step 3 |
+**CRITICAL**: This project uses `develop` as the integration branch. Read
+`.claude/conventions/branching.md` → "PR Base" and pick the base for the current
+branch type and mode from its table.
 
 Exception: `bugfix/<CVE-or-GHSA-ID>` branches created by `/dependabot` always target
 `develop`, never a stack layer — see that skill's Step 3 for why.
@@ -135,18 +120,12 @@ Stacked Mode with no base supplied, **ask the user** which open PR branch to sta
 on — offer the candidates from `gh pr list --state open --json number,headRefName,baseRefName,url`,
 with `develop` (Normal Mode) as the safe default. **Never infer it.**
 
-Set `$BASE_BRANCH` from whichever row above applies; Steps 1, 4, 4.5, 4.6, and 6 use
-this variable.
+Set `$BASE_BRANCH` from whichever row of that table applies; Steps 1, 4, 4.5, 4.6,
+and 6 use this variable.
 
-**Branch Creation Rule**: In Normal Mode, create new branches from `origin/develop`:
-
-```bash
-git fetch origin
-git checkout -b feature/<issue>-<desc> origin/develop
-```
-
-In Stacked Mode, see `.claude/skills/implement/SKILL.md` Step 3's branch-base
-decision table instead.
+Branch creation (Normal and Stacked Mode) is defined in
+`.claude/conventions/branching.md` → "Branch Base"; this skill does not create
+branches.
 
 ### Step 4: Review Changes
 

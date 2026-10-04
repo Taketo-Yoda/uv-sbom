@@ -25,17 +25,15 @@ Before responding to any QA review request, read:
   - Unicode in package names or descriptions
   - Very large dependency trees (performance edge case)
 - Flag when a change modifies existing behavior without updating tests
-- Recommend test placement following project conventions:
-  - Tests belong in `#[cfg(test)]` blocks in the same file as the code under test
-  - Separate `tests.rs` files are NOT used in this project
+- Recommend test placement following `.claude/conventions/testing.md` (see below)
 - Evaluate regression risk: changes to output formatters, domain logic, or config
   resolution are high-risk and require explicit regression tests
 
 ## Test Placement Convention
 
-**IMPORTANT**: This project places all tests in `#[cfg(test)]` blocks within the same
-file as the implementation. Do NOT suggest creating separate `tests.rs` files or a
-`tests/` directory unless the issue explicitly calls for integration tests.
+**IMPORTANT**: Read and apply `.claude/conventions/testing.md` (the canonical rule:
+`#[cfg(test)]` in the same file, no sibling `tests.rs`, crate-root `tests/` only for
+integration tests). Do not suggest a placement that contradicts it.
 
 ## Scope
 
