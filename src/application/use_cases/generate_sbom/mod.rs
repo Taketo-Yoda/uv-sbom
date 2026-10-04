@@ -271,10 +271,14 @@ mod tests {
 
     pub(crate) struct MockProjectConfigReader {
         pub(crate) project_name: String,
+        pub(crate) pyproject_missing: bool,
     }
 
     impl ProjectConfigReader for MockProjectConfigReader {
         fn read_project_name(&self, _path: &Path) -> Result<String> {
+            if self.pyproject_missing {
+                return Err(crate::ports::outbound::ProjectConfigError::PyprojectNotFound.into());
+            }
             Ok(self.project_name.clone())
         }
     }
@@ -329,6 +333,8 @@ mod tests {
             group_roots: GroupRoots,
             source_map: PackageSourceMap,
             project_name: String,
+            pyproject_missing: bool,
+            locale: Locale,
             vuln: Option<MockVulnerabilityRepository>,
             maint: Option<MockMaintenanceRepository>,
             pyc: Option<MockPythonCompatibilityRepository>,
@@ -343,6 +349,8 @@ mod tests {
                     group_roots: HashMap::new(),
                     source_map: PackageSourceMap::new(),
                     project_name: "test-project".to_string(),
+                    pyproject_missing: false,
+                    locale: Locale::default(),
                     vuln: None,
                     maint: None,
                     pyc: None,
@@ -374,6 +382,16 @@ mod tests {
 
             pub(crate) fn with_project_name(mut self, name: impl Into<String>) -> Self {
                 self.project_name = name.into();
+                self
+            }
+
+            pub(crate) fn with_missing_pyproject(mut self) -> Self {
+                self.pyproject_missing = true;
+                self
+            }
+
+            pub(crate) fn with_locale(mut self, locale: Locale) -> Self {
+                self.locale = locale;
                 self
             }
 
@@ -415,6 +433,7 @@ mod tests {
                     },
                     MockProjectConfigReader {
                         project_name: self.project_name,
+                        pyproject_missing: self.pyproject_missing,
                     },
                     MockLicenseRepository,
                     MockProgressReporter,
@@ -423,7 +442,7 @@ mod tests {
                     self.pyc,
                     self.sim,
                     None::<()>,
-                    Locale::default(),
+                    self.locale,
                 )
             }
         }
