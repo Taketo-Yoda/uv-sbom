@@ -123,12 +123,14 @@ pub struct Messages {
     pub warn_ignored_cve_with_reason: &'static str,
     pub warn_ignored_cve_no_reason: &'static str,
     pub warn_dependency_chain_truncated: &'static str,
+    pub warn_exclude_pattern_unmatched: &'static str,
     pub warn_suggest_fix_requires_uv: &'static str,
     pub warn_suggest_fix_requires_pyproject: &'static str,
     pub progress_fetching_abandoned: &'static str,
     pub progress_abandoned_found: &'static str,
     pub progress_abandoned_none: &'static str,
     pub progress_excluded_groups: &'static str,
+    pub progress_packages_excluded: &'static str,
     pub progress_fetching_python_compat: &'static str,
     pub progress_python_compat_found: &'static str,
     pub progress_python_compat_none: &'static str,
@@ -409,12 +411,14 @@ static EN_MESSAGES: Messages = Messages {
     warn_ignored_cve_with_reason: "⚠ Ignored {} for package {} (reason: {})",
     warn_ignored_cve_no_reason: "⚠ Ignored {} for package {} (no reason provided)",
     warn_dependency_chain_truncated: "⚠️  Warning: Maximum recursion depth ({}) reached for package '{}'. Dependency chain may be truncated.",
+    warn_exclude_pattern_unmatched: "⚠️  Warning: Exclude pattern '{}' did not match any dependencies.",
     warn_suggest_fix_requires_uv: "⚠ --suggest-fix requires `uv` CLI. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh",
     warn_suggest_fix_requires_pyproject: "⚠ --suggest-fix requires pyproject.toml in the project directory.",
     progress_fetching_abandoned: "🔍 Fetching package maintenance information...",
     progress_abandoned_found: "✅ Abandoned check complete: {} package(s) abandoned ({} direct, {} transitive), threshold: {} days",
     progress_abandoned_none: "✅ Abandoned check complete: No packages exceed {} day threshold",
     progress_excluded_groups: "🚫 Excluded {} package(s) from dependency group(s): {}",
+    progress_packages_excluded: "🚫 Excluded {} package(s) based on filters",
     progress_fetching_python_compat: "🔍 Checking Python version compatibility...",
     progress_python_compat_found: "✅ Python compatibility check complete: {} package(s) incompatible with Python {} ({} direct, {} transitive)",
     progress_python_compat_none: "✅ Python compatibility check complete: All packages compatible with Python {}",
@@ -663,12 +667,14 @@ static JA_MESSAGES: Messages = Messages {
     warn_ignored_cve_with_reason: "⚠ {} をパッケージ {} で無視しました (理由: {})",
     warn_ignored_cve_no_reason: "⚠ {} をパッケージ {} で無視しました (理由の指定なし)",
     warn_dependency_chain_truncated: "⚠️  警告: 最大再帰深度 ({}) に達しました（パッケージ: '{}'）。依存関係チェーンが切り詰められる可能性があります。",
+    warn_exclude_pattern_unmatched: "⚠️  警告: 除外パターン '{}' はどの依存関係にも一致しませんでした。",
     warn_suggest_fix_requires_uv: "⚠ --suggest-fix には `uv` CLI が必要です。インストール: curl -LsSf https://astral.sh/uv/install.sh | sh",
     warn_suggest_fix_requires_pyproject: "⚠ --suggest-fix にはプロジェクトディレクトリに pyproject.toml が必要です。",
     progress_fetching_abandoned: "🔍 パッケージのメンテナンス情報を取得中...",
     progress_abandoned_found: "✅ 廃止パッケージチェック完了: {}件廃止（直接: {}件、間接: {}件）、閾値: {}日",
     progress_abandoned_none: "✅ 廃止パッケージチェック完了: {}日以上更新のないパッケージはありません",
     progress_excluded_groups: "🚫 依存関係グループから{}個のパッケージを除外: {}",
+    progress_packages_excluded: "🚫 フィルターにより{}個のパッケージを除外",
     progress_fetching_python_compat: "🔍 Pythonバージョン互換性を確認中...",
     progress_python_compat_found: "✅ Python互換性チェック完了: {}件のパッケージがPython {}と互換性がありません（直接: {}件、間接: {}件）",
     progress_python_compat_none: "✅ Python互換性チェック完了: すべてのパッケージがPython {}と互換性があります",
@@ -1745,6 +1751,62 @@ mod tests {
             .count();
         assert_eq!(en_count, ja_count);
         assert_eq!(en_count, 2);
+    }
+
+    #[test]
+    fn test_warn_exclude_pattern_unmatched_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(msgs.warn_exclude_pattern_unmatched, &["foo-*"]);
+        assert_eq!(
+            result,
+            "⚠️  Warning: Exclude pattern 'foo-*' did not match any dependencies."
+        );
+    }
+
+    #[test]
+    fn test_warn_exclude_pattern_unmatched_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(msgs.warn_exclude_pattern_unmatched, &["foo-*"]);
+        assert_eq!(
+            result,
+            "⚠️  警告: 除外パターン 'foo-*' はどの依存関係にも一致しませんでした。"
+        );
+    }
+
+    #[test]
+    fn test_warn_exclude_pattern_unmatched_placeholder_parity() {
+        let en_count = EN_MESSAGES
+            .warn_exclude_pattern_unmatched
+            .matches("{}")
+            .count();
+        let ja_count = JA_MESSAGES
+            .warn_exclude_pattern_unmatched
+            .matches("{}")
+            .count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 1);
+    }
+
+    #[test]
+    fn test_progress_packages_excluded_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(msgs.progress_packages_excluded, &["3"]);
+        assert_eq!(result, "🚫 Excluded 3 package(s) based on filters");
+    }
+
+    #[test]
+    fn test_progress_packages_excluded_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(msgs.progress_packages_excluded, &["3"]);
+        assert_eq!(result, "🚫 フィルターにより3個のパッケージを除外");
+    }
+
+    #[test]
+    fn test_progress_packages_excluded_placeholder_parity() {
+        let en_count = EN_MESSAGES.progress_packages_excluded.matches("{}").count();
+        let ja_count = JA_MESSAGES.progress_packages_excluded.matches("{}").count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 1);
     }
 
     #[test]
