@@ -272,6 +272,13 @@ Before submitting via `gh issue create`:
 | `enhancement` | New features or improvements |
 | `documentation` | Documentation updates |
 | `refactor` | Code refactoring |
-| `security` | Security-related issues |
-| `performance` | Performance improvements |
-| `testing` | Test additions or improvements |
+| `security` | Vulnerabilities or security-related issues |
+| `ci` | CI/CD pipeline changes |
+| `maintenance` | Maintenance tasks, dependency updates, CI/CD |
+| `rust` | PRs that update Rust code |
+| `dependencies` | PRs that update a dependency file |
+| `good first issue` | Good for newcomers |
+| `github_actions` | PRs that update GitHub Actions code |
+| `priority: low` | Low priority, address when time permits |
+| `priority: medium` | Normal priority |
+| `priority: high` | High priority, address soon |
