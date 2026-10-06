@@ -146,7 +146,7 @@ fn build_use_case<LR: LockfileReader>(
 
     // Create exploitability repository if exploitability enrichment is requested
     let exploitability_repository = if merged.check_exploitability {
-        Some(EpssKevClient::new()?)
+        Some(EpssKevClient::new(locale)?)
     } else {
         None
     };
