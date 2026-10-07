@@ -38,109 +38,18 @@ After reading the guidelines, gather the following information from the user:
 - **Types affected**: New or changed types, if any — these become the `## Design Sketch`
   Mermaid diagram. If no types change, the Design Sketch section is omitted.
 
-### 3. Determine Issue Template
+### 3. Draft Issue from Template
 
-Both templates split into a visible **human section** and a collapsed **AI section**.
-These mirror `.claude/issue-guidelines.md` — if the two ever disagree, the guidelines
-file wins and this skill must be corrected.
+Use the template under `## Issue Structure Template` in `.claude/issue-guidelines.md`
+for Feature Requests. Use the template under `### Bug Report Template` in
+`.claude/issue-guidelines.md` for Bug Reports.
 
-**Formatting rule**: leave a blank line after `<summary>` and before `</details>`, or
-GitHub renders the AI section as literal text.
+Follow the formatting rules under `## Issue Structure Template` in
+`.claude/issue-guidelines.md` — in particular, leave a blank line after `<summary>`
+and before `</details>`.
 
-**No implementation code** in either section — see "No Implementation Code in Issue
-Bodies" in the guidelines for the four allowed exceptions.
-
-Based on the type, use the appropriate structure:
-
-#### Feature Request
-
-```markdown
-## Summary
-[2–3 sentences: what changes and what value it provides. No implementation detail.]
-
-## Why
-- [Reason / pain point 1]
-- [Reason / pain point 2]
-
-## Design Sketch
-[Minimal Mermaid classDiagram of NEW or CHANGED types only. Omit entirely if no
-types change.]
-
-## Scope
-**In**
-- [What this Issue delivers]
-
-**Out**
-- [Explicitly excluded]
-
-## Acceptance Criteria
-- [ ] [Behavior-level, human-verifiable outcome]
-
-<details>
-<summary>🤖 Implementation Spec (for AI agents)</summary>
-
-## Context & Constraints
-- [Existing pattern, precedent Issue/PR, invariant, or file not to touch]
-
-## Design Decisions
-- **[Decision]** — [rationale, in prose]
-
-## Files to Update/Create
-1. `path/to/file.rs` — [what changes]
-
-## Technical Acceptance Criteria
-- [ ] All existing tests pass (`cargo test --all`)
-- [ ] New tests added for new functionality (if applicable)
-- [ ] Formatted with `cargo fmt --all`
-- [ ] No new Clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
-- [ ] Documentation updated (if applicable)
-- [ ] No speculative `#[allow(dead_code)]` (see `.claude/CLAUDE.md` → Dead Code Policy)
-
-</details>
-```
-
-#### Bug Report
-
-```markdown
-## Summary
-[1–2 sentences: what is broken and who it affects.]
-
-## Current Behavior
-[What happens now. A reproduction command and its real error output are allowed here.]
-
-## Expected Behavior
-[What should happen instead.]
-
-## Steps to Reproduce
-1. [Step 1]
-2. [Step 2]
-3. [Step 3]
-
-## Acceptance Criteria
-- [ ] [Observable behavior after the fix]
-- [ ] The reproduction above no longer triggers the failure
-
-<details>
-<summary>🤖 Implementation Spec (for AI agents)</summary>
-
-## Root Cause Analysis
-- Environment: [OS, Rust version, etc.]
-- [Which file/function is responsible and why, citing `path/to/file.rs:LINE`]
-
-## Proposed Fix
-[Technical approach to fix, in prose — no implementation code]
-
-## Files to Update/Create
-1. `path/to/file.rs` — [what changes]
-
-## Technical Acceptance Criteria
-- [ ] Regression test added to prevent recurrence
-- [ ] All existing tests pass (`cargo test --all`)
-- [ ] Formatted with `cargo fmt --all`
-- [ ] No new Clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
-
-</details>
-```
+Do not include implementation code in either section — see "No Implementation Code
+in Issue Bodies" in `.claude/issue-guidelines.md` for the four allowed exceptions.
 
 ### 4. Validate Completeness
 
@@ -183,15 +92,7 @@ After creating, output:
 
 ## Labels Reference
 
-Common labels for this project:
-
-- `bug` - Bug fixes
-- `enhancement` - New features or improvements
-- `documentation` - Documentation updates
-- `refactor` - Code refactoring
-- `security` - Security-related issues
-- `performance` - Performance improvements
-- `testing` - Test additions or improvements
+Use the labels listed under `## Labels Reference` in `.claude/issue-guidelines.md`.
 
 ## Example Usage
 
