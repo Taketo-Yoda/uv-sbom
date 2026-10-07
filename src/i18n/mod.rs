@@ -120,6 +120,8 @@ pub struct Messages {
     pub warn_verify_links_json_hint: &'static str,
     pub warn_abandoned_fetch_failed: &'static str,
     pub warn_vuln_detail_fetch_failed: &'static str,
+    pub warn_epss_fetch_failed: &'static str,
+    pub warn_kev_fetch_failed: &'static str,
     pub warn_ignored_cve_with_reason: &'static str,
     pub warn_ignored_cve_no_reason: &'static str,
     pub warn_dependency_chain_truncated: &'static str,
@@ -408,6 +410,8 @@ static EN_MESSAGES: Messages = Messages {
     warn_verify_links_json_hint: "   Use --format markdown to use link verification.",
     warn_abandoned_fetch_failed: "⚠️  Warning: Failed to fetch maintenance info for {}: {}",
     warn_vuln_detail_fetch_failed: "⚠️  Warning: Failed to fetch details for {}: {}",
+    warn_epss_fetch_failed: "Warning: EPSS fetch failed for batch {}: {}",
+    warn_kev_fetch_failed: "Warning: KEV catalog fetch failed: {}",
     warn_ignored_cve_with_reason: "⚠ Ignored {} for package {} (reason: {})",
     warn_ignored_cve_no_reason: "⚠ Ignored {} for package {} (no reason provided)",
     warn_dependency_chain_truncated: "⚠️  Warning: Maximum recursion depth ({}) reached for package '{}'. Dependency chain may be truncated.",
@@ -664,6 +668,8 @@ static JA_MESSAGES: Messages = Messages {
     warn_verify_links_json_hint: "   リンク検証を使用するには --format markdown を使用してください。",
     warn_abandoned_fetch_failed: "⚠️  警告: {}のメンテナンス情報の取得に失敗: {}",
     warn_vuln_detail_fetch_failed: "⚠️  警告: {}の詳細情報の取得に失敗: {}",
+    warn_epss_fetch_failed: "警告: バッチ{}のEPSSデータ取得に失敗: {}",
+    warn_kev_fetch_failed: "警告: KEVカタログの取得に失敗: {}",
     warn_ignored_cve_with_reason: "⚠ {} をパッケージ {} で無視しました (理由: {})",
     warn_ignored_cve_no_reason: "⚠ {} をパッケージ {} で無視しました (理由の指定なし)",
     warn_dependency_chain_truncated: "⚠️  警告: 最大再帰深度 ({}) に達しました（パッケージ: '{}'）。依存関係チェーンが切り詰められる可能性があります。",
@@ -1683,6 +1689,62 @@ mod tests {
             result,
             "⚠️  警告: CVE-2024-001の詳細情報の取得に失敗: リクエストがタイムアウトしました"
         );
+    }
+
+    #[test]
+    fn test_warn_epss_fetch_failed_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(msgs.warn_epss_fetch_failed, &["3", "connection refused"]);
+        assert_eq!(
+            result,
+            "Warning: EPSS fetch failed for batch 3: connection refused"
+        );
+    }
+
+    #[test]
+    fn test_warn_epss_fetch_failed_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(msgs.warn_epss_fetch_failed, &["3", "接続が拒否されました"]);
+        assert_eq!(
+            result,
+            "警告: バッチ3のEPSSデータ取得に失敗: 接続が拒否されました"
+        );
+    }
+
+    #[test]
+    fn test_warn_epss_fetch_failed_placeholder_parity() {
+        let en_count = EN_MESSAGES.warn_epss_fetch_failed.matches("{}").count();
+        let ja_count = JA_MESSAGES.warn_epss_fetch_failed.matches("{}").count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 2);
+    }
+
+    #[test]
+    fn test_warn_kev_fetch_failed_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(msgs.warn_kev_fetch_failed, &["connection refused"]);
+        assert_eq!(
+            result,
+            "Warning: KEV catalog fetch failed: connection refused"
+        );
+    }
+
+    #[test]
+    fn test_warn_kev_fetch_failed_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(msgs.warn_kev_fetch_failed, &["接続が拒否されました"]);
+        assert_eq!(
+            result,
+            "警告: KEVカタログの取得に失敗: 接続が拒否されました"
+        );
+    }
+
+    #[test]
+    fn test_warn_kev_fetch_failed_placeholder_parity() {
+        let en_count = EN_MESSAGES.warn_kev_fetch_failed.matches("{}").count();
+        let ja_count = JA_MESSAGES.warn_kev_fetch_failed.matches("{}").count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 1);
     }
 
     #[test]

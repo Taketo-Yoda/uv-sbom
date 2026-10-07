@@ -6,6 +6,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use reqwest::Client;
 
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::ExploitabilityRepository;
 use crate::sbom_generation::domain::exploitability::ExploitabilityInfo;
 use crate::shared::response_size_guard;
@@ -26,6 +27,7 @@ pub struct EpssKevClient {
     client: Client,
     epss_base_url: String,
     kev_url: String,
+    locale: Locale,
 }
 
 impl EpssKevClient {
@@ -38,19 +40,25 @@ impl EpssKevClient {
     const MAX_BATCH_SIZE: usize = 100;
     const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
 
-    pub fn new() -> Result<Self> {
+    /// Creates a new client using the default EPSS and KEV endpoint URLs.
+    pub fn new(locale: Locale) -> Result<Self> {
         Self::build(
             Self::EPSS_API_BASE.to_string(),
             Self::KEV_CATALOG_URL.to_string(),
+            locale,
         )
     }
 
     #[cfg(test)]
-    fn new_with_urls(epss_base_url: impl Into<String>, kev_url: impl Into<String>) -> Result<Self> {
-        Self::build(epss_base_url.into(), kev_url.into())
+    fn new_with_urls(
+        epss_base_url: impl Into<String>,
+        kev_url: impl Into<String>,
+        locale: Locale,
+    ) -> Result<Self> {
+        Self::build(epss_base_url.into(), kev_url.into(), locale)
     }
 
-    fn build(epss_base_url: String, kev_url: String) -> Result<Self> {
+    fn build(epss_base_url: String, kev_url: String, locale: Locale) -> Result<Self> {
         let version = env!("CARGO_PKG_VERSION");
         let user_agent = format!("uv-sbom/{}", version);
         let client = Client::builder()
@@ -62,6 +70,7 @@ impl EpssKevClient {
             client,
             epss_base_url,
             kev_url,
+            locale,
         })
     }
 
@@ -156,7 +165,14 @@ impl ExploitabilityRepository for EpssKevClient {
             match self.fetch_epss_batch(chunk).await {
                 Ok(batch) => epss_data.extend(batch),
                 Err(e) => {
-                    eprintln!("Warning: EPSS fetch failed for batch {}: {}", i + 1, e);
+                    let msgs = Messages::for_locale(self.locale);
+                    eprintln!(
+                        "{}",
+                        Messages::format(
+                            msgs.warn_epss_fetch_failed,
+                            &[&(i + 1).to_string(), &e.to_string()]
+                        )
+                    );
                 }
             }
         }
@@ -165,7 +181,11 @@ impl ExploitabilityRepository for EpssKevClient {
         let kev_set: HashSet<String> = match self.fetch_kev_catalog().await {
             Ok(set) => set,
             Err(e) => {
-                eprintln!("Warning: KEV catalog fetch failed: {}", e);
+                let msgs = Messages::for_locale(self.locale);
+                eprintln!(
+                    "{}",
+                    Messages::format(msgs.warn_kev_fetch_failed, &[&e.to_string()])
+                );
                 HashSet::new()
             }
         };
@@ -228,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_client_creation() {
-        let client = EpssKevClient::new();
+        let client = EpssKevClient::new(Locale::En);
         assert!(client.is_ok());
     }
 
@@ -265,7 +285,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = EpssKevClient::new_with_urls(epss_url, kev_url).unwrap();
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::En).unwrap();
         let result = client
             .fetch_exploitability(vec![
                 "CVE-2024-0001".to_string(),
@@ -290,7 +310,7 @@ mod tests {
         let (mock_server, epss_url, kev_url) = setup_mock_server().await;
 
         // No HTTP calls should be made since all IDs are non-CVE
-        let client = EpssKevClient::new_with_urls(epss_url, kev_url).unwrap();
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::En).unwrap();
         let result = client
             .fetch_exploitability(vec![
                 "GHSA-xxxx-yyyy-zzzz".to_string(),
@@ -327,7 +347,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = EpssKevClient::new_with_urls(epss_url, kev_url).unwrap();
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::En).unwrap();
         let result = client
             .fetch_exploitability(vec![
                 "CVE-2024-0001".to_string(),
@@ -360,7 +380,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = EpssKevClient::new_with_urls(epss_url, kev_url).unwrap();
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::En).unwrap();
         let result = client
             .fetch_exploitability(vec!["CVE-2024-0001".to_string()])
             .await
@@ -393,7 +413,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = EpssKevClient::new_with_urls(epss_url, kev_url).unwrap();
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::En).unwrap();
         let result = client
             .fetch_exploitability(vec!["CVE-2024-0001".to_string()])
             .await
@@ -422,7 +442,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = EpssKevClient::new_with_urls(epss_url, kev_url).unwrap();
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::En).unwrap();
         let result = client
             .fetch_exploitability(vec!["CVE-2024-0001".to_string()])
             .await
@@ -432,8 +452,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_epss_failure_soft_fails_ja_locale() {
+        let (mock_server, epss_url, kev_url) = setup_mock_server().await;
+
+        Mock::given(method("GET"))
+            .and(path("/data/v1/epss"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/kev.json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "vulnerabilities": [
+                    { "cveID": "CVE-2024-0001" }
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::Ja).unwrap();
+        let result = client
+            .fetch_exploitability(vec!["CVE-2024-0001".to_string()])
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert!(result.get("CVE-2024-0001").unwrap().in_kev());
+    }
+
+    #[tokio::test]
+    async fn test_kev_failure_soft_fails_ja_locale() {
+        let (mock_server, epss_url, kev_url) = setup_mock_server().await;
+
+        Mock::given(method("GET"))
+            .and(path("/data/v1/epss"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "status": "OK",
+                "data": [
+                    { "cve": "CVE-2024-0001", "epss": "0.50000", "percentile": "0.97000" }
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/kev.json"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&mock_server)
+            .await;
+
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::Ja).unwrap();
+        let result = client
+            .fetch_exploitability(vec!["CVE-2024-0001".to_string()])
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert!(!result.get("CVE-2024-0001").unwrap().in_kev());
+        assert!((result.get("CVE-2024-0001").unwrap().epss_percentile() - 0.97).abs() < 0.001);
+    }
+
+    #[tokio::test]
     async fn test_empty_input_returns_empty() {
-        let client = EpssKevClient::new().unwrap();
+        let client = EpssKevClient::new(Locale::En).unwrap();
         let result = client.fetch_exploitability(vec![]).await.unwrap();
         assert!(result.is_empty());
     }
@@ -462,7 +544,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = EpssKevClient::new_with_urls(epss_url, kev_url).unwrap();
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::En).unwrap();
         let result = client
             .fetch_exploitability(vec!["CVE-2024-0001".to_string()])
             .await
@@ -499,7 +581,7 @@ mod tests {
         // Create 150 CVE IDs to force 2 batches
         let cve_ids: Vec<String> = (1..=150).map(|i| format!("CVE-2024-{:04}", i)).collect();
 
-        let client = EpssKevClient::new_with_urls(epss_url, kev_url).unwrap();
+        let client = EpssKevClient::new_with_urls(epss_url, kev_url, Locale::En).unwrap();
         let result = client.fetch_exploitability(cve_ids).await.unwrap();
 
         // No EPSS data returned, no KEV matches → empty
