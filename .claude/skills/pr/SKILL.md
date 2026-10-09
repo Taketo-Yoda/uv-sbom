@@ -285,9 +285,13 @@ gh pr create --base "$BASE_BRANCH" --title "TITLE" --body "$(cat <<'EOF'
 Closes #XX
 
 ## Changes Made
-- [Change 1]
-- [Change 2]
-- [Change 3]
+
+`path/to/first_file.rs`
+- [Change to this file]
+- [Another change to this file]
+
+`path/to/second_file.md`
+- [Change to this file]
 
 ## Test Plan
 - [ ] `cargo test --all` passes
@@ -301,6 +305,35 @@ Closes #XX
 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
+```
+
+#### Changes Made formatting
+
+Format the `## Changes Made` section as follows:
+
+- **Group changes by file.** Put each modified file's path on its own line, wrapped
+  in backticks only. The path line is not a bullet and has no `**` bold.
+- **List that file's changes as bullets under the path**, one change per bullet.
+  Do not join several changes into one bullet with semicolons.
+- Put a blank line between file groups.
+- **Never include a Claude session URL** (`https://claude.ai/code/session_...`)
+  anywhere in the PR body. The footer contains only the Claude Code attribution line
+  shown in the template above.
+
+Example (abridged from the corrected body of PR #908):
+
+```markdown
+## Changes Made
+
+`src/adapters/outbound/network/epss_kev_client/mod.rs`
+- Added `locale: Locale` field to `EpssKevClient` struct
+- Updated `new()`, `new_with_urls()`, `build()` constructors to accept `locale`
+
+`src/i18n/mod.rs`
+- Added `warn_epss_fetch_failed` and `warn_kev_fetch_failed` keys to `Messages`, `EN_MESSAGES`, `JA_MESSAGES`
+
+`CHANGELOG.md`
+- Added `[Unreleased] > Fixed` entry
 ```
 
 **Stacked PR note (only when `$BASE_BRANCH` is not `develop`/`main`)**: insert an

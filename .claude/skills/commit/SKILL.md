@@ -191,6 +191,11 @@ EOF
 )"
 ```
 
+**Never include a Claude session URL** (`https://claude.ai/code/session_...`) in the
+commit message — neither in the body nor as a trailer such as `Claude-Session:`. The
+only Claude-related trailer is the `Co-Authored-By` line shown above. Session URLs are internal
+tooling details with no value in the repository's history.
+
 ### Step 7: Verify Commit
 
 ```bash
@@ -202,6 +207,7 @@ Confirm:
 - [ ] Commit message is in English
 - [ ] Type is correct
 - [ ] Co-Authored-By is present
+- [ ] No Claude session URL (`https://claude.ai/code/session_...`) or `Claude-Session:` trailer
 - [ ] No secrets in the commit
 
 ## Error Handling
