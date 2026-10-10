@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-10
+
+### Added
+- **Exploitability prioritization (EPSS + CISA KEV)**: New `--check-exploitability` flag (config key `check_exploitability`) enriches CVE results with FIRST.org EPSS percentiles and CISA Known Exploited Vulnerabilities (KEV) catalog status. Markdown output gains conditional "Exploited (KEV)" and "EPSS" columns in the vulnerability table and resolution guide, plus an EPSS/KEV attribution line. Fetch failures soft-fail (affected CVEs simply get no exploitability data). Conflicts with `--no-check-cve`. CycloneDX JSON output is out of scope. Fully localized for EN and JA (#812, #875, #876, #877, #878, #879, #880, #890)
+
+### Changed
+- **Vulnerability tables are sorted by exploitability**: Actionable and informational vulnerability lists are now ordered KEV-listed first, then by EPSS percentile, then by CVSS severity. Without `--check-exploitability`, ordering is by severity as before (#888)
+
 ### Security
 - **`OsvClient` had no response-size guard, unlike other network adapters**: `src/adapters/outbound/network/osv_client/mod.rs`'s `fetch_batch` and `fetch_vulnerability_details` deserialized OSV API responses directly via `response.json()` with no upper bound, unlike `PyPiMaintenanceRepository`/`PyPiCompatibilityClient`, which both reject oversized responses before allocating memory. A malicious or misbehaving OSV endpoint (or a MITM, since TLS covers authenticity but not payload size) could force unbounded memory allocation. Both methods now go through a shared `read_bounded_bytes` helper applying the same two-stage guard as the sibling PyPI clients (`content_length()` pre-check, then a post-download `bytes.len()` check against a 10 MB limit), deserializing via `serde_json::from_slice` instead (#837)
 - **`PyPiLicenseRepository` had no response-size guard, unlike other network adapters**: `src/adapters/outbound/network/pypi_client.rs`'s `fetch_from_pypi` deserialized PyPI API responses directly via `response.json()` with no upper bound — the same class of gap fixed for `OsvClient` in #837, but on the most frequently invoked network call in the codebase (once per package on every SBOM generation). `fetch_from_pypi` now applies the same two-stage guard as the sibling PyPI clients (`content_length()` pre-check, then a post-download `bytes.len()` check against a 10 MB limit), deserializing via `serde_json::from_slice` instead (#852)
