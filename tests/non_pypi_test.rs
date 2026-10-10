@@ -35,11 +35,12 @@ async fn test_non_pypi_section_rendered_when_check_non_pypi_enabled() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -114,11 +115,12 @@ async fn test_non_pypi_section_absent_when_check_non_pypi_disabled() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,

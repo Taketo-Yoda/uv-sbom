@@ -18,6 +18,15 @@ Issue Analysis → Branch Creation → [Planning] → Implementation → Commit 
                                         ↑ Opus        ↑ Sonnet
 ```
 
+## Stacked Mode (opt-in)
+
+Stacked Mode (each PR based on the previous still-open PR's branch) is defined —
+including its **entry rule (explicit user request only; never inferred)**, why it is
+opt-in, and its session-scoped, sticky scope — in
+`.claude/conventions/branching.md` → "Stacked Mode (opt-in)". **Read that section
+before Step 3** whenever the user has mentioned stacking in this session. The safe
+default is Normal Mode.
+
 ## Steps
 
 ### Step 1: Analyze Issue (MANDATORY)
@@ -26,23 +35,35 @@ Issue Analysis → Branch Creation → [Planning] → Implementation → Commit 
 gh issue view <issue-number>
 ```
 
+**Read the ENTIRE body, including the collapsed block.** Issues follow the two-section
+format in `.claude/issue-guidelines.md`: a visible human section and an AI section
+collapsed under `<details><summary>🤖 Implementation Spec (for AI agents)</summary>`.
+`gh issue view` returns the raw Markdown, so the collapsed content IS present in the
+output — but it is easy to skim past. The implementation specification lives there.
+**Never plan from the human section alone.**
+
 Extract:
-- Issue title and description
-- Labels (to determine branch prefix)
-- Acceptance criteria
-- Files to modify
+
+| From | Section | Use |
+|------|---------|-----|
+| Human | `## Summary` / `## Why` | Issue intent; PR description |
+| Human | `## Scope` (In / Out) | What must NOT be implemented |
+| Human | `## Design Sketch` | Types to create/change (Mermaid, if present) |
+| Human | `## Acceptance Criteria` | Behavior-level completion check |
+| Labels | — | Branch prefix (Step 2) |
+| AI (`<details>`) | `## Context & Constraints` | Invariants, precedent Issues/PRs, files not to touch |
+| AI (`<details>`) | `## Design Decisions` | Approach already decided — do not re-litigate |
+| AI (`<details>`) | `## Files to Update/Create` | Files to read for Step 3.5 context |
+| AI (`<details>`) | `## Technical Acceptance Criteria` | Toolchain/docs gates before `/commit` |
+
+If the Issue predates this format (flat headings such as `## Technical Implementation`
+or `## Proposed Solution`), map it by meaning and continue — older Issues are not
+rewritten.
 
 ### Step 2: Determine Branch Name
 
-Based on issue labels:
-
-| Issue Label | Branch Prefix |
-|-------------|---------------|
-| `enhancement` | `feature/` |
-| `bug` | `bugfix/` |
-| `refactor` | `refactor/` |
-| `documentation` | `docs/` |
-| (no label) | `feature/` |
+Read `.claude/conventions/branching.md` → "Branch Naming (label → prefix)" and
+pick the prefix from the Issue's labels (multiple labels: highest-priority row wins).
 
 Format: `<prefix>/<issue-number>-<short-description>`
 
@@ -51,10 +72,44 @@ Format: `<prefix>/<issue-number>-<short-description>`
 ```bash
 # Verify not already on a feature branch for this issue
 git branch --show-current
-
-# If on develop or main, create new branch
 git fetch origin
+```
+
+**Default (Normal Mode)**: branch from `origin/develop`.
+
+```bash
 git checkout -b <branch-name> origin/develop
+```
+
+#### Stacked Mode branch base
+
+If Stacked Mode is active, read `.claude/conventions/branching.md` → "Branch Base"
+and choose the base from its Stacked Mode decision table instead of `origin/develop`.
+
+This is the first Issue in the stack if no earlier `Stack position: ... mode=Stacked`
+line has been printed yet in this session — if uncertain (e.g. after context
+compaction), ask the user or check `gh pr list --state open --json baseRefName` for
+an existing stack member before assuming Normal Mode.
+
+Determine whether the previous branch's PR is still open:
+
+```bash
+gh pr list --head <previous-branch> --state all --json number,state,url
+```
+
+`state: OPEN` → base on that branch. `MERGED`/`CLOSED` → base on `origin/develop`.
+
+**Record the stack position**: before continuing to Step 3.5, print exactly one line
+so Step 6 and Step 8 can pick it up:
+
+```
+Stack position: base=<branch> | stacks on #<PR> (<url>) | mode=Stacked
+```
+
+or, in Normal Mode:
+
+```
+Stack position: base=origin/develop | mode=Normal
 ```
 
 **CRITICAL**: This step cannot be skipped. If already on the correct feature branch, verify and continue.
@@ -72,8 +127,15 @@ Agent({
 })
 ```
 
+Pass the Issue's **full body** to the Architect, collapsed AI section included. The
+Architect's job is to produce the interface design and implementation code shape —
+Issues deliberately no longer contain implementation code, so `## Design Decisions` is
+prose and the Architect turns it into signatures.
+
 Gather relevant existing code context by:
-- Reading files listed in the issue's "Files to Update / Modify" section
+- Reading every file listed in the issue's `## Files to Update/Create` section — it is
+  inside the collapsed `🤖 Implementation Spec (for AI agents)` block, not the visible
+  human section
 - Reading adjacent modules or traits that the new code must implement or extend
 - Running `git grep` for key symbols mentioned in the issue
 
@@ -165,9 +227,12 @@ If no matches are found, continue to Step 4 without interruption.
 **Trigger**: Run this gate if the current implementation added, removed, or renamed
 any CLI flag (i.e., any `#[arg(` or `#[clap(` annotation was added/changed in `src/cli/`).
 
-Detect via:
+Detect via (`$BASE_BRANCH` is the branch recorded by Step 3 — `origin/develop` in
+Normal Mode, or the sibling stack branch in Stacked Mode; using it here rather than
+a hardcoded `origin/develop` avoids misattributing a lower stack layer's CLI flag to
+the current Issue):
 ```bash
-git diff origin/develop...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
+git diff "$BASE_BRANCH"...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
 ```
 
 If the diff is **non-empty**, verify ALL of the following before proceeding to Step 4.5:
@@ -210,7 +275,8 @@ If the diff is **non-empty**, verify ALL of the following before proceeding to S
 Invoke `/code-review` skill.
 
 - The skill runs a Reviewer Agent against the current `git diff HEAD`.
-- If the review **PASSES**, proceed to Step 5.
+- If the review **PASSES**, verify every box in the Issue's `## Technical Acceptance
+  Criteria` (AI section) is satisfied, then proceed to Step 5.
 - If the review **FAILS** after the maximum iteration limit (3), halt and report
   remaining issues to the user. Do **NOT** invoke `/commit` until `/code-review`
   returns PASS.
@@ -224,8 +290,15 @@ Invoke `/commit` skill with:
 ### Step 6: Create Pull Request
 
 Invoke `/pr` skill with:
-- Base branch: `develop`
+- Base branch: `<the branch recorded in Step 3's "Stack position:" line>` (may be
+  `develop`, or a sibling stack branch in Stacked Mode)
 - Reference to issue: `Closes #<issue-number>`
+- Stacks on (Stacked Mode only): `#<PR number>` of the lower stack layer
+
+**Re-verify before handing off (Stacked Mode only)**: time may have passed since
+Step 3. Confirm the recorded base branch still exists on the remote and its PR is
+still open (`gh pr list --head <base> --state open`). If it merged in the meantime,
+fall back to `develop` and say so.
 
 ### Step 7: Update Architecture Overview (conditional)
 
@@ -250,6 +323,8 @@ Output:
 - Files modified
 - Commit hash
 - PR URL
+- Stack position (Stacked Mode only): base branch used, and which Issue/PR this PR
+  stacks on top of
 - Follow-up Issues created during this session (including any opened by
   `/code-review` Step 3.5 or this skill's Step 3.6), with URLs — if any
 

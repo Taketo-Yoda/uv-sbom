@@ -10,8 +10,8 @@ use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::{determine_diff_source, FileSystemReader, GitLockfileReader};
 use adapters::outbound::formatters::{DiffJsonFormatter, DiffMarkdownFormatter};
 use adapters::outbound::network::{
-    CachingPyPiLicenseRepository, OsvClient, PyPiCompatibilityClient, PyPiLicenseRepository,
-    PyPiMaintenanceRepository,
+    CachingPyPiLicenseRepository, EpssKevClient, OsvClient, PyPiCompatibilityClient,
+    PyPiLicenseRepository, PyPiMaintenanceRepository,
 };
 use adapters::outbound::uv::{UvLockAdapter, UvWorkspaceReader};
 use application::dto::{DiffRequest, OutputFormat, SbomRequest, SbomResponse};
@@ -20,6 +20,7 @@ use application::read_models::SbomReadModelBuilder;
 use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase};
 use clap::Parser;
 use cli::config_resolver::{load_config, merge_config, MergedConfig};
+use cli::error_display::{render_config_error, render_error_chain};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFindings};
 use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
@@ -97,6 +98,7 @@ type WiredSbomUseCase<LR> = GenerateSbomUseCase<
     PyPiMaintenanceRepository,
     PyPiCompatibilityClient,
     UvLockAdapter,
+    EpssKevClient,
 >;
 
 /// Builds a fully-wired `GenerateSbomUseCase` from the resolved config.
@@ -115,7 +117,7 @@ fn build_use_case<LR: LockfileReader>(
 
     // Create vulnerability repository if CVE check is requested
     let vulnerability_repository = if merged.check_cve {
-        Some(OsvClient::new()?)
+        Some(OsvClient::new(locale)?)
     } else {
         None
     };
@@ -142,6 +144,13 @@ fn build_use_case<LR: LockfileReader>(
     // function returns.
     let uv_lock_simulator = Some(UvLockAdapter::new());
 
+    // Create exploitability repository if exploitability enrichment is requested
+    let exploitability_repository = if merged.check_exploitability {
+        Some(EpssKevClient::new(locale)?)
+    } else {
+        None
+    };
+
     Ok(GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
@@ -151,6 +160,7 @@ fn build_use_case<LR: LockfileReader>(
         maintenance_repository,
         compatibility_repository,
         uv_lock_simulator,
+        exploitability_repository,
         locale,
     ))
 }
@@ -158,35 +168,51 @@ fn build_use_case<LR: LockfileReader>(
 /// Prints deprecation/no-effect warnings for CLI flags that don't apply given the
 /// rest of the invocation (e.g. `--verify-links` combined with `--format json`).
 ///
-/// Gates on `args.format` (the raw CLI value, defaulting to `Json`) rather than
-/// the resolved `MergedConfig`, matching the pre-extraction behavior verbatim.
-/// Note this means a `format: markdown` set only via config file (no `--format`
-/// flag) will not suppress these warnings, since `args.format` stays at its
-/// default; that pre-existing quirk is out of scope for this extraction.
-fn print_startup_warnings(args: &Args, msgs: &Messages) {
-    // Warn if CVE check is active with JSON format
-    if !args.no_check_cve && args.format == OutputFormat::Json {
-        eprintln!("{}", msgs.warn_check_cve_no_effect);
-        eprintln!("   Vulnerability data is not included in JSON output.");
-        eprintln!("   Use --format markdown to see vulnerability report.");
-        eprintln!();
-    }
-
+/// Gates on the resolved `format` (`MergedConfig.format`) rather than the raw CLI
+/// `args.format`, so a `format: markdown` set only via config file (no `--format`
+/// flag) correctly suppresses these warnings (fixed in #822; previously gated on
+/// `args.format`, which stays at its `Json` default when no `--format` flag is
+/// passed, regardless of the config file).
+///
+/// `check_license` must be the resolved `MergedConfig.check_license`, not the raw
+/// CLI `args.check_license` (fixed in #828; previously gated on `args.check_license`,
+/// which stays `false` when no `--check-license` flag is passed, even if the config
+/// file enables it via `check_license: true`). `verify_links` stays sourced from the
+/// raw CLI flag since `MergedConfig` has no config-file tier for it — `args.verify_links`
+/// is already the fully resolved value.
+fn print_startup_warnings(
+    check_license: bool,
+    verify_links: bool,
+    format: OutputFormat,
+    msgs: &Messages,
+) {
     // Warn if check_license is used with JSON format
-    if args.check_license && args.format == OutputFormat::Json {
+    if check_license && format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_check_license_no_effect);
-        eprintln!("   License compliance data is not included in JSON output.");
-        eprintln!("   Use --format markdown to see license compliance report.");
+        eprintln!("{}", msgs.warn_check_license_json_detail);
+        eprintln!("{}", msgs.warn_check_license_json_hint);
         eprintln!();
     }
 
     // Warn if verify_links is used with JSON format
-    if args.verify_links && args.format == OutputFormat::Json {
+    if verify_links && format == OutputFormat::Json {
         eprintln!("{}", msgs.warn_verify_links_no_effect);
-        eprintln!("   PyPI link verification only applies to Markdown output.");
-        eprintln!("   Use --format markdown to use link verification.");
+        eprintln!("{}", msgs.warn_verify_links_json_detail);
+        eprintln!("{}", msgs.warn_verify_links_json_hint);
         eprintln!();
     }
+}
+
+/// Prints an error and its full `source()` chain to stderr, localized via `msgs`.
+///
+/// Extracted from three identical `Err(e)` arms in `main()` (workspace mode,
+/// diff mode, and normal mode) to avoid triplicating the same i18n-routed
+/// error-reporting logic. Delegates the actual rendering to
+/// `cli::error_display::render_error_chain`, which is independently unit
+/// tested and is the only place that knows how to localize a typed error
+/// (e.g. `ConfigError`) found at the head of the chain.
+fn print_error_chain(e: &anyhow::Error, msgs: &Messages) {
+    eprint!("{}", render_error_chain(e, msgs));
 }
 
 /// CLI-only `SbomRequest` fields that intentionally have no config-file tier
@@ -242,6 +268,7 @@ fn build_sbom_request(
         .check_abandoned(merged.check_abandoned)
         .abandoned_threshold_days(merged.abandoned_threshold_days)
         .check_non_pypi(merged.check_non_pypi)
+        .check_exploitability(merged.check_exploitability)
         .exclude_groups(exclude_groups)
         .target_python(merged.target_python.clone())
         .explain_package(cli_only.explain_package)
@@ -368,20 +395,17 @@ async fn main() {
         }
     };
 
+    // Captured before `args` is moved into run_workspace/run_diff/run below, so
+    // the error and --init messages can still be localized.
+    let msgs = Messages::for_locale(args.lang);
+
     // Handle --workspace mode before normal flow
     if args.workspace {
         let workspace_root = PathBuf::from(args.path.as_deref().unwrap_or("."));
         match run_workspace(args, workspace_root).await {
             Ok(()) => process::exit(ExitCode::Success.as_i32()),
             Err(e) => {
-                eprintln!("\n❌ An error occurred:\n");
-                eprintln!("{}", e);
-                let mut source = e.source();
-                while let Some(err) = source {
-                    eprintln!("\nCaused by: {}", err);
-                    source = err.source();
-                }
-                eprintln!();
+                print_error_chain(&e, msgs);
                 process::exit(ExitCode::ApplicationError.as_i32());
             }
         }
@@ -393,15 +417,19 @@ async fn main() {
         let dir_path = std::path::Path::new(dir);
         match config::generate_config_template(dir_path) {
             Ok(abs_path) => {
+                let dir_display = abs_path.parent().unwrap_or(dir_path).display().to_string();
                 eprintln!(
-                    "Created {} in {}",
-                    config::CONFIG_FILENAME,
-                    abs_path.parent().unwrap_or(dir_path).display()
+                    "{}",
+                    Messages::format(
+                        msgs.info_config_template_created,
+                        &[config::CONFIG_FILENAME, &dir_display],
+                    )
                 );
                 process::exit(ExitCode::Success.as_i32());
             }
             Err(e) => {
-                eprintln!("Error: {}", e);
+                let err_text = render_config_error(&e, msgs);
+                eprintln!("{}", Messages::format(msgs.error_init_failed, &[&err_text]));
                 process::exit(ExitCode::ApplicationError.as_i32());
             }
         }
@@ -418,14 +446,7 @@ async fn main() {
                 process::exit(ExitCode::Success.as_i32());
             }
             Err(e) => {
-                eprintln!("\n❌ An error occurred:\n");
-                eprintln!("{}", e);
-                let mut source = e.source();
-                while let Some(err) = source {
-                    eprintln!("\nCaused by: {}", err);
-                    source = err.source();
-                }
-                eprintln!();
+                print_error_chain(&e, msgs);
                 process::exit(ExitCode::ApplicationError.as_i32());
             }
         }
@@ -440,17 +461,7 @@ async fn main() {
             process::exit(ExitCode::Success.as_i32());
         }
         Err(e) => {
-            eprintln!("\n❌ An error occurred:\n");
-            eprintln!("{}", e);
-
-            // Display error chain
-            let mut source = e.source();
-            while let Some(err) = source {
-                eprintln!("\nCaused by: {}", err);
-                source = err.source();
-            }
-
-            eprintln!();
+            print_error_chain(&e, msgs);
             process::exit(ExitCode::ApplicationError.as_i32());
         }
     }
@@ -468,8 +479,6 @@ async fn run(args: Args) -> Result<bool> {
     let locale = args.lang;
     let msgs = Messages::for_locale(locale);
 
-    print_startup_warnings(&args, msgs);
-
     // Validate project directory
     let project_dir = args.path.as_deref().unwrap_or(".");
     let project_path = PathBuf::from(project_dir);
@@ -482,11 +491,16 @@ async fn run(args: Args) -> Result<bool> {
     // Merge CLI and config values
     let merged = merge_config(&args, &config)?;
 
+    // Print startup warnings using the resolved format and check_license, so a
+    // `format: markdown` (#822) or `check_license: true` (#828) set only via config
+    // file (no corresponding CLI flag) is still correctly reflected.
+    print_startup_warnings(merged.check_license, args.verify_links, merged.format, msgs);
+
     // Create use case with injected dependencies
     let use_case = build_use_case(FileSystemReader::new(), locale, &merged)?;
 
     // Pre-flight check for --suggest-fix
-    let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path);
+    let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path, msgs);
 
     // Resolve exclude_groups: --production-only expands to all group names in the lockfile.
     // This requires lockfile I/O so it lives here rather than in config_resolver.
@@ -563,15 +577,16 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
 
     validate_project_path(&workspace_root)?;
 
+    let locale = args.lang;
+    let msgs = Messages::for_locale(locale);
+
     let workspace_reader = UvWorkspaceReader::new();
     let members = workspace_reader.read_workspace_members(&workspace_root)?;
 
     if members.is_empty() {
-        anyhow::bail!("No workspace members found. Is this a uv workspace?");
+        anyhow::bail!("{}", msgs.error_no_workspace_members);
     }
 
-    let locale = args.lang;
-    let msgs = Messages::for_locale(locale);
     eprintln!(
         "{}\n",
         Messages::format(
@@ -692,7 +707,7 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     };
 
     let vulnerability_repository = if check_cve {
-        Some(OsvClient::new()?)
+        Some(OsvClient::new(locale)?)
     } else {
         None
     };

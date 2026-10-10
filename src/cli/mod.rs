@@ -1,4 +1,5 @@
 pub mod config_resolver;
+pub mod error_display;
 pub mod runner;
 pub mod workspace_summary;
 
@@ -79,6 +80,10 @@ pub struct Args {
     /// Check for packages sourced from non-PyPI origins (git, path, url, private registries)
     #[arg(long)]
     pub check_non_pypi: bool,
+
+    /// Enrich CVE results with EPSS scores and CISA KEV status (requires CVE checking)
+    #[arg(long, conflicts_with = "no_check_cve")]
+    pub check_exploitability: bool,
 
     /// Allowed license patterns (comma-separated, requires --check-license)
     /// Supports wildcards: "MIT,Apache-2.0,BSD-*"

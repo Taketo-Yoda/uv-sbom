@@ -85,7 +85,32 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix -f cyclonedx
   - `uv-sbom:recommended-action`: 人間が読める推奨アクション
   - `uv-sbom:resolved-version`: シミュレートされたアップグレード後の推移的依存関係バージョン
 
-### ステップ 4: 深刻度でフィルタリング
+### ステップ 4: 悪用可能性の優先順位付け（`--check-exploitability`）
+
+```bash
+uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
+```
+
+**表示される内容:**
+- Vulnerability Report テーブルと Resolution Guide に「Exploited (KEV)」と「EPSS」の列が追加
+- CISA KEV カタログに含まれる CVE は Exploited 列に「Yes」と表示
+- EPSS パーセンタイルが序数文字列で表示（例: "87th percentile"）
+- 脆弱性がEPSSパーセンタイル順（高い順）にソートされ、修正の優先順位付けに役立つ
+
+**出力抜粋（Vulnerability Resolution Guide）:**
+
+```markdown
+| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID | Exploited (KEV) | EPSS |
+|--------------------|---------|---------------|----------|----------------------------|------------------|-----------------|------|
+| urllib3 | 2.0.4 | 2.6.3 | 🟠 HIGH | requests (2.31.0) | GHSA-38jv-5279-wg99 | No | 87th percentile |
+| certifi | 2023.7.22 | 2024.7.4 | 🟢 LOW | httpx (0.24.1), requests (2.31.0) | GHSA-248v-346w-9cwc | No | 63rd percentile |
+| h11 | 0.14.0 | 0.16.0 | 🔴 CRITICAL | httpx (0.24.1) | GHSA-vqfr-h8mv-ghfj | No | 46th percentile |
+| anyio | 4.0.0 | 4.14.2 | 🔴 CRITICAL | httpx (0.24.1) | GHSA-82r6-8w77-94w6 | No | 19th percentile |
+```
+
+_（全32件中、EPSSパーセンタイル順の抜粋。EPSS値はライブデータのため変動する可能性があります。）_
+
+### ステップ 5: 深刻度でフィルタリング
 
 ```bash
 # HIGH および CRITICAL の脆弱性のみ表示
@@ -93,7 +118,7 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix \
   --severity-threshold high -f markdown
 ```
 
-### ステップ 5: 依存関係ツリーの可視化（`--show-dependency-tree`）
+### ステップ 6: 依存関係ツリーの可視化（`--show-dependency-tree`）
 
 このプロジェクトの `httpx` → `httpcore` → `anyio` → `idna`/`sniffio` という依存チェーンは3階層の深さがあり、
 同梱サンプルの中で縮小した深さでの省略表示（truncation）を実際に再現できる唯一のプロジェクトです。

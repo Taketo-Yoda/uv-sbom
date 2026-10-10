@@ -43,6 +43,28 @@ mod init_tests {
             .stderr(predicates::str::contains("already exists"));
     }
 
+    /// Same as `test_init_fails_if_config_exists`, but under `--lang ja`: the
+    /// `ConfigError::TemplateAlreadyExists` payload must render in Japanese,
+    /// not just the surrounding `error_init_failed` frame (#834).
+    #[test]
+    fn test_init_fails_if_config_exists_localized_to_japanese() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(CONFIG_FILENAME);
+        fs::write(&config_path, "existing content").unwrap();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--init",
+                "--path",
+                dir.path().to_str().unwrap(),
+                "--lang",
+                "ja",
+            ])
+            .assert()
+            .code(3)
+            .stderr(predicates::str::contains("既に存在します"));
+    }
+
     /// --init with --path writes to the specified directory
     #[test]
     fn test_init_with_path_option() {
@@ -73,5 +95,24 @@ mod init_tests {
             .assert()
             .code(0)
             .stderr(predicates::str::contains("Created uv-sbom.config.yml"));
+    }
+
+    /// --init with --lang ja prints a localized confirmation message
+    #[test]
+    fn test_init_prints_confirmation_in_japanese() {
+        let dir = TempDir::new().unwrap();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--init",
+                "--path",
+                dir.path().to_str().unwrap(),
+                "--lang",
+                "ja",
+            ])
+            .assert()
+            .code(0)
+            .stderr(predicates::str::contains("uv-sbom.config.yml を"))
+            .stderr(predicates::str::contains("に作成しました"));
     }
 }

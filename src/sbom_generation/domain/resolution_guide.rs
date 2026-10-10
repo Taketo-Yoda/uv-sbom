@@ -1,3 +1,4 @@
+use super::exploitability::ExploitabilityInfo;
 use super::vulnerability::Severity;
 
 /// Represents a resolution entry for a single vulnerable transitive dependency
@@ -19,6 +20,8 @@ pub struct ResolutionEntry {
     /// Each inner Vec is [direct_dep, ..., vulnerable_package].
     /// Empty if introduced directly (one-hop) or if the target is a direct dependency.
     dependency_chains: Vec<Vec<String>>,
+    /// Real-world exploitability data (EPSS + CISA KEV)
+    exploitability: Option<ExploitabilityInfo>,
 }
 
 impl ResolutionEntry {
@@ -39,6 +42,7 @@ impl ResolutionEntry {
             vulnerability_id,
             introduced_by,
             dependency_chains,
+            exploitability: None,
         }
     }
 
@@ -68,6 +72,14 @@ impl ResolutionEntry {
 
     pub fn dependency_chains(&self) -> &[Vec<String>] {
         &self.dependency_chains
+    }
+
+    pub fn exploitability(&self) -> Option<&ExploitabilityInfo> {
+        self.exploitability.as_ref()
+    }
+
+    pub fn set_exploitability(&mut self, exploitability: Option<ExploitabilityInfo>) {
+        self.exploitability = exploitability;
     }
 }
 

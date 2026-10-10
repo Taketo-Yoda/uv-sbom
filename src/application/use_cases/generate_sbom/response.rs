@@ -6,8 +6,8 @@ use crate::application::read_models::explain_view::ExplainView;
 use crate::application::read_models::non_pypi_package::NonPyPiPackagesReport;
 use crate::application::read_models::python_compatibility::PythonCompatibilityReport;
 use crate::ports::outbound::{
-    LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
-    ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
+    ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
@@ -17,8 +17,8 @@ use crate::sbom_generation::domain::{
 use crate::sbom_generation::services::SbomGenerator;
 use crate::shared::Result;
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -28,6 +28,7 @@ where
     MREPO: MaintenanceRepository + Clone,
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
+    EREPO: ExploitabilityRepository,
 {
     /// Builds a response for dry-run mode (validation only)
     pub(super) fn build_dry_run_response(&self) -> Result<SbomResponse> {
@@ -166,6 +167,7 @@ mod tests {
                 Severity::Critical,
                 None,
                 None,
+                vec![],
             )
             .unwrap();
             let pkg_vulns = crate::sbom_generation::domain::PackageVulnerabilities::new(
@@ -177,6 +179,7 @@ mod tests {
                 above_threshold: vec![pkg_vulns],
                 below_threshold: vec![],
                 threshold_exceeded: true,
+                ..Default::default()
             };
 
             let response = use_case.build_response(
@@ -220,6 +223,7 @@ mod tests {
                 Severity::Low,
                 None,
                 None,
+                vec![],
             )
             .unwrap();
             let pkg_vulns = crate::sbom_generation::domain::PackageVulnerabilities::new(
@@ -231,6 +235,7 @@ mod tests {
                 above_threshold: vec![],
                 below_threshold: vec![pkg_vulns],
                 threshold_exceeded: false,
+                ..Default::default()
             };
 
             let response = use_case.build_response(

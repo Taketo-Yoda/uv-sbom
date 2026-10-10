@@ -207,6 +207,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -283,6 +285,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {

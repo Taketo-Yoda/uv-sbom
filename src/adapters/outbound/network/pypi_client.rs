@@ -1,4 +1,5 @@
 use crate::ports::outbound::{LicenseRepository, PyPiMetadata};
+use crate::shared::response_size_guard;
 use crate::shared::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -47,10 +48,13 @@ struct PyPiInfo {
 #[derive(Clone)]
 pub struct PyPiLicenseRepository {
     client: reqwest::Client,
+    base_url: String,
 }
 
 impl PyPiLicenseRepository {
     const MAX_RETRIES: u32 = 3;
+    // 10 MB — well above any realistic PyPI package metadata response
+    const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
 
     /// Creates a new PyPI license repository with default configuration
     pub fn new() -> Result<Self> {
@@ -61,7 +65,27 @@ impl PyPiLicenseRepository {
             .user_agent(user_agent)
             .build()?;
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            base_url: "https://pypi.org".to_string(),
+        })
+    }
+
+    /// Creates a client pointed at a custom base URL (e.g. a wiremock server
+    /// or a raw TCP test server), for tests only.
+    #[cfg(test)]
+    fn new_with_base_url(base_url: impl Into<String>) -> Result<Self> {
+        let version = env!("CARGO_PKG_VERSION");
+        let user_agent = format!("uv-sbom/{}", version);
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .user_agent(user_agent)
+            .build()?;
+
+        Ok(Self {
+            client,
+            base_url: base_url.into(),
+        })
     }
 
     /// Fetches package information from PyPI with retry logic (async)
@@ -75,16 +99,18 @@ impl PyPiLicenseRepository {
     /// Fetches package information from PyPI API (async)
     async fn fetch_from_pypi(&self, package_name: &str, version: &str) -> Result<PyPiPackageInfo> {
         // Security: Validate URL components before using them
-        crate::shared::security::validate_url_component(package_name, "Package name")?;
-        crate::shared::security::validate_url_component(version, "Version")?;
+        crate::shared::security::validate_url_component(package_name, "Package name")
+            .map_err(crate::shared::http_retry::permanent)?;
+        crate::shared::security::validate_url_component(version, "Version")
+            .map_err(crate::shared::http_retry::permanent)?;
 
         // URL encode components to handle special characters safely
         let encoded_package = urlencoding::encode(package_name);
         let encoded_version = urlencoding::encode(version);
 
         let url = format!(
-            "https://pypi.org/pypi/{}/{}/json",
-            encoded_package, encoded_version
+            "{}/pypi/{}/{}/json",
+            self.base_url, encoded_package, encoded_version
         );
 
         let response = self.client.get(&url).send().await?;
@@ -93,7 +119,14 @@ impl PyPiLicenseRepository {
             anyhow::bail!("PyPI API returned status code {}", response.status());
         }
 
-        let package_info: PyPiPackageInfo = response.json().await?;
+        let bytes = response_size_guard::read_bounded_bytes(
+            response,
+            Self::MAX_RESPONSE_BYTES,
+            Some("PyPI license metadata"),
+        )
+        .await?;
+
+        let package_info: PyPiPackageInfo = serde_json::from_slice(&bytes)?;
         Ok(package_info)
     }
 }
@@ -105,7 +138,7 @@ impl PyPiLicenseRepository {
     /// returns 200 for all requests).
     pub async fn verify_package_exists(&self, package_name: &str) -> bool {
         let normalized = package_name.to_lowercase().replace('_', "-");
-        let url = format!("https://pypi.org/pypi/{}/json", normalized);
+        let url = format!("{}/pypi/{}/json", self.base_url, normalized);
         match self
             .client
             .head(&url)
@@ -168,6 +201,8 @@ impl LicenseRepository for PyPiLicenseRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_pypi_client_creation() {
@@ -259,4 +294,108 @@ mod tests {
     //     assert!(verified.contains("requests"));
     //     assert!(!verified.contains("nonexistent-pkg-xyz-123456"));
     // }
+
+    /// Builds a syntactically valid PyPI package-info JSON body whose total
+    /// length is exactly `total_len` bytes, padded via the `summary` field.
+    /// The body is deliberately *valid* JSON: if the size guard were absent,
+    /// deserialization would succeed, so an error from the client proves the
+    /// guard fired rather than a parse failure.
+    fn package_json_of_len(total_len: usize) -> Vec<u8> {
+        let prefix: &[u8] = br#"{"info":{"license":"MIT","summary":""#;
+        let suffix: &[u8] = br#""}}"#;
+        let mut body = Vec::with_capacity(total_len);
+        body.extend_from_slice(prefix);
+        body.resize(total_len - suffix.len(), b'x');
+        body.extend_from_slice(suffix);
+        assert_eq!(body.len(), total_len);
+        body
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_success_via_mock() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "info": {"license": "MIT", "summary": "A test package"},
+                "urls": [{"digests": {"sha256": "abc123"}}]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let info = client.fetch_from_pypi("requests", "2.31.0").await.unwrap();
+        assert_eq!(info.info.license, Some("MIT".to_string()));
+        assert_eq!(info.urls[0].digests.sha256, Some("abc123".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_rejects_oversized_response() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                package_json_of_len(PyPiLicenseRepository::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let err = client
+            .fetch_from_pypi("requests", "2.31.0")
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        // "too large" is the Content-Length pre-check branch specifically.
+        assert!(msg.contains("too large"), "unexpected error: {msg}");
+        // Proves the "PyPI license metadata" context is actually threaded
+        // through to the shared guard, not silently dropped.
+        assert!(
+            msg.contains("PyPI license metadata"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_oversized_response_not_retried() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                package_json_of_len(PyPiLicenseRepository::MAX_RESPONSE_BYTES + 1),
+                "application/json",
+            ))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let err = client
+            .fetch_with_retry("requests", "2.31.0")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("too large"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fetch_from_pypi_accepts_response_at_limit() {
+        // Exactly at the limit must pass: proves the comparison is `>`, not `>=`.
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/pypi/requests/2.31.0/json"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                package_json_of_len(PyPiLicenseRepository::MAX_RESPONSE_BYTES),
+                "application/json",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let info = client.fetch_from_pypi("requests", "2.31.0").await.unwrap();
+        assert_eq!(info.info.license, Some("MIT".to_string()));
+    }
 }

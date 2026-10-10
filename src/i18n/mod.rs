@@ -64,6 +64,26 @@ pub struct Messages {
     // Config loading messages (CLI layer)
     pub info_config_loaded_from: &'static str,
     pub info_config_auto_discovered: &'static str,
+    pub warn_unknown_config_field: &'static str,
+
+    // Error reporting and --init messages (CLI layer)
+    pub error_header: &'static str,
+    pub error_caused_by: &'static str,
+    pub info_config_template_created: &'static str,
+    pub error_init_failed: &'static str,
+    pub error_no_workspace_members: &'static str,
+
+    // SBOM generation error messages (application layer, GenerateSbomUseCase)
+    pub error_all_packages_excluded: &'static str,
+    pub error_pyproject_not_found: &'static str,
+
+    // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
+    pub error_config_already_exists: &'static str,
+    pub error_config_template_write_failed: &'static str,
+    pub error_config_read_failed: &'static str,
+    pub error_config_parse_failed: &'static str,
+    pub error_config_empty_ignore_cve_id: &'static str,
+    pub error_config_invalid_unknown_license_handling: &'static str,
 
     // Progress messages (use case layer)
     pub progress_loading_lockfile: &'static str,
@@ -92,14 +112,27 @@ pub struct Messages {
     pub label_dependency_plural: &'static str,
 
     // Warning messages
-    pub warn_check_cve_no_effect: &'static str,
     pub warn_check_license_no_effect: &'static str,
+    pub warn_check_license_json_detail: &'static str,
+    pub warn_check_license_json_hint: &'static str,
     pub warn_verify_links_no_effect: &'static str,
+    pub warn_verify_links_json_detail: &'static str,
+    pub warn_verify_links_json_hint: &'static str,
     pub warn_abandoned_fetch_failed: &'static str,
+    pub warn_vuln_detail_fetch_failed: &'static str,
+    pub warn_epss_fetch_failed: &'static str,
+    pub warn_kev_fetch_failed: &'static str,
+    pub warn_ignored_cve_with_reason: &'static str,
+    pub warn_ignored_cve_no_reason: &'static str,
+    pub warn_dependency_chain_truncated: &'static str,
+    pub warn_exclude_pattern_unmatched: &'static str,
+    pub warn_suggest_fix_requires_uv: &'static str,
+    pub warn_suggest_fix_requires_pyproject: &'static str,
     pub progress_fetching_abandoned: &'static str,
     pub progress_abandoned_found: &'static str,
     pub progress_abandoned_none: &'static str,
     pub progress_excluded_groups: &'static str,
+    pub progress_packages_excluded: &'static str,
     pub progress_fetching_python_compat: &'static str,
     pub progress_python_compat_found: &'static str,
     pub progress_python_compat_none: &'static str,
@@ -115,6 +148,7 @@ pub struct Messages {
     pub label_no_transitive_deps: &'static str,
     pub label_no_license_violations: &'static str,
     pub label_osv_attribution: &'static str,
+    pub label_epss_kev_attribution: &'static str,
 
     // Vulnerability count templates (4 placeholders: count, unit, count, unit)
     pub warn_no_vuln_above_threshold: &'static str,
@@ -220,6 +254,11 @@ pub struct Messages {
     pub summary_explain_also_transitive: &'static str,
     pub summary_explain_not_found: &'static str,
 
+    // Exploitability columns (conditional on --check-exploitability)
+    pub col_exploited_kev: &'static str,
+    pub col_epss: &'static str,
+    pub progress_fetching_exploitability: &'static str,
+
     // Dependency tree section
     pub section_dependency_tree: &'static str,
     pub label_dependency_tree_truncated: &'static str,
@@ -314,6 +353,26 @@ static EN_MESSAGES: Messages = Messages {
     // Config loading messages (CLI layer)
     info_config_loaded_from: "📄 Loaded config from: {}",
     info_config_auto_discovered: "📄 Auto-discovered config file in project directory.",
+    warn_unknown_config_field: "⚠️  Warning: Unknown config field '{}' will be ignored.",
+
+    // Error reporting and --init messages (CLI layer)
+    error_header: "❌ An error occurred:",
+    error_caused_by: "Caused by: {}",
+    info_config_template_created: "Created {} in {}",
+    error_init_failed: "Error: {}",
+    error_no_workspace_members: "No workspace members found. Is this a uv workspace?",
+
+    // SBOM generation error messages (application layer, GenerateSbomUseCase)
+    error_all_packages_excluded: "All {} package(s) were excluded by the provided filters. The SBOM would be empty. Please adjust your exclusion patterns.",
+    error_pyproject_not_found: "pyproject.toml not found in project directory",
+
+    // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
+    error_config_already_exists: "{} already exists in {}. Use a different directory or remove the existing file.",
+    error_config_template_write_failed: "Failed to write config template to: {}",
+    error_config_read_failed: "Failed to read config file: {}\n\n💡 Hint: Check that the file exists and is readable.",
+    error_config_parse_failed: "Failed to parse config file: {}\n\n💡 Hint: Ensure the file contains valid YAML syntax.",
+    error_config_empty_ignore_cve_id: "Invalid config: ignore_cves[{}].id must not be empty.\n\n💡 Hint: Each ignore_cves entry must have a non-empty 'id' field (e.g., \"CVE-2024-1234\").",
+    error_config_invalid_unknown_license_handling: "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"{}\"",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
@@ -343,14 +402,27 @@ static EN_MESSAGES: Messages = Messages {
     label_dependency_plural: "dependencies",
 
     // Warning messages
-    warn_check_cve_no_effect: "⚠️  Warning: --check-cve has no effect with JSON format.",
     warn_check_license_no_effect: "⚠️  Warning: --check-license has no effect with JSON format.",
+    warn_check_license_json_detail: "   License compliance data is not included in JSON output.",
+    warn_check_license_json_hint: "   Use --format markdown to see license compliance report.",
     warn_verify_links_no_effect: "⚠️  Warning: --verify-links has no effect with JSON format.",
+    warn_verify_links_json_detail: "   PyPI link verification only applies to Markdown output.",
+    warn_verify_links_json_hint: "   Use --format markdown to use link verification.",
     warn_abandoned_fetch_failed: "⚠️  Warning: Failed to fetch maintenance info for {}: {}",
+    warn_vuln_detail_fetch_failed: "⚠️  Warning: Failed to fetch details for {}: {}",
+    warn_epss_fetch_failed: "Warning: EPSS fetch failed for batch {}: {}",
+    warn_kev_fetch_failed: "Warning: KEV catalog fetch failed: {}",
+    warn_ignored_cve_with_reason: "⚠ Ignored {} for package {} (reason: {})",
+    warn_ignored_cve_no_reason: "⚠ Ignored {} for package {} (no reason provided)",
+    warn_dependency_chain_truncated: "⚠️  Warning: Maximum recursion depth ({}) reached for package '{}'. Dependency chain may be truncated.",
+    warn_exclude_pattern_unmatched: "⚠️  Warning: Exclude pattern '{}' did not match any dependencies.",
+    warn_suggest_fix_requires_uv: "⚠ --suggest-fix requires `uv` CLI. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh",
+    warn_suggest_fix_requires_pyproject: "⚠ --suggest-fix requires pyproject.toml in the project directory.",
     progress_fetching_abandoned: "🔍 Fetching package maintenance information...",
     progress_abandoned_found: "✅ Abandoned check complete: {} package(s) abandoned ({} direct, {} transitive), threshold: {} days",
     progress_abandoned_none: "✅ Abandoned check complete: No packages exceed {} day threshold",
     progress_excluded_groups: "🚫 Excluded {} package(s) from dependency group(s): {}",
+    progress_packages_excluded: "🚫 Excluded {} package(s) based on filters",
     progress_fetching_python_compat: "🔍 Checking Python version compatibility...",
     progress_python_compat_found: "✅ Python compatibility check complete: {} package(s) incompatible with Python {} ({} direct, {} transitive)",
     progress_python_compat_none: "✅ Python compatibility check complete: All packages compatible with Python {}",
@@ -366,6 +438,7 @@ static EN_MESSAGES: Messages = Messages {
     label_no_transitive_deps: "*No transitive dependencies*",
     label_no_license_violations: "**No license violations found.**",
     label_osv_attribution: "*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*",
+    label_epss_kev_attribution: "*Exploitability data: [EPSS](https://www.first.org/epss) by FIRST.org; [KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) by CISA*",
 
     // Vulnerability count templates (4 placeholders: count, unit, count, unit)
     warn_no_vuln_above_threshold: "### ⚠️Warning No vulnerabilities found above threshold.",
@@ -470,6 +543,11 @@ static EN_MESSAGES: Messages = Messages {
     summary_explain_also_transitive: "It is also reachable through {} transitive path(s):",
     summary_explain_not_found: "Package **{}** was not found in this project's dependencies.",
 
+    // Exploitability columns
+    col_exploited_kev: "Exploited (KEV)",
+    col_epss: "EPSS",
+    progress_fetching_exploitability: "🔍 Fetching exploitability data (EPSS/KEV)...",
+
     // Dependency tree section
     section_dependency_tree: "## Dependency Tree",
     label_dependency_tree_truncated: "... (truncated)",
@@ -533,6 +611,26 @@ static JA_MESSAGES: Messages = Messages {
     // Config loading messages (CLI layer)
     info_config_loaded_from: "📄 設定ファイルを読み込みました: {}",
     info_config_auto_discovered: "📄 プロジェクトディレクトリ内の設定ファイルを自動検出しました。",
+    warn_unknown_config_field: "⚠️  警告: 不明な設定項目 '{}' は無視されます。",
+
+    // Error reporting and --init messages (CLI layer)
+    error_header: "❌ エラーが発生しました:",
+    error_caused_by: "原因: {}",
+    info_config_template_created: "{} を {} に作成しました",
+    error_init_failed: "エラー: {}",
+    error_no_workspace_members: "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？",
+
+    // SBOM generation error messages (application layer, GenerateSbomUseCase)
+    error_all_packages_excluded: "指定されたフィルターにより {} 個のパッケージがすべて除外されました。SBOM が空になります。除外パターンを見直してください。",
+    error_pyproject_not_found: "プロジェクトディレクトリに pyproject.toml が見つかりません。",
+
+    // Config error messages (CLI layer, rendered by src/cli/error_display.rs)
+    error_config_already_exists: "{} は {} に既に存在します。別のディレクトリを指定するか、既存のファイルを削除してください。",
+    error_config_template_write_failed: "設定テンプレートの書き込みに失敗しました: {}",
+    error_config_read_failed: "設定ファイルの読み込みに失敗しました: {}\n\n💡 ヒント: ファイルが存在し、読み取り可能であることを確認してください。",
+    error_config_parse_failed: "設定ファイルの解析に失敗しました: {}\n\n💡 ヒント: ファイルが有効な YAML 構文であることを確認してください。",
+    error_config_empty_ignore_cve_id: "設定が不正です: ignore_cves[{}].id は空にできません。\n\n💡 ヒント: ignore_cves の各エントリには空でない 'id' フィールドが必要です（例: \"CVE-2024-1234\"）。",
+    error_config_invalid_unknown_license_handling: "設定が不正です: license_policy.unknown は warn, deny, allow のいずれかである必要があります。指定値: \"{}\"",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -562,14 +660,27 @@ static JA_MESSAGES: Messages = Messages {
     label_dependency_plural: "個の直接依存パッケージ",
 
     // Warning messages
-    warn_check_cve_no_effect: "⚠️  警告: JSON形式では --check-cve は効果がありません。",
     warn_check_license_no_effect: "⚠️  警告: JSON形式では --check-license は効果がありません。",
+    warn_check_license_json_detail: "   ライセンスコンプライアンス情報はJSON出力には含まれません。",
+    warn_check_license_json_hint: "   ライセンスコンプライアンスレポートを表示するには --format markdown を使用してください。",
     warn_verify_links_no_effect: "⚠️  警告: JSON形式では --verify-links は効果がありません。",
+    warn_verify_links_json_detail: "   PyPIリンク検証はMarkdown出力にのみ適用されます。",
+    warn_verify_links_json_hint: "   リンク検証を使用するには --format markdown を使用してください。",
     warn_abandoned_fetch_failed: "⚠️  警告: {}のメンテナンス情報の取得に失敗: {}",
+    warn_vuln_detail_fetch_failed: "⚠️  警告: {}の詳細情報の取得に失敗: {}",
+    warn_epss_fetch_failed: "警告: バッチ{}のEPSSデータ取得に失敗: {}",
+    warn_kev_fetch_failed: "警告: KEVカタログの取得に失敗: {}",
+    warn_ignored_cve_with_reason: "⚠ {} をパッケージ {} で無視しました (理由: {})",
+    warn_ignored_cve_no_reason: "⚠ {} をパッケージ {} で無視しました (理由の指定なし)",
+    warn_dependency_chain_truncated: "⚠️  警告: 最大再帰深度 ({}) に達しました（パッケージ: '{}'）。依存関係チェーンが切り詰められる可能性があります。",
+    warn_exclude_pattern_unmatched: "⚠️  警告: 除外パターン '{}' はどの依存関係にも一致しませんでした。",
+    warn_suggest_fix_requires_uv: "⚠ --suggest-fix には `uv` CLI が必要です。インストール: curl -LsSf https://astral.sh/uv/install.sh | sh",
+    warn_suggest_fix_requires_pyproject: "⚠ --suggest-fix にはプロジェクトディレクトリに pyproject.toml が必要です。",
     progress_fetching_abandoned: "🔍 パッケージのメンテナンス情報を取得中...",
     progress_abandoned_found: "✅ 廃止パッケージチェック完了: {}件廃止（直接: {}件、間接: {}件）、閾値: {}日",
     progress_abandoned_none: "✅ 廃止パッケージチェック完了: {}日以上更新のないパッケージはありません",
     progress_excluded_groups: "🚫 依存関係グループから{}個のパッケージを除外: {}",
+    progress_packages_excluded: "🚫 フィルターにより{}個のパッケージを除外",
     progress_fetching_python_compat: "🔍 Pythonバージョン互換性を確認中...",
     progress_python_compat_found: "✅ Python互換性チェック完了: {}件のパッケージがPython {}と互換性がありません（直接: {}件、間接: {}件）",
     progress_python_compat_none: "✅ Python互換性チェック完了: すべてのパッケージがPython {}と互換性があります",
@@ -585,6 +696,7 @@ static JA_MESSAGES: Messages = Messages {
     label_no_transitive_deps: "*間接依存パッケージなし*",
     label_no_license_violations: "**ライセンス違反は見つかりませんでした。**",
     label_osv_attribution: "*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*",
+    label_epss_kev_attribution: "*悪用可能性データ: [EPSS](https://www.first.org/epss)（FIRST.org 提供）; [KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)（CISA 提供）*",
 
     // Vulnerability count templates
     // JA uses 4 placeholders in order: vuln_count, vuln_unit, pkg_count, pkg_unit
@@ -690,6 +802,11 @@ static JA_MESSAGES: Messages = Messages {
     summary_explain_direct: "**{}** はこのプロジェクトの直接依存パッケージです。",
     summary_explain_also_transitive: "さらに {} 個の間接経路からも到達可能です:",
     summary_explain_not_found: "パッケージ **{}** はこのプロジェクトの依存関係に見つかりませんでした。",
+
+    // Exploitability columns
+    col_exploited_kev: "悪用確認済み (KEV)",
+    col_epss: "EPSS",
+    progress_fetching_exploitability: "🔍 悪用可能性データ (EPSS/KEV) を取得中...",
 
     // Dependency tree section
     section_dependency_tree: "## 依存関係ツリー",
@@ -899,6 +1016,267 @@ mod tests {
             msgs.info_config_auto_discovered,
             "📄 プロジェクトディレクトリ内の設定ファイルを自動検出しました。"
         );
+    }
+
+    #[test]
+    fn test_messages_unknown_config_field_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            Messages::format(msgs.warn_unknown_config_field, &["typo_field"]),
+            "⚠️  Warning: Unknown config field 'typo_field' will be ignored."
+        );
+    }
+
+    #[test]
+    fn test_messages_unknown_config_field_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            Messages::format(msgs.warn_unknown_config_field, &["typo_field"]),
+            "⚠️  警告: 不明な設定項目 'typo_field' は無視されます。"
+        );
+    }
+
+    #[test]
+    fn test_messages_startup_warning_details_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.warn_check_license_json_detail,
+            "   License compliance data is not included in JSON output."
+        );
+        assert_eq!(
+            msgs.warn_check_license_json_hint,
+            "   Use --format markdown to see license compliance report."
+        );
+        assert_eq!(
+            msgs.warn_verify_links_json_detail,
+            "   PyPI link verification only applies to Markdown output."
+        );
+        assert_eq!(
+            msgs.warn_verify_links_json_hint,
+            "   Use --format markdown to use link verification."
+        );
+    }
+
+    #[test]
+    fn test_messages_startup_warning_details_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.warn_check_license_json_detail,
+            "   ライセンスコンプライアンス情報はJSON出力には含まれません。"
+        );
+        assert_eq!(
+            msgs.warn_check_license_json_hint,
+            "   ライセンスコンプライアンスレポートを表示するには --format markdown を使用してください。"
+        );
+        assert_eq!(
+            msgs.warn_verify_links_json_detail,
+            "   PyPIリンク検証はMarkdown出力にのみ適用されます。"
+        );
+        assert_eq!(
+            msgs.warn_verify_links_json_hint,
+            "   リンク検証を使用するには --format markdown を使用してください。"
+        );
+    }
+
+    #[test]
+    fn test_messages_error_reporting_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(msgs.error_header, "❌ An error occurred:");
+        assert_eq!(
+            Messages::format(msgs.error_caused_by, &["network timeout"]),
+            "Caused by: network timeout"
+        );
+        assert_eq!(
+            Messages::format(
+                msgs.info_config_template_created,
+                &["uv-sbom.config.yml", "/tmp/project"]
+            ),
+            "Created uv-sbom.config.yml in /tmp/project"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_init_failed, &["permission denied"]),
+            "Error: permission denied"
+        );
+        assert_eq!(
+            msgs.error_no_workspace_members,
+            "No workspace members found. Is this a uv workspace?"
+        );
+    }
+
+    #[test]
+    fn test_messages_error_reporting_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(msgs.error_header, "❌ エラーが発生しました:");
+        assert_eq!(
+            Messages::format(msgs.error_caused_by, &["network timeout"]),
+            "原因: network timeout"
+        );
+        assert_eq!(
+            Messages::format(
+                msgs.info_config_template_created,
+                &["uv-sbom.config.yml", "/tmp/project"]
+            ),
+            "uv-sbom.config.yml を /tmp/project に作成しました"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_init_failed, &["permission denied"]),
+            "エラー: permission denied"
+        );
+        assert_eq!(
+            msgs.error_no_workspace_members,
+            "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？"
+        );
+    }
+
+    #[test]
+    fn test_error_all_packages_excluded_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            Messages::format(msgs.error_all_packages_excluded, &["3"]),
+            "All 3 package(s) were excluded by the provided filters. The SBOM would be empty. Please adjust your exclusion patterns."
+        );
+    }
+
+    #[test]
+    fn test_error_all_packages_excluded_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            Messages::format(msgs.error_all_packages_excluded, &["3"]),
+            "指定されたフィルターにより 3 個のパッケージがすべて除外されました。SBOM が空になります。除外パターンを見直してください。"
+        );
+    }
+
+    #[test]
+    fn test_error_pyproject_not_found_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.error_pyproject_not_found,
+            "pyproject.toml not found in project directory"
+        );
+    }
+
+    #[test]
+    fn test_error_pyproject_not_found_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.error_pyproject_not_found,
+            "プロジェクトディレクトリに pyproject.toml が見つかりません。"
+        );
+    }
+
+    #[test]
+    fn test_messages_config_errors_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            Messages::format(
+                msgs.error_config_already_exists,
+                &["uv-sbom.config.yml", "/tmp/project"]
+            ),
+            "uv-sbom.config.yml already exists in /tmp/project. Use a different directory or remove the existing file."
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_template_write_failed, &["/tmp/x.yml"]),
+            "Failed to write config template to: /tmp/x.yml"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_read_failed, &["/tmp/x.yml"]),
+            "Failed to read config file: /tmp/x.yml\n\n💡 Hint: Check that the file exists and is readable."
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_parse_failed, &["/tmp/x.yml"]),
+            "Failed to parse config file: /tmp/x.yml\n\n💡 Hint: Ensure the file contains valid YAML syntax."
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_empty_ignore_cve_id, &["2"]),
+            "Invalid config: ignore_cves[2].id must not be empty.\n\n💡 Hint: Each ignore_cves entry must have a non-empty 'id' field (e.g., \"CVE-2024-1234\")."
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_invalid_unknown_license_handling, &["maybe"]),
+            "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"maybe\""
+        );
+    }
+
+    #[test]
+    fn test_messages_config_errors_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            Messages::format(
+                msgs.error_config_already_exists,
+                &["uv-sbom.config.yml", "/tmp/project"]
+            ),
+            "uv-sbom.config.yml は /tmp/project に既に存在します。別のディレクトリを指定するか、既存のファイルを削除してください。"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_template_write_failed, &["/tmp/x.yml"]),
+            "設定テンプレートの書き込みに失敗しました: /tmp/x.yml"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_read_failed, &["/tmp/x.yml"]),
+            "設定ファイルの読み込みに失敗しました: /tmp/x.yml\n\n💡 ヒント: ファイルが存在し、読み取り可能であることを確認してください。"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_parse_failed, &["/tmp/x.yml"]),
+            "設定ファイルの解析に失敗しました: /tmp/x.yml\n\n💡 ヒント: ファイルが有効な YAML 構文であることを確認してください。"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_empty_ignore_cve_id, &["2"]),
+            "設定が不正です: ignore_cves[2].id は空にできません。\n\n💡 ヒント: ignore_cves の各エントリには空でない 'id' フィールドが必要です（例: \"CVE-2024-1234\"）。"
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_invalid_unknown_license_handling, &["maybe"]),
+            "設定が不正です: license_policy.unknown は warn, deny, allow のいずれかである必要があります。指定値: \"maybe\""
+        );
+    }
+
+    #[test]
+    fn test_messages_config_errors_placeholder_parity() {
+        // EN and JA templates must have the same number of `{}` placeholders,
+        // in the same semantic order, since Messages::format fills them
+        // positionally.
+        let pairs = [
+            (
+                EN_MESSAGES.error_config_already_exists,
+                JA_MESSAGES.error_config_already_exists,
+                2,
+            ),
+            (
+                EN_MESSAGES.error_config_template_write_failed,
+                JA_MESSAGES.error_config_template_write_failed,
+                1,
+            ),
+            (
+                EN_MESSAGES.error_config_read_failed,
+                JA_MESSAGES.error_config_read_failed,
+                1,
+            ),
+            (
+                EN_MESSAGES.error_config_parse_failed,
+                JA_MESSAGES.error_config_parse_failed,
+                1,
+            ),
+            (
+                EN_MESSAGES.error_config_empty_ignore_cve_id,
+                JA_MESSAGES.error_config_empty_ignore_cve_id,
+                1,
+            ),
+            (
+                EN_MESSAGES.error_config_invalid_unknown_license_handling,
+                JA_MESSAGES.error_config_invalid_unknown_license_handling,
+                1,
+            ),
+        ];
+        for (en, ja, expected_count) in pairs {
+            let en_count = en.matches("{}").count();
+            let ja_count = ja.matches("{}").count();
+            assert_eq!(
+                en_count, ja_count,
+                "EN/JA placeholder count mismatch for {en:?}"
+            );
+            assert_eq!(
+                en_count, expected_count,
+                "unexpected placeholder count for {en:?}"
+            );
+        }
     }
 
     #[test]
@@ -1258,6 +1636,274 @@ mod tests {
         assert_eq!(
             result,
             "### ⚠️警告 2件の脆弱性が1個のパッケージで見つかりました。"
+        );
+    }
+
+    #[test]
+    fn test_warn_ignored_cve_with_reason_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.warn_ignored_cve_with_reason,
+            &["CVE-2024-001", "requests", "False positive"],
+        );
+        assert_eq!(
+            result,
+            "⚠ Ignored CVE-2024-001 for package requests (reason: False positive)"
+        );
+    }
+
+    #[test]
+    fn test_warn_ignored_cve_no_reason_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.warn_ignored_cve_no_reason,
+            &["CVE-2024-001", "requests"],
+        );
+        assert_eq!(
+            result,
+            "⚠ Ignored CVE-2024-001 for package requests (no reason provided)"
+        );
+    }
+
+    #[test]
+    fn test_warn_vuln_detail_fetch_failed_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.warn_vuln_detail_fetch_failed,
+            &["CVE-2024-001", "request timed out"],
+        );
+        assert_eq!(
+            result,
+            "⚠️  Warning: Failed to fetch details for CVE-2024-001: request timed out"
+        );
+    }
+
+    #[test]
+    fn test_warn_vuln_detail_fetch_failed_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.warn_vuln_detail_fetch_failed,
+            &["CVE-2024-001", "リクエストがタイムアウトしました"],
+        );
+        assert_eq!(
+            result,
+            "⚠️  警告: CVE-2024-001の詳細情報の取得に失敗: リクエストがタイムアウトしました"
+        );
+    }
+
+    #[test]
+    fn test_warn_epss_fetch_failed_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(msgs.warn_epss_fetch_failed, &["3", "connection refused"]);
+        assert_eq!(
+            result,
+            "Warning: EPSS fetch failed for batch 3: connection refused"
+        );
+    }
+
+    #[test]
+    fn test_warn_epss_fetch_failed_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(msgs.warn_epss_fetch_failed, &["3", "接続が拒否されました"]);
+        assert_eq!(
+            result,
+            "警告: バッチ3のEPSSデータ取得に失敗: 接続が拒否されました"
+        );
+    }
+
+    #[test]
+    fn test_warn_epss_fetch_failed_placeholder_parity() {
+        let en_count = EN_MESSAGES.warn_epss_fetch_failed.matches("{}").count();
+        let ja_count = JA_MESSAGES.warn_epss_fetch_failed.matches("{}").count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 2);
+    }
+
+    #[test]
+    fn test_warn_kev_fetch_failed_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(msgs.warn_kev_fetch_failed, &["connection refused"]);
+        assert_eq!(
+            result,
+            "Warning: KEV catalog fetch failed: connection refused"
+        );
+    }
+
+    #[test]
+    fn test_warn_kev_fetch_failed_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(msgs.warn_kev_fetch_failed, &["接続が拒否されました"]);
+        assert_eq!(
+            result,
+            "警告: KEVカタログの取得に失敗: 接続が拒否されました"
+        );
+    }
+
+    #[test]
+    fn test_warn_kev_fetch_failed_placeholder_parity() {
+        let en_count = EN_MESSAGES.warn_kev_fetch_failed.matches("{}").count();
+        let ja_count = JA_MESSAGES.warn_kev_fetch_failed.matches("{}").count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 1);
+    }
+
+    #[test]
+    fn test_warn_ignored_cve_with_reason_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.warn_ignored_cve_with_reason,
+            &["CVE-2024-001", "requests", "誤検知"],
+        );
+        assert_eq!(
+            result,
+            "⚠ CVE-2024-001 をパッケージ requests で無視しました (理由: 誤検知)"
+        );
+    }
+
+    #[test]
+    fn test_warn_ignored_cve_no_reason_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.warn_ignored_cve_no_reason,
+            &["CVE-2024-001", "requests"],
+        );
+        assert_eq!(
+            result,
+            "⚠ CVE-2024-001 をパッケージ requests で無視しました (理由の指定なし)"
+        );
+    }
+
+    #[test]
+    fn test_warn_dependency_chain_truncated_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(
+            msgs.warn_dependency_chain_truncated,
+            &["100", "some-package"],
+        );
+        assert_eq!(
+            result,
+            "⚠️  Warning: Maximum recursion depth (100) reached for package 'some-package'. Dependency chain may be truncated."
+        );
+    }
+
+    #[test]
+    fn test_warn_dependency_chain_truncated_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.warn_dependency_chain_truncated,
+            &["100", "some-package"],
+        );
+        assert_eq!(
+            result,
+            "⚠️  警告: 最大再帰深度 (100) に達しました（パッケージ: 'some-package'）。依存関係チェーンが切り詰められる可能性があります。"
+        );
+    }
+
+    #[test]
+    fn test_warn_dependency_chain_truncated_placeholder_parity() {
+        // EN and JA templates must have the same number of `{}` placeholders, in the
+        // same semantic order, since Messages::format fills them positionally.
+        let en_count = EN_MESSAGES
+            .warn_dependency_chain_truncated
+            .matches("{}")
+            .count();
+        let ja_count = JA_MESSAGES
+            .warn_dependency_chain_truncated
+            .matches("{}")
+            .count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 2);
+    }
+
+    #[test]
+    fn test_warn_exclude_pattern_unmatched_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(msgs.warn_exclude_pattern_unmatched, &["foo-*"]);
+        assert_eq!(
+            result,
+            "⚠️  Warning: Exclude pattern 'foo-*' did not match any dependencies."
+        );
+    }
+
+    #[test]
+    fn test_warn_exclude_pattern_unmatched_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(msgs.warn_exclude_pattern_unmatched, &["foo-*"]);
+        assert_eq!(
+            result,
+            "⚠️  警告: 除外パターン 'foo-*' はどの依存関係にも一致しませんでした。"
+        );
+    }
+
+    #[test]
+    fn test_warn_exclude_pattern_unmatched_placeholder_parity() {
+        let en_count = EN_MESSAGES
+            .warn_exclude_pattern_unmatched
+            .matches("{}")
+            .count();
+        let ja_count = JA_MESSAGES
+            .warn_exclude_pattern_unmatched
+            .matches("{}")
+            .count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 1);
+    }
+
+    #[test]
+    fn test_progress_packages_excluded_en_format() {
+        let msgs = Messages::for_locale(Locale::En);
+        let result = Messages::format(msgs.progress_packages_excluded, &["3"]);
+        assert_eq!(result, "🚫 Excluded 3 package(s) based on filters");
+    }
+
+    #[test]
+    fn test_progress_packages_excluded_ja_format() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(msgs.progress_packages_excluded, &["3"]);
+        assert_eq!(result, "🚫 フィルターにより3個のパッケージを除外");
+    }
+
+    #[test]
+    fn test_progress_packages_excluded_placeholder_parity() {
+        let en_count = EN_MESSAGES.progress_packages_excluded.matches("{}").count();
+        let ja_count = JA_MESSAGES.progress_packages_excluded.matches("{}").count();
+        assert_eq!(en_count, ja_count);
+        assert_eq!(en_count, 1);
+    }
+
+    #[test]
+    fn test_warn_suggest_fix_requires_uv_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.warn_suggest_fix_requires_uv,
+            "⚠ --suggest-fix requires `uv` CLI. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        );
+    }
+
+    #[test]
+    fn test_warn_suggest_fix_requires_uv_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.warn_suggest_fix_requires_uv,
+            "⚠ --suggest-fix には `uv` CLI が必要です。インストール: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        );
+    }
+
+    #[test]
+    fn test_warn_suggest_fix_requires_pyproject_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        assert_eq!(
+            msgs.warn_suggest_fix_requires_pyproject,
+            "⚠ --suggest-fix requires pyproject.toml in the project directory."
+        );
+    }
+
+    #[test]
+    fn test_warn_suggest_fix_requires_pyproject_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        assert_eq!(
+            msgs.warn_suggest_fix_requires_pyproject,
+            "⚠ --suggest-fix にはプロジェクトディレクトリに pyproject.toml が必要です。"
         );
     }
 

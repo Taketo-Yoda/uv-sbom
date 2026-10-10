@@ -28,7 +28,7 @@
 //! let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::default());
 //!
 //! // Create use case
-//! let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+//! let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
 //!     lockfile_reader,
 //!     project_config_reader,
 //!     license_repository,
@@ -37,6 +37,7 @@
 //!     None, // No abandoned-package checking in this example
 //!     None, // No Python compatibility checking in this example
 //!     None, // No upgrade simulation in this example
+//!     None, // No exploitability enrichment in this example
 //!     uv_sbom::i18n::Locale::default(),
 //! );
 //!

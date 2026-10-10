@@ -3,6 +3,7 @@
 /// These ports define the interfaces that the application core uses
 /// to interact with external systems (file system, network, console, etc.).
 pub mod diff_lockfile_reader;
+pub mod exploitability_repository;
 pub mod formatter;
 pub mod license_repository;
 pub mod lockfile_reader;
@@ -25,6 +26,7 @@ pub mod workspace_reader;
 // `adapters::outbound::uv::UvLockAdapter`.
 
 pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
+pub use exploitability_repository::ExploitabilityRepository;
 pub use formatter::SbomFormatter;
 pub use license_repository::{LicenseRepository, PyPiMetadata};
 pub use lockfile_reader::{
@@ -35,7 +37,7 @@ pub use lockfile_reader::{
 pub use maintenance_repository::{MaintenanceInfo, MaintenanceRepository};
 pub use output_presenter::OutputPresenter;
 pub use progress_reporter::{ProgressCallback, ProgressReporter};
-pub use project_config_reader::ProjectConfigReader;
+pub use project_config_reader::{ProjectConfigError, ProjectConfigReader};
 pub use python_compatibility_repository::{PythonCompatibilityInfo, PythonCompatibilityRepository};
 // Note: This will be used in subsequent subtasks (Subtask 3-8)
 #[allow(unused_imports)]

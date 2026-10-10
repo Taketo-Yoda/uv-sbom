@@ -76,11 +76,12 @@ async fn test_e2e_json_format() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -136,11 +137,12 @@ async fn test_e2e_markdown_format() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -198,11 +200,12 @@ async fn test_e2e_nonexistent_project() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -228,11 +231,12 @@ async fn test_e2e_package_count() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -270,11 +274,12 @@ async fn test_e2e_exclude_single_package() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -312,11 +317,12 @@ async fn test_e2e_exclude_multiple_packages() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -358,11 +364,12 @@ async fn test_e2e_exclude_with_wildcard() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -400,11 +407,12 @@ async fn test_e2e_exclude_all_packages_error() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -448,11 +456,12 @@ async fn test_e2e_exclude_root_project_preserves_dependency_classification() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -504,11 +513,12 @@ async fn test_e2e_exclude_root_project_markdown_output() {
     let license_repository = create_test_license_repository();
     let progress_reporter = StderrProgressReporter::new(uv_sbom::i18n::Locale::En);
 
-    let use_case: GenerateSbomUseCase<_, _, _, _, (), ()> = GenerateSbomUseCase::new(
+    let use_case: GenerateSbomUseCase<_, _, _, _, (), (), ()> = GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
         license_repository,
         progress_reporter,
+        None,
         None,
         None,
         None,
@@ -654,6 +664,187 @@ mod lang_option_tests {
             .assert()
             .code(2)
             .stderr(predicate::str::contains("Supported languages"));
+    }
+}
+
+// `--suggest-fix` pre-flight warning i18n tests (#824)
+//
+// `resolve_suggest_fix` (src/cli/runner.rs) used to print two hardcoded English
+// `eprintln!` warnings that bypassed the i18n catalog. These tests prove the
+// warnings are now routed through `Messages` and localized for `--lang ja`.
+//
+// Unix-only: the `pyproject.toml`-missing branch is only reached when the `uv`
+// CLI check passes first, and CI runners do not install `uv` by default, so a
+// stub `uv` executable is placed first on PATH to make the `uv`-available branch
+// deterministic regardless of whether the real `uv` CLI happens to be present on
+// the test runner. Reproducing this PATH-shim trick portably on Windows (where
+// `Command::new("uv")` does not resolve extension-less names the same way) is
+// out of scope here; the underlying strings are still covered cross-platform by
+// the unit tests in `src/i18n/mod.rs`.
+#[cfg(unix)]
+mod suggest_fix_i18n_tests {
+    use assert_cmd::cargo::cargo_bin_cmd;
+    use predicates::prelude::*;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::TempDir;
+
+    /// `--suggest-fix --lang ja` against a project directory missing
+    /// `pyproject.toml` prints the localized (Japanese) warning.
+    #[test]
+    fn test_suggest_fix_missing_pyproject_ja_localized() {
+        // Stub `uv` executable so `resolve_suggest_fix`'s `uv --version` check
+        // always succeeds, independent of the real test runner's PATH.
+        let fake_bin_dir = TempDir::new().unwrap();
+        let uv_stub_path = fake_bin_dir.path().join("uv");
+        fs::write(&uv_stub_path, "#!/bin/sh\nexit 0\n").unwrap();
+        fs::set_permissions(&uv_stub_path, fs::Permissions::from_mode(0o755)).unwrap();
+
+        // Empty project directory: no pyproject.toml (and no uv.lock, which is
+        // fine — resolve_suggest_fix's warning fires before the lockfile is read).
+        let project_dir = TempDir::new().unwrap();
+
+        let existing_path = std::env::var("PATH").unwrap_or_default();
+        let path_with_stub = format!("{}:{}", fake_bin_dir.path().display(), existing_path);
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                project_dir.path().to_str().unwrap(),
+                "--suggest-fix",
+                "--lang",
+                "ja",
+            ])
+            .env("PATH", path_with_stub)
+            .assert()
+            .stderr(predicate::str::contains(
+                "⚠ --suggest-fix にはプロジェクトディレクトリに pyproject.toml が必要です。",
+            ));
+    }
+}
+
+/// End-to-end tests proving `DependencyAnalyzer`'s recursion-depth truncation
+/// warning is routed through the i18n catalog rather than a hardcoded `eprintln!`
+/// (Issue #830), mirroring Issue #826's `test_ignore_cve_warning_localized_ja`
+/// pattern in `tests/e2e_config_file.rs`.
+///
+/// Both tests are `#[ignore]`d because `GenerateSbomUseCase::execute` always runs
+/// license enrichment (Step 4) against the real PyPI API regardless of `--format`,
+/// and this fixture's 151-package linear chain would otherwise make ~150 real
+/// network requests on every default `cargo test` run.
+mod dependency_chain_truncation_tests {
+    use assert_cmd::cargo::cargo_bin_cmd;
+    use std::fmt::Write as _;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// Depth beyond `DependencyAnalyzer::MAX_RECURSION_DEPTH` (100) at which the
+    /// chain `test-project -> pkg-0 -> pkg-1 -> ... -> pkg-{CHAIN_LEN - 1}` triggers
+    /// the recursion-depth truncation guard.
+    const CHAIN_LEN: usize = 150;
+
+    /// Writes a `uv.lock` with a single linear dependency chain deep enough to trip
+    /// `DependencyAnalyzer::MAX_RECURSION_DEPTH`.
+    fn write_deep_chain_uv_lock(dir: &std::path::Path) {
+        let mut uv_lock = String::from(
+            r#"version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "test-project"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "pkg-0" },
+]
+"#,
+        );
+
+        for i in 0..CHAIN_LEN {
+            let deps = if i + 1 < CHAIN_LEN {
+                format!("dependencies = [\n    {{ name = \"pkg-{}\" }},\n]\n", i + 1)
+            } else {
+                String::new()
+            };
+            write!(
+                uv_lock,
+                r#"
+[[package]]
+name = "pkg-{i}"
+version = "0.1.0"
+source = {{ registry = "https://pypi.org/simple" }}
+{deps}"#
+            )
+            .unwrap();
+        }
+
+        fs::write(dir.join("uv.lock"), uv_lock).unwrap();
+    }
+
+    fn write_pyproject_toml(dir: &std::path::Path) {
+        let pyproject = r#"[project]
+name = "test-project"
+version = "0.1.0"
+requires-python = ">=3.8"
+dependencies = [
+    "pkg-0",
+]
+"#;
+        fs::write(dir.join("pyproject.toml"), pyproject).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires network access to PyPI API for license fetching"]
+    fn test_dependency_chain_truncation_warning_default_english() {
+        let dir = TempDir::new().unwrap();
+        write_deep_chain_uv_lock(dir.path());
+        write_pyproject_toml(dir.path());
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "-f",
+                "markdown",
+                "--no-check-cve",
+            ])
+            .output()
+            .unwrap();
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("Maximum recursion depth (100) reached for package 'pkg-100'"),
+            "stderr did not contain the expected truncation warning: {stderr}"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires network access to PyPI API for license fetching"]
+    fn test_dependency_chain_truncation_warning_localized_ja() {
+        let dir = TempDir::new().unwrap();
+        write_deep_chain_uv_lock(dir.path());
+        write_pyproject_toml(dir.path());
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "-f",
+                "markdown",
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .output()
+            .unwrap();
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // The truncation warning must be localized to Japanese, not the English text.
+        assert!(
+            stderr.contains("最大再帰深度 (100) に達しました（パッケージ: 'pkg-100'）"),
+            "stderr did not contain the expected localized truncation warning: {stderr}"
+        );
+        assert!(!stderr.contains("Maximum recursion depth"));
     }
 }
 

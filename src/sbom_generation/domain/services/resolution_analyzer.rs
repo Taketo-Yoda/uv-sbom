@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use super::exploitability_sorter::ExploitabilitySorter;
 use crate::sbom_generation::domain::dependency_graph::DependencyGraph;
 use crate::sbom_generation::domain::package::PackageName;
 use crate::sbom_generation::domain::resolution_guide::{IntroducedBy, ResolutionEntry};
@@ -73,7 +74,7 @@ impl ResolutionAnalyzer {
                     .unwrap_or_default();
 
             for vuln in pkg_vuln.vulnerabilities() {
-                entries.push(ResolutionEntry::new(
+                let mut entry = ResolutionEntry::new(
                     pkg_vuln.package_name().to_string(),
                     pkg_vuln.current_version().to_string(),
                     vuln.fixed_version().map(|v| v.to_string()),
@@ -81,10 +82,13 @@ impl ResolutionAnalyzer {
                     vuln.id().to_string(),
                     introduced_by.clone(),
                     dependency_chains.clone(),
-                ));
+                );
+                entry.set_exploitability(vuln.exploitability().cloned());
+                entries.push(entry);
             }
         }
 
+        ExploitabilitySorter::sort_resolution_entries(&mut entries);
         entries
     }
 }
@@ -115,6 +119,7 @@ mod tests {
             severity,
             fixed.map(|v| v.to_string()),
             None,
+            vec![],
         )
         .unwrap()
     }

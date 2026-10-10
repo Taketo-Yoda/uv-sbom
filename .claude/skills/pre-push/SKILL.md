@@ -12,8 +12,8 @@ Final validation before pushing commits to remote repository.
 Validate branch conventions and push commits to remote. Quality checks (fmt, clippy, tests)
 are delegated to the `.githooks/pre-push` hook, which runs automatically when `git push` executes.
 
-> **Hook delegation**: `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features -- -D warnings`,
-> and `cargo test --all` are all run by `.githooks/pre-push` on every `git push`.
+> **Hook delegation**: `.githooks/pre-push` runs the canonical fmt / clippy / test block
+> (see `.claude/conventions/ci-checks.md`) on every `git push`.
 > Run `make setup` once to activate the hook if you haven't already.
 
 ## Validation Checklist
@@ -26,17 +26,8 @@ All of the following MUST pass before pushing:
 git branch --show-current
 ```
 
-Verify branch name follows convention based on **Issue labels** (priority order):
-
-| Priority | Issue Label | Branch Prefix | Example |
-|----------|-------------|---------------|---------|
-| 1 | `enhancement` | `feature/` | `feature/84-agent-skills` |
-| 2 | `bug` | `bugfix/` | `bugfix/42-fix-parsing` |
-| 3 | `refactor` | `refactor/` | `refactor/30-cleanup-code` |
-| 4 | `documentation` | `doc/` | `doc/50-update-readme` |
-| 5 | (no label) | `feature/` | `feature/99-misc-task` |
-
-**Additional**: `hotfix/<issue>-<desc>` for critical production fixes
+Verify the branch name follows `.claude/conventions/branching.md` → "Branch Naming
+(label → prefix)" (read it if unsure which prefix the Issue's labels map to).
 
 **FORBIDDEN branches for direct push:**
 
@@ -92,9 +83,8 @@ Before pushing, confirm:
 git push -u origin $(git branch --show-current)
 ```
 
-The `.githooks/pre-push` hook will automatically run `cargo fmt --all -- --check`,
-`cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all`
-before the push completes.
+The `.githooks/pre-push` hook will automatically run the canonical check block
+(`.claude/conventions/ci-checks.md`) before the push completes.
 
 ## Error Handling
 
@@ -113,16 +103,14 @@ If the `.githooks/pre-push` hook reports a failure:
 WARNING: You are on branch 'main'. Direct pushes to main are not allowed.
 ```
 
-**CRITICAL**: Always create branches from `origin/develop`:
+**CRITICAL**: Never push to `main`/`develop`. Instead:
 
-```bash
-git fetch origin
-git checkout -b feature/<issue>-<description> origin/develop
-```
-
-1. Create a feature branch from origin/develop (not main!)
+1. Create a feature branch per `.claude/conventions/branching.md` → "Branch Base"
+   (Normal Mode: from `origin/develop`, never `main`; Stacked Mode only on an explicit
+   user request — never inferred)
 2. Push the feature branch
-3. Create a PR targeting `develop`
+3. Create a PR via the `/pr` skill, which resolves the target branch into
+   `$BASE_BRANCH`
 
 ### Hook Not Active
 

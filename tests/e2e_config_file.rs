@@ -170,6 +170,67 @@ format: markdown
 }
 
 // ============================================================================
+// Unknown Config Field Warning Tests
+// ============================================================================
+
+mod unknown_field_tests {
+    use super::*;
+
+    #[test]
+    fn test_unknown_field_warning_localized_to_english() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            r#"
+format: json
+totally_unknown_field: true
+"#,
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args(["-p", dir.path().to_str().unwrap(), "--no-check-cve"])
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr
+            .contains("Warning: Unknown config field 'totally_unknown_field' will be ignored."));
+    }
+
+    #[test]
+    fn test_unknown_field_warning_localized_to_japanese() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            r#"
+format: json
+totally_unknown_field: true
+"#,
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("警告: 不明な設定項目 'totally_unknown_field' は無視されます。"));
+    }
+}
+
+// ============================================================================
 // Explicit Config Path (`--config`) Tests
 // ============================================================================
 
@@ -366,6 +427,60 @@ ignore_cves:
 
     #[test]
     #[ignore = "requires network access to OSV API"]
+    fn test_ignore_cve_warning_localized_ja() {
+        let dir = TempDir::new().unwrap();
+
+        // Copy vulnerable project files
+        let vuln_project = fixtures_path().join("vulnerable_project");
+        fs::copy(vuln_project.join("uv.lock"), dir.path().join("uv.lock")).unwrap();
+        fs::copy(
+            vuln_project.join("pyproject.toml"),
+            dir.path().join("pyproject.toml"),
+        )
+        .unwrap();
+
+        // Config ignores the known CVE
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            r#"
+check_cve: true
+ignore_cves:
+  - id: CVE-2023-37920
+    reason: "Test fixture - known false positive"
+  - id: PYSEC-2023-135
+    reason: "Test fixture - duplicate of CVE-2023-37920"
+"#,
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "-f",
+                "markdown",
+                "--lang",
+                "ja",
+            ])
+            .output()
+            .unwrap();
+
+        // Should succeed because all CVEs are ignored
+        assert!(
+            output.status.success(),
+            "Expected exit code 0 but got {}. stderr: {}",
+            output.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // The ignored-CVE warning must be localized to Japanese, not the English text
+        assert!(stderr.contains("無視しました"));
+        assert!(stderr.contains("CVE-2023-37920"));
+        assert!(!stderr.contains("Ignored"));
+    }
+
+    #[test]
+    #[ignore = "requires network access to OSV API"]
     fn test_ignore_cve_via_config_without_check_cve_key() {
         let dir = TempDir::new().unwrap();
 
@@ -518,6 +633,36 @@ mod error_tests {
         assert_eq!(output.status.code(), Some(3)); // ApplicationError
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(stderr.contains("Failed to parse config file"));
+    }
+
+    /// Same as `test_invalid_yaml_syntax_error`, but under `--lang ja`: the
+    /// `ConfigError::ParseFailed` payload must render in Japanese, not just the
+    /// surrounding error frame (#834).
+    #[test]
+    fn test_invalid_yaml_syntax_error_localized_to_japanese() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            "invalid: yaml: [[[broken",
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args(["-p", dir.path().to_str().unwrap(), "--lang", "ja"])
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(3)); // ApplicationError
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("設定ファイルの解析に失敗しました"),
+            "stderr must contain the Japanese parse-failure message, got: {stderr}"
+        );
+        assert!(
+            !stderr.contains("Failed to parse config file"),
+            "English text must not leak through under --lang ja, got: {stderr}"
+        );
     }
 
     #[test]

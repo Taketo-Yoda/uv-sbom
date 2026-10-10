@@ -33,68 +33,23 @@ After reading the guidelines, gather the following information from the user:
 - **Type**: Feature, Bug, Documentation, Refactor, or other
 - **Summary**: Brief description of the task
 - **Context**: Why is this needed?
-- **Technical Details**: Implementation hints if available
+- **Technical Details**: Implementation hints if available (file paths, precedent
+  Issues/PRs, invariants) — these go in the collapsed AI section
+- **Types affected**: New or changed types, if any — these become the `## Design Sketch`
+  Mermaid diagram. If no types change, the Design Sketch section is omitted.
 
-### 3. Determine Issue Template
+### 3. Draft Issue from Template
 
-Based on the type, use the appropriate structure:
+Use the template under `## Issue Structure Template` in `.claude/issue-guidelines.md`
+for Feature Requests. Use the template under `### Bug Report Template` in
+`.claude/issue-guidelines.md` for Bug Reports.
 
-#### Feature Request
+Follow the formatting rules under `## Issue Structure Template` in
+`.claude/issue-guidelines.md` — in particular, leave a blank line after `<summary>`
+and before `</details>`.
 
-```markdown
-## Summary
-[Brief description of the feature]
-
-## Problem
-[What problem does this solve?]
-
-## Proposed Solution
-[How should this be implemented?]
-
-## Technical Implementation
-[Technical details for autonomous implementation]
-- Files to modify:
-- New files to create:
-- Dependencies:
-- Architecture considerations:
-
-## Acceptance Criteria
-- [ ] [Specific, testable criterion]
-- [ ] [Another criterion]
-- [ ] Tests added
-- [ ] Documentation updated (if applicable)
-```
-
-#### Bug Report
-
-```markdown
-## Summary
-[Brief description of the bug]
-
-## Current Behavior
-[What happens now?]
-
-## Expected Behavior
-[What should happen?]
-
-## Steps to Reproduce
-1. [Step 1]
-2. [Step 2]
-3. [Step 3]
-
-## Technical Details
-- Environment: [OS, Rust version, etc.]
-- Error messages:
-- Related files:
-
-## Proposed Fix
-[Technical approach to fix]
-
-## Acceptance Criteria
-- [ ] Bug is fixed
-- [ ] Tests added to prevent regression
-- [ ] No new warnings from clippy
-```
+Do not include implementation code in either section — see "No Implementation Code
+in Issue Bodies" in `.claude/issue-guidelines.md` for the four allowed exceptions.
 
 ### 4. Validate Completeness
 
@@ -102,16 +57,29 @@ Before creating the Issue, verify:
 
 - [ ] Title is concise and descriptive (in English)
 - [ ] Technical detail is sufficient for autonomous implementation
-- [ ] Acceptance criteria are specific and testable
+- [ ] Acceptance Criteria are behavior-level and human-verifiable; CI/tooling checks live in Technical Acceptance Criteria
 - [ ] Labels are appropriate (bug, enhancement, documentation, etc.)
 - [ ] Related Issues/PRs are referenced if applicable
+- [ ] Human section present and complete (Summary, Why, Scope, Acceptance Criteria;
+      Design Sketch when types change)
+- [ ] AI section wrapped in `<details><summary>🤖 Implementation Spec (for AI agents)</summary>`,
+      with a blank line after `<summary>` and before `</details>`
+- [ ] AI section contains Context & Constraints, Design Decisions, Files to Update/Create,
+      Technical Acceptance Criteria
+- [ ] No implementation code outside the allowed exceptions
+- [ ] The human section alone conveys what and why in under a minute
 
 ### 5. Create the Issue
 
-Use the `gh` CLI to create the Issue:
+Use the `gh` CLI to create the Issue. The body contains HTML tags and backticks —
+pass it via a quoted heredoc (or `--body-file`) so the shell does not mangle
+`<details>` or fenced blocks:
 
 ```bash
-gh issue create --title "TITLE" --body "BODY" --label "LABEL"
+gh issue create --title "TITLE" --label "LABEL" --body "$(cat <<'EOF'
+<body>
+EOF
+)"
 ```
 
 ### 6. Confirm Creation
@@ -124,15 +92,7 @@ After creating, output:
 
 ## Labels Reference
 
-Common labels for this project:
-
-- `bug` - Bug fixes
-- `enhancement` - New features or improvements
-- `documentation` - Documentation updates
-- `refactor` - Code refactoring
-- `security` - Security-related issues
-- `performance` - Performance improvements
-- `testing` - Test additions or improvements
+Use the labels listed under `## Labels Reference` in `.claude/issue-guidelines.md`.
 
 ## Example Usage
 

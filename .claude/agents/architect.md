@@ -30,7 +30,10 @@ Before responding to any architecture question, read:
 
 ## Design Pattern Reference
 
-uv-sbom follows **Hexagonal Architecture (Ports & Adapters)** with DDD principles:
+uv-sbom follows **Hexagonal Architecture (Ports & Adapters)** with DDD principles.
+
+> Intentional summary for quick context (decided in Issue #849); `.claude/CLAUDE.md` →
+> `## Architecture Overview` → Module Structure is authoritative and wins on conflict.
 
 | Layer | Location | Rule |
 |-------|----------|------|

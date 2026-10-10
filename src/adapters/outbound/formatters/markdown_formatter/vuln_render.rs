@@ -4,6 +4,14 @@ use crate::application::read_models::{
 use crate::i18n::Messages;
 use std::collections::HashSet;
 
+fn has_exploitability_data(vulns: &VulnerabilityReportView) -> bool {
+    vulns
+        .actionable
+        .iter()
+        .chain(vulns.informational.iter())
+        .any(|v| v.epss_percentile.is_some())
+}
+
 /// Renders the vulnerabilities section
 pub(super) fn render_vulnerabilities(
     messages: &'static Messages,
@@ -15,6 +23,8 @@ pub(super) fn render_vulnerabilities(
     output.push_str(messages.section_vuln_report);
     output.push_str("\n\n");
 
+    let show_exploitability = has_exploitability_data(vulns);
+
     // Summary section
     render_vulnerability_summary(messages, output, &vulns.summary);
 
@@ -23,7 +33,13 @@ pub(super) fn render_vulnerabilities(
         output.push_str(messages.warn_no_vuln_above_threshold);
         output.push_str("\n\n");
     } else {
-        render_actionable_vulnerabilities(messages, verified_packages, output, &vulns.actionable);
+        render_actionable_vulnerabilities(
+            messages,
+            verified_packages,
+            output,
+            &vulns.actionable,
+            show_exploitability,
+        );
     }
 
     // Informational vulnerabilities
@@ -33,6 +49,7 @@ pub(super) fn render_vulnerabilities(
             verified_packages,
             output,
             &vulns.informational,
+            show_exploitability,
         );
     }
 
@@ -40,6 +57,10 @@ pub(super) fn render_vulnerabilities(
     output.push_str("\n---\n\n");
     output.push_str(messages.label_osv_attribution);
     output.push('\n');
+    if show_exploitability {
+        output.push_str(messages.label_epss_kev_attribution);
+        output.push('\n');
+    }
 }
 
 /// Renders vulnerability summary statistics
@@ -76,6 +97,7 @@ pub(super) fn render_actionable_vulnerabilities(
     verified_packages: Option<&HashSet<String>>,
     output: &mut String,
     vulns: &[VulnerabilityView],
+    show_exploitability: bool,
 ) {
     let total_vulns = vulns.len();
     let unique_packages = super::helpers::count_unique_packages(vulns);
@@ -101,15 +123,17 @@ pub(super) fn render_actionable_vulnerabilities(
     ));
     output.push_str("\n\n");
 
-    output.push_str(&super::table::vuln_table_header(messages));
-    output.push_str(&super::table::vuln_table_separator(messages));
+    output.push_str(&super::table::vuln_table_header_with_exploitability(
+        messages,
+        show_exploitability,
+    ));
+    output.push_str(&super::table::vuln_table_separator_with_exploitability(
+        messages,
+        show_exploitability,
+    ));
 
-    // Sort by severity (Critical first)
-    let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
-    sorted_vulns.sort_by_key(|v| &v.severity);
-
-    for vuln in sorted_vulns {
-        render_vulnerability_row(verified_packages, output, vuln);
+    for vuln in vulns {
+        render_vulnerability_row(verified_packages, output, vuln, show_exploitability);
     }
     output.push('\n');
 }
@@ -120,6 +144,7 @@ pub(super) fn render_informational_vulnerabilities(
     verified_packages: Option<&HashSet<String>>,
     output: &mut String,
     vulns: &[VulnerabilityView],
+    show_exploitability: bool,
 ) {
     let total_vulns = vulns.len();
     let unique_packages = super::helpers::count_unique_packages(vulns);
@@ -145,14 +170,17 @@ pub(super) fn render_informational_vulnerabilities(
     ));
     output.push_str("\n\n");
 
-    output.push_str(&super::table::vuln_table_header(messages));
-    output.push_str(&super::table::vuln_table_separator(messages));
+    output.push_str(&super::table::vuln_table_header_with_exploitability(
+        messages,
+        show_exploitability,
+    ));
+    output.push_str(&super::table::vuln_table_separator_with_exploitability(
+        messages,
+        show_exploitability,
+    ));
 
-    let mut sorted_vulns: Vec<&VulnerabilityView> = vulns.iter().collect();
-    sorted_vulns.sort_by_key(|v| &v.severity);
-
-    for vuln in sorted_vulns {
-        render_vulnerability_row(verified_packages, output, vuln);
+    for vuln in vulns {
+        render_vulnerability_row(verified_packages, output, vuln, show_exploitability);
     }
 }
 
@@ -161,6 +189,7 @@ pub(super) fn render_vulnerability_row(
     verified_packages: Option<&HashSet<String>>,
     output: &mut String,
     vuln: &VulnerabilityView,
+    show_exploitability: bool,
 ) {
     let cvss_display = vuln
         .cvss_score
@@ -169,7 +198,7 @@ pub(super) fn render_vulnerability_row(
     let severity_emoji = vuln.severity.emoji();
 
     output.push_str(&format!(
-        "| {} | {} | {} | {} | {} {} | {} |\n",
+        "| {} | {} | {} | {} | {} {} | {} |",
         super::links::format_package_name(&vuln.affected_component_name, verified_packages),
         super::table::escape_markdown_table_cell(&vuln.affected_version),
         super::table::escape_markdown_table_cell(fixed_version),
@@ -178,6 +207,36 @@ pub(super) fn render_vulnerability_row(
         vuln.severity.as_str(),
         super::links::vulnerability_id_to_link(&vuln.id),
     ));
+
+    if show_exploitability {
+        let kev_display = vuln
+            .in_kev
+            .map_or("-", |kev| if kev { "Yes" } else { "No" });
+        let epss_display = vuln
+            .epss_percentile
+            .map(format_epss_percentile)
+            .unwrap_or_else(|| "-".to_string());
+        output.push_str(&format!(" {} | {} |", kev_display, epss_display));
+    }
+    output.push('\n');
+}
+
+pub(super) fn format_epss_percentile(percentile: f32) -> String {
+    let pct = (percentile * 100.0).round() as u32;
+    let suffix = ordinal_suffix(pct);
+    format!("{}{} percentile", pct, suffix)
+}
+
+fn ordinal_suffix(n: u32) -> &'static str {
+    if (11..=13).contains(&(n % 100)) {
+        return "th";
+    }
+    match n % 10 {
+        1 => "st",
+        2 => "nd",
+        3 => "rd",
+        _ => "th",
+    }
 }
 
 #[cfg(test)]
@@ -231,6 +290,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             },
             VulnerabilityView {
                 bom_ref: "vuln-002".to_string(),
@@ -244,11 +305,13 @@ mod tests {
                 fixed_version: None,
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             },
         ];
 
         let mut output = String::new();
-        render_actionable_vulnerabilities(messages(), None, &mut output, &vulns);
+        render_actionable_vulnerabilities(messages(), None, &mut output, &vulns, false);
 
         assert!(output.contains("### ⚠️Warning Found 2 vulnerabilities in 1 package."));
         assert!(output.contains("[CVE-2024-1111](https://nvd.nist.gov/vuln/detail/CVE-2024-1111)"));
@@ -273,10 +336,12 @@ mod tests {
             fixed_version: Some("1.27.0".to_string()),
             description: None,
             source_url: None,
+            epss_percentile: None,
+            in_kev: None,
         }];
 
         let mut output = String::new();
-        render_informational_vulnerabilities(messages(), None, &mut output, &vulns);
+        render_informational_vulnerabilities(messages(), None, &mut output, &vulns, false);
 
         assert!(output.contains("### ℹ️Info Found 1 vulnerability in 1 package."));
         assert!(output.contains("[CVE-2024-3333](https://nvd.nist.gov/vuln/detail/CVE-2024-3333)"));
@@ -300,6 +365,8 @@ mod tests {
                 fixed_version: Some("2.32.0".to_string()),
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             },
             VulnerabilityView {
                 bom_ref: "vuln-002".to_string(),
@@ -313,12 +380,78 @@ mod tests {
                 fixed_version: None,
                 description: None,
                 source_url: None,
+                epss_percentile: None,
+                in_kev: None,
             },
         ];
 
         let mut output = String::new();
-        render_actionable_vulnerabilities(messages(), None, &mut output, &vulns);
+        render_actionable_vulnerabilities(messages(), None, &mut output, &vulns, false);
 
         assert!(output.contains("### ⚠️Warning Found 2 vulnerabilities in 2 packages."));
+    }
+
+    #[test]
+    fn test_render_vulnerability_row_with_exploitability() {
+        let vuln = VulnerabilityView {
+            bom_ref: "vuln-001".to_string(),
+            id: "CVE-2024-1111".to_string(),
+            affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+            affected_component_name: "requests".to_string(),
+            affected_version: "2.31.0".to_string(),
+            cvss_score: Some(9.8),
+            cvss_vector: None,
+            severity: SeverityView::Critical,
+            fixed_version: Some("2.32.0".to_string()),
+            description: None,
+            source_url: None,
+            epss_percentile: Some(0.97),
+            in_kev: Some(true),
+        };
+
+        let mut output = String::new();
+        render_vulnerability_row(None, &mut output, &vuln, true);
+
+        assert!(output.contains("Yes"));
+        assert!(output.contains("97th percentile"));
+    }
+
+    #[test]
+    fn test_render_vulnerability_row_without_exploitability() {
+        let vuln = VulnerabilityView {
+            bom_ref: "vuln-001".to_string(),
+            id: "CVE-2024-1111".to_string(),
+            affected_component: "pkg:pypi/requests@2.31.0".to_string(),
+            affected_component_name: "requests".to_string(),
+            affected_version: "2.31.0".to_string(),
+            cvss_score: Some(9.8),
+            cvss_vector: None,
+            severity: SeverityView::Critical,
+            fixed_version: Some("2.32.0".to_string()),
+            description: None,
+            source_url: None,
+            epss_percentile: None,
+            in_kev: None,
+        };
+
+        let mut output = String::new();
+        render_vulnerability_row(None, &mut output, &vuln, false);
+
+        assert!(!output.contains("percentile"));
+        assert!(!output.contains("Yes"));
+    }
+
+    #[test]
+    fn test_format_epss_percentile_ordinals() {
+        assert_eq!(format_epss_percentile(0.97), "97th percentile");
+        assert_eq!(format_epss_percentile(0.01), "1st percentile");
+        assert_eq!(format_epss_percentile(0.02), "2nd percentile");
+        assert_eq!(format_epss_percentile(0.03), "3rd percentile");
+        assert_eq!(format_epss_percentile(0.11), "11th percentile");
+        assert_eq!(format_epss_percentile(0.12), "12th percentile");
+        assert_eq!(format_epss_percentile(0.13), "13th percentile");
+        assert_eq!(format_epss_percentile(0.21), "21st percentile");
+        assert_eq!(format_epss_percentile(1.0), "100th percentile");
+        assert_eq!(format_epss_percentile(0.0), "0th percentile");
     }
 }

@@ -42,6 +42,8 @@ pub struct SbomRequest {
     pub abandoned_threshold_days: u64,
     /// Whether to detect packages sourced from non-PyPI origins.
     pub check_non_pypi: bool,
+    /// Whether to enrich CVE results with EPSS scores and CISA KEV status.
+    pub check_exploitability: bool,
     /// Dependency group names to exclude from the SBOM (e.g. ["dev", "lint"]).
     /// Empty = no group filtering.
     pub exclude_groups: Vec<String>,
@@ -121,6 +123,7 @@ pub struct SbomRequestBuilder {
     check_abandoned: bool,
     abandoned_threshold_days: u64,
     check_non_pypi: bool,
+    check_exploitability: bool,
     exclude_groups: Vec<String>,
     target_python: Option<String>,
     explain_package: Option<String>,
@@ -156,6 +159,7 @@ impl SbomRequestBuilder {
             check_abandoned: false,
             abandoned_threshold_days: 730,
             check_non_pypi: false,
+            check_exploitability: false,
             exclude_groups: Vec::new(),
             target_python: None,
             explain_package: None,
@@ -257,6 +261,12 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets whether to enrich CVE results with EPSS scores and CISA KEV status.
+    pub fn check_exploitability(mut self, check: bool) -> Self {
+        self.check_exploitability = check;
+        self
+    }
+
     /// Sets dependency group names to exclude from the SBOM (e.g. `["dev", "lint"]`).
     pub fn exclude_groups(mut self, groups: Vec<String>) -> Self {
         self.exclude_groups = groups;
@@ -318,6 +328,7 @@ impl SbomRequestBuilder {
             check_abandoned: self.check_abandoned,
             abandoned_threshold_days: self.abandoned_threshold_days,
             check_non_pypi: self.check_non_pypi,
+            check_exploitability: self.check_exploitability,
             exclude_groups: self.exclude_groups,
             target_python: self.target_python,
             explain_package: self.explain_package,

@@ -23,12 +23,28 @@ pub fn load_config(
             "{}",
             Messages::format(msgs.info_config_loaded_from, &[&path_str])
         );
+        warn_unknown_fields(&cfg, msgs);
         Ok(Some(cfg))
     } else {
         let cfg = config::discover_config(project_path)?;
-        if cfg.is_some() {
+        if let Some(ref c) = cfg {
             eprintln!("{}", msgs.info_config_auto_discovered);
+            warn_unknown_fields(c, msgs);
         }
         Ok(cfg)
+    }
+}
+
+/// Warns about config keys that `uv-sbom` does not recognize.
+///
+/// Lives here rather than in `uv_sbom::config` because the warning is
+/// locale-dependent and `config.rs` has no `Locale` (and must stay free of
+/// any i18n dependency); `ConfigFile::unknown_fields` already carries the data.
+fn warn_unknown_fields(cfg: &ConfigFile, msgs: &Messages) {
+    for key in cfg.unknown_fields.keys() {
+        eprintln!(
+            "{}",
+            Messages::format(msgs.warn_unknown_config_field, &[key])
+        );
     }
 }

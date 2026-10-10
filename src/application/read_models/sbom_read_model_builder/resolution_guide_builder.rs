@@ -30,6 +30,11 @@ fn build_resolution_entry_view(entry: &ResolutionEntry) -> ResolutionEntryView {
 
     let dependency_chains = entry.dependency_chains().to_vec();
 
+    let (epss_percentile, in_kev) = entry
+        .exploitability()
+        .map(|e| (Some(e.epss_percentile()), Some(e.in_kev())))
+        .unwrap_or((None, None));
+
     ResolutionEntryView {
         vulnerable_package: entry.vulnerable_package().to_string(),
         current_version: entry.current_version().to_string(),
@@ -38,6 +43,8 @@ fn build_resolution_entry_view(entry: &ResolutionEntry) -> ResolutionEntryView {
         vulnerability_id: entry.vulnerability_id().to_string(),
         introduced_by,
         dependency_chains,
+        epss_percentile,
+        in_kev,
     }
 }
 

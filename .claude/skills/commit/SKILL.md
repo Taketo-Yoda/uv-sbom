@@ -44,6 +44,12 @@ git branch --show-current
    ```
 4. After branch creation, proceed with the commit workflow
 
+> **Stacked Mode**: `origin/develop` is the correct base here **even when Stacked Mode
+> is active** — this error-recovery path only triggers on `develop`/`main` (not on any
+> stack layer), and `/commit` must never infer a stack base. If these changes belong on
+> a stack layer, say so instead of guessing; the user re-bases the new branch per
+> `.claude/conventions/branching.md` → "Branch Base" before the commit proceeds.
+
 ### Error Message Template
 
 If on protected branch, display:
@@ -53,13 +59,15 @@ If on protected branch, display:
 This project uses Git Flow. Please create a feature branch first:
   git checkout -b feature/<issue>-<description> origin/develop
 
-See .claude/instructions.md for branching guidelines.
+See .claude/conventions/branching.md for branching guidelines
+(including Stacked Mode).
 ```
 
 ## Pre-flight Checks (MANDATORY)
 
 > **Note**: `cargo fmt` is handled automatically by the `.githooks/pre-commit` hook.
-> `cargo clippy` and `cargo test` are handled by the `.githooks/pre-push` hook at push time.
+> `cargo clippy` and `cargo test` are handled by the `.githooks/pre-push` hook at push time
+> (canonical commands: `.claude/conventions/ci-checks.md`).
 > Run `make setup` once to activate these hooks if you haven't already.
 
 ### 1. Security Check
@@ -183,6 +191,11 @@ EOF
 )"
 ```
 
+**Never include a Claude session URL** (`https://claude.ai/code/session_...`) in the
+commit message — neither in the body nor as a trailer such as `Claude-Session:`. The
+only Claude-related trailer is the `Co-Authored-By` line shown above. Session URLs are internal
+tooling details with no value in the repository's history.
+
 ### Step 7: Verify Commit
 
 ```bash
@@ -194,6 +207,7 @@ Confirm:
 - [ ] Commit message is in English
 - [ ] Type is correct
 - [ ] Co-Authored-By is present
+- [ ] No Claude session URL (`https://claude.ai/code/session_...`) or `Claude-Session:` trailer
 - [ ] No secrets in the commit
 
 ## Error Handling
@@ -232,11 +246,10 @@ User: "変更をコミットして"
 
 Claude executes /commit skill:
 
-1. Runs `cargo fmt --all`
-2. Runs `cargo clippy --all-targets --all-features -- -D warnings`
-3. Checks for secrets in staged files
-4. Reviews changes with `git diff --cached`
-5. Generates conventional commit message in English
-6. Creates commit with Co-Authored-By trailer
-7. Confirms commit with `git log -1`
-8. Reports success to user
+1. Checks for secrets in staged files
+2. Reviews changes with `git diff --cached`
+3. Generates conventional commit message in English
+4. Creates commit with Co-Authored-By trailer (the `.githooks/pre-commit` hook runs
+   `cargo fmt --all` automatically)
+5. Confirms commit with `git log -1`
+6. Reports success to user

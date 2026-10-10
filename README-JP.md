@@ -25,6 +25,7 @@
 - 💾 標準出力またはファイルへ出力
 - 🛡️ 堅牢なエラーハンドリングと親切なエラーメッセージ・提案
 - 📈 ライセンス情報取得時の進捗表示
+- 🎯 **悪用可能性の優先順位付け** - CVE結果にEPSSスコア（FIRST.org）とCISA KEVカタログステータスを付加し、実際の悪用可能性に基づいて脆弱性の優先順位付けを支援
 
 ## スコープとCycloneDXとの主な違い
 
@@ -327,6 +328,9 @@ license_policy:
   allow: ["MIT", "Apache-2.0", "BSD-*", "ISC", "PSF-2.0"]
   deny: ["GPL-3.0-only", "GPL-3.0-or-later", "AGPL-*"]
   unknown: "warn"  # "warn" | "deny" | "allow"
+
+# CVE結果にEPSSスコアとCISA KEVステータスを付加
+# check_exploitability: false
 ```
 
 #### 設定ファイルスキーマリファレンス
@@ -349,6 +353,7 @@ license_policy:
 | `abandoned_threshold_days` | integer | No | 廃止パッケージ検出の非アクティブ期間しきい値（日数、デフォルト: 730） |
 | `check_non_pypi` | bool | No | 非PyPIソース検出を有効化（オプトイン、デフォルト: false） |
 | `exclude_groups` | string[] | No | SBOMから除外する依存関係グループ（そのグループからのみ到達可能なパッケージを除外） |
+| `check_exploitability` | bool | No | CVE結果にEPSSスコアとCISA KEVステータスを付加（オプトイン、デフォルト: false） |
 | `target_python` | string | No | 互換性チェック対象のPythonバージョン（PEP 440形式、例: `"3.8"`）。未設定の場合はチェックを行わない |
 
 #### 優先度とマージルール
@@ -361,6 +366,7 @@ license_policy:
 - **`--license-allow`** と **`--license-deny`** CLIオプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を**完全に上書き**します（マージされません）
 - **`check_abandoned`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-abandoned` または設定ファイルの `check_abandoned: true` で有効化できます。`abandoned_threshold_days` の値はCLI > 設定ファイル > デフォルト（730）の順に解決されます。
 - **`check_non_pypi`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-non-pypi` または設定ファイルの `check_non_pypi: true` で有効化できます。
+- **`check_exploitability`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-exploitability` または設定ファイルの `check_exploitability: true` で有効化できます。CVEチェックが有効である必要があります（`--no-check-cve` と競合）。
 - **`exclude_groups`**: CLIの `--exclude-groups` は設定ファイルの値を**完全に上書き**します（マージされません）。`--production-only` は実行時にlockfileからすべてのグループ名を解決し、CLIと設定ファイルの両方より優先されます。
 - **`target_python`** はオプトイン（デフォルト: 未設定、チェックを行わない）です。CLIフラグ `--target-python 3.8` または設定ファイルの `target_python: "3.8"` で有効化できます。CLIの値が設定ファイルより優先されます。
 
@@ -584,6 +590,61 @@ uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdow
 target_python: "3.8"
 ```
 
+### 悪用可能性の優先順位付け（`--check-exploitability`）
+
+`--check-exploitability` オプションを使用して、CVE結果に2つの信頼性の高いソースからの実世界の悪用データを付加できます：
+
+- **EPSS**（Exploit Prediction Scoring System）[FIRST.org](https://www.first.org/epss/) 提供 — 今後30日以内にCVEが実際に悪用される可能性を示すパーセンタイルランキング
+- **CISA KEV**（Known Exploited Vulnerabilities）カタログ [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) 提供 — 実際に悪用が確認されたCVEのキュレーションリスト
+
+```bash
+# 脆弱性結果にEPSSとKEVデータを付加
+uv-sbom --check-exploitability --format markdown
+
+# 他のチェックと組み合わせる
+uv-sbom --check-exploitability --severity-threshold high --check-license
+```
+
+**動作の仕組み:**
+- FIRST.org EPSS API（`https://api.first.org/data/v1/epss`）からEPSSスコアとパーセンタイルを取得
+- CISA KEV JSONフィードをダウンロードして、各CVEに実際の悪用が確認されているかを確認
+- 脆弱性テーブルと解決ガイドに2つの追加列として結果を表示
+- いずれのCVEにも悪用可能性データがない場合、列は完全に省略されます
+
+**出力:**
+- **悪用確認済み (KEV) 列**: CISA KEVカタログに含まれるCVEには「Yes」、それ以外は「No」を表示
+- **EPSS 列**: EPSSパーセンタイルを序数文字列で表示（例: "97th percentile"）
+- 少なくとも1つのCVEに悪用可能性データがある場合のみ、これらの列が表示されます
+
+**出力例:**
+
+[`examples/suggest-fix-project`](examples/suggest-fix-project) に対して実行した結果：
+
+```bash
+uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
+```
+
+```markdown
+## Vulnerability Report
+
+| Package | Current Version | Fixed Version | CVSS | Severity | Vulnerability ID | Exploited (KEV) | EPSS |
+|---------|-----------------|---------------|------|----------|------------------|-----------------|------|
+| urllib3 | 2.0.4 | 2.6.3 | 7.5 | 🟠 HIGH | GHSA-38jv-5279-wg99 | No | 87th percentile |
+| certifi | 2023.7.22 | 2024.7.4 | N/A | 🟢 LOW | GHSA-248v-346w-9cwc | No | 63rd percentile |
+| h11 | 0.14.0 | 0.16.0 | 9.1 | 🔴 CRITICAL | GHSA-vqfr-h8mv-ghfj | No | 46th percentile |
+| urllib3 | 2.0.4 | 2.0.7 | 4.2 | 🟡 MEDIUM | GHSA-g4mx-q9vg-27p4 | No | 43rd percentile |
+| anyio | 4.0.0 | 4.14.2 | N/A | 🔴 CRITICAL | GHSA-82r6-8w77-94w6 | No | 19th percentile |
+```
+
+_（全32件中、EPSSパーセンタイル順の抜粋。EPSS値はライブデータのため変動する可能性があります。）_
+
+**設定ファイルでの指定:**
+```yaml
+check_exploitability: true
+```
+
+> **注:** `--check-exploitability` はCVEチェックが有効である必要があり、`--no-check-cve` と競合します。SBOM生成ごとに2つのネットワークリクエスト（FIRST.org EPSS APIとCISA KEVカタログフィード）が追加されます。
+
 ### 依存関係の説明（`--explain`）
 
 `--explain <PACKAGE_NAME>` オプションを使用すると、指定したパッケージがどの経路で依存ツリーに含まれているかを追跡できます。直接依存パッケージから対象パッケージまでのすべての経路を出力し、「なぜこのパッケージが含まれているのか」を明らかにします。
@@ -657,7 +718,7 @@ uv-sbom -p examples/suggest-fix-project --explain definitely-not-a-real-package 
   ```
   error: the argument '--explain <PACKAGE_NAME>' cannot be used with '--workspace'
   ```
-- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係の説明データは含まれず、CVEチェック・`--check-license`・`--verify-links` とは異なり「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--explain` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
+- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係の説明データは含まれず、`--check-license`・`--verify-links` とは異なり「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--explain` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
 
 ### 依存関係ツリーの可視化（`--show-dependency-tree`）
 
@@ -1199,6 +1260,8 @@ Options:
       --check-abandoned              廃止/メンテナンス停止パッケージをチェック（しきい値日数以内に新しいリリースがない）
       --abandoned-threshold-days <DAYS>  廃止パッケージ検出の非活動しきい値（日数、デフォルト: 730）
       --check-non-pypi               非PyPIソース（git、直接URL、プライベートレジストリ）からのパッケージをチェック
+      --check-exploitability         CVE結果にEPSSスコアとCISA KEVステータスを付加
+                                     --no-check-cveとの同時使用は不可
       --license-allow <LIST>         許可するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
       --license-deny <LIST>          拒否するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
       --exclude-groups <GROUPS>      指定した依存関係グループからのみ到達可能なパッケージを除外（カンマ区切り）
@@ -1442,6 +1505,18 @@ Secondary dependencies introduced by the primary packages.
      - `/v1/querybatch` - 脆弱性IDのバッチクエリ
      - `/v1/vulns/{vuln_id}` - 詳細な脆弱性情報
 
+4. **FIRST.org EPSS API**
+   - ドメイン: `https://api.first.org`
+   - 目的: CVEのEPSS（Exploit Prediction Scoring System）スコアとパーセンタイルを取得
+   - タイミング: `--check-exploitability`フラグ使用時のみ
+   - エンドポイント: `/data/v1/epss?cve=CVE-A,CVE-B,...`（バッチ処理）
+
+5. **CISA KEV（Known Exploited Vulnerabilities）カタログ**
+   - ドメイン: `https://www.cisa.gov`
+   - 目的: CVEに実際の悪用が確認されているかを確認
+   - タイミング: `--check-exploitability`フラグ使用時のみ
+   - エンドポイント: `/sites/default/files/feeds/known_exploited_vulnerabilities.json`
+
 ### ファイアウォール設定
 
 企業のファイアウォールやプロキシの内側にいる場合は、以下のドメインを許可リストに追加してください：
@@ -1455,6 +1530,10 @@ api.osv.dev    # --no-check-cveで無効化可能
 
 # オプション（--verify-links使用時）
 pypi.org       # --verify-linksでも使用
+
+# オプション（--check-exploitability使用時のみ）
+api.first.org  # EPSSスコア
+www.cisa.gov   # CISA KEVカタログ
 ```
 
 ### プロキシ設定
@@ -1564,6 +1643,13 @@ CVEチェックが有効な場合（デフォルト）、このツールは[OSV 
 - ライセンス: CC-BY 4.0
 
 OSVデータベースは、オープンソースソフトウェアの包括的で正確かつアクセスしやすい脆弱性情報を提供するためのオープンな共同プロジェクトです。
+
+### 悪用可能性データ
+
+`--check-exploitability` 使用時、このツールは以下のソースからデータを取得します：
+
+- **EPSS（Exploit Prediction Scoring System）** [FIRST.org](https://www.first.org/epss/) 提供 — CVE悪用可能性の確率スコアリング。EPSSについて: https://www.first.org/epss
+- **CISA KEV（Known Exploited Vulnerabilities）** カタログ [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) 提供 — 実際に悪用が確認されたCVEの信頼できるリスト（パブリックドメイン、CC0）
 
 ## ライセンス
 

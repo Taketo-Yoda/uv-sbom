@@ -149,7 +149,7 @@ pub(crate) mod test_helpers {
 
     pub(crate) fn vulnerability(id: &str, cvss: Option<f32>, severity: Severity) -> Vulnerability {
         let cvss_score = cvss.and_then(|s| CvssScore::new(s).ok());
-        Vulnerability::new(id.to_string(), cvss_score, severity, None, None).unwrap()
+        Vulnerability::new(id.to_string(), cvss_score, severity, None, None, vec![]).unwrap()
     }
 
     pub(crate) fn vulnerability_with_fix(
@@ -165,6 +165,7 @@ pub(crate) mod test_helpers {
             severity,
             Some(fixed_version.to_string()),
             None,
+            vec![],
         )
         .unwrap()
     }
@@ -394,6 +395,7 @@ mod tests {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let read_model = SbomReadModelBuilder::build_with_project(
@@ -443,6 +445,7 @@ mod tests {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let read_model = SbomReadModelBuilder::build_with_project(
@@ -479,6 +482,7 @@ mod tests {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let read_model = SbomReadModelBuilder::build_with_project(
@@ -537,6 +541,7 @@ mod tests {
             above_threshold: vec![pkg_vuln],
             below_threshold: vec![],
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let read_model = SbomReadModelBuilder::build_with_project(

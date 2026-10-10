@@ -4,10 +4,10 @@ mod response;
 mod upgrade;
 
 use crate::application::dto::{SbomRequest, SbomResponse};
-use crate::i18n::Locale;
+use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
-    LicenseRepository, LockfileReader, MaintenanceRepository, ProgressReporter,
-    ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
+    ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::services::VulnerabilityChecker;
 use crate::sbom_generation::domain::UvLockSimulator;
@@ -27,7 +27,9 @@ use crate::shared::Result;
 /// * `MREPO` - MaintenanceRepository implementation (optional)
 /// * `PCREPO` - PythonCompatibilityRepository implementation (optional)
 /// * `USIM` - UvLockSimulator implementation (optional)
-pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = (), USIM = ()> {
+/// * `EREPO` - ExploitabilityRepository implementation (optional)
+pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = (), USIM = (), EREPO = ()>
+{
     lockfile_reader: LR,
     project_config_reader: PCR,
     license_repository: LREPO,
@@ -36,11 +38,12 @@ pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = (), US
     maintenance_repository: Option<MREPO>,
     compatibility_repository: Option<PCREPO>,
     uv_lock_simulator: Option<USIM>,
+    exploitability_repository: Option<EREPO>,
     locale: Locale,
 }
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -50,6 +53,7 @@ where
     MREPO: MaintenanceRepository + Clone,
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
+    EREPO: ExploitabilityRepository,
 {
     /// Creates a new GenerateSbomUseCase with injected dependencies
     #[allow(clippy::too_many_arguments)]
@@ -62,6 +66,7 @@ where
         maintenance_repository: Option<MREPO>,
         compatibility_repository: Option<PCREPO>,
         uv_lock_simulator: Option<USIM>,
+        exploitability_repository: Option<EREPO>,
         locale: Locale,
     ) -> Self {
         Self {
@@ -73,6 +78,7 @@ where
             maintenance_repository,
             compatibility_repository,
             uv_lock_simulator,
+            exploitability_repository,
             locale,
         }
     }
@@ -113,15 +119,44 @@ where
         let enriched_packages = self.fetch_license_info(filtered_packages.clone()).await?;
 
         // Step 5: CVE check if requested
-        let vulnerability_report = self
+        let mut vulnerability_report = self
             .check_vulnerabilities_if_requested(&request, &filtered_packages)
             .await?;
+
+        // Step 5.5: Enrich vulnerabilities with EPSS scores and CISA KEV status
+        self.enrich_exploitability_if_requested(&request, &mut vulnerability_report)
+            .await;
 
         // Step 6: Apply threshold evaluation if vulnerabilities were found
         let vulnerability_check_result = vulnerability_report.as_ref().map(|report| {
             let threshold_config = Self::build_threshold_config(&request);
             VulnerabilityChecker::check(report.clone(), threshold_config, &request.ignore_cves)
         });
+
+        // Report any CVEs that were ignored via the ignore list. CveFilter/VulnerabilityChecker
+        // (domain layer) only return this as data — printing/localizing happens here, where
+        // Locale/Messages are in scope.
+        if let Some(result) = vulnerability_check_result.as_ref() {
+            let msgs = Messages::for_locale(self.locale);
+            for record in &result.ignored_cves {
+                match record.reason.as_deref() {
+                    Some(reason) => eprintln!(
+                        "{}",
+                        Messages::format(
+                            msgs.warn_ignored_cve_with_reason,
+                            &[&record.cve_id, &record.package_name, reason],
+                        )
+                    ),
+                    None => eprintln!(
+                        "{}",
+                        Messages::format(
+                            msgs.warn_ignored_cve_no_reason,
+                            &[&record.cve_id, &record.package_name],
+                        )
+                    ),
+                }
+            }
+        }
 
         // Step 7: License compliance check if requested
         let license_compliance_result =
@@ -236,10 +271,14 @@ mod tests {
 
     pub(crate) struct MockProjectConfigReader {
         pub(crate) project_name: String,
+        pub(crate) pyproject_missing: bool,
     }
 
     impl ProjectConfigReader for MockProjectConfigReader {
         fn read_project_name(&self, _path: &Path) -> Result<String> {
+            if self.pyproject_missing {
+                return Err(crate::ports::outbound::ProjectConfigError::PyprojectNotFound.into());
+            }
             Ok(self.project_name.clone())
         }
     }
@@ -285,6 +324,7 @@ mod tests {
             MockMaintenanceRepository,
             MockPythonCompatibilityRepository,
             MockUvLockSimulator,
+            (),
         >;
 
         pub(crate) struct UseCaseBuilder {
@@ -293,6 +333,8 @@ mod tests {
             group_roots: GroupRoots,
             source_map: PackageSourceMap,
             project_name: String,
+            pyproject_missing: bool,
+            locale: Locale,
             vuln: Option<MockVulnerabilityRepository>,
             maint: Option<MockMaintenanceRepository>,
             pyc: Option<MockPythonCompatibilityRepository>,
@@ -307,6 +349,8 @@ mod tests {
                     group_roots: HashMap::new(),
                     source_map: PackageSourceMap::new(),
                     project_name: "test-project".to_string(),
+                    pyproject_missing: false,
+                    locale: Locale::default(),
                     vuln: None,
                     maint: None,
                     pyc: None,
@@ -338,6 +382,16 @@ mod tests {
 
             pub(crate) fn with_project_name(mut self, name: impl Into<String>) -> Self {
                 self.project_name = name.into();
+                self
+            }
+
+            pub(crate) fn with_missing_pyproject(mut self) -> Self {
+                self.pyproject_missing = true;
+                self
+            }
+
+            pub(crate) fn with_locale(mut self, locale: Locale) -> Self {
+                self.locale = locale;
                 self
             }
 
@@ -379,6 +433,7 @@ mod tests {
                     },
                     MockProjectConfigReader {
                         project_name: self.project_name,
+                        pyproject_missing: self.pyproject_missing,
                     },
                     MockLicenseRepository,
                     MockProgressReporter,
@@ -386,7 +441,8 @@ mod tests {
                     self.maint,
                     self.pyc,
                     self.sim,
-                    Locale::default(),
+                    None::<()>,
+                    self.locale,
                 )
             }
         }

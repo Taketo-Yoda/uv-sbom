@@ -331,6 +331,7 @@ mod tests {
             Severity::High,
             None,
             None,
+            vec![],
         )
         .expect("valid vulnerability");
         let above_threshold = vec![PackageVulnerabilities::new(
@@ -342,6 +343,7 @@ mod tests {
             above_threshold,
             below_threshold: Vec::new(),
             threshold_exceeded: true,
+            ..Default::default()
         };
 
         let response = SbomResponse::builder()

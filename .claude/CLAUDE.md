@@ -1,5 +1,13 @@
 # Project Instructions
 
+> **Charter (what this file owns)**: architecture (`## Architecture Overview`), skill
+> routing (`## Skill Invocation Rules` — the authoritative skill-routing table),
+> the Issue-First rule, and the dead-code policy. Branching, CI-check commands, and
+> test placement are owned by `.claude/conventions/` (`branching.md`, `ci-checks.md`,
+> `testing.md`); `.claude/instructions.md` is a quick-reference/FAQ layer that links
+> here rather than restating. When adding a convention, give it one owner and link to
+> it — do not restate it in another file (see Issue #849).
+
 ## Issue-First Rule
 
 **Before making any file change — code, configuration, skill, or documentation —
@@ -40,7 +48,7 @@ When the user requests any of the following operations, ALWAYS invoke the corres
 
 | User Request | Skill to Invoke | Key Requirements |
 |--------------|-----------------|------------------|
-| Commit changes | /commit | Run `cargo fmt`, `cargo clippy`, English message |
+| Commit changes | /commit | Branch guard, secrets check, English message (fmt/clippy via `.githooks/`) |
 | Create PR | /pr | Run pre-flight checks, English title/body |
 | Push to remote | /pre-push | Run all validations before push |
 | Create Issue | /issue | English title/body, proper template |
@@ -74,6 +82,14 @@ Skills contain mandatory pre-flight checks and language requirements that preven
   in prose but never turned into tracked Issues — a human had to ask before Issues
   #795/#796 were created. Fixed by Issue #797 (`/code-review` Step 3.5 and
   `/implement` Step 3.6 Follow-up Issue Gates).
+- **2026-09-27 (Issue #867)**: `/split`'s decomposition of #853 into subtasks
+  #858–#862 (each migrating a network client onto the new shared
+  `src/shared/response_size_guard.rs`) recurringly omitted that module's `//!`
+  adoption-list doc comment and the parent CHANGELOG entry from every subtask's
+  `Files to Update/Create` — the gap was independently rediscovered by the
+  Architect Agent in #859, #860, and #861 in turn. Fixed by Issue #867 (`/split`
+  Step 2 Shared-Dependency Convergence Check, surfaced in the user-facing proposal,
+  plus a Step 4 carry-over backstop).
 
 ### Enforcement
 
@@ -246,6 +262,8 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `DependencyTreeBuilder` / `TreeNode` | `src/sbom_generation/domain/services/dependency_tree_builder.rs` | Pure domain service building a depth-limited, cycle-safe dependency tree (`TreeNode { name, children, truncated }`) from `DependencyGraph::children_of` (new accessor added alongside it); per-path visited-set with backtracking (same cycle-safety strategy as `find_paths_to`), diamond dependencies intentionally not deduplicated; added in #780 as the foundational data layer for the dependency tree visualization feature (parent #736). `TreeNode` deliberately has no `version` field — `DependencyGraph` has no version data to draw from; wired into `GenerateSbomUseCase` in #781 via `--show-dependency-tree`/`--dependency-tree-depth` |
 | `DependencyTreeView` / `DependencyTreeNodeView` | `src/application/read_models/dependency_tree_view.rs` | Read model for the `--show-dependency-tree` visualization; converts the domain `TreeNode` tree into `DependencyTreeNodeView` (all `String`/`Option<String>`, formatter-ready) and joins each node's `version` from `enriched_packages` — the domain `TreeNode` has no version data. Populated by `GenerateSbomUseCase::build_dependency_tree_if_requested` (`checks.rs`, same shape as `build_explain_view_if_requested`) only when `show_dependency_tree` is true and a dependency graph was built; added in #781. Carried into `SbomReadModel.dependency_tree` by `SbomReadModelBuilder::build_with_project` and rendered by the Markdown formatter's `dependency_tree` section as an ASCII-connector tree (`├──`/`└──`/`│`, wrapped in a ` ```text ` fence, package name + version only) in #782; the former `SbomResponse.dependency_tree` `#[allow(dead_code)] // WIRE(#782)` annotation was removed once this consumer landed. CycloneDX JSON is out of scope |
 | `MemberFindings` / `EnabledChecks` | `src/cli/workspace_summary.rs` | CLI-presentation-layer types (binary-only, not part of `lib.rs`) for `--workspace` mode's aggregate summary, added in #737. `MemberFindings::from_response` extracts per-member check results from a completed `SbomResponse` before it is moved into `render_and_present` (which consumes it by value). `EnabledChecks::from_merged` reads which checks were actually requested from `MergedConfig`; aggregate-line visibility is gated on this rather than on per-member `Option` report presence, since a check can be enabled but still yield `Ok(None)` for a given member — deriving visibility from report presence would silently drop an enabled check's line (the inverse of the #669 failure mode). `render_workspace_aggregate` is a pure function producing the printable lines, wired into `run_workspace` in `src/main.rs` |
+| `ProjectConfigError` | `src/ports/outbound/project_config_reader.rs` | Typed port-level error (thiserror) returned by `ProjectConfigReader` implementations instead of localized text; currently one variant, `PyprojectNotFound`, whose English `Display` is the library contract. Downcast and localized by `GenerateSbomUseCase::analyze_dependencies_if_requested` (`filtering.rs`), where `Locale` is in scope; added in #870 so the adapter never builds localized text and the trait signature stays unchanged. Lives in `ports/` (not `shared/error.rs`) because the application layer may import ports but not adapters, and the binary's own `mod ports;` copy is self-consistent for raise/downcast |
+| `ConfigError` | `src/config.rs` | Typed error (thiserror, 6 variants carrying structured data only) replacing `config.rs`'s former `anyhow::bail!()`/`.with_context()` calls in `generate_config_template`, `load_config_from_path`, `discover_config`, and `validate_config`; added in #834 per the localization strategy decided in #832. Its `#[error(...)]` templates are the library's English `Display` contract, kept byte-for-byte identical to the pre-#834 hardcoded strings. Rendered in the caller's locale by `render_config_error` in the new `src/cli/error_display.rs` (binary-only, not part of `lib.rs`, same pattern as `workspace_summary.rs`); `render_error_chain` (also there) replaces `main.rs`'s former `print_error_chain` body, downcasting `anyhow::Error` to `ConfigError` when present. Deliberately placed in `config.rs` rather than as new `SbomError` variants in `src/shared/error.rs`, since `main.rs`'s local `mod shared;` would otherwise make `shared::error::SbomError` a distinct type from the library's copy, causing a CLI-layer downcast to silently fail depending on which copy raised the error |
 
 ### Important Invariants
 
@@ -262,6 +280,59 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
   than `src/ports/outbound/` (#703), but that placement is no longer load-bearing for this invariant
   — see the doc comment on `sbom_generation::domain::uv_lock_simulator` for the current rationale.
 - **All GitHub artifacts (commits, PRs, Issues) must be in English** — enforced by skills in `.claude/skills/`.
+
+### Error Message Localization Policy (decided in #832, parent #821)
+
+`--lang ja` localizes the error *frame* (`error_header`, `error_caused_by`) and the
+error text of the **CLI and config layers only**. Error *payloads* originating in the
+domain, adapter, and `shared::error` layers are permanently English. This is an
+intentional, permanent limitation — not a gap to be closed later.
+
+| Layer | Error text localized? | Where rendered |
+|-------|----------------------|----------------|
+| `src/main.rs` ad-hoc `bail!` | Yes (#833) | in place; `Messages` already in scope |
+| `src/config.rs` | Yes (#834) | `src/cli/error_display.rs` renders typed `ConfigError` |
+| `src/application/use_cases/generate_sbom/filtering.rs` `bail!` | Yes (#870) | in place; `self.locale` in scope |
+| `src/adapters/outbound/filesystem/file_reader.rs` missing `pyproject.toml` | Yes (#870) | typed `ProjectConfigError`, localized in `filtering.rs` |
+| `src/shared/error.rs` (`SbomError`) | **No — permanent** | n/a |
+| `src/sbom_generation/` (domain `bail!`) | **No — permanent** | n/a |
+| `src/adapters/outbound/network/`, `uv/`, `shared/security.rs` | **No — permanent** | n/a |
+
+**Why `SbomError` payloads stay English (to be closed as won't-fix, see #835)**
+
+1. Every variant interpolates a field that cannot be translated by us:
+   `details` is the `Display` of a `std::io::Error` or `toml::de::Error`
+   (third-party / OS-generated), and `suggestion` / `reason` / `hint` are
+   free-form English assembled at ~25 construction sites across
+   `shared/security.rs`, `adapters/outbound/filesystem/*`, and `application/dto/*`.
+2. Localizing only the `#[error(...)]` templates would produce sentence-level
+   language mixing (`uv.lock ファイルが見つかりません: /path … 💡 ヒント: Run \`uv lock\``),
+   which is worse UX than a localized frame around consistently English internals.
+3. `SbomError` is part of the public `uv_sbom` **library** API; its `Display` is a
+   contract for downstream Rust consumers, who have no `Locale`. Localization
+   belongs at the CLI presentation boundary, not in the library's error type.
+4. `src/main.rs` declares its own `mod shared;` while also importing `uv_sbom::config`,
+   so `shared::error::SbomError` (binary copy) and `uv_sbom::shared::error::SbomError`
+   (library copy) are distinct types. Downcast-based rendering of `SbomError` would
+   silently fail depending on which copy raised the error.
+
+**Why domain-layer `bail!` text stays English**
+
+Localizing `src/sbom_generation/` would require the domain layer to import
+`crate::i18n::Messages`, introducing a domain → presentation dependency that violates
+the "Domain layer has no I/O" invariant above. These sites are defensive invariant
+checks on internally-constructed data and are rarely user-reachable. If they must ever
+be localized, the only acceptable route is typed domain errors rendered at the CLI
+boundary — never an `i18n` import inside `src/sbom_generation/`.
+
+**Invariant: error text is stringified only in the CLI layer**
+
+New user-facing error text must be produced by `src/cli/error_display.rs` (to be
+created in #834; until then, by a site that already holds `&Messages`), never by
+embedding localized strings in
+`src/config.rs`, `src/shared/`, `src/sbom_generation/`, or `src/adapters/`.
+`src/config.rs` must stay free of any `i18n` dependency (see also the doc comment on
+`warn_unknown_fields` in `src/cli/config_resolver/loader.rs`).
 
 ### Files NOT to touch unless their issue explicitly targets them
 
@@ -315,18 +386,12 @@ If you identify that a future issue will need a field/method that doesn't exist 
 
 ### Clippy Requirement
 
-CI and all local checks MUST use `--all-targets --all-features`:
-
-```bash
-# ✅ CORRECT — catches dead code in binary and integration-test targets
-cargo clippy --all-targets --all-features -- -D warnings
-
-# ❌ WRONG — misses dead code visible only from binary/integration targets
-cargo clippy --lib -- -D warnings
-```
-
-This is already enforced in `.claude/skills/commit/SKILL.md` and
-`.claude/skills/pr/SKILL.md`. Do not weaken this to `--lib` only.
+CI and all local checks MUST use `cargo clippy --all-targets --all-features -- -D warnings`
+— `--lib` alone misses dead code visible only from binary and integration-test
+targets. The canonical command block, and why each flag is required, lives in
+`.claude/conventions/ci-checks.md`; it is enforced by `.githooks/pre-push` and
+`.github/workflows/ci.yml`, and mirrored by `/pr`'s pre-flight. Do not weaken this to
+`--lib` only.
 
 ### Recent Incidents
 

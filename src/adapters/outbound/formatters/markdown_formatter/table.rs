@@ -61,6 +61,49 @@ pub(super) fn vuln_table_separator(messages: &'static Messages) -> String {
     ])
 }
 
+/// Locale-aware vulnerability table header with optional exploitability columns
+pub(super) fn vuln_table_header_with_exploitability(
+    messages: &'static Messages,
+    show_exploitability: bool,
+) -> String {
+    if show_exploitability {
+        format!(
+            "| {} | {} | {} | {} | {} | {} | {} | {} |\n",
+            messages.col_package,
+            messages.col_current_version,
+            messages.col_fixed_version,
+            messages.col_cvss,
+            messages.col_severity,
+            messages.col_vuln_id,
+            messages.col_exploited_kev,
+            messages.col_epss,
+        )
+    } else {
+        vuln_table_header(messages)
+    }
+}
+
+/// Locale-aware vulnerability table separator with optional exploitability columns
+pub(super) fn vuln_table_separator_with_exploitability(
+    messages: &'static Messages,
+    show_exploitability: bool,
+) -> String {
+    if show_exploitability {
+        make_separator(&[
+            messages.col_package,
+            messages.col_current_version,
+            messages.col_fixed_version,
+            messages.col_cvss,
+            messages.col_severity,
+            messages.col_vuln_id,
+            messages.col_exploited_kev,
+            messages.col_epss,
+        ])
+    } else {
+        vuln_table_separator(messages)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
