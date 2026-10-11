@@ -1,13 +1,8 @@
 # Instructions for Claude Code
 
-> **Charter (what this file owns)**: this file is the quick-reference / FAQ layer only.
-> It must not restate a table or rule owned elsewhere — link to it instead.
-> - `.claude/CLAUDE.md` owns architecture, skill routing (`## Skill Invocation Rules` —
->   the authoritative skill-routing table), and the dead-code policy.
-> - `.claude/conventions/` owns branching (`branching.md`), CI-check commands
->   (`ci-checks.md`), and test placement (`testing.md`).
-> - The one exception is a table explicitly labelled as a summary (e.g. Layer Rules
->   below); on conflict, the owning file wins.
+> **Charter (what this file owns)**: this file is the quick-reference / FAQ layer only
+> and owns no rule. Which file owns each rule, and how rules are linked rather than
+> restated, is defined in `.claude/conventions/README.md`.
 
 ## Quick Reference
 
@@ -284,12 +279,13 @@ Implement `LicenseRepository` trait → new adapter in `adapters/outbound/` → 
 
 ---
 
-Last Updated: 2026-10-04
+Last Updated: 2026-10-11
 
 ## Change History
 
 | Date | Change | Reference |
 |------|--------|-----------|
+| 2026-10-11 | Charter now points at `.claude/conventions/README.md` instead of restating the ownership rule and the owner list | Issue #918 |
 | 2026-10-04 | Added non-overlap charter; replaced branching/CI-check restatements with pointers to `.claude/conventions/`; removed the duplicate "Agent Skills" table (CLAUDE.md's Skill Invocation Rules is the only routing table) | Issue #849 |
 | 2026-09-26 | Qualified all `develop`/`main` branch-base assertions as Normal Mode; added a single Stacked Mode cross-reference note to Key Invariants | Issue #846 |
 | 2026-03-30 | Restructured for AI context efficiency: added Quick Reference, extracted Issue Guidelines to `issue-guidelines.md`, condensed prose to tables | Issue #371 |

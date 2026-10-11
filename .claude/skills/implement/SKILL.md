@@ -138,6 +138,8 @@ Gather relevant existing code context by:
   human section
 - Reading adjacent modules or traits that the new code must implement or extend
 - Running `git grep` for key symbols mentioned in the issue
+- If any listed file is under `.claude/`, reading `.claude/conventions/README.md` and
+  the convention files it indexes
 
 The Architect agent produces an implementation plan covering:
 
@@ -148,9 +150,12 @@ The Architect agent produces an implementation plan covering:
 | Interface design | New traits, structs, enums with their signatures |
 | Implementation order | Step-by-step sequence with rationale |
 | Risk flags | Potential layer boundary violations, DDD concerns, edge cases |
+| Convention ownership | Only when the Issue's files include `.claude/` paths: the Architect's verdict per `.claude/conventions/README.md` → "Convention Ownership Check" |
 
 **Present the plan to the user and wait for explicit confirmation before
-proceeding to Step 4. Do not modify any files until the user confirms.**
+proceeding to Step 4. Do not modify any files until the user confirms.** For
+`.claude/` Issues, the user confirms the convention-ownership verdict together with
+the rest of the plan.
 
 Accepted responses:
 - "Looks good, proceed" → continue to Step 4

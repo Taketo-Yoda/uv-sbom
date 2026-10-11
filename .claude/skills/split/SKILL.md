@@ -76,6 +76,14 @@ toward the ≤ 200-line target, but are never a reason to split a subtask furthe
 never be broken out into a separate "update the shared docs" subtask — that would make
 every sibling depend on it and defeat the goal of independently implementable slices.
 
+#### Convention Ownership Check (conditional)
+
+**Trigger**: the parent Issue's `Files to Update/Create` lists any `.claude/` path.
+
+Run the Convention Ownership Check in `.claude/conventions/README.md` across all
+proposed subtasks together, and report its result in the proposal's `Rule owners`
+block.
+
 Present the proposed subtasks to the user in this format:
 
 ```
@@ -92,14 +100,18 @@ Shared files every converging subtask must also update:
 - `path/to/shared_item.rs` — [which subtasks, and what each adds]
 - `CHANGELOG.md` — [which subtasks, and what each extends]
 
+Rule owners (Convention Ownership Check result lines):
+- [result line per .claude/conventions/README.md] — owner created/edited in subtask N
+
 Proceed? (yes / adjust / cancel)
 ```
 
-**Always print the `Shared files` block**, even when the Shared-Dependency Convergence
-Check did not trigger — in that case print `- none — no shared-dependency convergence in
-this split` under it rather than omitting the block, so the user can see the check
-actually ran. Silently omitting the block on a "no" result is indistinguishable from
-forgetting to run the check at all.
+**Always print the `Shared files` and `Rule owners` blocks**, even when their check did
+not trigger. In that case, print `- none — no shared-dependency convergence in this
+split` under `Shared files`, and under `Rule owners` either the check's own "none"
+result line or `- not triggered — no .claude/ paths`. Never omit a block, so the user
+can see whether each check ran. Silently omitting the block on a "no" result is
+indistinguishable from forgetting to run the check at all.
 
 ### Step 3: Wait for Explicit Confirmation
 
@@ -174,7 +186,9 @@ site, not instead of it — each stating what this specific subtask does to it (
 to 4 of 4"). A subtask body that lists only its one call site has dropped the check's
 result. Mention the same two files in `## Scope > In` so the human section reflects them
 too — they are in the AI-only `<details>` block otherwise, and a reader who never expands
-it would miss them.
+it would miss them. Likewise, a `Rule owners` entry puts the owner file into its owning
+subtask's `## Files to Update/Create` and `## Scope > In`; consuming subtasks list only
+the link they add.
 
 Use the `gh` CLI. The body contains HTML tags and backticks — pass it via a quoted
 heredoc so the shell does not mangle `<details>` or fenced blocks:
