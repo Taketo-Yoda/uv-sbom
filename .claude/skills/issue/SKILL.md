@@ -51,6 +51,19 @@ and before `</details>`.
 Do not include implementation code in either section — see "No Implementation Code
 in Issue Bodies" in `.claude/issue-guidelines.md` for the four allowed exceptions.
 
+### 3.5. Convention Ownership Check (conditional)
+
+**Trigger**: the draft's `## Files to Update/Create` lists any path under `.claude/`.
+
+Run the Convention Ownership Check in `.claude/conventions/README.md` against the
+draft, and revise the draft until it passes. Then present the check's result lines
+together with the draft, and wait for the user's confirmation before Step 5. When
+another gate invokes `/issue` non-interactively (`/code-review` Step 3.5,
+`/implement` Step 3.6), skip the wait and include the result lines in Step 6's
+output instead.
+
+Skip this step silently when the trigger does not fire.
+
 ### 4. Validate Completeness
 
 Before creating the Issue, verify:
@@ -89,6 +102,7 @@ After creating, output:
 - Issue URL
 - Issue number
 - Summary of what was created
+- Convention Ownership Check result lines, if Step 3.5 ran
 
 ## Labels Reference
 

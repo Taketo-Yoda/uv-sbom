@@ -206,6 +206,7 @@ Before submitting via `gh issue create`:
 - [ ] VERIFY: No implementation code outside the allowed exceptions; any allowed code block uses proper markdown formatting
 - [ ] CHECK: Acceptance criteria use checklist format
 - [ ] VERIFY: File paths are specific and accurate
+- [ ] CHECK: If Files to Update/Create lists any .claude/ path, the Convention Ownership Check in .claude/conventions/README.md was run and passes
 - [ ] FINAL: Re-read the full issue as if you were an AI implementing it
 ```
 
