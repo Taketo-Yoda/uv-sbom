@@ -25,6 +25,7 @@ change-history rows describe past events, so they do not count as consumers.
 | Branch naming, branch base, PR base, Stacked Mode, who merges | `branching.md` |
 | Local CI-check commands | `ci-checks.md` |
 | Rust test placement | `testing.md` |
+| What needs a CHANGELOG entry, per-feature entry ownership, reference numbers, non-owner PR line | `changelog.md` |
 
 A new convention gets its own `.claude/conventions/<topic>.md` and a row in this
 table, both in the same change.

@@ -22,10 +22,11 @@ to enumerate commits that should be reflected in the CHANGELOG.
 ## Responsibilities
 
 - Verify CHANGELOG completeness:
-  - Every user-facing change (new feature, bug fix, behavior change, deprecation) since
-    the last release tag must appear in the CHANGELOG under the correct version heading
-  - Internal refactors, CI changes, and documentation-only changes do NOT need CHANGELOG
-    entries, but must not be listed under user-facing sections
+  - Every change since the last release tag that needs an entry per
+    `.claude/conventions/changelog.md` → "What Needs an Entry" must appear in the
+    CHANGELOG under the correct version heading
+  - Changes that need no entry per the same section must not be listed under
+    user-facing sections
 - Verify version consistency:
   - `version` in `Cargo.toml` and `python-wrapper/pyproject.toml` must match
   - The version must follow SemVer and the bump level must be appropriate:
