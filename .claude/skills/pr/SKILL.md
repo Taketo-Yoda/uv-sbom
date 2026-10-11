@@ -148,6 +148,8 @@ git branch --show-current
 ```
 
 If the prefix is unrecognized or not in the skip list, **do not skip** (fail-closed).
+The skip list is the branch-prefix form of `.claude/conventions/changelog.md` →
+"What Needs an Entry".
 
 **For all other branch types** (`feature/`, `bugfix/`, `hotfix/`, `security/`):
 
@@ -184,6 +186,7 @@ Also consider:
 | No | No | ✅ Gate passes — internal-only PR |
 | No | Yes | ✅ Gate passes |
 | Yes | Yes | ✅ Gate passes |
+| Yes | No, but the line from `.claude/conventions/changelog.md` → "Non-Owner PR Line" was supplied for the PR body (by `/implement` Step 4.4 or the user) | ✅ Gate passes |
 | Yes | No | ❌ **STOP** — prompt user |
 
 If user-facing changes are detected and CHANGELOG.md was **not** updated, output:
@@ -283,6 +286,7 @@ gh pr create --base "$BASE_BRANCH" --title "TITLE" --body "$(cat <<'EOF'
 
 ## Related Issue
 Closes #XX
+[CHANGELOG non-owner line, if any]
 
 ## Changes Made
 
