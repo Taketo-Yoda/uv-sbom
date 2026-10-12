@@ -99,6 +99,14 @@ Skills contain mandatory pre-flight checks and language requirements that preven
   `.claude/conventions/README.md` owns the definition and the Convention Ownership
   Check, which `/issue` Step 3.5, `/split` Step 2, `/implement` Step 3.5 (Architect),
   and `/code-review` criterion 3 run.
+- **2026-10-11 (Issue #917)**: The whole `--check-exploitability` feature (#812)
+  shipped across eight PRs (#881–#892) with no CHANGELOG entry, and the gap was caught
+  only by a manual audit during v3.2.0 prep (#915). Root cause had three parts: no
+  step owned the entry for a split feature, the PRs came from cloud sessions that
+  skipped `/pr` Step 4.5, and `/release` Step 3.6 had no mechanical audit. Fixed by
+  Issue #917: `.claude/conventions/changelog.md` owns per-feature ownership, which
+  `/split` Step 2/4, `/implement` Step 4.4, and `/pr` Step 4.5 apply, and `/release`
+  Step 3.6 gained a merged-PR audit.
 
 ### Enforcement
 

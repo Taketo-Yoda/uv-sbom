@@ -63,7 +63,7 @@ When triggered, answer both questions before finalizing any subtask's file list:
 | Question | If yes, add the file to |
 |----------|------------------------|
 | Does the shared item's own source carry a doc comment (e.g. a `//!` module doc) enumerating which callers have adopted it? | every subtask after the one that introduces the list |
-| Does a `CHANGELOG.md` entry describe the shared item's introduction and progressively list migrated callers ("N of M migrated so far")? | every subtask, including the first |
+| Does a `CHANGELOG.md` entry describe the shared item's introduction and progressively list migrated callers ("N of M migrated so far")? | every subtask, including the first (the first is the owner and the rest are extenders, per `.claude/conventions/changelog.md` → "Ownership Per Feature") |
 
 Precedent: #853 was split into #858–#862, each migrating one network client onto the new
 `src/shared/response_size_guard.rs`. Both that module's `//!` adoption list and its
@@ -84,6 +84,14 @@ Run the Convention Ownership Check in `.claude/conventions/README.md` across all
 proposed subtasks together, and report its result in the proposal's `Rule owners`
 block.
 
+#### CHANGELOG Owner (conditional)
+
+**Trigger**: the parent Issue makes a user-facing change per
+`.claude/conventions/changelog.md` → "What Needs an Entry".
+
+Name the owning subtask, and any extenders, per `.claude/conventions/changelog.md` →
+"Ownership Per Feature". Report them in the proposal's `CHANGELOG owner` block.
+
 Present the proposed subtasks to the user in this format:
 
 ```
@@ -103,13 +111,17 @@ Shared files every converging subtask must also update:
 Rule owners (Convention Ownership Check result lines):
 - [result line per .claude/conventions/README.md] — owner created/edited in subtask N
 
+CHANGELOG owner:
+- subtask N (owner) — [entry it writes]; extenders: [subtask M — what each adds | none]
+
 Proceed? (yes / adjust / cancel)
 ```
 
-**Always print the `Shared files` and `Rule owners` blocks**, even when their check did
-not trigger. In that case, print `- none — no shared-dependency convergence in this
-split` under `Shared files`, and under `Rule owners` either the check's own "none"
-result line or `- not triggered — no .claude/ paths`. Never omit a block, so the user
+**Always print the `Shared files`, `Rule owners`, and `CHANGELOG owner` blocks**, even
+when their check did not trigger. In that case, print `- none — no shared-dependency
+convergence in this split` under `Shared files`; under `Rule owners`, either the check's
+own "none" result line or `- not triggered — no .claude/ paths`; and under `CHANGELOG
+owner`, `- not triggered — no user-facing change`. Never omit a block, so the user
 can see whether each check ran. Silently omitting the block on a "no" result is
 indistinguishable from forgetting to run the check at all.
 
@@ -188,7 +200,9 @@ result. Mention the same two files in `## Scope > In` so the human section refle
 too — they are in the AI-only `<details>` block otherwise, and a reader who never expands
 it would miss them. Likewise, a `Rule owners` entry puts the owner file into its owning
 subtask's `## Files to Update/Create` and `## Scope > In`; consuming subtasks list only
-the link they add.
+the link they add. Similarly, the `CHANGELOG owner` block puts `CHANGELOG.md` into the
+owner's and each extender's `## Files to Update/Create` and `## Scope > In`, stating the
+entry each one writes or extends.
 
 Use the `gh` CLI. The body contains HTML tags and backticks — pass it via a quoted
 heredoc so the shell does not mangle `<details>` or fenced blocks:

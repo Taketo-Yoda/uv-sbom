@@ -141,7 +141,66 @@ Review the `[Unreleased]` section and remove any entries that do not reflect
 user-observable changes. This step must be completed **before** promoting to a
 versioned entry in Step 4.
 
+#### Merged-PR Audit (run first)
+
+List every PR merged into `develop` since the last tag whose diff touches `src/`, and
+check that `[Unreleased]` accounts for it. A PR is accounted for when any of its
+candidate numbers appears among the entry references described in
+`.claude/conventions/changelog.md` → "Reference Numbers". A PR's candidates are:
+
+- the PR number
+- the Issues it closes, or the Issue number in its branch name if it closes none
+- each such Issue's parent epic: a `Part of #N` line in its body, or a GitHub
+  sub-issue parent
+
+```bash
+git fetch origin --tags
+LAST_TAG=$(git describe --tags --abbrev=0 origin/main)
+RANGE="$LAST_TAG..origin/develop"
+REFS=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md \
+  | grep -oE '#[0-9]+' | tr -d '#' | sort -u)
+git log --first-parent --no-merges --format='DIRECT %h %s' "$RANGE" -- src/
+echo '| PR | Title | Branch | Candidates |'; echo '|----|-------|--------|------------|'
+git log --first-parent --merges --format='%H %s' "$RANGE" | while read -r sha subject; do
+  pr=$(printf '%s\n' "$subject" | sed -nE 's/^Merge pull request #([0-9]+) .*/\1/p')
+  [ -n "$pr" ] || continue
+  git diff --quiet "$sha^1" "$sha" -- src/ && continue
+  info=$(gh pr view "$pr" --json title,headRefName,closingIssuesReferences \
+    --jq '[.title, .headRefName, ([.closingIssuesReferences[].number] | join(" "))] | @tsv' </dev/null)
+  title=$(printf '%s' "$info" | cut -f1 | sed 's/|/\\|/g'); branch=$(printf '%s' "$info" | cut -f2)
+  issues=$(printf '%s' "$info" | cut -f3)
+  [ -n "$issues" ] || issues=$(printf '%s\n' "$branch" | sed -nE 's#^[^/]+/([0-9]+)-.*#\1#p')
+  cands="$pr $issues"
+  for i in $issues; do
+    cands="$cands $(gh issue view "$i" --json body \
+      --jq '(.body // "") | capture("Part of #(?<n>[0-9]+)").n? // empty' </dev/null 2>/dev/null)"
+    cands="$cands $(gh issue view "$i" --json parent --jq '.parent.number // empty' </dev/null 2>/dev/null)"
+  done
+  hit=no
+  for c in $cands; do printf '%s\n' "$REFS" | grep -qx "$c" && { hit=yes; break; }; done
+  [ "$hit" = yes ] || printf '| #%s | %s | `%s` | %s |\n' "$pr" "$title" "$branch" "$(echo $cands)"
+done
+```
+
+Notes on the commands:
+
+- **Range.** The range walks `origin/develop` with `--first-parent`. Never audit up to
+  a tag: tags sit on `main` merge commits, so `--first-parent` from a tag sees only the
+  `develop` → `main` merge.
+- **Direct commits.** `DIRECT` lines are commits that reached `develop` without a merge
+  commit (squash merges or direct pushes). The `--merges` loop cannot see them.
+- **PR bodies.** PR bodies are deliberately not scanned for `#N`. They cite sibling PRs
+  and epics, which would mark a PR as accounted for when it is not.
+
+If the table has rows or any `DIRECT` line printed, **STOP**. Show the table, and for
+each row ask the user to either supply an entry or confirm the PR as internal-only.
+Continue only when every row is resolved.
+
 #### Sections to REMOVE
+
+> The REMOVE and KEEP tables below are a summary of `.claude/conventions/changelog.md` →
+> "What Needs an Entry", mapped to section headings. That section is authoritative and
+> wins on conflict.
 
 | Section heading | Reason |
 |----------------|--------|
@@ -178,7 +237,7 @@ typically means one of two things:
 > Promoting this will produce a release with no user-facing changelog.
 >
 > Did you intentionally make no user-facing changes in this release?
-> Run `git log <last-tag>..HEAD --oneline` to audit merged PRs if unsure.
+> Re-check the Merged-PR Audit table above if unsure.
 >
 > Type **yes** to proceed with an empty release entry, or **no** to pause and add missing entries first.
 
