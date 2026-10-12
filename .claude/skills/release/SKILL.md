@@ -143,8 +143,10 @@ versioned entry in Step 4.
 
 #### Merged-PR Audit (run first)
 
-List every PR merged into `develop` since the last tag whose diff touches `src/`, and
-check that `[Unreleased]` accounts for it. A PR is accounted for when any of its
+List every PR merged into `develop` since the last tag whose diff touches `src/`,
+plus any PR whose diff touches `Cargo.lock` and that carries the `security` label
+(these are typically `/dependabot` dependency updates), and check that `[Unreleased]`
+accounts for it. A PR is accounted for when any of its
 candidate numbers appears among the entry references described in
 `.claude/conventions/changelog.md` → "Reference Numbers". A PR's candidates are:
 
@@ -164,7 +166,12 @@ echo '| PR | Title | Branch | Candidates |'; echo '|----|-------|--------|------
 git log --first-parent --merges --format='%H %s' "$RANGE" | while read -r sha subject; do
   pr=$(printf '%s\n' "$subject" | sed -nE 's/^Merge pull request #([0-9]+) .*/\1/p')
   [ -n "$pr" ] || continue
-  git diff --quiet "$sha^1" "$sha" -- src/ && continue
+  if git diff --quiet "$sha^1" "$sha" -- src/; then
+    # Does not touch src/ — check for security-labelled Cargo.lock change
+    git diff --quiet "$sha^1" "$sha" -- Cargo.lock && continue
+    labels=$(gh pr view "$pr" --json labels --jq '[.labels[].name] | join(",")' </dev/null 2>/dev/null)
+    echo "$labels" | grep -q 'security' || continue
+  fi
   info=$(gh pr view "$pr" --json title,headRefName,closingIssuesReferences \
     --jq '[.title, .headRefName, ([.closingIssuesReferences[].number] | join(" "))] | @tsv' </dev/null)
   title=$(printf '%s' "$info" | cut -f1 | sed 's/|/\\|/g'); branch=$(printf '%s' "$info" | cut -f2)
