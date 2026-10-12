@@ -12,7 +12,7 @@
 |-----------|------------------|
 | New branch | Per `.claude/conventions/branching.md` → "Branch Base" (Normal Mode: from `origin/develop`) |
 | Clippy check | `/pre-push` skill (NOT direct `cargo clippy`) |
-| Format check | `/pre-push` skill or `cargo fmt --all -- --check` |
+| Format check | `/pre-push` skill (see `.claude/conventions/ci-checks.md`) |
 | Push code | `/pre-push` skill before `git push` |
 | Create PR | `/pr` skill (base resolved per `.claude/conventions/branching.md` → "PR Base") |
 | Create Issue | `/issue` skill (English only) |
@@ -279,12 +279,13 @@ Implement `LicenseRepository` trait → new adapter in `adapters/outbound/` → 
 
 ---
 
-Last Updated: 2026-10-11
+Last Updated: 2026-10-12
 
 ## Change History
 
 | Date | Change | Reference |
 |------|--------|-----------|
+| 2026-10-12 | "Format check" row links to `ci-checks.md` instead of quoting `cargo fmt` inline | Issue #919 |
 | 2026-10-11 | Charter now points at `.claude/conventions/README.md` instead of restating the ownership rule and the owner list | Issue #918 |
 | 2026-10-04 | Added non-overlap charter; replaced branching/CI-check restatements with pointers to `.claude/conventions/`; removed the duplicate "Agent Skills" table (CLAUDE.md's Skill Invocation Rules is the only routing table) | Issue #849 |
 | 2026-09-26 | Qualified all `develop`/`main` branch-base assertions as Normal Mode; added a single Stacked Mode cross-reference note to Key Invariants | Issue #846 |

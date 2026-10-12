@@ -90,10 +90,8 @@ classDiagram
 2. `path/to/new_file.rs` — [what to create, which layer, and why]
 
 ## Technical Acceptance Criteria
-- [ ] All existing tests pass (`cargo test --all`)
+- [ ] CI checks pass (see `.claude/conventions/ci-checks.md` → "Canonical Command Block")
 - [ ] New tests added for new functionality (if applicable)
-- [ ] Formatted with `cargo fmt --all`
-- [ ] No new Clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
 - [ ] Documentation updated (if user-facing change; see `/implement` Step 4.3)
 - [ ] No speculative `#[allow(dead_code)]` (see `.claude/CLAUDE.md` → Dead Code Policy)
 
@@ -152,9 +150,7 @@ format drifted.
 
 ## Technical Acceptance Criteria
 - [ ] Regression test added that fails before the fix and passes after
-- [ ] All existing tests pass (`cargo test --all`)
-- [ ] Formatted with `cargo fmt --all`
-- [ ] No new Clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
+- [ ] CI checks pass (see `.claude/conventions/ci-checks.md` → "Canonical Command Block")
 
 </details>
 ```

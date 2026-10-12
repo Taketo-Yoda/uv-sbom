@@ -176,10 +176,8 @@ Part of #<parent-number>
 1. `path/to/file.rs` — [what changes]
 
 ## Technical Acceptance Criteria
-- [ ] All existing tests pass (`cargo test --all`)
+- [ ] CI checks pass (see `.claude/conventions/ci-checks.md` → "Canonical Command Block")
 - [ ] New tests added for new functionality (if applicable)
-- [ ] Formatted with `cargo fmt --all`
-- [ ] No new Clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
 
 </details>
 ```
