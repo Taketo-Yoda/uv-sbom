@@ -68,6 +68,7 @@ it is treated as an ordinary PR.
 
 ## Consumers
 
+- `/dependabot` Step 4.5 (entry) and Step 7.5 (reference number)
 - `/split` Step 2 (`CHANGELOG owner` block) and Step 4 (carry-over)
 - `/implement` Step 4.4
 - `/pr` Step 4.5 (skip list and decision table)
