@@ -172,7 +172,7 @@ Check for user-facing changes in the diff:
 git diff "$BASE_BRANCH"...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
 
 # Changes to core behavior (application, formatters, config)
-git diff "$BASE_BRANCH"...HEAD --stat -- src/sbom_generation/ src/application/ src/adapters/outbound/formatters/ src/cli/config_resolver.rs src/config.rs
+git diff "$BASE_BRANCH"...HEAD --stat -- src/sbom_generation/ src/application/ src/adapters/outbound/formatters/ src/cli/config_resolver/ src/config.rs
 ```
 
 Also consider:
