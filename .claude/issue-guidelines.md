@@ -279,3 +279,5 @@ Before submitting via `gh issue create`:
 | `priority: low` | Low priority, address when time permits |
 | `priority: medium` | Normal priority |
 | `priority: high` | High priority, address soon |
+
+For an Issue confined to `.claude/`, choose the label per `.claude/conventions/labels.md` → "Label for `.claude/`-only Issues".
