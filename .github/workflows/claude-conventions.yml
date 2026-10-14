@@ -1,0 +1,52 @@
+name: Claude Conventions
+
+# Lints .claude/ against the canonical files in .claude/conventions/.
+# Kept separate from ci.yml on purpose: ci.yml lists '.claude/**' in
+# paths-ignore so Rust CI skips doc-only PRs, which means a step added there
+# would never run on the PRs this lint guards. See #901 / #911.
+
+concurrency:
+  group: claude-conventions-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    # Keep in sync with ci.yml on.push.branches.
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'bugfix/**'
+      - 'fix/**'        # Legacy: kept for backward compatibility
+      - 'refactor/**'
+      - 'doc/**'
+      - 'docs/**'
+      - 'hotfix/**'
+    paths:
+      - '.claude/**'
+      - 'scripts/check-claude-conventions.sh'
+      - '.github/workflows/claude-conventions.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - '.claude/**'
+      - 'scripts/check-claude-conventions.sh'
+      - '.github/workflows/claude-conventions.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint .claude/ conventions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: ShellCheck the lint script
+        run: shellcheck scripts/check-claude-conventions.sh
+
+      - name: Check .claude/ conventions
+        run: bash scripts/check-claude-conventions.sh
