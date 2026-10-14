@@ -17,7 +17,7 @@ This block mirrors exactly what runs automatically:
 | Where | What it runs |
 |-------|--------------|
 | `.githooks/pre-push` | All three commands above, on every `git push` |
-| `.githooks/pre-commit` | `cargo fmt --all` (write mode), re-staging formatted files |
+| `.githooks/pre-commit` | `cargo fmt --all` (write mode), re-staging formatted files; plus `scripts/check-claude-conventions.sh` when `.claude/` files or that script are staged |
 | `.github/workflows/ci.yml` | All three commands above, plus CI-only `cargo test --all --release` and `cargo build --release` |
 
 Run `make setup` once after cloning to activate the hooks.
@@ -51,7 +51,11 @@ file read at runtime. Such a copy MUST:
 
 - be byte-identical to the canonical block's command lines (or `cargo fmt --all` per
   the write-mode note above), and
-- be preceded by the marker `<!-- derived: .claude/conventions/ci-checks.md -->`.
+- be preceded by the marker `<!-- derived: .claude/conventions/ci-checks.md -->` on
+  the line directly above the ```` ```bash ```` fence, with no blank line between them.
+
+`scripts/check-claude-conventions.sh` enforces this section in CI
+(`.github/workflows/claude-conventions.yml`) and in `.githooks/pre-commit`.
 
 Files that only *cite* the rule (FAQ, policy, checklists) link to this file instead
 of restating it.

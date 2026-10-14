@@ -4,6 +4,9 @@ Single source of truth for branch naming, branch base, PR base, and Stacked Mode
 Skills and docs under `.claude/` reference the sections below by heading instead of
 restating them. If a restated copy anywhere disagrees with this file, this file wins
 and the copy must be corrected (or, better, replaced with a pointer).
+`scripts/check-claude-conventions.sh` fails CI if the label→prefix table or the
+`git checkout -b … origin/develop` command appears outside this file, except at the
+execution sites it allow-lists.
 
 Established by Issue #849 after the same `origin/develop` fact had to be fixed in
 three separate Issues (#838, #843, #846) and the label→prefix table had drifted
