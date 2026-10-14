@@ -20,7 +20,8 @@ These changes need no entry, because the tool behaves the same afterwards:
 - internal refactors, tests, CI changes, and non-security dependency bumps
 - documentation-only changes (README, examples, doc comments)
 - changes confined to `.claude/` (skills, agents, conventions) or to other
-  contributor-only process files
+  contributor-only process files (their label: `labels.md` → "Label for
+  `.claude/`-only Issues")
 
 ## Reference Numbers
 

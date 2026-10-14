@@ -71,7 +71,8 @@ Before creating the Issue, verify:
 - [ ] Title is concise and descriptive (in English)
 - [ ] Technical detail is sufficient for autonomous implementation
 - [ ] Acceptance Criteria are behavior-level and human-verifiable; CI/tooling checks live in Technical Acceptance Criteria
-- [ ] Labels are appropriate (bug, enhancement, documentation, etc.)
+- [ ] Labels are appropriate (bug, enhancement, documentation, etc.; a `.claude/`-only
+      Issue is labeled per `.claude/conventions/labels.md` → "Label for `.claude/`-only Issues")
 - [ ] Related Issues/PRs are referenced if applicable
 - [ ] Human section present and complete (Summary, Why, Scope, Acceptance Criteria;
       Design Sketch when types change)

@@ -202,6 +202,9 @@ the link they add. Similarly, the `CHANGELOG owner` block puts `CHANGELOG.md` in
 owner's and each extender's `## Files to Update/Create` and `## Scope > In`, stating the
 entry each one writes or extends.
 
+Choose each subtask's label as `/issue` would; for a `.claude/`-only subtask, per
+`.claude/conventions/labels.md` → "Label for `.claude/`-only Issues".
+
 Use the `gh` CLI. The body contains HTML tags and backticks — pass it via a quoted
 heredoc so the shell does not mangle `<details>` or fenced blocks:
 
