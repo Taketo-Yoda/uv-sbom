@@ -252,7 +252,9 @@ mod tests {
 
     #[test]
     fn test_select_license_full_text_falls_to_classifiers() {
-        let full_text = "The MIT License (MIT)\n\nCopyright (c) 2015-2020\n\nPermission is hereby granted...".repeat(5);
+        let full_text =
+            "The MIT License (MIT)\n\nCopyright (c) 2015-2020\n\nPermission is hereby granted..."
+                .repeat(5);
         let license = Some(full_text);
         let license_expression = None;
         let classifiers = vec!["License :: OSI Approved :: MIT License".to_string()];
@@ -263,7 +265,8 @@ mod tests {
 
     #[test]
     fn test_select_license_full_text_last_resort() {
-        let full_text = "Custom License\n\nThis software is provided as-is.\n\nNo warranty.".to_string();
+        let full_text =
+            "Custom License\n\nThis software is provided as-is.\n\nNo warranty.".to_string();
         let license = Some(full_text.clone());
         let license_expression = None;
         let classifiers = vec!["Programming Language :: Python :: 3".to_string()];
@@ -290,7 +293,9 @@ mod tests {
         assert!(!LicensePriority::is_full_license_text("UNKNOWN"));
 
         assert!(LicensePriority::is_full_license_text(&"x".repeat(151)));
-        assert!(LicensePriority::is_full_license_text("Short text\nwith newline"));
+        assert!(LicensePriority::is_full_license_text(
+            "Short text\nwith newline"
+        ));
         assert!(LicensePriority::is_full_license_text(
             &"Copyright (c) 2024. ".repeat(50)
         ));
