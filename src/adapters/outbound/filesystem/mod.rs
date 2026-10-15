@@ -5,7 +5,6 @@ mod file_writer;
 mod git_lockfile_reader;
 mod lockfile_parser;
 
-#[allow(unused_imports)]
 pub use baseline_file::BaselineFileRepository;
 pub use file_reader::FileSystemReader;
 pub use file_writer::{FileSystemWriter, StdoutPresenter};

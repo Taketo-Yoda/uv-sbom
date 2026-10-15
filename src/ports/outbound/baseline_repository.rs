@@ -7,7 +7,6 @@ use std::path::Path;
 /// Implementations handle the file format and I/O safety checks
 /// (symlink rejection, size validation). The use case decides how to
 /// handle a missing file (e.g. warn and proceed with an empty baseline).
-#[allow(dead_code)] // WIRE(#938): remove when --baseline is wired into GenerateSbomUseCase
 pub trait BaselineRepository {
     /// Loads a baseline from `path`.
     ///
@@ -20,7 +19,6 @@ pub trait BaselineRepository {
 }
 
 /// No-op implementation for when the baseline feature is not active.
-#[allow(dead_code)] // WIRE(#938): remove when --baseline is wired into GenerateSbomUseCase
 impl BaselineRepository for () {
     fn load(&self, _path: &Path) -> Result<Option<VulnerabilityBaseline>> {
         Ok(None)

@@ -1,5 +1,6 @@
 use crate::config::IgnoreCve;
 use crate::i18n::Locale;
+use crate::sbom_generation::domain::baseline::VulnerabilityBaseline;
 use crate::sbom_generation::domain::license_policy::LicensePolicy;
 use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::error::SbomError;
@@ -58,6 +59,9 @@ pub struct SbomRequest {
     /// Resolved depth limit for the dependency tree visualization.
     /// Only meaningful when `show_dependency_tree` is true. Defaults to 3.
     pub dependency_tree_depth: usize,
+    /// Vulnerability baseline for suppressing previously-accepted findings.
+    /// `None` disables baseline filtering.
+    pub baseline: Option<VulnerabilityBaseline>,
     /// Output locale for human-readable formats
     pub locale: Locale,
 }
@@ -129,6 +133,7 @@ pub struct SbomRequestBuilder {
     explain_package: Option<String>,
     show_dependency_tree: bool,
     dependency_tree_depth: usize,
+    baseline: Option<VulnerabilityBaseline>,
     locale: Locale,
 }
 
@@ -165,6 +170,7 @@ impl SbomRequestBuilder {
             explain_package: None,
             show_dependency_tree: false,
             dependency_tree_depth: 3,
+            baseline: None,
             locale: Locale::default(),
         }
     }
@@ -297,6 +303,12 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets the vulnerability baseline for suppressing previously-accepted findings.
+    pub fn baseline(mut self, baseline: Option<VulnerabilityBaseline>) -> Self {
+        self.baseline = baseline;
+        self
+    }
+
     /// Sets the output locale for human-readable formats.
     pub fn locale(mut self, locale: Locale) -> Self {
         self.locale = locale;
@@ -334,6 +346,7 @@ impl SbomRequestBuilder {
             explain_package: self.explain_package,
             show_dependency_tree: self.show_dependency_tree,
             dependency_tree_depth: self.dependency_tree_depth,
+            baseline: self.baseline,
             locale: self.locale,
         })
     }

@@ -10,7 +10,6 @@ pub mod resolution_analyzer;
 pub mod upgrade_advisor;
 pub mod vulnerability_checker;
 
-#[allow(unused_imports)]
 pub use baseline_filter::BaselineFilter;
 #[allow(unused_imports)]
 pub use dependency_diff_analyzer::DependencyDiffAnalyzer;

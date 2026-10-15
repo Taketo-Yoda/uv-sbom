@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Vulnerability baseline for suppressing previously-accepted CVE findings**: New `--baseline <PATH>` flag (config key `baseline_file`) loads a JSON baseline file and suppresses matching vulnerability findings from the report. `--update-baseline` (requires `--baseline`) saves all current findings to the baseline file after SBOM generation, enabling a "review once, suppress forever" workflow for accepted risks. Conflicts with `--no-check-cve`. Fully localized for EN and JA (#813, #936, #937, #938)
+
 ### Changed
 - **Truncate long license text in Markdown output**: License strings exceeding 100 characters are now truncated with "..." in Markdown table cells (component inventory and license compliance tables). CycloneDX JSON output preserves the full untruncated text for compliance tooling (#934)
 
