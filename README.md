@@ -332,6 +332,9 @@ license_policy:
 
 # Enrich CVE results with EPSS scores and CISA KEV status
 # check_exploitability: false
+
+# Path to vulnerability baseline file for suppressing previously-accepted CVE findings
+# baseline_file: .uv-sbom-baseline.json
 ```
 
 #### Config File Schema Reference
@@ -356,6 +359,7 @@ license_policy:
 | `exclude_groups` | string[] | No | Dependency groups whose exclusively-reachable packages are excluded from the SBOM |
 | `check_exploitability` | bool | No | Enrich CVE results with EPSS scores and CISA KEV status (opt-in, default: false) |
 | `target_python` | string | No | Target Python version for compatibility checking (PEP 440 format, e.g. `"3.8"`). Unset disables the check |
+| `baseline_file` | string | No | Path to a vulnerability baseline JSON file for suppressing previously-accepted findings |
 
 #### Priority and Merge Rules
 
@@ -927,6 +931,56 @@ uv-sbom --diff main --cvss-threshold 7.0
 uv-sbom --diff origin/main --format markdown --output diff.md --severity-threshold high
 ```
 
+### Vulnerability Baseline
+
+Use `--baseline` to suppress previously-accepted vulnerability findings. A baseline file records `(package, version, vulnerability_id)` tuples. Only exact matches are suppressed — bumping a package version makes its previously-baselined findings count as new.
+
+```bash
+# First run: generate a baseline file from the current findings
+uv-sbom --baseline .uv-sbom-baseline.json --update-baseline
+
+# Subsequent runs: suppress known findings; new ones still trigger exit code 1
+uv-sbom --baseline .uv-sbom-baseline.json
+```
+
+The baseline file is a JSON document with a `version` key and an `entries` array:
+
+```json
+{
+  "version": 1,
+  "entries": [
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "GHSA-9wx4-h78v-vm56"
+    }
+  ]
+}
+```
+
+**`--update-baseline`** rewrites the baseline file with all current (unfiltered) findings. Use it when you accept a new batch of known CVEs. Requires `--baseline`.
+
+When findings are suppressed, the Markdown vulnerability section includes a footnote:
+
+> _Note: 3 previously-baselined finding(s) suppressed._
+
+**Configuration file:** Set `baseline_file` in `uv-sbom.config.yml` instead of passing `--baseline` on every invocation:
+
+```yaml
+baseline_file: .uv-sbom-baseline.json
+```
+
+**Mutual exclusion:** `--baseline` cannot be combined with `--no-check-cve` (baselines require vulnerability checking).
+
+**CI workflow:**
+```bash
+# Check for new vulnerabilities while suppressing accepted ones
+uv-sbom --baseline .uv-sbom-baseline.json --severity-threshold high -f markdown -o report.md
+
+# After review, accept all current findings into the baseline
+uv-sbom --baseline .uv-sbom-baseline.json --update-baseline
+```
+
 ### CI Integration
 
 Use vulnerability thresholds for CI/CD pipeline integration:
@@ -1283,6 +1337,10 @@ Options:
       --production-only              Exclude all non-default dependency groups (production-only mode)
                                      Cannot be used with --exclude-groups
       --target-python <VERSION>      Target Python version for compatibility checking (PEP 440 format, e.g. 3.8)
+      --baseline <PATH>              Path to a vulnerability baseline file for suppressing previously-accepted findings
+                                     Cannot be used with --no-check-cve
+      --update-baseline              Update the baseline file with all current vulnerability findings after SBOM generation
+                                     Requires --baseline
       --explain <PACKAGE_NAME>       Trace the dependency path(s) to the given package (Markdown format only)
                                      Cannot be used with --workspace
       --show-dependency-tree        Render the dependency graph as an ASCII tree (Markdown format only)
