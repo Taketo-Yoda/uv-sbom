@@ -18,6 +18,7 @@ pub(super) fn render_vulnerabilities(
     verified_packages: Option<&HashSet<String>>,
     output: &mut String,
     vulns: &VulnerabilityReportView,
+    baseline_suppressed_count: usize,
 ) {
     output.push('\n');
     output.push_str(messages.section_vuln_report);
@@ -51,6 +52,16 @@ pub(super) fn render_vulnerabilities(
             &vulns.informational,
             show_exploitability,
         );
+    }
+
+    // Baseline suppression footnote
+    if baseline_suppressed_count > 0 {
+        output.push('\n');
+        output.push_str(&Messages::format(
+            messages.footnote_baseline_suppressed,
+            &[&baseline_suppressed_count.to_string()],
+        ));
+        output.push('\n');
     }
 
     // Attribution

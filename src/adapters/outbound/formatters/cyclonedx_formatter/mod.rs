@@ -105,6 +105,7 @@ mod tests {
             python_compatibility: None,
             explain_view: None,
             dependency_tree: None,
+            baseline_suppressed_count: 0,
             applied_group_filter: vec![],
         }
     }
