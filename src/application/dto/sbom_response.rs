@@ -54,7 +54,6 @@ pub struct SbomResponse {
     pub dependency_tree: Option<DependencyTreeView>,
     /// Number of vulnerability findings suppressed by the baseline filter.
     /// Zero when no baseline was provided or no findings were suppressed.
-    #[allow(dead_code)] // WIRE(#939): remove when Markdown formatter renders baseline footnote
     pub baseline_suppressed_count: usize,
     /// Dependency groups that were excluded during SBOM generation.
     /// Empty when no group filter was applied.

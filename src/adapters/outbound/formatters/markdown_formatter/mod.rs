@@ -92,6 +92,7 @@ impl MarkdownFormatter {
                 self.verified_packages.as_ref(),
                 output,
                 vulns,
+                model.baseline_suppressed_count,
             );
         }
         if let Some(compliance) = &model.license_compliance {
@@ -194,6 +195,7 @@ mod tests {
                 python_compatibility: None,
                 explain_view: None,
                 dependency_tree: None,
+                baseline_suppressed_count: 0,
                 applied_group_filter: vec![],
             }
         }
@@ -1247,5 +1249,68 @@ mod tests {
         let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
         assert!(markdown.contains("## 依存関係ツリー"));
         assert!(!markdown.contains("## Dependency Tree"));
+    }
+
+    // ===== Baseline suppression footnote tests =====
+
+    #[test]
+    fn test_baseline_footnote_present_when_suppressed_count_positive() {
+        let mut model = test_fixtures::with_empty_vuln_report();
+        model.baseline_suppressed_count = 3;
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(
+            markdown.contains("_Note: 3 previously-baselined finding(s) suppressed._"),
+            "Expected baseline footnote, got:\n{markdown}"
+        );
+    }
+
+    #[test]
+    fn test_baseline_footnote_absent_when_zero() {
+        let model = test_fixtures::with_empty_vuln_report();
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(
+            !markdown.contains("previously-baselined"),
+            "Should not contain baseline footnote when count is 0"
+        );
+    }
+
+    #[test]
+    fn test_baseline_footnote_absent_when_no_vuln_section() {
+        let mut model = test_fixtures::base_model();
+        model.baseline_suppressed_count = 5;
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        assert!(
+            !markdown.contains("previously-baselined"),
+            "Should not contain baseline footnote when no vulnerability section"
+        );
+    }
+
+    #[test]
+    fn test_baseline_footnote_ja_locale() {
+        let mut model = test_fixtures::with_empty_vuln_report();
+        model.baseline_suppressed_count = 2;
+        let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
+        assert!(
+            markdown.contains("_注: ベースラインにより 2 件の既知の検出結果が抑制されています。_"),
+            "Expected Japanese baseline footnote, got:\n{markdown}"
+        );
+        assert!(!markdown.contains("previously-baselined"));
+    }
+
+    #[test]
+    fn test_baseline_footnote_before_attribution() {
+        let mut model = test_fixtures::with_empty_vuln_report();
+        model.baseline_suppressed_count = 1;
+        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
+        let footnote_pos = markdown
+            .find("previously-baselined")
+            .expect("footnote must be present");
+        let attribution_pos = markdown
+            .find("Vulnerability data provided by")
+            .expect("attribution must be present");
+        assert!(
+            footnote_pos < attribution_pos,
+            "Baseline footnote should appear before OSV attribution"
+        );
     }
 }

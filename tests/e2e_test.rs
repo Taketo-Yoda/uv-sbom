@@ -113,6 +113,7 @@ async fn test_e2e_json_format() {
         None,
         None,
         None,
+        response.baseline_suppressed_count,
         &applied_group_filter,
     );
     let formatter = CycloneDxFormatter::new();
@@ -175,6 +176,7 @@ async fn test_e2e_markdown_format() {
         None,
         None,
         None,
+        response.baseline_suppressed_count,
         &applied_group_filter,
     );
     let formatter = MarkdownFormatter::new(uv_sbom::i18n::Locale::En);
@@ -553,6 +555,7 @@ async fn test_e2e_exclude_root_project_markdown_output() {
         None,
         None,
         None,
+        response.baseline_suppressed_count,
         &applied_group_filter,
     );
     let formatter = MarkdownFormatter::new(uv_sbom::i18n::Locale::En);

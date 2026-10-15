@@ -48,6 +48,7 @@ impl SbomReadModelBuilder {
         python_compatibility_report: Option<&PythonCompatibilityReport>,
         explain_view: Option<&ExplainView>,
         dependency_tree: Option<&DependencyTreeView>,
+        baseline_suppressed_count: usize,
         applied_group_filter: &[String],
     ) -> SbomReadModel {
         let metadata_view = metadata_builder::build_metadata(metadata, project_component);
@@ -88,6 +89,7 @@ impl SbomReadModelBuilder {
             python_compatibility,
             explain_view,
             dependency_tree,
+            baseline_suppressed_count,
             applied_group_filter: applied_group_filter.to_vec(),
         }
     }
@@ -233,6 +235,7 @@ mod tests {
             None,
             None,
             None,
+            0,
             &[],
         );
 
@@ -263,6 +266,7 @@ mod tests {
             None,
             None,
             None,
+            0,
             &[],
         );
 
@@ -298,6 +302,7 @@ mod tests {
             Some(&report),
             None,
             None,
+            0,
             &[],
         );
 
@@ -333,6 +338,7 @@ mod tests {
             None,
             Some(&view),
             None,
+            0,
             &[],
         );
 
@@ -372,6 +378,7 @@ mod tests {
             None,
             None,
             Some(&tree),
+            0,
             &[],
         );
 
@@ -411,6 +418,7 @@ mod tests {
             None,
             None,
             None,
+            0,
             &[],
         );
 
@@ -461,6 +469,7 @@ mod tests {
             None,
             None,
             None,
+            0,
             &[],
         );
 
@@ -498,6 +507,7 @@ mod tests {
             None,
             None,
             None,
+            0,
             &[],
         );
 
@@ -523,6 +533,7 @@ mod tests {
             None,
             None,
             None,
+            0,
             &[],
         );
 
@@ -557,6 +568,7 @@ mod tests {
             None,
             None,
             None,
+            0,
             &[],
         );
 
@@ -582,6 +594,7 @@ mod tests {
             None,
             None,
             None,
+            0,
             &[],
         );
 
