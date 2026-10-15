@@ -48,11 +48,15 @@ pub(in super::super) fn render(
         ]));
 
         for v in &compliance.violations {
+            let license = super::super::table::truncate_for_table(
+                &v.license,
+                super::super::table::LICENSE_TEXT_MAX_LEN,
+            );
             output.push_str(&format!(
                 "| {} | {} | {} | {} | {} |\n",
                 super::super::table::escape_markdown_table_cell(&v.package_name),
                 super::super::table::escape_markdown_table_cell(&v.package_version),
-                super::super::table::escape_markdown_table_cell(&v.license),
+                super::super::table::escape_markdown_table_cell(&license),
                 super::super::table::escape_markdown_table_cell(&v.reason),
                 v.matched_pattern.as_deref().unwrap_or("-"),
             ));
@@ -331,5 +335,27 @@ mod tests {
         let compliance = make_compliance(vec![], vec![w]);
         let output = call_render(Locale::Ja, &compliance);
         assert!(output.contains("### 警告"));
+    }
+
+    // --- license truncation ---
+
+    #[test]
+    fn test_long_license_in_violation_is_truncated() {
+        let long_license = "x".repeat(200);
+        let v = make_violation("pkg-a", "1.0.0", &long_license, "Denied", None);
+        let compliance = make_compliance(vec![v], vec![]);
+        let output = call_render(Locale::En, &compliance);
+        let expected_truncated = format!("{}...", "x".repeat(100));
+        assert!(output.contains(&expected_truncated));
+        assert!(!output.contains(&long_license));
+    }
+
+    #[test]
+    fn test_short_license_in_violation_is_not_truncated() {
+        let v = make_violation("pkg-a", "1.0.0", "GPL-3.0", "Copyleft", Some("GPL*"));
+        let compliance = make_compliance(vec![v], vec![]);
+        let output = call_render(Locale::En, &compliance);
+        assert!(output.contains("GPL-3.0"));
+        assert!(!output.contains("GPL-3.0..."));
     }
 }
