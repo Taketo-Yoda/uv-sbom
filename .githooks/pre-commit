@@ -5,6 +5,14 @@
 
 set -e
 
+# Lint .claude/ conventions only when they (or the lint itself) are staged, so
+# commits that don't touch .claude/ stay fast. The lint reads the working tree,
+# not the index; CI lints the committed tree.
+if git diff --cached --name-only -- .claude scripts/check-claude-conventions.sh | grep -q .; then
+    echo "Running .claude/ convention lint..."
+    bash scripts/check-claude-conventions.sh
+fi
+
 echo "Running cargo fmt..."
 cargo fmt --all
 
