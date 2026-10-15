@@ -1,8 +1,27 @@
 # Issue Label Conventions (canonical)
 
-Single source of truth for which label an Issue gets when that is not obvious from the
-label list. Established by Issue #923, after #917 and #918 were both filed as
-`enhancement` and #918's branch had to be renamed from `feature/` to `docs/`.
+Single source of truth for which labels exist and which label an Issue gets when that
+is not obvious from the list. Established by Issue #923, after #917 and #918 were both
+filed as `enhancement` and #918's branch had to be renamed from `feature/` to `docs/`.
+
+## Labels Reference
+
+| Label | Purpose |
+|-------|---------|
+| `bug` | Bug fixes |
+| `enhancement` | New features or improvements |
+| `documentation` | Documentation updates |
+| `refactor` | Code refactoring |
+| `security` | Vulnerabilities or security-related issues |
+| `ci` | CI/CD pipeline changes |
+| `maintenance` | Maintenance tasks, dependency updates, CI/CD |
+| `rust` | PRs that update Rust code |
+| `dependencies` | PRs that update a dependency file |
+| `good first issue` | Good for newcomers |
+| `github_actions` | PRs that update GitHub Actions code |
+| `priority: low` | Low priority, address when time permits |
+| `priority: medium` | Normal priority |
+| `priority: high` | High priority, address soon |
 
 ## Label for `.claude/`-only Issues
 

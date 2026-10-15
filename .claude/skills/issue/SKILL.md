@@ -107,7 +107,7 @@ After creating, output:
 
 ## Labels Reference
 
-Use the labels listed under `## Labels Reference` in `.claude/issue-guidelines.md`.
+Use the labels listed under `## Labels Reference` in `.claude/conventions/labels.md`.
 
 ## Example Usage
 
