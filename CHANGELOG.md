@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **License field contained full license body text instead of SPDX identifier**: `LicensePriority::select_license` unconditionally preferred PyPI's legacy `license` field over `license_expression`, so packages like numpy (~45KB BSD text), h2, and dependency-injector had their full license body in the SBOM output. Priority order now prefers `license_expression` (SPDX identifier) first, then short `license` values, then classifiers, with full license text only as a last resort (#933)
+
 ## [3.2.0] - 2026-10-10
 
 ### Added

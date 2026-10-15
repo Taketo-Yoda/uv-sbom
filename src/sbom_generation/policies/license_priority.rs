@@ -6,10 +6,13 @@ use crate::sbom_generation::domain::LicenseInfo;
 /// when multiple sources are available (license field, license_expression, classifiers).
 ///
 /// Priority order:
-/// 1. license field (if non-empty and not "UNKNOWN")
-/// 2. license_expression field (if non-empty)
+/// 1. license_expression field (if non-empty) — always a short SPDX identifier
+/// 2. license field (if non-empty, not "UNKNOWN", and not full license text)
 /// 3. OSI Approved license from classifiers
+/// 4. license field as last resort (full text when no better source exists)
 pub struct LicensePriority;
+
+const MAX_LICENSE_IDENTIFIER_LENGTH: usize = 150;
 
 impl LicensePriority {
     /// Selects the most appropriate license text based on priority rules
@@ -26,13 +29,27 @@ impl LicensePriority {
         license_expression: Option<String>,
         classifiers: &[String],
     ) -> Option<String> {
-        // Priority 1: license field (non-empty and not "UNKNOWN")
-        license
-            .filter(|l| !l.is_empty() && l != "UNKNOWN")
-            // Priority 2: license_expression field
-            .or_else(|| license_expression.filter(|l| !l.is_empty()))
-            // Priority 3: Extract from classifiers
-            .or_else(|| Self::extract_license_from_classifiers(classifiers))
+        // Priority 1: license_expression (always a short SPDX identifier when present)
+        if let Some(ref expr) = license_expression {
+            if !expr.is_empty() {
+                return license_expression;
+            }
+        }
+
+        // Priority 2: license field, only if it looks like an identifier (not full text)
+        if let Some(ref lic) = license {
+            if !lic.is_empty() && lic != "UNKNOWN" && !Self::is_full_license_text(lic) {
+                return license;
+            }
+        }
+
+        // Priority 3: Extract from classifiers
+        if let Some(from_classifiers) = Self::extract_license_from_classifiers(classifiers) {
+            return Some(from_classifiers);
+        }
+
+        // Priority 4 (last resort): license field even if it is full text
+        license.filter(|l| !l.is_empty() && l != "UNKNOWN")
     }
 
     /// Creates a LicenseInfo from PyPI package metadata
@@ -53,6 +70,10 @@ impl LicensePriority {
     ) -> LicenseInfo {
         let selected_license = Self::select_license(license, license_expression, classifiers);
         LicenseInfo::new(selected_license, summary)
+    }
+
+    fn is_full_license_text(s: &str) -> bool {
+        s.contains('\n') || s.len() > MAX_LICENSE_IDENTIFIER_LENGTH
     }
 
     /// Extracts license information from classifier strings
@@ -80,13 +101,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_select_license_prefers_license_field() {
+    fn test_select_license_prefers_license_expression() {
         let license = Some("MIT".to_string());
         let license_expression = Some("Apache-2.0".to_string());
         let classifiers = vec!["License :: OSI Approved :: BSD License".to_string()];
 
         let result = LicensePriority::select_license(license, license_expression, &classifiers);
-        assert_eq!(result, Some("MIT".to_string()));
+        assert_eq!(result, Some("Apache-2.0".to_string()));
     }
 
     #[test]
@@ -216,5 +237,67 @@ mod tests {
 
         let result = LicensePriority::select_license(license, license_expression, &classifiers);
         assert_eq!(result, Some("MIT OR Apache-2.0".to_string()));
+    }
+
+    #[test]
+    fn test_select_license_full_text_with_expression() {
+        let full_text = "Copyright (c) 2005-2024, NumPy Developers.\n\nRedistribution and use in source and binary forms...".repeat(5);
+        let license = Some(full_text);
+        let license_expression = Some("BSD-3-Clause".to_string());
+        let classifiers = vec![];
+
+        let result = LicensePriority::select_license(license, license_expression, &classifiers);
+        assert_eq!(result, Some("BSD-3-Clause".to_string()));
+    }
+
+    #[test]
+    fn test_select_license_full_text_falls_to_classifiers() {
+        let full_text =
+            "The MIT License (MIT)\n\nCopyright (c) 2015-2020\n\nPermission is hereby granted..."
+                .repeat(5);
+        let license = Some(full_text);
+        let license_expression = None;
+        let classifiers = vec!["License :: OSI Approved :: MIT License".to_string()];
+
+        let result = LicensePriority::select_license(license, license_expression, &classifiers);
+        assert_eq!(result, Some("MIT License".to_string()));
+    }
+
+    #[test]
+    fn test_select_license_full_text_last_resort() {
+        let full_text =
+            "Custom License\n\nThis software is provided as-is.\n\nNo warranty.".to_string();
+        let license = Some(full_text.clone());
+        let license_expression = None;
+        let classifiers = vec!["Programming Language :: Python :: 3".to_string()];
+
+        let result = LicensePriority::select_license(license, license_expression, &classifiers);
+        assert_eq!(result, Some(full_text));
+    }
+
+    #[test]
+    fn test_select_license_short_license_preferred_over_classifiers() {
+        let license = Some("MIT".to_string());
+        let license_expression = None;
+        let classifiers = vec!["License :: OSI Approved :: BSD License".to_string()];
+
+        let result = LicensePriority::select_license(license, license_expression, &classifiers);
+        assert_eq!(result, Some("MIT".to_string()));
+    }
+
+    #[test]
+    fn test_is_full_license_text() {
+        assert!(!LicensePriority::is_full_license_text("MIT"));
+        assert!(!LicensePriority::is_full_license_text("BSD-3-Clause"));
+        assert!(!LicensePriority::is_full_license_text("Apache-2.0 OR MIT"));
+        assert!(!LicensePriority::is_full_license_text("UNKNOWN"));
+
+        assert!(LicensePriority::is_full_license_text(&"x".repeat(151)));
+        assert!(LicensePriority::is_full_license_text(
+            "Short text\nwith newline"
+        ));
+        assert!(LicensePriority::is_full_license_text(
+            &"Copyright (c) 2024. ".repeat(50)
+        ));
     }
 }
