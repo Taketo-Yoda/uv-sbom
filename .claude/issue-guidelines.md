@@ -263,21 +263,4 @@ Before submitting via `gh issue create`:
 
 ## Labels Reference
 
-| Label | Purpose |
-|-------|---------|
-| `bug` | Bug fixes |
-| `enhancement` | New features or improvements |
-| `documentation` | Documentation updates |
-| `refactor` | Code refactoring |
-| `security` | Vulnerabilities or security-related issues |
-| `ci` | CI/CD pipeline changes |
-| `maintenance` | Maintenance tasks, dependency updates, CI/CD |
-| `rust` | PRs that update Rust code |
-| `dependencies` | PRs that update a dependency file |
-| `good first issue` | Good for newcomers |
-| `github_actions` | PRs that update GitHub Actions code |
-| `priority: low` | Low priority, address when time permits |
-| `priority: medium` | Normal priority |
-| `priority: high` | High priority, address soon |
-
-For an Issue confined to `.claude/`, choose the label per `.claude/conventions/labels.md` → "Label for `.claude/`-only Issues".
+See `.claude/conventions/labels.md` → "Labels Reference" for the label list and choice rules.
