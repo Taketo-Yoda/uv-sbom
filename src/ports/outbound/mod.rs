@@ -2,6 +2,7 @@
 ///
 /// These ports define the interfaces that the application core uses
 /// to interact with external systems (file system, network, console, etc.).
+pub mod baseline_repository;
 pub mod diff_lockfile_reader;
 pub mod exploitability_repository;
 pub mod formatter;
@@ -25,6 +26,8 @@ pub mod workspace_reader;
 // `sbom_generation::domain::uv_lock_simulator`). It is implemented by
 // `adapters::outbound::uv::UvLockAdapter`.
 
+#[allow(unused_imports)]
+pub use baseline_repository::BaselineRepository;
 pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
 pub use exploitability_repository::ExploitabilityRepository;
 pub use formatter::SbomFormatter;
