@@ -26,7 +26,6 @@ pub mod workspace_reader;
 // `sbom_generation::domain::uv_lock_simulator`). It is implemented by
 // `adapters::outbound::uv::UvLockAdapter`.
 
-#[allow(unused_imports)]
 pub use baseline_repository::BaselineRepository;
 pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
 pub use exploitability_repository::ExploitabilityRepository;

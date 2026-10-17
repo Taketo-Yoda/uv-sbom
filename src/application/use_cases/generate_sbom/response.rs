@@ -55,6 +55,7 @@ where
         python_compatibility_report: Option<PythonCompatibilityReport>,
         explain_view: Option<ExplainView>,
         dependency_tree: Option<DependencyTreeView>,
+        baseline_suppressed_count: usize,
         exclude_groups: Vec<String>,
     ) -> SbomResponse {
         let metadata = SbomGenerator::generate_default_metadata();
@@ -75,6 +76,7 @@ where
             .metadata(metadata)
             .has_vulnerabilities_above_threshold(has_vulnerabilities_above_threshold)
             .has_license_violations(has_license_violations)
+            .baseline_suppressed_count(baseline_suppressed_count)
             .applied_group_filter(exclude_groups);
 
         if let Some(graph) = dependency_graph {
@@ -137,6 +139,7 @@ mod tests {
                 None,
                 None,
                 None,
+                0,
                 vec![],
             );
 
@@ -193,6 +196,7 @@ mod tests {
                 None,
                 None,
                 None,
+                0,
                 vec![],
             );
 
@@ -249,6 +253,7 @@ mod tests {
                 None,
                 None,
                 None,
+                0,
                 vec![],
             );
 

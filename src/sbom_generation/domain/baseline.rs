@@ -4,7 +4,6 @@ use super::vulnerability::PackageVulnerabilities;
 
 /// A single entry in a vulnerability baseline: an exact (package, version, vulnerability_id) tuple.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[allow(dead_code)] // WIRE(#938): remove when --baseline is wired into GenerateSbomUseCase
 pub struct BaselineEntry {
     pub package: String,
     pub version: String,
@@ -20,12 +19,10 @@ pub struct BaselineEntry {
 /// Name matching uses the package name exactly as it appears in
 /// `PackageVulnerabilities` (no PEP 503 normalization in v1).
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // WIRE(#938): remove when --baseline is wired into GenerateSbomUseCase
 pub struct VulnerabilityBaseline {
     entries: HashSet<BaselineEntry>,
 }
 
-#[allow(dead_code)] // WIRE(#938): remove when --baseline is wired into GenerateSbomUseCase
 impl VulnerabilityBaseline {
     pub fn new() -> Self {
         Self {
@@ -83,6 +80,7 @@ impl VulnerabilityBaseline {
         self.entries.is_empty()
     }
 
+    #[allow(dead_code)] // WIRE(#939): remove when Markdown formatter renders baseline footnote
     pub fn len(&self) -> usize {
         self.entries.len()
     }

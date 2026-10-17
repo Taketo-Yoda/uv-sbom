@@ -5,7 +5,6 @@ use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
 ///
 /// Mirrors `CveFilter`: a unit struct with a stateless associated function that
 /// returns data only (no `eprintln!`, no i18n).
-#[allow(dead_code)] // WIRE(#938): remove when --baseline is wired into GenerateSbomUseCase
 pub struct BaselineFilter;
 
 impl BaselineFilter {
@@ -20,7 +19,6 @@ impl BaselineFilter {
     /// * Filtered list with baselined findings removed (packages with no
     ///   remaining vulns are dropped entirely, same as `CveFilter`)
     /// * The count of individual vulnerabilities that were suppressed
-    #[allow(dead_code)] // WIRE(#938): remove when --baseline is wired into GenerateSbomUseCase
     pub fn apply(
         vulnerabilities: Vec<PackageVulnerabilities>,
         baseline: &VulnerabilityBaseline,

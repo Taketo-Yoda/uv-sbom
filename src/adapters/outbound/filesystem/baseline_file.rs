@@ -42,7 +42,6 @@ impl From<BaselineEntryDto> for BaselineEntry {
 
 /// Filesystem adapter that loads and saves a `VulnerabilityBaseline`
 /// as a versioned JSON file.
-#[allow(dead_code)] // WIRE(#938): remove when --baseline is wired into GenerateSbomUseCase
 pub struct BaselineFileRepository;
 
 impl Default for BaselineFileRepository {
@@ -51,7 +50,6 @@ impl Default for BaselineFileRepository {
     }
 }
 
-#[allow(dead_code)] // WIRE(#938): remove when --baseline is wired into GenerateSbomUseCase
 impl BaselineFileRepository {
     pub fn new() -> Self {
         Self
