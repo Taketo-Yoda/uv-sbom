@@ -342,6 +342,7 @@ async fn render_and_present(
         response.python_compatibility_report.as_ref(),
         response.explain_view.as_ref(),
         response.dependency_tree.as_ref(),
+        response.baseline_suppressed_count,
         &applied_group_filter,
     );
 
@@ -575,9 +576,10 @@ async fn run(args: Args) -> Result<bool> {
             all_vulns.extend(vuln_result.below_threshold.clone());
             let new_baseline = VulnerabilityBaseline::from_report(&all_vulns);
             baseline_repo.save(Path::new(baseline_path), &new_baseline)?;
+            let count_str = new_baseline.len().to_string();
             eprintln!(
                 "{}",
-                Messages::format(msgs.progress_baseline_updated, &[baseline_path])
+                Messages::format(msgs.progress_baseline_updated, &[baseline_path, &count_str])
             );
         }
     }

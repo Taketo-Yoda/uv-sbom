@@ -80,7 +80,6 @@ impl VulnerabilityBaseline {
         self.entries.is_empty()
     }
 
-    #[allow(dead_code)] // WIRE(#939): remove when Markdown formatter renders baseline footnote
     pub fn len(&self) -> usize {
         self.entries.len()
     }

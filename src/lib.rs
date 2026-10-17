@@ -61,6 +61,7 @@
 //!     None, // No Python compatibility report in this example
 //!     None, // No explain view in this example
 //!     None, // No dependency tree in this example
+//!     0, // No baseline suppression in this example
 //!     &[], // No group filter in this example
 //! );
 //! let formatter = CycloneDxFormatter::new();
