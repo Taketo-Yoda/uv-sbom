@@ -14,6 +14,7 @@ realistic uv-sbom output for all three major opt-in analysis features:
 | License compliance | `--check-license` | `chardet 3.0.4` uses LGPL-2.1-only (denied) |
 | Abandoned package detection | `--check-abandoned` | Some packages may be flagged depending on PyPI state; see `examples/abandoned-packages-project/` for a focused demo |
 | Python version compatibility | `--target-python` | Several transitive dependencies declare `Requires-Python` constraints incompatible with older Python versions (e.g. 3.8) |
+| Vulnerability baseline | `--baseline` / `--update-baseline` | Suppress previously-accepted CVE findings; re-scan only for new vulnerabilities |
 
 > ⚠️ **Do not use these package versions in production.** They are intentionally
 > outdated for demonstration purposes.
@@ -90,7 +91,37 @@ uv-sbom --diff /path/to/old/uv.lock -p examples/sample-project -f json
 **What you will see:** A diff report listing Added, Removed, Updated, and
 Unchanged packages between the base ref and the current lockfile.
 
-### Step 6: All checks via config file
+### Step 6: Vulnerability baseline
+
+```bash
+# First run: generate a baseline file from the current findings
+uv-sbom -p examples/sample-project -f markdown \
+  --baseline examples/sample-project/.uv-sbom-baseline.json --update-baseline
+```
+
+**What you will see:** All current vulnerabilities are written to the baseline
+file. The stderr output confirms the file was created:
+
+```text
+📋 Updated vulnerability baseline: examples/sample-project/.uv-sbom-baseline.json (106 entries)
+```
+
+```bash
+# Second run: baseline suppresses all known findings
+uv-sbom -p examples/sample-project -f markdown \
+  --baseline examples/sample-project/.uv-sbom-baseline.json
+```
+
+**What you will see:** The vulnerability table is empty (all findings suppressed),
+and a footnote appears in the Markdown output:
+
+```text
+_Note: 106 previously-baselined finding(s) suppressed._
+```
+
+The process exits with code `0` because no new (unbaselined) findings remain.
+
+### Step 7: All checks via config file
 
 ```bash
 uv-sbom -p examples/sample-project -f markdown \
@@ -133,9 +164,10 @@ packages.
 
 | | `examples/sample-project` | `examples/abandoned-packages-project` | `examples/suggest-fix-project` | `examples/workspace` |
 |---|---|---|---|---|
-| Primary feature | CVE + license + abandoned | `--check-abandoned` (focused) | `--suggest-fix` Upgrade Advisor | `--workspace` mode |
+| Primary feature | CVE + license + abandoned + baseline | `--check-abandoned` (focused) | `--suggest-fix` Upgrade Advisor | `--workspace` mode |
 | Vulnerable packages | Direct dependencies | None | Transitive dependencies | N/A |
 | Abandoned demo | Partial (depends on PyPI state) | ✅ Yes (4 packages, always flagged) | ❌ Not focused | ❌ Not focused |
+| Baseline demo | ✅ Yes (checked-in `.uv-sbom-baseline.json`) | ❌ No | ❌ No | ❌ No |
 | Config file | ✅ Yes (`config/`) | ❌ No | ❌ No | ❌ No |
 
 Use `abandoned-packages-project` to explore `--check-abandoned` in isolation with guaranteed output.

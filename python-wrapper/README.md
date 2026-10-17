@@ -18,6 +18,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 - **Package exclusion** - Exclude internal packages with `--exclude` patterns
 - **Configuration file support** - Define defaults in `uv-sbom.config.yml`
 - **License compliance** - Enforce license policies with allow/deny lists via `--check-license`
+- **Vulnerability baseline** - Suppress known CVEs with `--baseline` / `--update-baseline`
 - **CI/CD ready** - Exit codes for easy integration into pipelines
 - **License detection** - Automatically fetches license info from PyPI
 

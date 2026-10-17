@@ -33,6 +33,9 @@ abandoned_threshold_days: 730
 # Check package compatibility against a target Python version (PEP 440 format)
 # target_python: "3.8"
 
+# Path to vulnerability baseline file for suppressing previously-accepted CVE findings
+# baseline_file: .uv-sbom-baseline.json
+
 license_policy:
   allow:
     - "MIT"

@@ -331,6 +331,9 @@ license_policy:
 
 # CVE結果にEPSSスコアとCISA KEVステータスを付加
 # check_exploitability: false
+
+# 既知のCVE検出結果を抑制するための脆弱性ベースラインファイルのパス
+# baseline_file: .uv-sbom-baseline.json
 ```
 
 #### 設定ファイルスキーマリファレンス
@@ -355,6 +358,7 @@ license_policy:
 | `exclude_groups` | string[] | No | SBOMから除外する依存関係グループ（そのグループからのみ到達可能なパッケージを除外） |
 | `check_exploitability` | bool | No | CVE結果にEPSSスコアとCISA KEVステータスを付加（オプトイン、デフォルト: false） |
 | `target_python` | string | No | 互換性チェック対象のPythonバージョン（PEP 440形式、例: `"3.8"`）。未設定の場合はチェックを行わない |
+| `baseline_file` | string | No | 既知の脆弱性検出結果を抑制するためのベースラインJSONファイルのパス |
 
 #### 優先度とマージルール
 
@@ -921,6 +925,56 @@ uv-sbom --diff main --cvss-threshold 7.0
 uv-sbom --diff origin/main --format markdown --output diff.md --severity-threshold high
 ```
 
+### 脆弱性ベースライン
+
+`--baseline` を使用して、既に受け入れ済みの脆弱性検出結果を抑制します。ベースラインファイルは `(パッケージ名, バージョン, 脆弱性ID)` のタプルを記録します。完全一致のみ抑制されます — パッケージバージョンを変更すると、以前のベースライン登録は新規の検出として扱われます。
+
+```bash
+# 初回: 現在の検出結果からベースラインファイルを生成
+uv-sbom --baseline .uv-sbom-baseline.json --update-baseline
+
+# 以降の実行: 既知の検出結果を抑制し、新規の検出結果のみ終了コード1を返す
+uv-sbom --baseline .uv-sbom-baseline.json
+```
+
+ベースラインファイルは `version` キーと `entries` 配列を持つJSONドキュメントです：
+
+```json
+{
+  "version": 1,
+  "entries": [
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "GHSA-9wx4-h78v-vm56"
+    }
+  ]
+}
+```
+
+**`--update-baseline`** は現在の（フィルタリング前の）全検出結果でベースラインファイルを上書きします。新たに受け入れるCVEがある場合に使用します。`--baseline` が必要です。
+
+検出結果が抑制された場合、Markdownの脆弱性セクションに脚注が表示されます：
+
+> _注: ベースラインにより 3 件の既知の検出結果が抑制されています。_
+
+**設定ファイル:** `--baseline` を毎回指定する代わりに、`uv-sbom.config.yml` で `baseline_file` を設定できます：
+
+```yaml
+baseline_file: .uv-sbom-baseline.json
+```
+
+**排他制約:** `--baseline` は `--no-check-cve` と同時に使用できません（ベースラインには脆弱性チェックが必要）。
+
+**CIワークフロー:**
+```bash
+# 受け入れ済みの検出結果を抑制しつつ、新規脆弱性をチェック
+uv-sbom --baseline .uv-sbom-baseline.json --severity-threshold high -f markdown -o report.md
+
+# レビュー後、現在の全検出結果をベースラインに追加
+uv-sbom --baseline .uv-sbom-baseline.json --update-baseline
+```
+
 ### CI統合
 
 CI/CDパイプライン統合には脆弱性しきい値を使用します：
@@ -1269,6 +1323,10 @@ Options:
       --production-only              すべての非デフォルト依存関係グループを除外（プロダクションのみモード）
                                      --exclude-groupsとの同時使用は不可
       --target-python <VERSION>      互換性チェック対象のPythonバージョン（PEP 440形式、例: 3.8）
+      --baseline <PATH>              既知の脆弱性検出結果を抑制するためのベースラインファイルのパス
+                                     --no-check-cveとの同時使用は不可
+      --update-baseline              SBOM生成後に現在の全脆弱性検出結果でベースラインファイルを更新
+                                     --baselineが必要
       --explain <PACKAGE_NAME>       指定したパッケージへの依存経路を出力（Markdownフォーマットのみ）
                                      --workspaceとの同時使用は不可
       --show-dependency-tree        依存関係グラフをASCIIツリーとして描画（Markdownフォーマットのみ）
