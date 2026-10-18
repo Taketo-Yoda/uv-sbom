@@ -53,6 +53,9 @@ pub struct SbomReadModel {
     /// Populated only when `show_dependency_tree` was true in the request AND a
     /// dependency graph was built.
     pub dependency_tree: Option<DependencyTreeView>,
+    /// Number of vulnerability findings suppressed by the baseline filter.
+    /// Zero when no baseline was provided or no findings were suppressed.
+    pub baseline_suppressed_count: usize,
     /// Dependency groups that were excluded during generation. Empty = no filter.
     pub applied_group_filter: Vec<String>,
 }
