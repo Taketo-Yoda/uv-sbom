@@ -8,9 +8,9 @@ use crate::sbom_generation::domain::license_policy::LicensePolicy;
 use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::Result;
 use field_resolvers::{
-    resolve_abandoned_threshold_days, resolve_check_cve, resolve_cvss_threshold,
-    resolve_exclude_groups, resolve_flag, resolve_format, resolve_severity_threshold,
-    resolve_target_python,
+    resolve_abandoned_threshold_days, resolve_baseline_file, resolve_check_cve,
+    resolve_cvss_threshold, resolve_exclude_groups, resolve_flag, resolve_format,
+    resolve_severity_threshold, resolve_target_python,
 };
 use license_policy_resolver::resolve_license_policy;
 use list_merge::{merge_ignore_cves, merge_string_lists};
@@ -45,6 +45,9 @@ pub struct MergedConfig {
     /// Target Python version for compatibility checking (PEP 440 format).
     /// Populated from `--target-python` (CLI) or `target_python` (config file).
     pub target_python: Option<String>,
+    /// Path to a vulnerability baseline file.
+    /// Populated from `--baseline` (CLI) or `baseline_file` (config file).
+    pub baseline_file: Option<String>,
 }
 
 /// Merge CLI arguments with config file values.
@@ -110,6 +113,10 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedCo
         &args.exclude_groups,
         cfg.and_then(|c| c.exclude_groups.as_deref()),
     );
+    let baseline_file = resolve_baseline_file(
+        args.baseline.as_ref(),
+        cfg.and_then(|c| c.baseline_file.as_ref()),
+    );
 
     Ok(MergedConfig {
         format,
@@ -127,6 +134,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedCo
         check_exploitability,
         exclude_groups,
         target_python,
+        baseline_file,
     })
 }
 

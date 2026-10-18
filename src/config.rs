@@ -143,6 +143,9 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 
 # Target Python version for compatibility checking (PEP 440 format, e.g. 3.13)
 # target_python: "3.13"
+
+# Path to vulnerability baseline file for suppressing previously-accepted CVE findings
+# baseline_file: .uv-sbom-baseline.json
 "#;
 
 /// Generate a config template file in the specified directory.
@@ -191,6 +194,7 @@ pub struct ConfigFile {
     pub check_exploitability: Option<bool>,
     pub exclude_groups: Option<Vec<String>>,
     pub target_python: Option<String>,
+    pub baseline_file: Option<String>,
     /// Captures unknown fields for warnings.
     #[serde(flatten)]
     pub unknown_fields: HashMap<String, serde_yaml_ng::Value>,
