@@ -29,7 +29,7 @@ cargo run -- --path examples/sample-project --format markdown
 
 ```bash
 # Run all tests
-cargo test
+cargo test --all
 
 # Run tests with output
 cargo test -- --nocapture
@@ -38,21 +38,35 @@ cargo test -- --nocapture
 cargo test test_parse_lockfile
 ```
 
+CI additionally runs the test suite in release mode (`cargo test --all --release`).
+
 ## Code formatting
 
 ```bash
 # Check formatting
-cargo fmt -- --check
+cargo fmt --all -- --check
 
 # Apply formatting
-cargo fmt
+cargo fmt --all
 ```
 
 ## Linting
 
 ```bash
 # Run clippy for linting
-cargo clippy -- -D warnings
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+`--all-targets` also lints tests, benches, and examples, `--all-features` lints feature-gated code, and `-D warnings` turns warnings into errors, as CI does.
+
+## Pre-push hook
+
+Run `make setup` once after cloning. It enables `.githooks/pre-push`, which runs the CI fmt, clippy, and test checks before every push (CI additionally runs release-mode tests and a release build):
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all
 ```
 
 ## Project Structure
@@ -131,8 +145,8 @@ For urgent production fixes:
 
 1. Create a feature branch following the naming convention above
 2. Implement the feature with tests
-3. Run `cargo test` to ensure all tests pass
-4. Run `cargo fmt` and `cargo clippy` to ensure code quality
+3. Run `cargo test --all` to ensure all tests pass
+4. Run `cargo fmt --all -- --check` and `cargo clippy --all-targets --all-features -- -D warnings` to ensure code quality (these run automatically on push after `make setup`)
 5. Update documentation if needed
 6. Submit a pull request to `develop`
 
