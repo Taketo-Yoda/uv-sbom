@@ -1,6 +1,7 @@
 mod cvss;
 mod dto;
 
+use self::cvss::{parse_cvss_score, parse_severity_string};
 use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{ProgressCallback, VulnerabilityRepository};
 use crate::sbom_generation::domain::vulnerability::{
@@ -10,7 +11,6 @@ use crate::sbom_generation::domain::Package;
 use crate::shared::response_size_guard;
 use crate::shared::Result;
 use async_trait::async_trait;
-use cvss::{parse_cvss_score, parse_severity_string};
 use dto::{OsvBatchQuery, OsvBatchResponse, OsvPackage, OsvQuery, OsvResult, OsvVulnerability};
 use reqwest::Client;
 use std::time::Duration;
@@ -134,17 +134,18 @@ impl OsvClient {
 
     /// Converts a single OSV vulnerability to domain model
     fn convert_to_vulnerability(&self, osv_vuln: &OsvVulnerability) -> Result<Vulnerability> {
-        // Extract CVSS score - try V3 first, then V4
-        let cvss_score = osv_vuln
-            .severity
-            .as_ref()
-            .and_then(|severities| {
+        // Extract CVSS score - first parseable V3 entry wins, then V4
+        // (an unparseable V3 entry falls through to V4 rather than to
+        // database_specific.severity)
+        let cvss_score = osv_vuln.severity.as_ref().and_then(|severities| {
+            let first_scored = |severity_type: &str| {
                 severities
                     .iter()
-                    .find(|s| s.severity_type == "CVSS_V3")
-                    .or_else(|| severities.iter().find(|s| s.severity_type == "CVSS_V4"))
-            })
-            .and_then(|s| parse_cvss_score(&s.score));
+                    .filter(|s| s.severity_type == severity_type)
+                    .find_map(|s| parse_cvss_score(&s.score))
+            };
+            first_scored("CVSS_V3").or_else(|| first_scored("CVSS_V4"))
+        });
 
         // Determine severity with fallback strategy:
         // 1. First: use CVSS score if available
@@ -507,5 +508,62 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(vuln.id, "CVE-2024-0001");
+    }
+
+    const V3_CRITICAL: &str = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H";
+    const V4_CRITICAL: &str = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N";
+
+    fn convert(osv_json: serde_json::Value) -> Vulnerability {
+        let osv_vuln: OsvVulnerability = serde_json::from_value(osv_json).unwrap();
+        OsvClient::new(Locale::En)
+            .unwrap()
+            .convert_to_vulnerability(&osv_vuln)
+            .unwrap()
+    }
+
+    #[test]
+    fn test_convert_v4_only_scores_critical() {
+        // Regression test for #958: a v4-only record used to get no score.
+        let vuln = convert(serde_json::json!({
+            "id": "GHSA-v4only",
+            "severity": [{ "type": "CVSS_V4", "score": V4_CRITICAL }]
+        }));
+        assert_eq!(vuln.cvss_score().map(|s| s.value()), Some(9.3));
+        assert_eq!(vuln.severity(), Severity::Critical);
+    }
+
+    #[test]
+    fn test_convert_prefers_v3_when_both_present() {
+        let vuln = convert(serde_json::json!({
+            "id": "GHSA-both",
+            "severity": [
+                { "type": "CVSS_V4", "score": V4_CRITICAL },
+                { "type": "CVSS_V3", "score": V3_CRITICAL }
+            ]
+        }));
+        assert_eq!(vuln.cvss_score().map(|s| s.value()), Some(9.8));
+    }
+
+    #[test]
+    fn test_convert_falls_back_to_v4_when_v3_malformed() {
+        let vuln = convert(serde_json::json!({
+            "id": "GHSA-badv3",
+            "severity": [
+                { "type": "CVSS_V3", "score": "CVSS:3.1/garbage" },
+                { "type": "CVSS_V4", "score": V4_CRITICAL }
+            ]
+        }));
+        assert_eq!(vuln.cvss_score().map(|s| s.value()), Some(9.3));
+    }
+
+    #[test]
+    fn test_convert_unparseable_v4_uses_db_severity() {
+        let vuln = convert(serde_json::json!({
+            "id": "GHSA-badv4",
+            "severity": [{ "type": "CVSS_V4", "score": "CVSS:4.0/garbage" }],
+            "database_specific": { "severity": "HIGH" }
+        }));
+        assert!(vuln.cvss_score().is_none());
+        assert_eq!(vuln.severity(), Severity::High);
     }
 }
