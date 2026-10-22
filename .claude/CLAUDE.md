@@ -2,11 +2,11 @@
 
 > **Charter (what this file owns)**: architecture (`## Architecture Overview`), skill
 > routing (`## Skill Invocation Rules` — the authoritative skill-routing table),
-> the Issue-First rule, and the dead-code policy. Branching, CI-check commands, and
-> test placement are owned by `.claude/conventions/` (`branching.md`, `ci-checks.md`,
-> `testing.md`); `.claude/instructions.md` is a quick-reference/FAQ layer that links
-> here rather than restating. When adding a convention, give it one owner and link to
-> it — do not restate it in another file (see Issue #849).
+> the Issue-First rule, and the dead-code policy. Every other cross-file convention is
+> owned by a file under `.claude/conventions/`. The index of those files, how
+> ownership works, and the Convention Ownership Check are in
+> `.claude/conventions/README.md`. `.claude/instructions.md` is a quick-reference/FAQ
+> layer that links here rather than restating.
 
 ## Issue-First Rule
 
@@ -90,6 +90,23 @@ Skills contain mandatory pre-flight checks and language requirements that preven
   Architect Agent in #859, #860, and #861 in turn. Fixed by Issue #867 (`/split`
   Step 2 Shared-Dependency Convergence Check, surfaced in the user-facing proposal,
   plus a Step 4 carry-over backstop).
+- **2026-10-10 (Issue #918)**: Both drafts of #917 wrote the same CHANGELOG-ownership
+  rule into `/split`, `/implement`, and `/pr`, instead of giving it one owner under
+  `.claude/conventions/`. This repeated the #838/#843/#846/#849 and #867 pattern, and
+  it happened with #849's "one owner, link to it" charter note already in place.
+  Root cause: the principle was a passive note, with no mechanical definition of
+  "convention" and no workflow step that applied it. Fixed by Issue #918:
+  `.claude/conventions/README.md` owns the definition and the Convention Ownership
+  Check, which `/issue` Step 3.5, `/split` Step 2, `/implement` Step 3.5 (Architect),
+  and `/code-review` criterion 3 run.
+- **2026-10-11 (Issue #917)**: The whole `--check-exploitability` feature (#812)
+  shipped across eight PRs (#881–#892) with no CHANGELOG entry, and the gap was caught
+  only by a manual audit during v3.2.0 prep (#915). Root cause had three parts: no
+  step owned the entry for a split feature, the PRs came from cloud sessions that
+  skipped `/pr` Step 4.5, and `/release` Step 3.6 had no mechanical audit. Fixed by
+  Issue #917: `.claude/conventions/changelog.md` owns per-feature ownership, which
+  `/split` Step 2/4, `/implement` Step 4.4, and `/pr` Step 4.5 apply, and `/release`
+  Step 3.6 gained a merged-PR audit.
 
 ### Enforcement
 

@@ -52,6 +52,9 @@ pub struct SbomResponse {
     /// Populated only when `show_dependency_tree` was true in the request AND a
     /// dependency graph was built (`include_dependency_info` was true).
     pub dependency_tree: Option<DependencyTreeView>,
+    /// Number of vulnerability findings suppressed by the baseline filter.
+    /// Zero when no baseline was provided or no findings were suppressed.
+    pub baseline_suppressed_count: usize,
     /// Dependency groups that were excluded during SBOM generation.
     /// Empty when no group filter was applied.
     pub applied_group_filter: Vec<String>,
@@ -77,6 +80,7 @@ pub struct SbomResponseBuilder {
     python_compatibility_report: Option<PythonCompatibilityReport>,
     explain_view: Option<ExplainView>,
     dependency_tree: Option<DependencyTreeView>,
+    baseline_suppressed_count: usize,
     applied_group_filter: Vec<String>,
 }
 
@@ -96,6 +100,7 @@ impl SbomResponseBuilder {
             python_compatibility_report: None,
             explain_view: None,
             dependency_tree: None,
+            baseline_suppressed_count: 0,
             applied_group_filter: Vec::new(),
         }
     }
@@ -174,6 +179,12 @@ impl SbomResponseBuilder {
         self
     }
 
+    /// Sets the count of vulnerability findings suppressed by the baseline filter.
+    pub fn baseline_suppressed_count(mut self, count: usize) -> Self {
+        self.baseline_suppressed_count = count;
+        self
+    }
+
     pub fn applied_group_filter(mut self, groups: Vec<String>) -> Self {
         self.applied_group_filter = groups;
         self
@@ -198,6 +209,7 @@ impl SbomResponseBuilder {
             python_compatibility_report: self.python_compatibility_report,
             explain_view: self.explain_view,
             dependency_tree: self.dependency_tree,
+            baseline_suppressed_count: self.baseline_suppressed_count,
             applied_group_filter: self.applied_group_filter,
         })
     }

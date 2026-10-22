@@ -9,7 +9,7 @@ use crate::ports::outbound::{
     ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
     ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
-use crate::sbom_generation::domain::services::VulnerabilityChecker;
+use crate::sbom_generation::domain::services::{BaselineFilter, VulnerabilityChecker};
 use crate::sbom_generation::domain::UvLockSimulator;
 use crate::shared::Result;
 
@@ -127,6 +127,27 @@ where
         self.enrich_exploitability_if_requested(&request, &mut vulnerability_report)
             .await;
 
+        // Step 5.6: Apply baseline filter if a baseline was provided
+        let baseline_suppressed_count = if let (Some(report), Some(baseline)) =
+            (&mut vulnerability_report, &request.baseline)
+        {
+            let (filtered, suppressed_count) = BaselineFilter::apply(report.clone(), baseline);
+            *report = filtered;
+            if suppressed_count > 0 {
+                let msgs = Messages::for_locale(self.locale);
+                eprintln!(
+                    "{}",
+                    Messages::format(
+                        msgs.progress_baseline_suppressed,
+                        &[&suppressed_count.to_string()],
+                    )
+                );
+            }
+            suppressed_count
+        } else {
+            0
+        };
+
         // Step 6: Apply threshold evaluation if vulnerabilities were found
         let vulnerability_check_result = vulnerability_report.as_ref().map(|report| {
             let threshold_config = Self::build_threshold_config(&request);
@@ -219,6 +240,7 @@ where
             python_compatibility_report,
             explain_view,
             dependency_tree,
+            baseline_suppressed_count,
             request.exclude_groups.clone(),
         ))
     }

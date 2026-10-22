@@ -98,6 +98,14 @@ pub(super) fn resolve_abandoned_threshold_days(cli: Option<u64>, config: Option<
     cli.or(config).unwrap_or(DEFAULT_ABANDONED_THRESHOLD_DAYS)
 }
 
+/// Resolve `baseline_file`: CLI > config > `None`.
+pub(super) fn resolve_baseline_file(
+    cli: Option<&String>,
+    config: Option<&String>,
+) -> Option<String> {
+    cli.or(config).cloned()
+}
+
 /// Resolve `exclude_groups`: CLI overrides config entirely (not merged/deduplicated
 /// like `exclude_patterns`).
 ///

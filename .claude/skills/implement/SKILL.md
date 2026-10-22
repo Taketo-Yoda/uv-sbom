@@ -138,6 +138,8 @@ Gather relevant existing code context by:
   human section
 - Reading adjacent modules or traits that the new code must implement or extend
 - Running `git grep` for key symbols mentioned in the issue
+- If any listed file is under `.claude/`, reading `.claude/conventions/README.md` and
+  the convention files it indexes
 
 The Architect agent produces an implementation plan covering:
 
@@ -148,9 +150,12 @@ The Architect agent produces an implementation plan covering:
 | Interface design | New traits, structs, enums with their signatures |
 | Implementation order | Step-by-step sequence with rationale |
 | Risk flags | Potential layer boundary violations, DDD concerns, edge cases |
+| Convention ownership | Only when the Issue's files include `.claude/` paths: the Architect's verdict per `.claude/conventions/README.md` → "Convention Ownership Check" |
 
 **Present the plan to the user and wait for explicit confirmation before
-proceeding to Step 4. Do not modify any files until the user confirms.**
+proceeding to Step 4. Do not modify any files until the user confirms.** For
+`.claude/` Issues, the user confirms the convention-ownership verdict together with
+the rest of the plan.
 
 Accepted responses:
 - "Looks good, proceed" → continue to Step 4
@@ -235,7 +240,7 @@ the current Issue):
 git diff "$BASE_BRANCH"...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
 ```
 
-If the diff is **non-empty**, verify ALL of the following before proceeding to Step 4.5:
+If the diff is **non-empty**, verify ALL of the following before proceeding to Step 4.4:
 
 #### A. README.md usage section
 
@@ -270,6 +275,13 @@ If the diff is **non-empty**, verify ALL of the following before proceeding to S
 
 **Do NOT skip this gate** even if the implementation plan did not explicitly list documentation files. Every new CLI flag requires all four checks.
 
+### Step 4.4: CHANGELOG Entry (MANDATORY)
+
+Decide whether this Issue writes, extends, or skips the `[Unreleased]` entry per
+`.claude/conventions/changelog.md` → "Who Writes the Entry", and act on that decision
+now. If it skips the entry as a non-owning subtask, pass the line from
+`.claude/conventions/changelog.md` → "Non-Owner PR Line" to `/pr` in Step 6.
+
 ### Step 4.5: Code Review (MANDATORY)
 
 Invoke `/code-review` skill.
@@ -293,6 +305,7 @@ Invoke `/pr` skill with:
 - Base branch: `<the branch recorded in Step 3's "Stack position:" line>` (may be
   `develop`, or a sibling stack branch in Stacked Mode)
 - Reference to issue: `Closes #<issue-number>`
+- CHANGELOG non-owner line (from Step 4.4), if any
 - Stacks on (Stacked Mode only): `#<PR number>` of the lower stack layer
 
 **Re-verify before handing off (Stacked Mode only)**: time may have passed since

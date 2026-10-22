@@ -133,6 +133,14 @@ pub struct Args {
     #[arg(long, value_name = "PACKAGE_NAME", conflicts_with = "workspace")]
     pub explain: Option<String>,
 
+    /// Path to a vulnerability baseline file for suppressing previously-accepted findings
+    #[arg(long, value_name = "PATH", conflicts_with = "no_check_cve")]
+    pub baseline: Option<String>,
+
+    /// Update the baseline file with all current vulnerability findings after SBOM generation
+    #[arg(long, requires = "baseline")]
+    pub update_baseline: bool,
+
     /// Render an ASCII tree visualization of the direct→transitive dependency
     /// structure (Markdown format only)
     ///

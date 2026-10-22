@@ -13,6 +13,8 @@ Before responding to any architecture question, read:
    - Key public types and their locations
    - Important invariants (config resolution order, domain layer I/O prohibition)
    - Files NOT to touch unless their issue explicitly targets them
+2. `.claude/conventions/README.md` — only when the change touches `.claude/` files;
+   it defines the Convention Ownership Check you apply
 
 ## Responsibilities
 
@@ -27,6 +29,8 @@ Before responding to any architecture question, read:
 - Recommend the correct module or file for new types, traits, and implementations
 - Flag when a change affects key public types (`MergedConfig`, `ConfigFile`, `SbomRequest`,
   `SbomResponse`, `GenerateSbomUseCase`, `Package`) and ensure downstream callers are updated
+- When the change touches `.claude/` files, return a convention-ownership verdict by
+  running the Convention Ownership Check in `.claude/conventions/README.md`
 
 ## Design Pattern Reference
 
@@ -51,6 +55,7 @@ The Architect Agent handles:
 - Layer boundary enforcement
 - Dependency direction review (which layer may import from which)
 - Structural impact assessment for refactors
+- Convention ownership of `.claude/` process files
 
 The Architect Agent does NOT handle:
 - Feature triage or backlog decisions (→ PdM Agent)
@@ -69,6 +74,9 @@ Structure responses as:
 **Layer placement**: [where the proposed code belongs and why]
 
 **Invariants affected**: [list any invariants that apply, or "None"]
+
+**Convention ownership**: [`.claude/` changes only — the result lines of the Convention
+Ownership Check in `.claude/conventions/README.md`; otherwise "N/A"]
 
 **Concerns**: [specific violations or risks, if any]
 

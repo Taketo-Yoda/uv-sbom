@@ -133,6 +133,29 @@ If code modifications are required:
 2. Update affected code paths
 3. Ensure backward compatibility where possible
 
+### Step 4.5: Write CHANGELOG Entry
+
+<!-- action: .claude/conventions/changelog.md → "What Needs an Entry" -->
+
+Security fixes always need a CHANGELOG entry. Add an entry under `### Security`
+in `CHANGELOG.md`'s `## [Unreleased]` section. Create the `### Security` heading
+if it does not exist.
+
+**Entry format** (matches existing security entries):
+
+```
+- Updated `<package>` to <version> to fix <CVE-ID> (<advisory summary>)
+```
+
+Use GHSA-ID in place of CVE-ID when no CVE is available. If the update bumps
+transitive dependencies (visible in `cargo tree` output), append "; this also
+bumps `<dep>` to <version>" as seen in existing entries.
+
+**Do NOT add a `(#N)` reference yet.** The PR number is not known until Step 7
+creates it; Step 7.5 will add the reference after PR creation. Per
+`.claude/conventions/changelog.md` → "Reference Numbers", use the PR number
+because `/dependabot` runs have no Issue.
+
 ### Step 5: Run Tests
 
 <!-- derived: .claude/conventions/ci-checks.md -->
@@ -194,6 +217,24 @@ Invoke `/pr` skill with:
 - Use `security` label for the PR
 - Never include the Dependabot alert number in title or body
 
+### Step 7.5: Update CHANGELOG Reference
+
+<!-- action: .claude/conventions/changelog.md → "Reference Numbers" -->
+
+After `/pr` returns the PR URL, extract the PR number and append `(#N)` to the
+CHANGELOG entry written in Step 4.5. Per `.claude/conventions/changelog.md` →
+"Reference Numbers", use the PR number because `/dependabot` runs have no Issue.
+
+```bash
+# Append the PR number to the Security entry added in Step 4.5
+# Then commit and push
+git add CHANGELOG.md
+git commit -m "fix(deps): add PR reference to CHANGELOG entry
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+git push
+```
+
 ### Step 8: Alert Closure
 
 **No manual action required.**
@@ -246,10 +287,12 @@ Claude executes /dependabot skill:
 3. Creates branch `bugfix/CVE-2026-25541`
 4. Runs `cargo update -p bytes`
 5. Verifies update with `cargo tree -p bytes`
-6. Runs `cargo test --all`
-7. Invokes `/commit` skill with security fix message
-8. Invokes `/pr` skill with security fix template
-9. Reports: "Created PR #XX for CVE-2026-25541 (bytes vulnerability)"
+6. Writes CHANGELOG `### Security` entry under `[Unreleased]` (no `(#N)` yet)
+7. Runs `cargo test --all`
+8. Invokes `/commit` skill with security fix message (includes CHANGELOG)
+9. Invokes `/pr` skill with security fix template
+10. Updates CHANGELOG entry with `(#XX)`, commits, pushes
+11. Reports: "Created PR #XX for CVE-2026-25541 (bytes vulnerability)"
 
 ## Reference URLs
 

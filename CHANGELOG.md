@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-23
+
+### Added
+- **Vulnerability baseline for suppressing previously-accepted CVE findings**: New `--baseline <PATH>` flag (config key `baseline_file`) loads a JSON baseline file and suppresses matching vulnerability findings from the report. `--update-baseline` (requires `--baseline`) saves all current findings to the baseline file after SBOM generation, enabling a "review once, suppress forever" workflow for accepted risks. Conflicts with `--no-check-cve`. When findings are suppressed, the Markdown vulnerability section renders a footnote noting the suppressed count. Fully localized for EN and JA (#813, #936, #937, #938, #939, #940)
+
+### Changed
+- **Truncate long license text in Markdown output**: License strings exceeding 100 characters are now truncated with "..." in Markdown table cells (component inventory and license compliance tables). CycloneDX JSON output preserves the full untruncated text for compliance tooling (#934)
+
+### Fixed
+- **License field contained full license body text instead of SPDX identifier**: `LicensePriority::select_license` unconditionally preferred PyPI's legacy `license` field over `license_expression`, so packages like numpy (~45KB BSD text), h2, and dependency-injector had their full license body in the SBOM output. Priority order now prefers `license_expression` (SPDX identifier) first, then short `license` values, then classifiers, with full license text only as a last resort (#933)
+- **CVSS v4.0-only advisories got no score, so `--cvss-threshold` never counted them**: `parse_cvss_score` (`src/adapters/outbound/network/osv_client/cvss.rs`) only understood CVSS v3 vectors, so an OSV record whose only CVSS entry was `CVSS:4.0/...` showed "N/A", fell below every `--cvss-threshold`, and took its severity from `database_specific.severity` or `None`. CVSS v4.0 Base vectors are now scored per the FIRST CVSS v4.0 specification via the RustSec `cvss` crate (Threat, Environmental, and Supplemental metrics are ignored), and an unparseable v3 entry now falls back to the v4 entry. v3 vectors are scored exactly as before and are still preferred when both are present (#958)
+
 ## [3.2.0] - 2026-10-10
 
 ### Added

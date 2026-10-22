@@ -1,4 +1,22 @@
+use std::borrow::Cow;
+
 use crate::i18n::Messages;
+
+/// Maximum characters for license text in Markdown table cells.
+/// Full text is preserved in CycloneDX output; this threshold keeps
+/// human-readable Markdown tables concise.
+pub(crate) const LICENSE_TEXT_MAX_LEN: usize = 100;
+
+/// Truncates `text` to at most `max_len` characters, appending "..." if truncated.
+/// Returns `Cow::Borrowed` when no truncation is needed to avoid allocation.
+pub(crate) fn truncate_for_table(text: &str, max_len: usize) -> Cow<'_, str> {
+    if text.chars().count() <= max_len {
+        Cow::Borrowed(text)
+    } else {
+        let truncated: String = text.chars().take(max_len).collect();
+        Cow::Owned(format!("{truncated}..."))
+    }
+}
 
 /// Escapes pipe characters and newlines for safe Markdown table rendering
 pub(crate) fn escape_markdown_table_cell(text: &str) -> String {
@@ -113,5 +131,52 @@ mod tests {
         let input = "Text with | pipe and\nnewline";
         let escaped = escape_markdown_table_cell(input);
         assert_eq!(escaped, "Text with \\| pipe and newline");
+    }
+
+    #[test]
+    fn test_truncate_short_text_unchanged() {
+        let result = truncate_for_table("MIT", 100);
+        assert_eq!(result, "MIT");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_truncate_empty_string() {
+        let result = truncate_for_table("", 100);
+        assert_eq!(result, "");
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_truncate_at_exact_threshold() {
+        let text = "a".repeat(100);
+        let result = truncate_for_table(&text, 100);
+        assert_eq!(result, text);
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_truncate_one_over_threshold() {
+        let text = "a".repeat(101);
+        let result = truncate_for_table(&text, 100);
+        let expected = format!("{}...", "a".repeat(100));
+        assert_eq!(result, expected);
+        assert!(matches!(result, Cow::Owned(_)));
+    }
+
+    #[test]
+    fn test_truncate_long_text() {
+        let text = "a".repeat(200);
+        let result = truncate_for_table(&text, 100);
+        assert_eq!(result.len(), 103); // 100 + "..."
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_truncate_multibyte_characters() {
+        let text = "あ".repeat(101);
+        let result = truncate_for_table(&text, 100);
+        assert_eq!(result.chars().count(), 103); // 100 chars + "..."
+        assert!(result.ends_with("..."));
     }
 }

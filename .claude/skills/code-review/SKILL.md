@@ -54,6 +54,10 @@ grep -rn 'eprintln!\|println!' src/ \
 - Lines in **changed files**: flag as 🔴 MUST FIX under criterion 11.
 - Lines in **unchanged files**: flag as 🟡 SHOULD FIX (pre-existing violation).
 
+If any changed file is under `.claude/`, also include the full content of
+`.claude/conventions/README.md` and every file it indexes, as supplemental context
+for criterion 3.
+
 If `git diff HEAD` is empty, report "Nothing to review — no uncommitted changes."
 and exit.
 
@@ -132,6 +136,11 @@ uv-sbom-specific DRY violations:
 - Is severity comparison done via ThresholdConfig::is_above_threshold() rather than
   hand-written match blocks?
 - Is file security validation done via src/shared/security.rs rather than inline fs calls?
+
+`.claude/` convention ownership:
+- Run the Convention Ownership Check (.claude/conventions/README.md) on the lines this
+  diff adds or modifies in changed `.claude/` files. Each failing result line is a
+  🟡 SHOULD FIX.
 
 ### 4. Domain-Driven Design
 

@@ -7,7 +7,9 @@ mod sbom_generation;
 mod shared;
 
 use adapters::outbound::console::StderrProgressReporter;
-use adapters::outbound::filesystem::{determine_diff_source, FileSystemReader, GitLockfileReader};
+use adapters::outbound::filesystem::{
+    determine_diff_source, BaselineFileRepository, FileSystemReader, GitLockfileReader,
+};
 use adapters::outbound::formatters::{DiffJsonFormatter, DiffMarkdownFormatter};
 use adapters::outbound::network::{
     CachingPyPiLicenseRepository, EpssKevClient, OsvClient, PyPiCompatibilityClient,
@@ -26,8 +28,8 @@ use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFi
 use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
 use i18n::{Locale, Messages};
 use ports::outbound::{
-    DiffSource, GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap,
-    ProjectConfigReader, WorkspaceReader,
+    BaselineRepository, DiffSource, GroupRoots, LockfileParseResult, LockfileReader,
+    PackageSourceMap, ProjectConfigReader, WorkspaceReader,
 };
 use shared::error::ExitCode;
 use shared::Result;
@@ -240,6 +242,7 @@ struct CliOnlyRequestOptions {
 /// `cli_only` groups fields sourced straight from the raw `Args`, not
 /// `MergedConfig`: `MergedConfig` only exists to express the CLI > config
 /// file > defaults merge, which doesn't apply to CLI-only values.
+#[allow(clippy::too_many_arguments)]
 fn build_sbom_request(
     project_path: PathBuf,
     merged: &MergedConfig,
@@ -247,6 +250,7 @@ fn build_sbom_request(
     suggest_fix: bool,
     dry_run: bool,
     cli_only: CliOnlyRequestOptions,
+    baseline: Option<sbom_generation::domain::baseline::VulnerabilityBaseline>,
     locale: Locale,
 ) -> Result<SbomRequest> {
     let include_dependency_info = matches!(merged.format, OutputFormat::Markdown);
@@ -274,6 +278,7 @@ fn build_sbom_request(
         .explain_package(cli_only.explain_package)
         .show_dependency_tree(cli_only.show_dependency_tree)
         .dependency_tree_depth(dependency_tree_depth)
+        .baseline(baseline)
         .locale(locale)
         .build()
 }
@@ -337,6 +342,7 @@ async fn render_and_present(
         response.python_compatibility_report.as_ref(),
         response.explain_view.as_ref(),
         response.dependency_tree.as_ref(),
+        response.baseline_suppressed_count,
         &applied_group_filter,
     );
 
@@ -513,6 +519,31 @@ async fn run(args: Args) -> Result<bool> {
         merged.exclude_groups.clone()
     };
 
+    // Load vulnerability baseline if --baseline is set
+    let baseline_repo = BaselineFileRepository;
+    let baseline = if let Some(ref baseline_path) = merged.baseline_file {
+        match baseline_repo.load(Path::new(baseline_path))? {
+            Some(b) => {
+                eprintln!(
+                    "{}",
+                    Messages::format(msgs.progress_baseline_loaded, &[baseline_path])
+                );
+                Some(b)
+            }
+            None => {
+                eprintln!(
+                    "{}",
+                    Messages::format(msgs.warn_baseline_not_found, &[baseline_path])
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let update_baseline = args.update_baseline;
+
     // Create request using shared builder helper
     let request = build_sbom_request(
         project_path.clone(),
@@ -525,6 +556,7 @@ async fn run(args: Args) -> Result<bool> {
             show_dependency_tree: args.show_dependency_tree,
             dependency_tree_depth: args.dependency_tree_depth,
         },
+        baseline,
         locale,
     )?;
 
@@ -533,6 +565,24 @@ async fn run(args: Args) -> Result<bool> {
 
     // Execute use case
     let response = use_case.execute(request).await?;
+
+    // Update baseline file if --update-baseline is set
+    if update_baseline {
+        if let (Some(ref baseline_path), Some(ref vuln_result)) =
+            (&merged.baseline_file, &response.vulnerability_check_result)
+        {
+            use sbom_generation::domain::baseline::VulnerabilityBaseline;
+            let mut all_vulns = vuln_result.above_threshold.clone();
+            all_vulns.extend(vuln_result.below_threshold.clone());
+            let new_baseline = VulnerabilityBaseline::from_report(&all_vulns);
+            baseline_repo.save(Path::new(baseline_path), &new_baseline)?;
+            let count_str = new_baseline.len().to_string();
+            eprintln!(
+                "{}",
+                Messages::format(msgs.progress_baseline_updated, &[baseline_path, &count_str])
+            );
+        }
+    }
 
     // Skip output generation for dry-run mode
     if args.dry_run {
@@ -640,6 +690,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
                 show_dependency_tree: args.show_dependency_tree,
                 dependency_tree_depth: args.dependency_tree_depth,
             },
+            None,
             locale,
         )?;
 

@@ -1,0 +1,535 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "package": "idna",
+      "version": "2.10",
+      "id": "GHSA-65pc-fj4g-8rjx"
+    },
+    {
+      "package": "idna",
+      "version": "2.10",
+      "id": "GHSA-jjg7-2v4v-x38h"
+    },
+    {
+      "package": "idna",
+      "version": "2.10",
+      "id": "PYSEC-2024-60"
+    },
+    {
+      "package": "idna",
+      "version": "2.10",
+      "id": "PYSEC-2026-215"
+    },
+    {
+      "package": "jinja2",
+      "version": "2.11.3",
+      "id": "GHSA-cpwx-vrp4-4pq7"
+    },
+    {
+      "package": "jinja2",
+      "version": "2.11.3",
+      "id": "GHSA-h5c8-rqwp-cp95"
+    },
+    {
+      "package": "jinja2",
+      "version": "2.11.3",
+      "id": "GHSA-h75v-3vvj-5mfj"
+    },
+    {
+      "package": "jinja2",
+      "version": "2.11.3",
+      "id": "GHSA-q2x7-8rv6-6q7h"
+    },
+    {
+      "package": "jinja2",
+      "version": "2.11.3",
+      "id": "PYSEC-2026-1471"
+    },
+    {
+      "package": "jinja2",
+      "version": "2.11.3",
+      "id": "PYSEC-2026-1473"
+    },
+    {
+      "package": "jinja2",
+      "version": "2.11.3",
+      "id": "PYSEC-2026-1474"
+    },
+    {
+      "package": "jinja2",
+      "version": "2.11.3",
+      "id": "PYSEC-2026-1475"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-3f63-hfp8-52jq"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-44wm-f244-xhp3"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-45hq-cxwh-f6vc"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-4fx9-vc88-q2xc"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-4x4j-2g7c-83w6"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-5x94-69rx-g8h2"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-62p4-gmf7-7g93"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-6r8x-57c9-28j4"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-8ghj-p4vj-mr35"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-8v84-f9pq-wr9x"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-8vj2-vxx3-667w"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-9hw9-ch79-4vh6"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-9j59-75qj-795w"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-fj7v-r99m-22gq"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-j7hp-h8jx-5ppr"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-jjj6-mw9f-p565"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-m2vv-5vj5-2hm7"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-phj9-mv4w-65pm"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-pw3c-h7wp-cvhx"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-r73j-pqj5-w3x7"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-vjc4-5qp5-m44j"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-wjx4-4jcj-g98j"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-xj96-63gp-2gmr"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "GHSA-xrcv-f9gm-v42c"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2022-10"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2022-168"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2022-42979"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2022-8"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2022-9"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2023-175"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2023-227"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-165"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-1793"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-1794"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-2253"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-2254"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-2255"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-2256"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-2257"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-2874"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-3451"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-3453"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-3454"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-3493"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-3494"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-3495"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-3496"
+    },
+    {
+      "package": "pillow",
+      "version": "8.3.2",
+      "id": "PYSEC-2026-457"
+    },
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "GHSA-9hjg-9r4m-mvj7"
+    },
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "GHSA-9wx4-h78v-vm56"
+    },
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "GHSA-gc5v-m9x4-r6x2"
+    },
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "GHSA-j8r2-6x86-q33q"
+    },
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "PYSEC-2023-74"
+    },
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "PYSEC-2026-1872"
+    },
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "PYSEC-2026-1873"
+    },
+    {
+      "package": "requests",
+      "version": "2.25.0",
+      "id": "PYSEC-2026-2275"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-2xpw-w6gg-jr37"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-34jh-p97f-mpxf"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-38jv-5279-wg99"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-8988-9cw3-xx77"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-g4mx-q9vg-27p4"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-gm62-xv2j-4w53"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-pq67-6m6q-mj2v"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-qccp-gfcp-xxvc"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-v845-jxx5-vc9f"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "GHSA-vxq7-64xx-v4gw"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2023-192"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2023-212"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2026-141"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2026-1994"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2026-1995"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2026-1996"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2026-1998"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2026-1999"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2026-4175"
+    },
+    {
+      "package": "urllib3",
+      "version": "1.26.5",
+      "id": "PYSEC-2026-4177"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "GHSA-29vq-49wr-vm6x"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "GHSA-2g68-c3qc-8985"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "GHSA-87hc-h4r5-73f7"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "GHSA-f9vj-2wh5-fj8j"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "GHSA-g6x2-hccm-hh4m"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "GHSA-hgf8-39gv-g3f2"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "GHSA-px8h-6qxv-m22q"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "GHSA-xg9f-g7g7-2323"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2022-203"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2023-221"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2023-57"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2023-58"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2026-2043"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2026-2044"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2026-2045"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2026-2046"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2026-2320"
+    },
+    {
+      "package": "werkzeug",
+      "version": "1.0.0",
+      "id": "PYSEC-2026-4312"
+    }
+  ]
+}

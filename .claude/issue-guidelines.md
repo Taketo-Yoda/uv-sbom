@@ -90,10 +90,8 @@ classDiagram
 2. `path/to/new_file.rs` — [what to create, which layer, and why]
 
 ## Technical Acceptance Criteria
-- [ ] All existing tests pass (`cargo test --all`)
+- [ ] CI checks pass (see `.claude/conventions/ci-checks.md` → "Canonical Command Block")
 - [ ] New tests added for new functionality (if applicable)
-- [ ] Formatted with `cargo fmt --all`
-- [ ] No new Clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
 - [ ] Documentation updated (if user-facing change; see `/implement` Step 4.3)
 - [ ] No speculative `#[allow(dead_code)]` (see `.claude/CLAUDE.md` → Dead Code Policy)
 
@@ -152,9 +150,7 @@ format drifted.
 
 ## Technical Acceptance Criteria
 - [ ] Regression test added that fails before the fix and passes after
-- [ ] All existing tests pass (`cargo test --all`)
-- [ ] Formatted with `cargo fmt --all`
-- [ ] No new Clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
+- [ ] CI checks pass (see `.claude/conventions/ci-checks.md` → "Canonical Command Block")
 
 </details>
 ```
@@ -206,6 +202,7 @@ Before submitting via `gh issue create`:
 - [ ] VERIFY: No implementation code outside the allowed exceptions; any allowed code block uses proper markdown formatting
 - [ ] CHECK: Acceptance criteria use checklist format
 - [ ] VERIFY: File paths are specific and accurate
+- [ ] CHECK: If Files to Update/Create lists any .claude/ path, the Convention Ownership Check in .claude/conventions/README.md was run and passes
 - [ ] FINAL: Re-read the full issue as if you were an AI implementing it
 ```
 
@@ -266,19 +263,4 @@ Before submitting via `gh issue create`:
 
 ## Labels Reference
 
-| Label | Purpose |
-|-------|---------|
-| `bug` | Bug fixes |
-| `enhancement` | New features or improvements |
-| `documentation` | Documentation updates |
-| `refactor` | Code refactoring |
-| `security` | Vulnerabilities or security-related issues |
-| `ci` | CI/CD pipeline changes |
-| `maintenance` | Maintenance tasks, dependency updates, CI/CD |
-| `rust` | PRs that update Rust code |
-| `dependencies` | PRs that update a dependency file |
-| `good first issue` | Good for newcomers |
-| `github_actions` | PRs that update GitHub Actions code |
-| `priority: low` | Low priority, address when time permits |
-| `priority: medium` | Normal priority |
-| `priority: high` | High priority, address soon |
+See `.claude/conventions/labels.md` → "Labels Reference" for the label list and choice rules.

@@ -1,3 +1,4 @@
+pub mod baseline;
 pub mod dependency_diff;
 pub mod dependency_graph;
 pub mod enriched_package;
@@ -12,6 +13,8 @@ pub mod upgrade_recommendation;
 pub mod uv_lock_simulator;
 pub mod vulnerability;
 
+#[allow(unused_imports)]
+pub use baseline::{BaselineEntry, VulnerabilityBaseline};
 // Note: These will be used in subsequent subtasks of the dependency-diff feature (#224)
 #[allow(unused_imports)]
 pub use dependency_diff::{ChangeType, DependencyDiff, DiffSummary, PackageChange};

@@ -26,13 +26,17 @@ pub(in super::super) fn render(
             .as_ref()
             .map(|l| l.spdx_id.as_deref().unwrap_or(l.name.as_str()))
             .unwrap_or("N/A");
+        let license = super::super::table::truncate_for_table(
+            license,
+            super::super::table::LICENSE_TEXT_MAX_LEN,
+        );
         let description = component.description.as_deref().unwrap_or("");
 
         output.push_str(&format!(
             "| {} | {} | {} | {} |\n",
             super::super::links::format_package_name(&component.name, verified_packages),
             super::super::table::escape_markdown_table_cell(&component.version),
-            super::super::table::escape_markdown_table_cell(license),
+            super::super::table::escape_markdown_table_cell(&license),
             super::super::table::escape_markdown_table_cell(description)
         ));
     }
@@ -167,5 +171,41 @@ mod tests {
         let mut output = String::new();
         render(msgs, None, &mut output, &[component]);
         assert!(output.contains("[requests](https://pypi.org/project/requests/)"));
+    }
+
+    // ============================================================
+    // License truncation
+    // ============================================================
+
+    #[test]
+    fn test_long_license_name_is_truncated_in_markdown() {
+        let msgs = Messages::for_locale(Locale::En);
+        let long_license = "a".repeat(200);
+        let component = make_component("pkg", "1.0.0", None, &long_license, None);
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[component]);
+        let expected_truncated = format!("{}...", "a".repeat(100));
+        assert!(output.contains(&expected_truncated));
+        assert!(!output.contains(&long_license));
+    }
+
+    #[test]
+    fn test_short_license_name_is_not_truncated() {
+        let msgs = Messages::for_locale(Locale::En);
+        let component = make_component("pkg", "1.0.0", None, "Apache License 2.0", None);
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[component]);
+        assert!(output.contains("Apache License 2.0"));
+        assert!(!output.contains("..."));
+    }
+
+    #[test]
+    fn test_spdx_id_is_not_truncated() {
+        let msgs = Messages::for_locale(Locale::En);
+        let component = make_component("pkg", "1.0.0", Some("MIT"), &"a".repeat(200), None);
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[component]);
+        assert!(output.contains("MIT"));
+        assert!(!output.contains("..."));
     }
 }
