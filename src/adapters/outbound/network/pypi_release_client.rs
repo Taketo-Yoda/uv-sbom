@@ -1,11 +1,9 @@
+use super::pypi_version_endpoint;
 use crate::ports::outbound::ReleaseRepository;
 use crate::sbom_generation::domain::advisory::ReleaseStatus;
-use crate::shared::response_size_guard;
 use crate::shared::Result;
 use async_trait::async_trait;
-use reqwest::StatusCode;
 use serde::Deserialize;
-use std::time::Duration;
 
 #[derive(Debug, Default, Deserialize)]
 struct PyPiReleaseInfo {
@@ -45,13 +43,7 @@ impl PyPiReleaseClient {
 
     /// Shared constructor logic for [`Self::new`] and [`Self::new_with_base_url`].
     fn build(base_url: String) -> Result<Self> {
-        let version = env!("CARGO_PKG_VERSION");
-        let user_agent = format!("uv-sbom/{}", version);
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .user_agent(user_agent)
-            .build()?;
-
+        let client = pypi_version_endpoint::build_client(pypi_version_endpoint::DEFAULT_TIMEOUT)?;
         Ok(Self { client, base_url })
     }
 
@@ -79,30 +71,18 @@ impl PyPiReleaseClient {
         package_name: &str,
         version: &str,
     ) -> Result<Option<PyPiVersionResponse>> {
-        crate::shared::security::validate_url_component(package_name, "Package name")
-            .map_err(crate::shared::http_retry::permanent)?;
-        crate::shared::security::validate_url_component(version, "Package version")
-            .map_err(crate::shared::http_retry::permanent)?;
-        let encoded_name = urlencoding::encode(package_name);
-        let encoded_version = urlencoding::encode(version);
-        let url = format!(
-            "{}/pypi/{}/{}/json",
-            self.base_url, encoded_name, encoded_version
-        );
-
-        let response = self.client.get(&url).send().await?;
-        if response.status() == StatusCode::NOT_FOUND {
-            return Ok(None);
-        }
-        if !response.status().is_success() {
-            anyhow::bail!("PyPI API returned status code {}", response.status());
-        }
-        let bytes = response_size_guard::read_bounded_bytes(
-            response,
+        let Some(bytes) = pypi_version_endpoint::fetch_version_json(
+            &self.client,
+            &self.base_url,
+            package_name,
+            version,
             Self::MAX_RESPONSE_BYTES,
-            Some("PyPI release metadata"),
+            "PyPI release metadata",
         )
-        .await?;
+        .await?
+        else {
+            return Ok(None);
+        };
         Ok(Some(serde_json::from_slice::<PyPiVersionResponse>(&bytes)?))
     }
 
