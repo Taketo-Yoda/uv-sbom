@@ -1,0 +1,20 @@
+#!/bin/sh
+# Stub `uv` for UvLockAdapter::simulate_upgrade_to tests (#966).
+# `uv --version` succeeds. `uv lock --upgrade-package <one-arg>` succeeds only
+# when exactly three arguments are passed and the third is `<name>==<version>`
+# (proving the target is handed over as a single process argument), and writes
+# the "after" fixture lock (requests 2.32.3) into the working directory.
+if [ "$1" = "--version" ]; then
+    echo "uv 0.0.0-stub"
+    exit 0
+fi
+if [ "$#" -eq 3 ] && [ "$1" = "lock" ] && [ "$2" = "--upgrade-package" ]; then
+    case "$3" in
+        *==*)
+            cp "$(dirname "$0")/../../sample_uv_lock_after.lock" uv.lock
+            exit 0
+            ;;
+    esac
+fi
+echo "uv stub: unexpected arguments: $*" >&2
+exit 97

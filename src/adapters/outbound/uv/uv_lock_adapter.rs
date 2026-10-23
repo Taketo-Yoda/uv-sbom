@@ -1,17 +1,33 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use pep440_rs::Version;
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::path::Path;
+use std::process::{ExitStatus, Output};
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::time::timeout;
 
-use crate::sbom_generation::domain::{SimulationResult, UvLockSimulator};
+use crate::sbom_generation::domain::{
+    SimulationResult, TargetedSimulationOutcome, UvLockSimulator,
+};
+
+/// Program name used to invoke the `uv` CLI (resolved via PATH).
+const UV_PROGRAM: &str = "uv";
+
+/// Upper bound on a package name accepted by `simulate_upgrade_to`.
+const MAX_PACKAGE_NAME_LEN: usize = 200;
+
+/// Upper bound on a version string accepted by `simulate_upgrade_to`.
+const MAX_VERSION_LEN: usize = 100;
 
 /// Adapter that implements [`UvLockSimulator`] by shelling out to the `uv` CLI.
 ///
 /// Uses a temporary directory strategy: copies `pyproject.toml` and `uv.lock`
-/// to a temp dir, runs `uv lock --upgrade-package <pkg>`, then parses the
-/// resulting lock file to determine resolved versions.
+/// to a temp dir, runs `uv lock --upgrade-package <pkg>` (or `<pkg>==<version>`
+/// for [`UvLockSimulator::simulate_upgrade_to`]), then parses the resulting lock
+/// file to determine resolved versions.
 pub struct UvLockAdapter;
 
 impl UvLockAdapter {
@@ -43,6 +59,197 @@ impl UvLockAdapter {
             .map(|p| (p.name, p.version))
             .collect())
     }
+
+    /// Returns whether `<program> --version` runs and exits successfully.
+    async fn uv_available(program: &OsStr) -> bool {
+        tokio::process::Command::new(program)
+            .arg("--version")
+            .output()
+            .await
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+
+    /// Verifies the project files exist and copies them into a fresh temp dir.
+    ///
+    /// The returned `TempDir` removes itself when dropped, so the original
+    /// project's `uv.lock` is never touched.
+    fn prepare_sandbox(project_path: &Path) -> Result<tempfile::TempDir> {
+        let pyproject_src = project_path.join("pyproject.toml");
+        let lockfile_src = project_path.join("uv.lock");
+
+        if !pyproject_src.exists() {
+            return Err(anyhow!(
+                "pyproject.toml not found in: {}",
+                project_path.display()
+            ));
+        }
+        if !lockfile_src.exists() {
+            return Err(anyhow!("uv.lock not found in: {}", project_path.display()));
+        }
+
+        let temp_dir = tempfile::TempDir::new()
+            .map_err(|e| anyhow!("Failed to create temp directory: {}", e))?;
+
+        std::fs::copy(&pyproject_src, temp_dir.path().join("pyproject.toml"))
+            .map_err(|e| anyhow!("Failed to copy pyproject.toml to temp dir: {}", e))?;
+        std::fs::copy(&lockfile_src, temp_dir.path().join("uv.lock"))
+            .map_err(|e| anyhow!("Failed to copy uv.lock to temp dir: {}", e))?;
+
+        Ok(temp_dir)
+    }
+
+    /// Runs `<program> lock --upgrade-package <upgrade_arg>` in `dir` with a
+    /// 60-second timeout. `upgrade_arg` is passed as a single process argument;
+    /// no shell is involved.
+    async fn run_uv_lock_upgrade(program: &OsStr, dir: &Path, upgrade_arg: &str) -> Result<Output> {
+        timeout(
+            Duration::from_secs(60),
+            tokio::process::Command::new(program)
+                .args(["lock", "--upgrade-package", upgrade_arg])
+                .current_dir(dir)
+                .output(),
+        )
+        .await
+        .map_err(|_| anyhow!("uv lock command timed out after 60 seconds"))?
+        .map_err(|e| anyhow!("Failed to run uv lock: {}", e))
+    }
+
+    /// Rejects package names and versions that are not safe to hand to `uv`.
+    ///
+    /// Both values come from advisory data and are untrusted. The name must
+    /// match the PEP 508 name charset (which also rules out a leading `-`, so it
+    /// cannot be read as an option); the version must use only PEP 440
+    /// characters and parse as a PEP 440 version. The charset check runs first
+    /// because `pep440_rs` tolerates surrounding whitespace. Returns the parsed
+    /// target version on success.
+    fn validate_upgrade_target(package_name: &str, target_version: &str) -> Result<Version> {
+        let name_bytes = package_name.as_bytes();
+        let name_valid = !name_bytes.is_empty()
+            && name_bytes.len() <= MAX_PACKAGE_NAME_LEN
+            && name_bytes[0].is_ascii_alphanumeric()
+            && name_bytes[name_bytes.len() - 1].is_ascii_alphanumeric()
+            && name_bytes
+                .iter()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'));
+        if !name_valid {
+            return Err(anyhow!(
+                "Security: invalid package name for upgrade simulation: {:?}",
+                package_name
+            ));
+        }
+
+        let version_charset_valid = !target_version.is_empty()
+            && target_version.len() <= MAX_VERSION_LEN
+            && !target_version.starts_with('-')
+            && target_version.bytes().all(|b| {
+                b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'!' | b'_' | b'-')
+            });
+        let parsed = Version::from_str(target_version).ok();
+        match parsed {
+            Some(version) if version_charset_valid => Ok(version),
+            _ => Err(anyhow!(
+                "Security: invalid target version for upgrade simulation: {:?}",
+                target_version
+            )),
+        }
+    }
+
+    /// PEP 503 name normalization: lowercase, and runs of `-`, `_`, `.` collapse
+    /// to a single `-`.
+    fn normalize_name(name: &str) -> String {
+        let mut normalized = String::with_capacity(name.len());
+        let mut previous_was_separator = false;
+        for c in name.trim().chars() {
+            if matches!(c, '-' | '_' | '.') {
+                if !previous_was_separator {
+                    normalized.push('-');
+                }
+                previous_was_separator = true;
+            } else {
+                normalized.push(c.to_ascii_lowercase());
+                previous_was_separator = false;
+            }
+        }
+        normalized
+    }
+
+    /// Summarizes a failed `uv lock` run as its trimmed stderr, falling back to
+    /// the exit status when stderr is empty.
+    fn summarize_stderr(stderr: &[u8], status: ExitStatus) -> String {
+        let text = String::from_utf8_lossy(stderr);
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            format!("uv lock exited with {}", status)
+        } else {
+            trimmed.to_string()
+        }
+    }
+
+    /// Implementation of [`UvLockSimulator::simulate_upgrade_to`] with the
+    /// `uv` program injectable, so tests can point it at a stub or a missing
+    /// binary without mutating the process-global PATH.
+    async fn simulate_upgrade_to_with(
+        program: &OsStr,
+        package_name: &str,
+        target_version: &str,
+        project_path: &Path,
+    ) -> Result<TargetedSimulationOutcome> {
+        // 1. Validate untrusted input before anything is executed
+        let target = Self::validate_upgrade_target(package_name, target_version)?;
+
+        // 2. Report a missing uv as a distinguishable outcome, not an error
+        if !Self::uv_available(program).await {
+            return Ok(TargetedSimulationOutcome::SimulatorUnavailable);
+        }
+
+        // 3. Copy the project into a sandbox and run the targeted upgrade
+        let temp_dir = Self::prepare_sandbox(project_path)?;
+        let upgrade_arg = format!("{}=={}", package_name, target_version);
+        let run_output = Self::run_uv_lock_upgrade(program, temp_dir.path(), &upgrade_arg).await?;
+
+        if !run_output.status.success() {
+            return Ok(TargetedSimulationOutcome::ResolutionFailed {
+                reason: Self::summarize_stderr(&run_output.stderr, run_output.status),
+            });
+        }
+
+        // 4. Parse the resulting uv.lock and compare against the target
+        let new_content = std::fs::read_to_string(temp_dir.path().join("uv.lock"))
+            .map_err(|e| anyhow!("Failed to read resulting uv.lock: {}", e))?;
+        let new_versions = Self::parse_versions(&new_content)?;
+
+        let normalized_name = Self::normalize_name(package_name);
+        let Some(resolved_version) = new_versions
+            .iter()
+            .find(|(k, _)| Self::normalize_name(k) == normalized_name)
+            .map(|(_, v)| v.clone())
+        else {
+            return Ok(TargetedSimulationOutcome::ResolutionFailed {
+                reason: format!("'{}' not present in resolved uv.lock", package_name),
+            });
+        };
+
+        let Ok(resolved) = Version::from_str(&resolved_version) else {
+            return Ok(TargetedSimulationOutcome::ResolutionFailed {
+                reason: format!(
+                    "unparseable resolved version '{}' for '{}'",
+                    resolved_version, package_name
+                ),
+            });
+        };
+
+        if resolved >= target {
+            Ok(TargetedSimulationOutcome::Resolved { resolved_version })
+        } else {
+            Ok(TargetedSimulationOutcome::ResolutionFailed {
+                reason: format!(
+                    "'{}' resolved to {}, older than target {}",
+                    package_name, resolved_version, target_version
+                ),
+            })
+        }
+    }
 }
 
 impl Default for UvLockAdapter {
@@ -58,54 +265,20 @@ impl UvLockSimulator for UvLockAdapter {
         package_name: &str,
         project_path: &Path,
     ) -> Result<SimulationResult> {
-        // 1. Verify uv is available in PATH
-        let uv_available = tokio::process::Command::new("uv")
-            .arg("--version")
-            .output()
-            .await
-            .map(|o| o.status.success())
-            .unwrap_or(false);
+        let program = OsStr::new(UV_PROGRAM);
 
-        if !uv_available {
+        // 1. Verify uv is available in PATH
+        if !Self::uv_available(program).await {
             return Err(anyhow!(
                 "`uv` CLI not found. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
             ));
         }
 
-        // 2. Verify required files exist in project_path
-        let pyproject_src = project_path.join("pyproject.toml");
-        let lockfile_src = project_path.join("uv.lock");
-
-        if !pyproject_src.exists() {
-            return Err(anyhow!(
-                "pyproject.toml not found in: {}",
-                project_path.display()
-            ));
-        }
-        if !lockfile_src.exists() {
-            return Err(anyhow!("uv.lock not found in: {}", project_path.display()));
-        }
-
-        // 3. Create temp directory and copy files into it
-        let temp_dir = tempfile::TempDir::new()
-            .map_err(|e| anyhow!("Failed to create temp directory: {}", e))?;
-
-        std::fs::copy(&pyproject_src, temp_dir.path().join("pyproject.toml"))
-            .map_err(|e| anyhow!("Failed to copy pyproject.toml to temp dir: {}", e))?;
-        std::fs::copy(&lockfile_src, temp_dir.path().join("uv.lock"))
-            .map_err(|e| anyhow!("Failed to copy uv.lock to temp dir: {}", e))?;
+        // 2-3. Verify required files exist and copy them into a temp directory
+        let temp_dir = Self::prepare_sandbox(project_path)?;
 
         // 4. Run: uv lock --upgrade-package <package_name> with 60-second timeout
-        let run_output = timeout(
-            Duration::from_secs(60),
-            tokio::process::Command::new("uv")
-                .args(["lock", "--upgrade-package", package_name])
-                .current_dir(temp_dir.path())
-                .output(),
-        )
-        .await
-        .map_err(|_| anyhow!("uv lock command timed out after 60 seconds"))?
-        .map_err(|e| anyhow!("Failed to run uv lock: {}", e))?;
+        let run_output = Self::run_uv_lock_upgrade(program, temp_dir.path(), package_name).await?;
 
         if !run_output.status.success() {
             let stderr = String::from_utf8_lossy(&run_output.stderr);
@@ -130,6 +303,21 @@ impl UvLockSimulator for UvLockAdapter {
             upgraded_to_version,
             resolved_versions: new_versions,
         })
+    }
+
+    async fn simulate_upgrade_to(
+        &self,
+        package_name: &str,
+        target_version: &str,
+        project_path: &Path,
+    ) -> Result<TargetedSimulationOutcome> {
+        Self::simulate_upgrade_to_with(
+            OsStr::new(UV_PROGRAM),
+            package_name,
+            target_version,
+            project_path,
+        )
+        .await
     }
 }
 
@@ -227,5 +415,326 @@ version = "0.1.0"
                 .map(|s| s.as_str()),
             Some("2024.2.2")
         );
+    }
+
+    // --- simulate_upgrade_to (#966) ---
+
+    fn repo_path(relative: &str) -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
+    }
+
+    /// Temp project holding a minimal pyproject.toml and the "before" fixture
+    /// lock (requests 2.31.0) as its uv.lock.
+    fn make_project() -> tempfile::TempDir {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("pyproject.toml"),
+            "[project]\nname = \"stub-project\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::copy(
+            repo_path("tests/fixtures/sample_uv_lock_before.lock"),
+            dir.path().join("uv.lock"),
+        )
+        .unwrap();
+        dir
+    }
+
+    fn real_uv_available() -> bool {
+        std::process::Command::new("uv")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_missing_uv_is_simulator_unavailable() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/nonexistent/uv");
+        let outcome = UvLockAdapter::simulate_upgrade_to_with(
+            program.as_os_str(),
+            "requests",
+            "2.32.0",
+            project.path(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(outcome, TargetedSimulationOutcome::SimulatorUnavailable);
+    }
+
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_rejects_invalid_input_before_running_uv() {
+        let project = make_project();
+        // A missing program would yield SimulatorUnavailable if validation were
+        // skipped, so an Err here proves validation runs first.
+        let program = repo_path("tests/fixtures/uv_stub/nonexistent/uv");
+        let result = UvLockAdapter::simulate_upgrade_to_with(
+            program.as_os_str(),
+            "requests; rm -rf /",
+            "2.32.0",
+            project.path(),
+        )
+        .await;
+        assert!(result.unwrap_err().to_string().contains("Security"));
+    }
+
+    #[test]
+    fn test_validate_upgrade_target_rejects_unsafe_names() {
+        for name in [
+            "",
+            "requests; rm -rf /",
+            "req uests",
+            "-r",
+            "$(x)",
+            "requests-",
+            "requests`id`",
+            "requests|cat",
+        ] {
+            assert!(
+                UvLockAdapter::validate_upgrade_target(name, "2.32.0").is_err(),
+                "name {:?} should be rejected",
+                name
+            );
+        }
+        let too_long = "a".repeat(MAX_PACKAGE_NAME_LEN + 1);
+        assert!(UvLockAdapter::validate_upgrade_target(&too_long, "2.32.0").is_err());
+    }
+
+    #[test]
+    fn test_validate_upgrade_target_rejects_unsafe_versions() {
+        for version in [
+            "",
+            "2.31.0 ",
+            " 2.31.0",
+            "2.31.0;id",
+            "--x",
+            ">=2",
+            "abc",
+            "2.*",
+        ] {
+            assert!(
+                UvLockAdapter::validate_upgrade_target("requests", version).is_err(),
+                "version {:?} should be rejected",
+                version
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_upgrade_target_accepts_valid_pep508_names_and_pep440_versions() {
+        for (name, version) in [
+            ("requests", "2.32.0"),
+            ("Foo_Bar.baz", "1.0"),
+            ("a", "1!2.0.post1+local.1"),
+            ("zope.interface", "6.0rc1"),
+        ] {
+            assert!(
+                UvLockAdapter::validate_upgrade_target(name, version).is_ok(),
+                "{}=={} should be accepted",
+                name,
+                version
+            );
+        }
+    }
+
+    #[test]
+    fn test_normalize_name_follows_pep503() {
+        assert_eq!(UvLockAdapter::normalize_name("Foo_Bar.baz"), "foo-bar-baz");
+        assert_eq!(UvLockAdapter::normalize_name("a--_.b"), "a-b");
+        assert_eq!(UvLockAdapter::normalize_name("Requests"), "requests");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_summarize_stderr_trims_and_falls_back_to_exit_status() {
+        use std::os::unix::process::ExitStatusExt;
+        let status = ExitStatus::from_raw(1 << 8);
+        assert_eq!(
+            UvLockAdapter::summarize_stderr(b"  conflict detail\n", status),
+            "conflict detail"
+        );
+        assert!(UvLockAdapter::summarize_stderr(b" \n", status).starts_with("uv lock exited with"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_resolved_at_or_above_target_keeps_original_lock() {
+        let project = make_project();
+        let original_lock = std::fs::read(project.path().join("uv.lock")).unwrap();
+        let program = repo_path("tests/fixtures/uv_stub/success/uv");
+
+        let outcome = UvLockAdapter::simulate_upgrade_to_with(
+            program.as_os_str(),
+            "requests",
+            "2.32.0",
+            project.path(),
+        )
+        .await
+        .unwrap();
+
+        // The stub resolves 2.32.3, which is newer than the 2.32.0 target
+        assert_eq!(
+            outcome,
+            TargetedSimulationOutcome::Resolved {
+                resolved_version: "2.32.3".to_string()
+            }
+        );
+        assert_eq!(
+            std::fs::read(project.path().join("uv.lock")).unwrap(),
+            original_lock
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_matches_package_name_by_pep503() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/success/uv");
+        let outcome = UvLockAdapter::simulate_upgrade_to_with(
+            program.as_os_str(),
+            "Requests",
+            "2.32.3",
+            project.path(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            outcome,
+            TargetedSimulationOutcome::Resolved {
+                resolved_version: "2.32.3".to_string()
+            }
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_older_than_target_is_resolution_failure() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/success/uv");
+        let outcome = UvLockAdapter::simulate_upgrade_to_with(
+            program.as_os_str(),
+            "requests",
+            "2.33.0",
+            project.path(),
+        )
+        .await
+        .unwrap();
+        match outcome {
+            TargetedSimulationOutcome::ResolutionFailed { reason } => {
+                assert!(reason.contains("older than target 2.33.0"), "{}", reason)
+            }
+            other => panic!("expected ResolutionFailed, got {:?}", other),
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_package_missing_from_lock_is_resolution_failure() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/success/uv");
+        let outcome = UvLockAdapter::simulate_upgrade_to_with(
+            program.as_os_str(),
+            "urllib4",
+            "1.0",
+            project.path(),
+        )
+        .await
+        .unwrap();
+        match outcome {
+            TargetedSimulationOutcome::ResolutionFailed { reason } => {
+                assert!(reason.contains("not present"), "{}", reason)
+            }
+            other => panic!("expected ResolutionFailed, got {:?}", other),
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_conflict_captures_uv_stderr() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/conflict/uv");
+        let outcome = UvLockAdapter::simulate_upgrade_to_with(
+            program.as_os_str(),
+            "requests",
+            "2.31.0",
+            project.path(),
+        )
+        .await
+        .unwrap();
+        match outcome {
+            TargetedSimulationOutcome::ResolutionFailed { reason } => {
+                assert!(reason.contains("unsatisfiable"), "{}", reason)
+            }
+            other => panic!("expected ResolutionFailed, got {:?}", other),
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_missing_pyproject_is_error() {
+        let project = tempfile::TempDir::new().unwrap();
+        let program = repo_path("tests/fixtures/uv_stub/success/uv");
+        let result = UvLockAdapter::simulate_upgrade_to_with(
+            program.as_os_str(),
+            "requests",
+            "2.32.0",
+            project.path(),
+        )
+        .await;
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("pyproject.toml not found"));
+    }
+
+    // Real `uv` (needs network access to PyPI, so these fail on an offline
+    // machine that has `uv` installed); skipped when `uv` is not on PATH,
+    // matching the `src/cli/runner.rs` precedent. CI runners do not install
+    // `uv`, so the stub-based tests above are the deterministic ones.
+
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_real_uv_resolves_suggest_fix_project() {
+        if !real_uv_available() {
+            return;
+        }
+        let project = repo_path("examples/suggest-fix-project");
+        let original_lock = std::fs::read(project.join("uv.lock")).unwrap();
+
+        let outcome = UvLockAdapter::new()
+            .simulate_upgrade_to("requests", "2.32.0", &project)
+            .await
+            .unwrap();
+
+        match outcome {
+            TargetedSimulationOutcome::Resolved { resolved_version } => {
+                let resolved = Version::from_str(&resolved_version).unwrap();
+                assert!(resolved >= Version::from_str("2.32.0").unwrap());
+            }
+            other => panic!("expected Resolved, got {:?}", other),
+        }
+        assert_eq!(
+            std::fs::read(project.join("uv.lock")).unwrap(),
+            original_lock
+        );
+    }
+
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_real_uv_conflict_in_sample_project() {
+        if !real_uv_available() {
+            return;
+        }
+        // sample-project pins requests==2.25.0, so 2.31.0 is unsatisfiable
+        let project = repo_path("examples/sample-project");
+        let outcome = UvLockAdapter::new()
+            .simulate_upgrade_to("requests", "2.31.0", &project)
+            .await
+            .unwrap();
+        match outcome {
+            TargetedSimulationOutcome::ResolutionFailed { reason } => {
+                assert!(reason.contains("unsatisfiable"), "{}", reason)
+            }
+            other => panic!("expected ResolutionFailed, got {:?}", other),
+        }
     }
 }

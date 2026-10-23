@@ -1,0 +1,14 @@
+#!/bin/sh
+# Stub `uv` for UvLockAdapter::simulate_upgrade_to tests (#966).
+# `uv --version` succeeds; every other invocation fails the way a real
+# `uv lock --upgrade-package` does when the target conflicts with a pin.
+if [ "$1" = "--version" ]; then
+    echo "uv 0.0.0-stub"
+    exit 0
+fi
+cat >&2 <<'MSG'
+  × No solution found when resolving dependencies:
+  ╰─▶ Because your project depends on requests==2.25.0 and requests==2.31.0,
+      we can conclude that your project's requirements are unsatisfiable.
+MSG
+exit 1
