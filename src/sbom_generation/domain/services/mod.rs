@@ -1,3 +1,5 @@
+#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
+pub mod advisory_range_matcher;
 pub mod baseline_filter;
 pub mod cve_filter;
 pub mod dependency_diff_analyzer;
