@@ -12,7 +12,7 @@ pub struct AdvisoryMatch {
     /// The smallest `fixed` version greater than the locked version, among the
     /// ranges that matched, as written in the advisory. `None` when no matched
     /// range carries a fix (including a match via the explicit `versions` list
-    /// only).
+    /// only). Surrounding whitespace is trimmed.
     pub fixed_version: Option<String>,
 }
 
@@ -24,6 +24,17 @@ pub struct AdvisoryMatch {
 pub struct AdvisoryRangeMatcher;
 
 impl AdvisoryRangeMatcher {
+    /// Returns `true` when `advisory` lists `package_name` in any `affected`
+    /// entry, comparing names after PEP 503 normalization (so `Flask_Login`
+    /// names `flask-login`). Says nothing about whether a version is affected.
+    pub fn names_package(advisory: &Advisory, package_name: &str) -> bool {
+        let target = normalize_name(package_name);
+        advisory
+            .affected
+            .iter()
+            .any(|package| normalize_name(&package.name) == target)
+    }
+
     /// Returns `Some` iff `locked_version` of `package_name` is affected.
     ///
     /// Package names are compared after PEP 503 normalization, and every
@@ -84,7 +95,7 @@ impl AdvisoryRangeMatcher {
         }
 
         affected.then(|| AdvisoryMatch {
-            fixed_version: fixed.map(|(_, raw)| raw.to_string()),
+            fixed_version: fixed.map(|(_, raw)| raw.trim().to_string()),
         })
     }
 
@@ -136,8 +147,8 @@ fn rank(verdict: IncidentVerdict) -> u8 {
 }
 
 /// PEP 503 name normalization: lowercase, and runs of `-`, `_`, `.` collapse
-/// to a single `-`.
-fn normalize_name(name: &str) -> String {
+/// to a single `-`. Surrounding whitespace is ignored.
+pub fn normalize_name(name: &str) -> String {
     let mut normalized = String::with_capacity(name.len());
     let mut previous_was_separator = false;
     for c in name.trim().chars() {
@@ -230,6 +241,29 @@ mod tests {
             vec![range(Some("2.3.0"), Some("2.31.0"), None)],
             &[],
         )])
+    }
+
+    #[test]
+    fn test_names_package_uses_pep503_normalization() {
+        let advisory = advisory(vec![package("Flask_Login", vec![], &["0.1"])]);
+
+        assert!(AdvisoryRangeMatcher::names_package(
+            &advisory,
+            "flask-login"
+        ));
+        assert!(AdvisoryRangeMatcher::names_package(
+            &advisory,
+            "Flask.Login"
+        ));
+        assert!(!AdvisoryRangeMatcher::names_package(&advisory, "flask"));
+    }
+
+    #[test]
+    fn test_names_package_false_for_empty_affected() {
+        assert!(!AdvisoryRangeMatcher::names_package(
+            &advisory(vec![]),
+            "requests"
+        ));
     }
 
     #[test]
@@ -533,5 +567,25 @@ mod tests {
             ]),
             IncidentVerdict::AffectedFixReleased
         );
+    }
+
+    #[test]
+    fn test_match_package_trims_fixed_version() {
+        let advisory = advisory(vec![package(
+            "requests",
+            vec![range(Some("0"), Some(" 2.31.0 \n"), None)],
+            &[],
+        )]);
+
+        assert_eq!(
+            fixed_of(&advisory, "requests", "2.25.0"),
+            Some(Some("2.31.0".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_normalize_name_is_pep503() {
+        assert_eq!(normalize_name(" Flask__Login.Ext "), "flask-login-ext");
+        assert_eq!(normalize_name("requests"), "requests");
     }
 }
