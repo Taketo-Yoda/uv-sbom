@@ -19,11 +19,11 @@
 //! HTTP status validation is the caller's responsibility — this function only
 //! concerns itself with body size.
 //!
-//! All four outbound network adapters — `OsvClient`, `PyPiLicenseRepository`,
-//! `PyPiMaintenanceRepository` and `PyPiCompatibilityClient` — call this
-//! function (Issues #859, #860, #861, #862). No adapter carries its own
-//! inline size-check any more; new network adapters should call this rather
-//! than reimplementing the guard.
+//! All five outbound network adapters — `OsvClient`, `PyPiLicenseRepository`,
+//! `PyPiMaintenanceRepository`, `PyPiCompatibilityClient` and
+//! `PyPiReleaseClient` — call this function (Issues #859, #860, #861, #862,
+//! #965). No adapter carries its own inline size-check any more; new network
+//! adapters should call this rather than reimplementing the guard.
 
 use crate::shared::Result;
 use futures::stream::StreamExt;
