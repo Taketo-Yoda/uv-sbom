@@ -4,6 +4,7 @@ pub mod dependency_diff;
 pub mod dependency_graph;
 pub mod enriched_package;
 pub mod exploitability;
+pub mod incident_target;
 pub mod license_info;
 pub mod license_policy;
 pub mod package;

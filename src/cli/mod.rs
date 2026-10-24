@@ -17,10 +17,10 @@ use crate::sbom_generation::domain::vulnerability::Severity;
 #[command(about = "Generate SBOMs for Python projects managed by uv", long_about = None)]
 pub struct Args {
     /// Output format: json or markdown (default: json; markdown in --incident mode)
-    ///
-    /// No clap default, so an explicit `--format json` is distinguishable from no
-    /// flag: normal mode resolves CLI > config > json, and incident mode uses the
-    /// CLI value or markdown without reading the config file's `format` (#968).
+    // No clap default, so an explicit `--format json` is distinguishable from no
+    // flag: normal mode resolves CLI > config > json, and incident mode uses the
+    // CLI value or markdown without reading the config file's `format` (#968).
+    // A plain comment, not `///`, so clap does not print it in `--help`.
     #[arg(short, long)]
     pub format: Option<OutputFormat>,
 
@@ -161,18 +161,25 @@ pub struct Args {
 
     /// Incident response: check whether one advisory (GHSA-, PYSEC-, CVE-, OSV- or
     /// MAL- ID) affects this project, whether the fix is released, and which
-    /// command to run. Outputs Markdown unless --format is given. With
-    /// --workspace, evaluates every workspace member and prints one combined
-    /// report.
-    ///
-    /// Intentionally has no config-file key: this is a one-off incident query,
-    /// not a persistent policy setting (same rationale as `--explain`, see
-    /// Issue #767). The config file's `format` and vulnerability/license/
-    /// maintenance check keys are ignored in this mode.
+    /// command to run. For an advisory not yet in OSV, pass a quoted package
+    /// range instead, e.g. "foo<2.3.2" or "foo>=2.0,<2.3.2" (operators >=, <,
+    /// <= only; the quotes are needed because < is a shell redirection).
+    /// Outputs Markdown unless --format is given. With --workspace, evaluates
+    /// every workspace member and prints one combined report. The config
+    /// file's `format` and vulnerability/license/maintenance check keys are
+    /// ignored in this mode.
+    //
+    // Developer notes (plain comments, so clap does not print them in `--help`):
+    // - The value is parsed after `--lang` is known (by
+    //   `cli::incident::parse_incident_target` in `main`), not by a clap value
+    //   parser, so that a malformed value is reported in the user's language
+    //   (#963, #832).
+    // - Intentionally has no config-file key: this is a one-off incident query,
+    //   not a persistent policy setting (same rationale as `--explain`, see
+    //   Issue #767).
     #[arg(
         long,
-        value_name = "ADVISORY_ID",
-        value_parser = parse_advisory_id,
+        value_name = "ID_OR_RANGE",
         conflicts_with_all = INCIDENT_CONFLICTS,
     )]
     pub incident: Option<String>,
@@ -202,9 +209,6 @@ const INCIDENT_CONFLICTS: [&str; 18] = [
     "verify_links",
 ];
 
-/// Advisory ID prefixes accepted by `--incident`, in their canonical case.
-const ADVISORY_ID_PREFIXES: [&str; 5] = ["GHSA-", "PYSEC-", "CVE-", "OSV-", "MAL-"];
-
 /// Default depth limit for `--show-dependency-tree` when `--dependency-tree-depth`
 /// is not explicitly provided.
 pub const DEFAULT_DEPENDENCY_TREE_DEPTH: u32 = 3;
@@ -212,31 +216,6 @@ pub const DEFAULT_DEPENDENCY_TREE_DEPTH: u32 = 3;
 fn parse_lang(s: &str) -> Result<Locale, String> {
     Locale::from_str(s)
         .ok_or_else(|| format!("Invalid language: '{}'. Supported languages: en, ja", s))
-}
-
-/// Validates an `--incident` advisory ID and normalizes its prefix to upper case.
-///
-/// Only the prefix is normalized: the rest is kept as typed, because OSV IDs
-/// can be case-sensitive (GHSA suffixes are lower case, e.g.
-/// `GHSA-j8r2-6x86-q33q`). Kept as a standalone function so #963 can widen it
-/// to accept a manual range spec without touching the flag definition.
-fn parse_advisory_id(s: &str) -> Result<String, String> {
-    let id = s.trim();
-    ADVISORY_ID_PREFIXES
-        .iter()
-        .find_map(|prefix| {
-            let head = id.get(..prefix.len())?;
-            let rest = &id[prefix.len()..];
-            (head.eq_ignore_ascii_case(prefix) && !rest.is_empty())
-                .then(|| format!("{}{}", prefix, rest))
-        })
-        .ok_or_else(|| {
-            format!(
-                "Invalid advisory ID: '{}'. Expected an ID starting with one of: {}",
-                s,
-                ADVISORY_ID_PREFIXES.join(", ")
-            )
-        })
 }
 
 fn parse_severity_threshold(s: &str) -> Result<Severity, String> {
@@ -442,67 +421,11 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_advisory_id_accepts_each_prefix() {
-        for id in [
-            "GHSA-j8r2-6x86-q33q",
-            "PYSEC-2023-74",
-            "CVE-2023-32681",
-            "OSV-2020-111",
-            "MAL-2024-1234",
-        ] {
-            assert_eq!(parse_advisory_id(id).unwrap(), id);
-        }
-    }
-
-    #[test]
-    fn test_parse_advisory_id_normalizes_prefix_only() {
-        assert_eq!(
-            parse_advisory_id("ghsa-j8r2-6x86-q33q").unwrap(),
-            "GHSA-j8r2-6x86-q33q"
-        );
-        assert_eq!(
-            parse_advisory_id("cve-2023-32681").unwrap(),
-            "CVE-2023-32681"
-        );
-        assert_eq!(parse_advisory_id("Pysec-2023-74").unwrap(), "PYSEC-2023-74");
-    }
-
-    #[test]
-    fn test_parse_advisory_id_trims_whitespace() {
-        assert_eq!(
-            parse_advisory_id("  CVE-2023-32681 ").unwrap(),
-            "CVE-2023-32681"
-        );
-    }
-
-    #[test]
-    fn test_parse_advisory_id_rejects_invalid() {
-        for id in [
-            "foo",
-            "",
-            "CVE-",
-            "GHSA",
-            "CVE2023-32681",
-            "XCVE-2023-1",
-            "日本語",
-        ] {
-            let err = parse_advisory_id(id).unwrap_err();
-            assert!(err.contains("Invalid advisory ID"), "{id}: {err}");
-        }
-    }
-
-    #[test]
-    fn test_incident_flag_parses_and_normalizes() {
-        let args = Args::parse_from(["uv-sbom", "--incident", "ghsa-j8r2-6x86-q33q"]);
-        assert_eq!(args.incident.as_deref(), Some("GHSA-j8r2-6x86-q33q"));
-    }
-
-    #[test]
-    fn test_incident_flag_rejects_malformed_id() {
-        use clap::error::ErrorKind;
-
-        let result = Args::try_parse_from(["uv-sbom", "--incident", "foo"]);
-        assert_eq!(result.unwrap_err().kind(), ErrorKind::ValueValidation);
+    fn test_incident_flag_keeps_raw_value() {
+        // Classification and validation happen in `cli::incident`, after the
+        // locale is known.
+        let args = Args::parse_from(["uv-sbom", "--incident", "requests>=2.0,<2.31.0"]);
+        assert_eq!(args.incident.as_deref(), Some("requests>=2.0,<2.31.0"));
     }
 
     #[test]
