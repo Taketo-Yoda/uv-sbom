@@ -18,6 +18,28 @@ pub struct IncidentRequest {
     pub exclude_groups: Vec<String>,
 }
 
+/// WorkspaceIncidentRequest - Internal request DTO for
+/// `RespondToIncidentUseCase::execute_workspace` (#969).
+///
+/// A uv workspace has one `uv.lock`, so the advisory is evaluated once per
+/// member against that shared lockfile. The CLI reads the member list from the
+/// lockfile and expands `--production-only` into `exclude_groups`, as it does
+/// for `IncidentRequest`.
+#[derive(Debug, Clone)]
+pub struct WorkspaceIncidentRequest {
+    /// Advisory ID as supplied by the user (CVE, GHSA, PYSEC, ...).
+    pub advisory_id: String,
+    /// Workspace root holding the shared `uv.lock`; also the directory the
+    /// upgrade dry-run is resolved in.
+    pub workspace_root: PathBuf,
+    /// Workspace member names, in the order the report lists them.
+    pub member_names: Vec<String>,
+    /// `--exclude` patterns; matching packages are out of scope in every member.
+    pub exclude_patterns: Vec<String>,
+    /// `--exclude-groups` names; packages reachable only from these groups are out of scope.
+    pub exclude_groups: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

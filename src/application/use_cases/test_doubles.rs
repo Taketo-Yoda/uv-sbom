@@ -250,6 +250,7 @@ pub(crate) struct MockUvLockSimulator {
     calls: Mutex<Vec<String>>,
     targeted: HashMap<String, std::result::Result<TargetedSimulationOutcome, String>>,
     targeted_calls: Mutex<Vec<(String, String)>>,
+    targeted_paths: Mutex<Vec<std::path::PathBuf>>,
 }
 
 impl MockUvLockSimulator {
@@ -303,6 +304,11 @@ impl MockUvLockSimulator {
     pub(crate) fn targeted_call_log(&self) -> Vec<(String, String)> {
         self.targeted_calls.lock().unwrap().clone()
     }
+
+    /// Returns the project paths passed to `simulate_upgrade_to`, in call order.
+    pub(crate) fn targeted_path_log(&self) -> Vec<std::path::PathBuf> {
+        self.targeted_paths.lock().unwrap().clone()
+    }
 }
 
 #[async_trait]
@@ -328,12 +334,16 @@ impl UvLockSimulator for MockUvLockSimulator {
         &self,
         package_name: &str,
         target_version: &str,
-        _project_path: &std::path::Path,
+        project_path: &std::path::Path,
     ) -> Result<TargetedSimulationOutcome> {
         self.targeted_calls
             .lock()
             .unwrap()
             .push((package_name.to_string(), target_version.to_string()));
+        self.targeted_paths
+            .lock()
+            .unwrap()
+            .push(project_path.to_path_buf());
 
         match self.targeted.get(package_name) {
             Some(Ok(outcome)) => Ok(outcome.clone()),

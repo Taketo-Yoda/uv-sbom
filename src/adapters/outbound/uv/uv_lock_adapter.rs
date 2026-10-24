@@ -3,15 +3,18 @@ use async_trait::async_trait;
 use pep440_rs::Version;
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::process::{ExitStatus, Output};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::time::timeout;
 
+use super::UvWorkspaceReader;
+use crate::ports::outbound::WorkspaceReader;
 use crate::sbom_generation::domain::{
     SimulationResult, TargetedSimulationOutcome, UvLockSimulator,
 };
+use crate::shared::security::{read_file_with_security, MAX_FILE_SIZE};
 
 /// Program name used to invoke the `uv` CLI (resolved via PATH).
 const UV_PROGRAM: &str = "uv";
@@ -25,7 +28,7 @@ const MAX_VERSION_LEN: usize = 100;
 /// Adapter that implements [`UvLockSimulator`] by shelling out to the `uv` CLI.
 ///
 /// Uses a temporary directory strategy: copies `pyproject.toml` and `uv.lock`
-/// to a temp dir, runs `uv lock --upgrade-package <pkg>` (or `<pkg>==<version>`
+/// (plus, for a uv workspace root, every member's `pyproject.toml`) to a temp dir, runs `uv lock --upgrade-package <pkg>` (or `<pkg>==<version>`
 /// for [`UvLockSimulator::simulate_upgrade_to`]), then parses the resulting lock
 /// file to determine resolved versions.
 pub struct UvLockAdapter;
@@ -72,6 +75,11 @@ impl UvLockAdapter {
 
     /// Verifies the project files exist and copies them into a fresh temp dir.
     ///
+    /// Every file is read with `read_file_with_security` (symlinks and
+    /// non-regular files rejected, size bounded, metadata re-verified after
+    /// opening) and written into the sandbox, rather than copied with
+    /// `std::fs::copy`, which would follow a symlink.
+    ///
     /// The returned `TempDir` removes itself when dropped, so the original
     /// project's `uv.lock` is never touched.
     fn prepare_sandbox(project_path: &Path) -> Result<tempfile::TempDir> {
@@ -91,12 +99,96 @@ impl UvLockAdapter {
         let temp_dir = tempfile::TempDir::new()
             .map_err(|e| anyhow!("Failed to create temp directory: {}", e))?;
 
-        std::fs::copy(&pyproject_src, temp_dir.path().join("pyproject.toml"))
+        Self::copy_checked(&pyproject_src, &temp_dir.path().join("pyproject.toml"))
             .map_err(|e| anyhow!("Failed to copy pyproject.toml to temp dir: {}", e))?;
-        std::fs::copy(&lockfile_src, temp_dir.path().join("uv.lock"))
+        Self::copy_checked(&lockfile_src, &temp_dir.path().join("uv.lock"))
             .map_err(|e| anyhow!("Failed to copy uv.lock to temp dir: {}", e))?;
 
+        Self::copy_workspace_member_manifests(project_path, temp_dir.path())?;
+
         Ok(temp_dir)
+    }
+
+    /// For a uv workspace root, copies each member's `pyproject.toml` into
+    /// `sandbox` at the same relative path, so `uv lock` in the sandbox sees
+    /// the whole workspace (#969). A non-workspace lockfile has no members,
+    /// so this is a no-op for single projects.
+    ///
+    /// Member paths come from `uv.lock` and are untrusted, so a member is
+    /// copied only when all of these hold:
+    /// - its path is lexically inside `project_path` (no `..`, no absolute path);
+    /// - its directory, with symlinks resolved, is still inside the resolved
+    ///   `project_path` (a symlinked member directory pointing elsewhere is
+    ///   skipped);
+    /// - its `pyproject.toml` passes `read_file_with_security` (not a symlink,
+    ///   a regular file, size bounded).
+    ///
+    /// A member failing any check, or without a `pyproject.toml`, is skipped,
+    /// and `uv lock` in the sandbox then reports what is missing.
+    ///
+    /// # Errors
+    /// Returns an error when the lockfile's member list cannot be read, or a
+    /// validated manifest cannot be written into the sandbox.
+    fn copy_workspace_member_manifests(project_path: &Path, sandbox: &Path) -> Result<()> {
+        let members = UvWorkspaceReader::new().read_workspace_members(project_path)?;
+        if members.is_empty() {
+            return Ok(());
+        }
+        let canonical_root = project_path
+            .canonicalize()
+            .map_err(|e| anyhow!("Failed to resolve workspace root: {}", e))?;
+        for member in members {
+            let Some(relative) = Self::member_relative_path(project_path, &member.absolute_path)
+            else {
+                continue;
+            };
+            let member_dir = project_path.join(&relative);
+            let inside_root = member_dir
+                .canonicalize()
+                .is_ok_and(|resolved| resolved.starts_with(&canonical_root));
+            if !inside_root {
+                continue;
+            }
+            let Ok(content) = read_file_with_security(
+                &member_dir.join("pyproject.toml"),
+                "workspace member pyproject.toml",
+                MAX_FILE_SIZE,
+            ) else {
+                continue;
+            };
+            let target_dir = sandbox.join(&relative);
+            std::fs::create_dir_all(&target_dir).map_err(|e| {
+                anyhow!(
+                    "Failed to create workspace member directory in temp dir: {}",
+                    e
+                )
+            })?;
+            std::fs::write(target_dir.join("pyproject.toml"), content).map_err(|e| {
+                anyhow!(
+                    "Failed to copy workspace member pyproject.toml to temp dir: {}",
+                    e
+                )
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Reads `source` with `read_file_with_security` and writes it to `target`.
+    fn copy_checked(source: &Path, target: &Path) -> Result<()> {
+        let content = read_file_with_security(source, "project file", MAX_FILE_SIZE)?;
+        std::fs::write(target, content)?;
+        Ok(())
+    }
+
+    /// The path of `member_path` relative to `root`, or `None` when it is not
+    /// strictly inside `root` (only plain, non-empty path components).
+    fn member_relative_path(root: &Path, member_path: &Path) -> Option<PathBuf> {
+        let relative = member_path.strip_prefix(root).ok()?;
+        let mut components = relative.components().peekable();
+        components.peek()?;
+        components
+            .all(|component| matches!(component, Component::Normal(_)))
+            .then(|| relative.to_path_buf())
     }
 
     /// Runs `<program> lock --upgrade-package <upgrade_arg>` in `dir` with a
@@ -736,5 +828,166 @@ version = "0.1.0"
             }
             other => panic!("expected ResolutionFailed, got {:?}", other),
         }
+    }
+
+    // --- workspace sandbox (#969) ---
+
+    /// Workspace root whose uv.lock lists `packages/api` and an untrusted
+    /// `../outside` member, each with a pyproject.toml on disk.
+    fn make_workspace() -> tempfile::TempDir {
+        let dir = tempfile::TempDir::new().unwrap();
+        let root = dir.path().join("ws");
+        std::fs::create_dir_all(root.join("packages/api")).unwrap();
+        std::fs::create_dir_all(dir.path().join("outside")).unwrap();
+        std::fs::write(
+            root.join("pyproject.toml"),
+            "[tool.uv.workspace]\nmembers = [\"packages/api\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("packages/api/pyproject.toml"),
+            "[project]\nname = \"api\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("outside/pyproject.toml"),
+            "[project]\nname = \"outside\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("uv.lock"),
+            r#"version = 1
+
+[manifest]
+members = ["api", "outside"]
+
+[[package]]
+name = "api"
+version = "0.1.0"
+source = { virtual = "packages/api" }
+
+[[package]]
+name = "outside"
+version = "0.1.0"
+source = { virtual = "../outside" }
+"#,
+        )
+        .unwrap();
+        dir
+    }
+
+    #[test]
+    fn test_prepare_sandbox_copies_workspace_member_manifests_inside_root_only() {
+        let dir = make_workspace();
+        let root = dir.path().join("ws");
+
+        let sandbox = UvLockAdapter::prepare_sandbox(&root).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(sandbox.path().join("packages/api/pyproject.toml")).unwrap(),
+            "[project]\nname = \"api\"\nversion = \"0.1.0\"\n"
+        );
+        assert!(!sandbox.path().join("../outside/pyproject.toml").exists());
+        let entries: Vec<_> = std::fs::read_dir(sandbox.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        assert!(!entries.contains(&"outside".to_string()), "{entries:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_prepare_sandbox_skips_symlinked_member_directory_and_manifest() {
+        let dir = make_workspace();
+        let root = dir.path().join("ws");
+        // `packages/api` now points outside the root.
+        std::fs::remove_dir_all(root.join("packages/api")).unwrap();
+        std::os::unix::fs::symlink(dir.path().join("outside"), root.join("packages/api")).unwrap();
+
+        let sandbox = UvLockAdapter::prepare_sandbox(&root).unwrap();
+        assert!(!sandbox.path().join("packages/api/pyproject.toml").exists());
+
+        // A real member directory whose pyproject.toml is a symlink.
+        std::fs::remove_file(root.join("packages/api")).unwrap();
+        std::fs::create_dir_all(root.join("packages/api")).unwrap();
+        std::os::unix::fs::symlink(
+            dir.path().join("outside/pyproject.toml"),
+            root.join("packages/api/pyproject.toml"),
+        )
+        .unwrap();
+
+        let sandbox = UvLockAdapter::prepare_sandbox(&root).unwrap();
+        assert!(!sandbox.path().join("packages/api/pyproject.toml").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_prepare_sandbox_rejects_symlinked_root_pyproject() {
+        let project = make_project();
+        let real = project.path().join("real.toml");
+        std::fs::rename(project.path().join("pyproject.toml"), &real).unwrap();
+        std::os::unix::fs::symlink(&real, project.path().join("pyproject.toml")).unwrap();
+
+        let err = UvLockAdapter::prepare_sandbox(project.path()).unwrap_err();
+
+        assert!(err.to_string().contains("pyproject.toml"), "{err}");
+    }
+
+    #[test]
+    fn test_prepare_sandbox_single_project_copies_only_root_files() {
+        let project = make_project();
+
+        let sandbox = UvLockAdapter::prepare_sandbox(project.path()).unwrap();
+
+        let mut entries: Vec<_> = std::fs::read_dir(sandbox.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        entries.sort();
+        assert_eq!(entries, vec!["pyproject.toml", "uv.lock"]);
+    }
+
+    #[test]
+    fn test_member_relative_path_rejects_paths_outside_root() {
+        let root = Path::new("/ws");
+        assert_eq!(
+            UvLockAdapter::member_relative_path(root, Path::new("/ws/packages/api")),
+            Some(PathBuf::from("packages/api"))
+        );
+        assert_eq!(
+            UvLockAdapter::member_relative_path(root, Path::new("/ws/../outside")),
+            None
+        );
+        assert_eq!(
+            UvLockAdapter::member_relative_path(root, Path::new("/elsewhere/api")),
+            None
+        );
+        assert_eq!(
+            UvLockAdapter::member_relative_path(root, Path::new("/ws")),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn test_simulate_upgrade_to_real_uv_resolves_workspace_root() {
+        if !real_uv_available() {
+            return;
+        }
+        let project = repo_path("examples/workspace");
+        let original_lock = std::fs::read(project.join("uv.lock")).unwrap();
+
+        let outcome = UvLockAdapter::new()
+            .simulate_upgrade_to("starlette", "1.0.0", &project)
+            .await
+            .unwrap();
+
+        assert!(
+            matches!(outcome, TargetedSimulationOutcome::Resolved { .. }),
+            "{outcome:?}"
+        );
+        assert_eq!(
+            std::fs::read(project.join("uv.lock")).unwrap(),
+            original_lock
+        );
     }
 }

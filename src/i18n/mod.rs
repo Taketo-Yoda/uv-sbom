@@ -332,6 +332,12 @@ pub struct Messages {
     pub incident_guidance_release_lookup_failed: &'static str,
     pub incident_guidance_not_from_pypi: &'static str,
     pub warn_incident_release_lookup_failed: &'static str,
+    // Workspace incident report strings (#969)
+    pub incident_member_heading: &'static str,
+    pub incident_label_member_verdict: &'static str,
+    pub incident_packages_not_in_member: &'static str,
+    pub incident_status_not_applicable_workspace: &'static str,
+    pub incident_workspace_aggregate: &'static str,
 }
 
 impl Messages {
@@ -664,6 +670,13 @@ static EN_MESSAGES: Messages = Messages {
     incident_guidance_release_lookup_failed: "Could not check whether **{}** {} is released: {}. Check PyPI manually before upgrading.",
     incident_guidance_not_from_pypi: "**{}** is not installed from PyPI; check its source for a release containing the fix ({}).",
     warn_incident_release_lookup_failed: "⚠️  Could not check the release status of {} {}: {}",
+
+    // Workspace incident report strings (#969)
+    incident_member_heading: "#### Member: {}",
+    incident_label_member_verdict: "Verdict",
+    incident_packages_not_in_member: "None of the affected packages ({}) are reachable from this member.",
+    incident_status_not_applicable_workspace: "Not applicable — no workspace member is affected.",
+    incident_workspace_aggregate: "**{} of {} members affected**: {}",
 };
 
 static JA_MESSAGES: Messages = Messages {
@@ -967,6 +980,13 @@ static JA_MESSAGES: Messages = Messages {
     incident_guidance_release_lookup_failed: "**{}** {} のリリース状況を確認できませんでした: {}。更新前に PyPI を手動で確認してください。",
     incident_guidance_not_from_pypi: "**{}** は PyPI 以外からインストールされています。修正（{}）を含むリリースをソース側で確認してください。",
     warn_incident_release_lookup_failed: "⚠️  {} {} のリリース状況を確認できませんでした: {}",
+
+    // Workspace incident report strings (#969)
+    incident_member_heading: "#### メンバー: {}",
+    incident_label_member_verdict: "判定",
+    incident_packages_not_in_member: "影響対象パッケージ（{}）はこのメンバーから到達しません。",
+    incident_status_not_applicable_workspace: "該当なし — 影響を受けるワークスペースメンバーはありません。",
+    incident_workspace_aggregate: "**{} / {} メンバーが影響あり**: {}",
 };
 
 #[cfg(test)]
@@ -1672,6 +1692,11 @@ mod tests {
             incident_guidance_release_lookup_failed,
             incident_guidance_not_from_pypi,
             warn_incident_release_lookup_failed,
+            incident_member_heading,
+            incident_label_member_verdict,
+            incident_packages_not_in_member,
+            incident_status_not_applicable_workspace,
+            incident_workspace_aggregate,
         );
         for (name, en, ja) in fields {
             let (en_count, ja_count) = (en.matches("{}").count(), ja.matches("{}").count());

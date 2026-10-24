@@ -18,7 +18,9 @@ use adapters::outbound::network::{
     PyPiLicenseRepository, PyPiMaintenanceRepository, PyPiReleaseClient,
 };
 use adapters::outbound::uv::{UvLockAdapter, UvWorkspaceReader};
-use application::dto::{DiffRequest, IncidentRequest, OutputFormat, SbomRequest, SbomResponse};
+use application::dto::{
+    DiffRequest, IncidentRequest, OutputFormat, SbomRequest, SbomResponse, WorkspaceIncidentRequest,
+};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::read_models::incident_report::IncidentVerdictView;
 use application::read_models::SbomReadModelBuilder;
@@ -33,7 +35,7 @@ use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
 use i18n::{Locale, Messages};
 use ports::outbound::{
     BaselineRepository, DiffSource, GroupRoots, LockfileParseResult, LockfileReader,
-    PackageSourceMap, ProjectConfigReader, WorkspaceReader,
+    PackageSourceMap, ProjectConfigReader, WorkspaceMember, WorkspaceReader,
 };
 use shared::error::ExitCode;
 use shared::Result;
@@ -438,6 +440,15 @@ async fn main() {
     // Handle --workspace mode before normal flow
     if args.workspace {
         let workspace_root = PathBuf::from(args.path.as_deref().unwrap_or("."));
+        if let Some(advisory_id) = args.incident.clone() {
+            match run_workspace_incident(args, workspace_root, advisory_id).await {
+                Ok(verdict) => process::exit(incident_exit_code(verdict).as_i32()),
+                Err(e) => {
+                    print_error_chain(&e, msgs);
+                    process::exit(ExitCode::ApplicationError.as_i32());
+                }
+            }
+        }
         match run_workspace(args, workspace_root).await {
             Ok(()) => process::exit(ExitCode::Success.as_i32()),
             Err(e) => {
@@ -654,25 +665,10 @@ async fn run(args: Args) -> Result<bool> {
 async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     display_banner();
 
-    validate_project_path(&workspace_root)?;
-
     let locale = args.lang;
     let msgs = Messages::for_locale(locale);
 
-    let workspace_reader = UvWorkspaceReader::new();
-    let members = workspace_reader.read_workspace_members(&workspace_root)?;
-
-    if members.is_empty() {
-        anyhow::bail!("{}", msgs.error_no_workspace_members);
-    }
-
-    eprintln!(
-        "{}\n",
-        Messages::format(
-            msgs.workspace_mode_members_found,
-            &[&members.len().to_string()]
-        )
-    );
+    let members = load_workspace_members(&workspace_root, msgs)?;
 
     let config = load_config(&args, &workspace_root, locale)?;
     let merged = merge_config(&args, &config)?;
@@ -760,6 +756,85 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Validates the workspace root, reads `[manifest].members` from its uv.lock,
+/// and prints how many members were found.
+///
+/// # Errors
+/// Returns an error when the path is invalid, the lockfile cannot be read,
+/// or the workspace has no members.
+fn load_workspace_members(workspace_root: &Path, msgs: &Messages) -> Result<Vec<WorkspaceMember>> {
+    validate_project_path(workspace_root)?;
+
+    let members = UvWorkspaceReader::new().read_workspace_members(workspace_root)?;
+    if members.is_empty() {
+        anyhow::bail!("{}", msgs.error_no_workspace_members);
+    }
+
+    eprintln!(
+        "{}\n",
+        Messages::format(
+            msgs.workspace_mode_members_found,
+            &[&members.len().to_string()]
+        )
+    );
+    Ok(members)
+}
+
+/// Runs --incident together with --workspace (#969): evaluates one advisory
+/// against every workspace member and prints one combined report to stdout.
+///
+/// Returns the workspace's overall verdict (the most actionable member
+/// verdict), which `main` maps to the exit code. No per-member `sbom.*` file
+/// is written. `--output` cannot reach here: `--workspace` conflicts with it.
+/// Config handling is the same as `run_incident`, rooted at the workspace.
+///
+/// # Errors
+/// The same as `run_incident`, plus an error when the workspace has no
+/// members or a member is missing from the lockfile.
+async fn run_workspace_incident(
+    args: Args,
+    workspace_root: PathBuf,
+    advisory_id: String,
+) -> Result<IncidentVerdictView> {
+    display_banner();
+
+    let locale = args.lang;
+    let msgs = Messages::for_locale(locale);
+    let members = load_workspace_members(&workspace_root, msgs)?;
+
+    let config = load_config(&args, &workspace_root, locale)?;
+    let merged = merge_config(&args, &config)?;
+    let exclude_groups = resolve_exclude_groups(args.production_only, &merged, &workspace_root)?;
+
+    let request = WorkspaceIncidentRequest {
+        advisory_id,
+        workspace_root,
+        member_names: members.into_iter().map(|member| member.name).collect(),
+        exclude_patterns: merged.exclude_patterns.clone(),
+        exclude_groups,
+    };
+
+    let use_case = RespondToIncidentUseCase::new(
+        FileSystemReader::new(),
+        FileSystemReader::new(),
+        OsvClient::new(locale)?,
+        PyPiReleaseClient::new()?,
+        UvLockAdapter::new(),
+        locale,
+    );
+    let report = use_case.execute_workspace(request).await?;
+
+    let formatted = match resolve_incident_format(args.format) {
+        OutputFormat::Markdown => IncidentMarkdownFormatter::new(locale).format_workspace(&report),
+        OutputFormat::Json => IncidentJsonFormatter::new().format_workspace(&report)?,
+    };
+
+    let presenter = PresenterFactory::create(PresenterType::Stdout, locale);
+    presenter.present(&formatted)?;
+
+    Ok(report.overall)
 }
 
 /// Runs --diff mode: compares the current uv.lock against a base source.

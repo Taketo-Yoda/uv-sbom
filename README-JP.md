@@ -978,6 +978,52 @@ uv sync
 ```
 ````
 
+**ワークスペース（`--workspace`）:** uv ワークスペースのルートで `--incident <ID> --workspace` を実行すると、1回の実行で全メンバーを確認し、**1つにまとめたレポート**を出力します。構成は、アドバイザリの見出し、メンバーごとの判定と依存経路を示す `1. 影響` のサブセクション、全メンバー共通の `2. パッチ状況` と `3. 次のアクション`（ワークスペースは1つの `uv.lock` を共有するため、更新コマンドは全メンバーで同じです）、最後の「N / M メンバーが影響あり」の行です。アドバイザリと PyPI のリリース状況はメンバーごとではなく1回の実行につき1回だけ取得し、試行解決はワークスペースのルートで実行します。終了コードはメンバーの判定のうち最も対応が必要なものに従います（下表と同じ）。メンバーごとの `sbom.*` ファイルは書き出さず、レポートは常に標準出力に出ます（`--workspace` は `--output` と同時に使用できません）。
+
+```bash
+uv-sbom --incident GHSA-82w8-qh3p-5jfq --workspace -p examples/workspace --lang ja
+```
+
+`starlette` に（`fastapi` 経由で）到達するのが `api` メンバーだけの `examples/workspace` に対する実行例（終了コード `1`）:
+
+````markdown
+## インシデントレポート: GHSA-82w8-qh3p-5jfq
+
+- **別名**: CVE-2026-54283, PYSEC-2026-249
+- **深刻度**: HIGH
+- **概要**: Starlette: request.form() limits silently ignored for application/x-www-form-urlencoded enable DoS
+- **総合判定**: 影響あり — 修正版リリース済み
+
+### 1. 影響
+
+#### メンバー: api
+
+- **判定**: 影響あり — 修正版リリース済み
+- **starlette** 1.0.0 — 影響あり — 修正版リリース済み (間接依存)
+  - 依存経路:
+    - `fastapi → starlette`
+
+#### メンバー: worker
+
+- **判定**: 影響なし
+
+影響対象パッケージ（starlette）はこのメンバーから到達しません。
+
+### 2. パッチ状況
+
+- **starlette**: 1.3.1 で修正 — リリース済み
+
+### 3. 次のアクション
+
+**starlette** — 試行解決で検証済み（uv.lock は変更されていません）:
+```sh
+uv lock --upgrade-package starlette==1.3.1
+uv sync
+```
+
+**1 / 2 メンバーが影響あり**: api
+````
+
 **終了コード:**
 
 | 判定 | 終了コード |
@@ -988,11 +1034,11 @@ uv sync
 | 不明なアドバイザリ ID、ネットワークエラー、その他のアプリケーションエラー | 3 |
 | 不正な形式のアドバイザリ ID、または同時に使えないフラグの指定 | 2 |
 
-**有効なスコープ系オプション:** `--path`、`--exclude`、`--exclude-groups`、`--production-only`、`--output`、`--format`、`--lang`、`--config`。設定ファイルの `exclude_packages` と `exclude_groups` も適用されます。
+**有効なスコープ系オプション:** `--path`、`--exclude`、`--exclude-groups`、`--production-only`、`--output`（`--workspace` 併用時は不可）、`--format`、`--lang`、`--config`。設定ファイルの `exclude_packages` と `exclude_groups` も適用されます。
 
 **無視される設定キー:** インシデントモードでは設定ファイルの `format` は使われず、出力形式は `--format` でのみ変わります。脆弱性・ライセンス・メンテナンス・互換性チェック系のキー（`check_cve`、`severity_threshold`、`cvss_threshold`、`ignore_cves`、`check_license`、`license_policy`、`check_abandoned`、`check_non_pypi`、`check_exploitability`、`target_python`、`suggest_fix`、`baseline_file`）も無視されます。
 
-**同時使用の制限:** `--incident` は `--diff`、`--init`、`--dry-run`、`--explain`、`--show-dependency-tree`、`--no-check-cve`、`--baseline`、`--update-baseline`、`--suggest-fix`、`--check-license`、`--check-abandoned`、`--check-non-pypi`、`--check-exploitability`、`--target-python`、`--severity-threshold`、`--cvss-threshold`、`--ignore-cve`、`--verify-links`、`--workspace` と同時に使用できません。ワークスペース対応は今後追加される予定です。
+**同時使用の制限:** `--incident` は `--diff`、`--init`、`--dry-run`、`--explain`、`--show-dependency-tree`、`--no-check-cve`、`--baseline`、`--update-baseline`、`--suggest-fix`、`--check-license`、`--check-abandoned`、`--check-non-pypi`、`--check-exploitability`、`--target-python`、`--severity-threshold`、`--cvss-threshold`、`--ignore-cve`、`--verify-links` と同時に使用できません。`--workspace` とは併用できます（上記参照）。
 
 **設定ファイルキー:** ありません。`--incident` は単一アドバイザリについての一度きりの問い合わせであり、永続的なポリシー設定ではないため、意図的に CLI 専用としています。
 
@@ -1405,7 +1451,8 @@ Options:
                                      --show-dependency-treeが必要
       --incident <ADVISORY_ID>       単一のアドバイザリ（GHSA-/PYSEC-/CVE-/OSV-/MAL- ID）がプロジェクトに影響するか、
                                      修正版がリリース済みか、実行すべきコマンドを出力（デフォルトは Markdown）
-                                     --workspace、--diff、各チェック系フラグとの同時使用は不可（インシデント対応を参照）
+                                     --workspace と併用すると全メンバーを1つのレポートにまとめて出力
+                                     --diff、各チェック系フラグとの同時使用は不可（インシデント対応を参照）
   -h, --help                         ヘルプを表示
   -V, --version                      バージョンを表示
 ```

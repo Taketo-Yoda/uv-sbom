@@ -1,7 +1,37 @@
+//! Markdown formatter for `--incident` reports (#967). The workspace layout
+//! (#969) lives in `workspace.rs` and reuses the section helpers here.
+
+mod workspace;
+
 use crate::application::read_models::incident_report::{
     IncidentFinding, IncidentGuidance, IncidentReport, IncidentVerdictView, ReleaseStatusView,
 };
+use crate::application::read_models::vulnerability_view::SeverityView;
 use crate::i18n::{Locale, Messages};
+
+/// The advisory fields shown in the heading block, shared by the
+/// single-project and workspace layouts.
+struct HeadingFields<'a> {
+    advisory_id: &'a str,
+    resolved_from: Option<&'a str>,
+    aliases: &'a [String],
+    severity: Option<SeverityView>,
+    summary: Option<&'a str>,
+    overall: IncidentVerdictView,
+}
+
+impl<'a> From<&'a IncidentReport> for HeadingFields<'a> {
+    fn from(report: &'a IncidentReport) -> Self {
+        Self {
+            advisory_id: &report.advisory_id,
+            resolved_from: report.resolved_from.as_deref(),
+            aliases: &report.aliases,
+            severity: report.severity,
+            summary: report.summary.as_deref(),
+            overall: report.overall,
+        }
+    }
+}
 
 /// Formats an `IncidentReport` as a human-readable Markdown report (#967).
 ///
@@ -30,27 +60,26 @@ impl IncidentMarkdownFormatter {
     /// untrusted, so they are collapsed onto a single line before rendering.
     pub fn format(&self, report: &IncidentReport) -> String {
         let mut lines: Vec<String> = Vec::new();
-        self.push_heading(&mut lines, report);
+        self.push_heading(&mut lines, report.into());
         self.push_impact(&mut lines, report);
-        self.push_patch_status(&mut lines, report);
+        self.push_patch_status(
+            &mut lines,
+            &report.findings,
+            self.messages.incident_status_not_applicable,
+        );
         if report.overall != IncidentVerdictView::NotAffected {
-            self.push_next_action(&mut lines, report);
+            self.push_next_action(&mut lines, &report.findings);
         }
-        while lines.last().is_some_and(String::is_empty) {
-            lines.pop();
-        }
-        let mut out = lines.join("\n");
-        out.push('\n');
-        out
+        finish(lines)
     }
 
-    fn push_heading(&self, lines: &mut Vec<String>, report: &IncidentReport) {
+    fn push_heading(&self, lines: &mut Vec<String>, report: HeadingFields<'_>) {
         let msgs = self.messages;
         lines.push(Messages::format(
             msgs.incident_title,
-            &[&single_line(&report.advisory_id)],
+            &[&single_line(report.advisory_id)],
         ));
-        if let Some(from) = &report.resolved_from {
+        if let Some(from) = report.resolved_from {
             lines.push(Messages::format(
                 msgs.incident_resolved_from,
                 &[&single_line(from)],
@@ -73,7 +102,7 @@ impl IncidentMarkdownFormatter {
                 severity.as_str()
             ));
         }
-        if let Some(summary) = &report.summary {
+        if let Some(summary) = report.summary {
             lines.push(format!(
                 "- **{}**: {}",
                 msgs.incident_label_summary,
@@ -101,41 +130,54 @@ impl IncidentMarkdownFormatter {
                 &[&single_line(&report.affected_packages.join(", "))],
             ));
         } else {
-            for finding in &report.findings {
-                let position = if finding.is_direct {
-                    msgs.incident_dependency_direct
-                } else {
-                    msgs.incident_dependency_transitive
-                };
-                lines.push(format!(
-                    "- **{}** {} — {} ({})",
-                    finding.package_name,
-                    finding.locked_version,
-                    self.verdict_label(finding.verdict),
-                    position
-                ));
-                if !finding.paths.is_empty() {
-                    lines.push(format!("  - {}", msgs.incident_paths_label));
-                    for path in &finding.paths {
-                        lines.push(format!("    - `{}`", path.join(" → ")));
-                    }
-                } else if !finding.is_direct {
-                    lines.push(format!("  - {}", msgs.incident_no_path));
-                }
-            }
+            self.push_finding_lines(lines, &report.findings);
         }
         lines.push(String::new());
     }
 
-    fn push_patch_status(&self, lines: &mut Vec<String>, report: &IncidentReport) {
+    /// One bullet per finding (package, version, verdict, position), followed
+    /// by its dependency paths.
+    fn push_finding_lines(&self, lines: &mut Vec<String>, findings: &[IncidentFinding]) {
+        let msgs = self.messages;
+        for finding in findings {
+            let position = if finding.is_direct {
+                msgs.incident_dependency_direct
+            } else {
+                msgs.incident_dependency_transitive
+            };
+            lines.push(format!(
+                "- **{}** {} — {} ({})",
+                finding.package_name,
+                finding.locked_version,
+                self.verdict_label(finding.verdict),
+                position
+            ));
+            if !finding.paths.is_empty() {
+                lines.push(format!("  - {}", msgs.incident_paths_label));
+                for path in &finding.paths {
+                    lines.push(format!("    - `{}`", path.join(" → ")));
+                }
+            } else if !finding.is_direct {
+                lines.push(format!("  - {}", msgs.incident_no_path));
+            }
+        }
+    }
+
+    /// `not_applicable` is shown when there are no findings at all.
+    fn push_patch_status(
+        &self,
+        lines: &mut Vec<String>,
+        findings: &[IncidentFinding],
+        not_applicable: &str,
+    ) {
         let msgs = self.messages;
         lines.push(msgs.incident_section_patch_status.to_string());
         lines.push(String::new());
 
-        if report.findings.is_empty() {
-            lines.push(msgs.incident_status_not_applicable.to_string());
+        if findings.is_empty() {
+            lines.push(not_applicable.to_string());
         } else {
-            for finding in &report.findings {
+            for finding in findings {
                 lines.push(format!(
                     "- **{}**: {}",
                     finding.package_name,
@@ -146,7 +188,7 @@ impl IncidentMarkdownFormatter {
         lines.push(String::new());
     }
 
-    fn push_next_action(&self, lines: &mut Vec<String>, report: &IncidentReport) {
+    fn push_next_action(&self, lines: &mut Vec<String>, findings: &[IncidentFinding]) {
         let msgs = self.messages;
         lines.push(msgs.incident_section_next_action.to_string());
         lines.push(String::new());
@@ -154,8 +196,7 @@ impl IncidentMarkdownFormatter {
         // Several locked versions of one package can share the same action;
         // render each distinct block once.
         let mut blocks: Vec<Vec<String>> = Vec::new();
-        for finding in report
-            .findings
+        for finding in findings
             .iter()
             .filter(|f| f.verdict != IncidentVerdictView::NotAffected)
         {
@@ -250,6 +291,16 @@ impl IncidentMarkdownFormatter {
     }
 }
 
+/// Drops trailing blank lines and joins `lines` with a final newline.
+fn finish(mut lines: Vec<String>) -> String {
+    while lines.last().is_some_and(String::is_empty) {
+        lines.pop();
+    }
+    let mut out = lines.join("\n");
+    out.push('\n');
+    out
+}
+
 /// Collapses all whitespace runs (including newlines) in untrusted text to a
 /// single space, so it cannot break out of its Markdown line.
 fn single_line(text: &str) -> String {
@@ -259,9 +310,8 @@ fn single_line(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::read_models::vulnerability_view::SeverityView;
 
-    fn finding(verdict: IncidentVerdictView) -> IncidentFinding {
+    pub(super) fn finding(verdict: IncidentVerdictView) -> IncidentFinding {
         IncidentFinding {
             package_name: "requests".to_string(),
             locked_version: "2.25.0".to_string(),
@@ -276,7 +326,7 @@ mod tests {
         }
     }
 
-    fn verified() -> IncidentFinding {
+    pub(super) fn verified() -> IncidentFinding {
         IncidentFinding {
             upgrade_command: Some("uv lock --upgrade-package requests==2.31.0".to_string()),
             command_verified: true,
@@ -284,7 +334,7 @@ mod tests {
         }
     }
 
-    fn report(findings: Vec<IncidentFinding>) -> IncidentReport {
+    pub(super) fn report(findings: Vec<IncidentFinding>) -> IncidentReport {
         let overall = findings
             .iter()
             .map(|f| f.verdict)
@@ -310,7 +360,7 @@ mod tests {
         IncidentMarkdownFormatter::new(Locale::Ja).format(report)
     }
 
-    fn position(out: &str, needle: &str) -> usize {
+    pub(super) fn position(out: &str, needle: &str) -> usize {
         out.find(needle)
             .unwrap_or_else(|| panic!("missing {needle:?} in:\n{out}"))
     }
@@ -739,7 +789,7 @@ uv sync
     }
 
     /// Every English label the formatter can emit; none may appear in JA output.
-    fn assert_no_english_labels(out: &str) {
+    pub(super) fn assert_no_english_labels(out: &str) {
         let en = Messages::for_locale(Locale::En);
         for label in [
             "Incident Report",

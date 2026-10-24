@@ -11,7 +11,7 @@ mod sbom_response;
 
 pub use diff_request::DiffRequest;
 pub use diff_result::DiffResult;
-pub use incident_request::IncidentRequest;
+pub use incident_request::{IncidentRequest, WorkspaceIncidentRequest};
 pub use output_format::OutputFormat;
 pub use sbom_request::SbomRequest;
 #[allow(unused_imports)]
