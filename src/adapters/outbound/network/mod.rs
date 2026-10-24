@@ -7,6 +7,7 @@ mod pypi_compatibility_client;
 mod pypi_maintenance_client;
 #[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
 mod pypi_release_client;
+mod pypi_version_endpoint;
 
 pub use caching_pypi_client::CachingPyPiLicenseRepository;
 pub use epss_kev_client::EpssKevClient;

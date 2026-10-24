@@ -21,9 +21,11 @@
 //!
 //! All five outbound network adapters — `OsvClient`, `PyPiLicenseRepository`,
 //! `PyPiMaintenanceRepository`, `PyPiCompatibilityClient` and
-//! `PyPiReleaseClient` — call this function (Issues #859, #860, #861, #862,
-//! #965). No adapter carries its own inline size-check any more; new network
-//! adapters should call this rather than reimplementing the guard.
+//! `PyPiReleaseClient` — go through this function (Issues #859, #860, #861,
+//! #862, #965); the two version-endpoint clients reach it via the shared
+//! `pypi_version_endpoint` helper (#978). No adapter carries its own inline
+//! size-check any more; new network adapters should call this rather than
+//! reimplementing the guard.
 
 use crate::shared::Result;
 use futures::stream::StreamExt;

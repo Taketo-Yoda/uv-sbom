@@ -1,8 +1,9 @@
+use super::pypi_version_endpoint;
 use crate::ports::outbound::{PythonCompatibilityInfo, PythonCompatibilityRepository};
-use crate::shared::response_size_guard;
 use crate::shared::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
+#[cfg(test)]
 use std::time::Duration;
 
 #[derive(Debug, Default, Deserialize)]
@@ -38,13 +39,7 @@ impl PyPiCompatibilityClient {
     /// # Errors
     /// Returns an error if the underlying HTTP client fails to build.
     pub fn new() -> Result<Self> {
-        let version = env!("CARGO_PKG_VERSION");
-        let user_agent = format!("uv-sbom/{}", version);
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .user_agent(user_agent)
-            .build()?;
-
+        let client = pypi_version_endpoint::build_client(pypi_version_endpoint::DEFAULT_TIMEOUT)?;
         Ok(Self {
             client,
             base_url: "https://pypi.org".to_string(),
@@ -56,12 +51,7 @@ impl PyPiCompatibilityClient {
         base_url: impl Into<String>,
         timeout: Duration,
     ) -> Result<Self> {
-        let user_agent = format!("uv-sbom/{}", env!("CARGO_PKG_VERSION"));
-        let client = reqwest::Client::builder()
-            .timeout(timeout)
-            .user_agent(user_agent)
-            .build()?;
-
+        let client = pypi_version_endpoint::build_client(timeout)?;
         Ok(Self {
             client,
             base_url: base_url.into(),
@@ -73,27 +63,22 @@ impl PyPiCompatibilityClient {
         package_name: &str,
         package_version: &str,
     ) -> Result<PyPiVersionResponse> {
-        crate::shared::security::validate_url_component(package_name, "Package name")
-            .map_err(crate::shared::http_retry::permanent)?;
-        crate::shared::security::validate_url_component(package_version, "Package version")
-            .map_err(crate::shared::http_retry::permanent)?;
-        let encoded_name = urlencoding::encode(package_name);
-        let encoded_version = urlencoding::encode(package_version);
-        let url = format!(
-            "{}/pypi/{}/{}/json",
-            self.base_url, encoded_name, encoded_version
-        );
-
-        let response = self.client.get(&url).send().await?;
-        if !response.status().is_success() {
-            anyhow::bail!("PyPI API returned status code {}", response.status());
-        }
-        let bytes = response_size_guard::read_bounded_bytes(
-            response,
+        let Some(bytes) = pypi_version_endpoint::fetch_version_json(
+            &self.client,
+            &self.base_url,
+            package_name,
+            package_version,
             Self::MAX_RESPONSE_BYTES,
-            Some("PyPI compatibility metadata"),
+            "PyPI compatibility metadata",
         )
-        .await?;
+        .await?
+        else {
+            // Preserve pre-#978 behavior: a 404 is an ordinary (retryable)
+            // error here, not "not found". Do not wrap it with `permanent`.
+            return Err(pypi_version_endpoint::status_error(
+                reqwest::StatusCode::NOT_FOUND,
+            ));
+        };
         Ok(serde_json::from_slice::<PyPiVersionResponse>(&bytes)?)
     }
 
