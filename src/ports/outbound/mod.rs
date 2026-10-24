@@ -2,6 +2,8 @@
 ///
 /// These ports define the interfaces that the application core uses
 /// to interact with external systems (file system, network, console, etc.).
+#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
+pub mod advisory_repository;
 pub mod baseline_repository;
 pub mod diff_lockfile_reader;
 pub mod exploitability_repository;
@@ -13,6 +15,8 @@ pub mod output_presenter;
 pub mod progress_reporter;
 pub mod project_config_reader;
 pub mod python_compatibility_repository;
+#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
+pub mod release_repository;
 pub mod vulnerability_repository;
 pub mod workspace_reader;
 
@@ -26,6 +30,7 @@ pub mod workspace_reader;
 // `sbom_generation::domain::uv_lock_simulator`). It is implemented by
 // `adapters::outbound::uv::UvLockAdapter`.
 
+pub use advisory_repository::AdvisoryRepository;
 pub use baseline_repository::BaselineRepository;
 pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
 pub use exploitability_repository::ExploitabilityRepository;
@@ -41,6 +46,7 @@ pub use output_presenter::OutputPresenter;
 pub use progress_reporter::{ProgressCallback, ProgressReporter};
 pub use project_config_reader::{ProjectConfigError, ProjectConfigReader};
 pub use python_compatibility_repository::{PythonCompatibilityInfo, PythonCompatibilityRepository};
+pub use release_repository::ReleaseRepository;
 // Note: This will be used in subsequent subtasks (Subtask 3-8)
 #[allow(unused_imports)]
 pub use vulnerability_repository::VulnerabilityRepository;
