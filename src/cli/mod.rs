@@ -1,5 +1,6 @@
 pub mod config_resolver;
 pub mod error_display;
+pub mod incident;
 pub mod runner;
 pub mod workspace_summary;
 
@@ -15,9 +16,13 @@ use crate::sbom_generation::domain::vulnerability::Severity;
 #[command(version)]
 #[command(about = "Generate SBOMs for Python projects managed by uv", long_about = None)]
 pub struct Args {
-    /// Output format: json or markdown
-    #[arg(short, long, default_value = "json")]
-    pub format: OutputFormat,
+    /// Output format: json or markdown (default: json; markdown in --incident mode)
+    ///
+    /// No clap default, so an explicit `--format json` is distinguishable from no
+    /// flag: normal mode resolves CLI > config > json, and incident mode uses the
+    /// CLI value or markdown without reading the config file's `format` (#968).
+    #[arg(short, long)]
+    pub format: Option<OutputFormat>,
 
     /// Path to the project directory (defaults to current directory)
     #[arg(short, long)]
@@ -153,7 +158,51 @@ pub struct Args {
     /// Maximum depth for the dependency tree visualization (default: 3)
     #[arg(long, value_name = "DEPTH", requires = "show_dependency_tree")]
     pub dependency_tree_depth: Option<u32>,
+
+    /// Incident response: check whether one advisory (GHSA-, PYSEC-, CVE-, OSV- or
+    /// MAL- ID) affects this project, whether the fix is released, and which
+    /// command to run. Outputs Markdown unless --format is given.
+    ///
+    /// Intentionally has no config-file key: this is a one-off incident query,
+    /// not a persistent policy setting (same rationale as `--explain`, see
+    /// Issue #767). The config file's `format` and vulnerability/license/
+    /// maintenance check keys are ignored in this mode.
+    #[arg(
+        long,
+        value_name = "ADVISORY_ID",
+        value_parser = parse_advisory_id,
+        conflicts_with_all = INCIDENT_CONFLICTS,
+    )]
+    pub incident: Option<String>,
 }
+
+/// Flags rejected together with `--incident`: other modes, and checks or
+/// filters that do not apply to a single-advisory report. `workspace` is
+/// temporary until #969 adds workspace support.
+const INCIDENT_CONFLICTS: [&str; 19] = [
+    "diff",
+    "init",
+    "dry_run",
+    "explain",
+    "show_dependency_tree",
+    "no_check_cve",
+    "baseline",
+    "update_baseline",
+    "suggest_fix",
+    "check_license",
+    "check_abandoned",
+    "check_non_pypi",
+    "check_exploitability",
+    "target_python",
+    "severity_threshold",
+    "cvss_threshold",
+    "ignore_cve",
+    "verify_links",
+    "workspace",
+];
+
+/// Advisory ID prefixes accepted by `--incident`, in their canonical case.
+const ADVISORY_ID_PREFIXES: [&str; 5] = ["GHSA-", "PYSEC-", "CVE-", "OSV-", "MAL-"];
 
 /// Default depth limit for `--show-dependency-tree` when `--dependency-tree-depth`
 /// is not explicitly provided.
@@ -162,6 +211,31 @@ pub const DEFAULT_DEPENDENCY_TREE_DEPTH: u32 = 3;
 fn parse_lang(s: &str) -> Result<Locale, String> {
     Locale::from_str(s)
         .ok_or_else(|| format!("Invalid language: '{}'. Supported languages: en, ja", s))
+}
+
+/// Validates an `--incident` advisory ID and normalizes its prefix to upper case.
+///
+/// Only the prefix is normalized: the rest is kept as typed, because OSV IDs
+/// can be case-sensitive (GHSA suffixes are lower case, e.g.
+/// `GHSA-j8r2-6x86-q33q`). Kept as a standalone function so #963 can widen it
+/// to accept a manual range spec without touching the flag definition.
+fn parse_advisory_id(s: &str) -> Result<String, String> {
+    let id = s.trim();
+    ADVISORY_ID_PREFIXES
+        .iter()
+        .find_map(|prefix| {
+            let head = id.get(..prefix.len())?;
+            let rest = &id[prefix.len()..];
+            (head.eq_ignore_ascii_case(prefix) && !rest.is_empty())
+                .then(|| format!("{}{}", prefix, rest))
+        })
+        .ok_or_else(|| {
+            format!(
+                "Invalid advisory ID: '{}'. Expected an ID starting with one of: {}",
+                s,
+                ADVISORY_ID_PREFIXES.join(", ")
+            )
+        })
 }
 
 fn parse_severity_threshold(s: &str) -> Result<Severity, String> {
@@ -352,5 +426,151 @@ mod tests {
             result.unwrap_err().kind(),
             ErrorKind::MissingRequiredArgument
         );
+    }
+
+    #[test]
+    fn test_format_absent_by_default() {
+        let args = Args::parse_from(["uv-sbom"]);
+        assert!(args.format.is_none());
+    }
+
+    #[test]
+    fn test_format_explicit_json_is_some() {
+        let args = Args::parse_from(["uv-sbom", "--format", "json"]);
+        assert_eq!(args.format, Some(OutputFormat::Json));
+    }
+
+    #[test]
+    fn test_parse_advisory_id_accepts_each_prefix() {
+        for id in [
+            "GHSA-j8r2-6x86-q33q",
+            "PYSEC-2023-74",
+            "CVE-2023-32681",
+            "OSV-2020-111",
+            "MAL-2024-1234",
+        ] {
+            assert_eq!(parse_advisory_id(id).unwrap(), id);
+        }
+    }
+
+    #[test]
+    fn test_parse_advisory_id_normalizes_prefix_only() {
+        assert_eq!(
+            parse_advisory_id("ghsa-j8r2-6x86-q33q").unwrap(),
+            "GHSA-j8r2-6x86-q33q"
+        );
+        assert_eq!(
+            parse_advisory_id("cve-2023-32681").unwrap(),
+            "CVE-2023-32681"
+        );
+        assert_eq!(parse_advisory_id("Pysec-2023-74").unwrap(), "PYSEC-2023-74");
+    }
+
+    #[test]
+    fn test_parse_advisory_id_trims_whitespace() {
+        assert_eq!(
+            parse_advisory_id("  CVE-2023-32681 ").unwrap(),
+            "CVE-2023-32681"
+        );
+    }
+
+    #[test]
+    fn test_parse_advisory_id_rejects_invalid() {
+        for id in [
+            "foo",
+            "",
+            "CVE-",
+            "GHSA",
+            "CVE2023-32681",
+            "XCVE-2023-1",
+            "日本語",
+        ] {
+            let err = parse_advisory_id(id).unwrap_err();
+            assert!(err.contains("Invalid advisory ID"), "{id}: {err}");
+        }
+    }
+
+    #[test]
+    fn test_incident_flag_parses_and_normalizes() {
+        let args = Args::parse_from(["uv-sbom", "--incident", "ghsa-j8r2-6x86-q33q"]);
+        assert_eq!(args.incident.as_deref(), Some("GHSA-j8r2-6x86-q33q"));
+    }
+
+    #[test]
+    fn test_incident_flag_rejects_malformed_id() {
+        use clap::error::ErrorKind;
+
+        let result = Args::try_parse_from(["uv-sbom", "--incident", "foo"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_incident_conflicts_with_each_listed_flag() {
+        use clap::error::ErrorKind;
+
+        let cases: [&[&str]; 19] = [
+            &["--diff", "HEAD"],
+            &["--init"],
+            &["--dry-run"],
+            &["--explain", "requests"],
+            &["--show-dependency-tree"],
+            &["--no-check-cve"],
+            &["--baseline", "baseline.json"],
+            &["--baseline", "baseline.json", "--update-baseline"],
+            &["--suggest-fix"],
+            &["--check-license"],
+            &["--check-abandoned"],
+            &["--check-non-pypi"],
+            &["--check-exploitability"],
+            &["--target-python", "3.13"],
+            &["--severity-threshold", "high"],
+            &["--cvss-threshold", "7.0"],
+            &["--ignore-cve", "CVE-2024-1"],
+            &["--verify-links"],
+            &["--workspace"],
+        ];
+        assert_eq!(cases.len(), INCIDENT_CONFLICTS.len());
+        for extra in cases {
+            let mut argv = vec!["uv-sbom", "--incident", "CVE-2023-32681"];
+            argv.extend_from_slice(extra);
+            let result = Args::try_parse_from(&argv);
+            assert_eq!(
+                result.unwrap_err().kind(),
+                ErrorKind::ArgumentConflict,
+                "expected a conflict for {extra:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_incident_accepts_scope_and_output_flags() {
+        let result = Args::try_parse_from([
+            "uv-sbom",
+            "--incident",
+            "CVE-2023-32681",
+            "-p",
+            "examples/sample-project",
+            "-o",
+            "report.md",
+            "-e",
+            "internal-*",
+            "--exclude-groups",
+            "dev",
+            "--lang",
+            "ja",
+            "--format",
+            "json",
+            "-c",
+            "uv-sbom.config.yml",
+        ]);
+        assert!(result.is_ok(), "{:?}", result.err());
+
+        let result = Args::try_parse_from([
+            "uv-sbom",
+            "--incident",
+            "CVE-2023-32681",
+            "--production-only",
+        ]);
+        assert!(result.is_ok());
     }
 }

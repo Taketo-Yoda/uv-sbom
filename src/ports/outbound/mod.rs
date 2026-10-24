@@ -2,7 +2,6 @@
 ///
 /// These ports define the interfaces that the application core uses
 /// to interact with external systems (file system, network, console, etc.).
-#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
 pub mod advisory_repository;
 pub mod baseline_repository;
 pub mod diff_lockfile_reader;
@@ -15,7 +14,6 @@ pub mod output_presenter;
 pub mod progress_reporter;
 pub mod project_config_reader;
 pub mod python_compatibility_repository;
-#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
 pub mod release_repository;
 pub mod vulnerability_repository;
 pub mod workspace_reader;

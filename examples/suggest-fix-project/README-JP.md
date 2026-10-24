@@ -136,6 +136,25 @@ uv-sbom -p examples/suggest-fix-project --show-dependency-tree --dependency-tree
 - 直接依存パッケージ（`httpx`、`requests`）ごとに1つのルートを持つ `## 依存関係ツリー` セクション
 - 深さ2の場合、`anyio` の子ノードが `... (省略)` マーカーに置き換えられ、適用された深さを明記した注記が続く
 
+### ステップ 7: インシデント対応（`--incident`）
+
+ロックされている `urllib3` 2.0.4 は GHSA-v845-jxx5-vc9f（CVE-2023-43804）の影響を受けます。このアドバイザリには
+`requests` が許容する範囲内にバックポートされた修正版（2.0.6）があるため、「検証済みのアップグレードコマンド」が出るケースを確認できます。
+実際の出力全体は、[メインREADME](../../README-JP.md)の「インシデント対応」の節を参照してください。
+
+```bash
+# 影響あり・修正版リリース済み・検証済みコマンド → 終了コード 1
+uv-sbom -p examples/suggest-fix-project --incident GHSA-v845-jxx5-vc9f --lang ja
+
+# 影響なし（requests は修正済みの 2.31.0 にロック）。CVE ID は GHSA レコードへ解決される → 終了コード 0
+uv-sbom -p examples/suggest-fix-project --incident CVE-2023-32681 --lang ja
+```
+
+**表示される内容:**
+- `### 1. 影響` に、`requests → urllib3` 経由の間接依存として `urllib3` 2.0.4
+- `### 2. パッチ状況` に `2.0.6 で修正 — リリース済み`
+- `### 3. 次のアクション` に、試行解決で検証済みの `uv lock --upgrade-package urllib3==2.0.6` + `uv sync` ブロック
+
 ## 出力例
 
 ```markdown

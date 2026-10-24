@@ -9,7 +9,6 @@ pub mod cve_delta_view;
 pub mod dependency_tree_view;
 pub mod dependency_view;
 pub mod explain_view;
-#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
 pub mod incident_report;
 pub mod license_compliance_view;
 pub mod non_pypi_package;

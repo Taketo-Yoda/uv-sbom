@@ -10,19 +10,23 @@ use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::{
     determine_diff_source, BaselineFileRepository, FileSystemReader, GitLockfileReader,
 };
-use adapters::outbound::formatters::{DiffJsonFormatter, DiffMarkdownFormatter};
+use adapters::outbound::formatters::{
+    DiffJsonFormatter, DiffMarkdownFormatter, IncidentJsonFormatter, IncidentMarkdownFormatter,
+};
 use adapters::outbound::network::{
     CachingPyPiLicenseRepository, EpssKevClient, OsvClient, PyPiCompatibilityClient,
-    PyPiLicenseRepository, PyPiMaintenanceRepository,
+    PyPiLicenseRepository, PyPiMaintenanceRepository, PyPiReleaseClient,
 };
 use adapters::outbound::uv::{UvLockAdapter, UvWorkspaceReader};
-use application::dto::{DiffRequest, OutputFormat, SbomRequest, SbomResponse};
+use application::dto::{DiffRequest, IncidentRequest, OutputFormat, SbomRequest, SbomResponse};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
+use application::read_models::incident_report::IncidentVerdictView;
 use application::read_models::SbomReadModelBuilder;
-use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase};
+use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase, RespondToIncidentUseCase};
 use clap::Parser;
 use cli::config_resolver::{load_config, merge_config, MergedConfig};
 use cli::error_display::{render_config_error, render_error_chain};
+use cli::incident::{incident_exit_code, resolve_incident_format};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFindings};
 use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
@@ -173,8 +177,7 @@ fn build_use_case<LR: LockfileReader>(
 /// Gates on the resolved `format` (`MergedConfig.format`) rather than the raw CLI
 /// `args.format`, so a `format: markdown` set only via config file (no `--format`
 /// flag) correctly suppresses these warnings (fixed in #822; previously gated on
-/// `args.format`, which stays at its `Json` default when no `--format` flag is
-/// passed, regardless of the config file).
+/// `args.format`, which ignored the config file).
 ///
 /// `check_license` must be the resolved `MergedConfig.check_license`, not the raw
 /// CLI `args.check_license` (fixed in #828; previously gated on `args.check_license`,
@@ -281,6 +284,33 @@ fn build_sbom_request(
         .baseline(baseline)
         .locale(locale)
         .build()
+}
+
+/// Resolves the groups to exclude: `--production-only` expands to every group
+/// name in `root`'s lockfile; otherwise the merged `--exclude-groups` / config
+/// value is used. Lives here rather than in `config_resolver` because it
+/// requires lockfile I/O.
+fn resolve_exclude_groups(
+    production_only: bool,
+    merged: &MergedConfig,
+    root: &Path,
+) -> Result<Vec<String>> {
+    if production_only {
+        Ok(FileSystemReader::new()
+            .read_and_parse_group_roots(root)?
+            .into_keys()
+            .collect())
+    } else {
+        Ok(merged.exclude_groups.clone())
+    }
+}
+
+/// Builds the `PresenterType` for `--output`: a file when given, else stdout.
+fn presenter_type_for(output: Option<String>) -> PresenterType {
+    match output {
+        Some(path) => PresenterType::File(PathBuf::from(path)),
+        None => PresenterType::Stdout,
+    }
 }
 
 /// Resolves the project's own name/version from the lockfile response, for use
@@ -458,6 +488,17 @@ async fn main() {
         }
     }
 
+    // Handle --incident before normal flow
+    if let Some(advisory_id) = args.incident.clone() {
+        match run_incident(args, advisory_id).await {
+            Ok(verdict) => process::exit(incident_exit_code(verdict).as_i32()),
+            Err(e) => {
+                print_error_chain(&e, msgs);
+                process::exit(ExitCode::ApplicationError.as_i32());
+            }
+        }
+    }
+
     // Run the main application logic
     match run(args).await {
         Ok(has_vulnerabilities) => {
@@ -509,15 +550,7 @@ async fn run(args: Args) -> Result<bool> {
     let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path, msgs);
 
     // Resolve exclude_groups: --production-only expands to all group names in the lockfile.
-    // This requires lockfile I/O so it lives here rather than in config_resolver.
-    let exclude_groups = if args.production_only {
-        FileSystemReader::new()
-            .read_and_parse_group_roots(&project_path)?
-            .into_keys()
-            .collect::<Vec<_>>()
-    } else {
-        merged.exclude_groups.clone()
-    };
+    let exclude_groups = resolve_exclude_groups(args.production_only, &merged, &project_path)?;
 
     // Load vulnerability baseline if --baseline is set
     let baseline_repo = BaselineFileRepository;
@@ -598,11 +631,7 @@ async fn run(args: Args) -> Result<bool> {
     // Determine project component for CycloneDX metadata before response is moved
     let project_component_info = resolve_project_component(&response, &project_path);
 
-    let presenter_type = if let Some(output_path) = args.output {
-        PresenterType::File(PathBuf::from(output_path))
-    } else {
-        PresenterType::Stdout
-    };
+    let presenter_type = presenter_type_for(args.output);
 
     let verify_links = args.verify_links && merged.format == OutputFormat::Markdown;
 
@@ -777,13 +806,62 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
         OutputFormat::Json => DiffJsonFormatter::new().format(diff, cve_delta)?,
     };
 
-    let presenter_type = if let Some(output_path) = args.output {
-        PresenterType::File(PathBuf::from(output_path))
-    } else {
-        PresenterType::Stdout
-    };
-    let presenter = PresenterFactory::create(presenter_type, locale);
+    let presenter = PresenterFactory::create(presenter_type_for(args.output), locale);
     presenter.present(&formatted)?;
 
     Ok(check_cve && cve_delta.is_some_and(|d| !d.new.is_empty()))
+}
+
+/// Runs --incident mode: evaluates one advisory against the project.
+///
+/// Returns the report's overall verdict, which `main` maps to the exit code.
+///
+/// The config file is still loaded and merged, so an invalid config fails
+/// here as in every mode, and its `exclude_packages` / `exclude_groups` scope
+/// the report. Its `format` and check-related keys are never read: the format
+/// is the CLI value or Markdown.
+///
+/// # Errors
+/// Returns `IncidentError::AdvisoryNotFound` (localized by `render_error_chain`)
+/// when the advisory ID is unknown to OSV, and an error when the project path
+/// or config file is invalid, the lockfile cannot be read, a network request
+/// fails, or the report cannot be written.
+async fn run_incident(args: Args, advisory_id: String) -> Result<IncidentVerdictView> {
+    display_banner();
+
+    let locale = args.lang;
+    let project_dir = args.path.as_deref().unwrap_or(".");
+    let project_path = PathBuf::from(project_dir);
+    validate_project_path(&project_path)?;
+
+    let config = load_config(&args, &project_path, locale)?;
+    let merged = merge_config(&args, &config)?;
+    let exclude_groups = resolve_exclude_groups(args.production_only, &merged, &project_path)?;
+
+    let request = IncidentRequest {
+        advisory_id,
+        project_path,
+        exclude_patterns: merged.exclude_patterns.clone(),
+        exclude_groups,
+    };
+
+    let use_case = RespondToIncidentUseCase::new(
+        FileSystemReader::new(),
+        FileSystemReader::new(),
+        OsvClient::new(locale)?,
+        PyPiReleaseClient::new()?,
+        UvLockAdapter::new(),
+        locale,
+    );
+    let report = use_case.execute(request).await?;
+
+    let formatted = match resolve_incident_format(args.format) {
+        OutputFormat::Markdown => IncidentMarkdownFormatter::new(locale).format(&report),
+        OutputFormat::Json => IncidentJsonFormatter::new().format(&report)?,
+    };
+
+    let presenter = PresenterFactory::create(presenter_type_for(args.output), locale);
+    presenter.present(&formatted)?;
+
+    Ok(report.overall)
 }

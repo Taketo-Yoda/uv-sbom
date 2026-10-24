@@ -362,7 +362,7 @@ license_policy:
 
 #### 優先度とマージルール
 
-- **CLIの引数が設定ファイルの値を上書き**します（スカラーフィールド: `format`, `severity_threshold`, `cvss_threshold`）
+- **CLIの引数が設定ファイルの値を上書き**します（スカラーフィールド: `format`, `severity_threshold`, `cvss_threshold`）。明示的に指定した `--format json` も、設定ファイルの `format: markdown` を上書きします
 - **`check_cve`** はデフォルトで有効。`--no-check-cve`フラグまたは設定ファイルで`check_cve: false`を指定した場合に無効化（論理AND）
 - **`exclude_packages`** はCLIと設定ファイルの両方から**マージ**され、重複が除去されます
 - **`ignore_cves`** はCLI（`--ignore-cve`）と設定ファイルの両方から**マージ**され、IDで重複が除去されます（重複時はCLIの指定が優先）
@@ -925,6 +925,77 @@ uv-sbom --diff main --cvss-threshold 7.0
 uv-sbom --diff origin/main --format markdown --output diff.md --severity-threshold high
 ```
 
+### インシデント対応（`--incident`）
+
+新しいアドバイザリが公開されたとき、`--incident <ADVISORY_ID>` を使うと、プロジェクトについて次の3つの問いに1コマンドで答えられます。**影響を受けているか、パッチは出ているか、何を実行すればよいか**。
+
+```bash
+# GHSA / PYSEC / CVE / OSV / MAL の ID を指定
+uv-sbom --incident GHSA-v845-jxx5-vc9f
+
+# CVE ID は対応する GHSA / PYSEC レコードへ自動で解決される
+uv-sbom --incident CVE-2023-43804 -p path/to/project
+
+# 自動化向けの JSON 出力、またはファイルへの書き出し
+uv-sbom --incident GHSA-v845-jxx5-vc9f --format json
+uv-sbom --incident GHSA-v845-jxx5-vc9f --output incident.md
+```
+
+**受け付ける ID:** `GHSA-`、`PYSEC-`、`CVE-`、`OSV-`、`MAL-` で始まる ID です。プレフィックスの大文字・小文字は区別しません。それ以外の ID は終了コード `2` で拒否されます。指定したレコードに PyPI パッケージが載っていない場合（`CVE-` ID でよくあります）、uv-sbom はそのレコードの `GHSA-`、次に `PYSEC-` のエイリアスをたどります。どの ID から解決したかはレポートに記載されます。
+
+**出力:** レポートは**デフォルトで Markdown** です（デフォルトが JSON の SBOM 生成とは異なります）。次の3セクションで構成されます。
+
+1. **影響** — アドバイザリが挙げる各パッケージについて、ロック中のバージョン、判定、直接依存か間接依存か（依存経路つき）を示します。
+2. **パッチ状況** — 修正バージョンと、それが PyPI でリリース済みかどうかを示します。
+3. **次のアクション** — コピー＆ペーストで使える `uv lock --upgrade-package <name>==<fixed>` + `uv sync` コマンドを示します。このコマンドは事前に試行解決で検証済みで、`uv.lock` は変更されません。アップグレードを解決できない場合や、修正版が未リリースの場合は、コマンドの代わりにガイダンスを表示します。
+
+`examples/suggest-fix-project` に対する実行例（終了コード `1`）:
+
+````markdown
+## インシデントレポート: GHSA-v845-jxx5-vc9f
+
+- **別名**: CVE-2023-43804, PYSEC-2023-192
+- **深刻度**: MEDIUM
+- **概要**: `Cookie` HTTP header isn't stripped on cross-origin redirects
+- **総合判定**: 影響あり — 修正版リリース済み
+
+### 1. 影響
+
+- **urllib3** 2.0.4 — 影響あり — 修正版リリース済み (間接依存)
+  - 依存経路:
+    - `requests → urllib3`
+
+### 2. パッチ状況
+
+- **urllib3**: 2.0.6 で修正 — リリース済み
+
+### 3. 次のアクション
+
+**urllib3** — 試行解決で検証済み（uv.lock は変更されていません）:
+```sh
+uv lock --upgrade-package urllib3==2.0.6
+uv sync
+```
+````
+
+**終了コード:**
+
+| 判定 | 終了コード |
+|------|-----------|
+| 影響なし（PyPI パッケージを含まないアドバイザリを含む） | 0 |
+| 影響あり、修正版リリース済み | 1 |
+| 影響あり、修正版が未リリース、または修正版なし | 4 |
+| 不明なアドバイザリ ID、ネットワークエラー、その他のアプリケーションエラー | 3 |
+| 不正な形式のアドバイザリ ID、または同時に使えないフラグの指定 | 2 |
+
+**有効なスコープ系オプション:** `--path`、`--exclude`、`--exclude-groups`、`--production-only`、`--output`、`--format`、`--lang`、`--config`。設定ファイルの `exclude_packages` と `exclude_groups` も適用されます。
+
+**無視される設定キー:** インシデントモードでは設定ファイルの `format` は使われず、出力形式は `--format` でのみ変わります。脆弱性・ライセンス・メンテナンス・互換性チェック系のキー（`check_cve`、`severity_threshold`、`cvss_threshold`、`ignore_cves`、`check_license`、`license_policy`、`check_abandoned`、`check_non_pypi`、`check_exploitability`、`target_python`、`suggest_fix`、`baseline_file`）も無視されます。
+
+**同時使用の制限:** `--incident` は `--diff`、`--init`、`--dry-run`、`--explain`、`--show-dependency-tree`、`--no-check-cve`、`--baseline`、`--update-baseline`、`--suggest-fix`、`--check-license`、`--check-abandoned`、`--check-non-pypi`、`--check-exploitability`、`--target-python`、`--severity-threshold`、`--cvss-threshold`、`--ignore-cve`、`--verify-links`、`--workspace` と同時に使用できません。ワークスペース対応は今後追加される予定です。
+
+**設定ファイルキー:** ありません。`--incident` は単一アドバイザリについての一度きりの問い合わせであり、永続的なポリシー設定ではないため、意図的に CLI 専用としています。
+
 ### 脆弱性ベースライン
 
 `--baseline` を使用して、既に受け入れ済みの脆弱性検出結果を抑制します。ベースラインファイルは `(パッケージ名, バージョン, 脆弱性ID)` のタプルを記録します。完全一致のみ抑制されます — パッケージバージョンを変更すると、以前のベースライン登録は新規の検出として扱われます。
@@ -1290,7 +1361,7 @@ uv-sbom -e "$(cat /etc/passwd)" # シェルコマンド置換がブロックさ�
 
 ```
 Options:
-  -f, --format <FORMAT>              出力形式: json または markdown [デフォルト: json]
+  -f, --format <FORMAT>              出力形式: json または markdown [デフォルト: json、--incident モードでは markdown]
   -p, --path <PATH>                  プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
   -o, --output <OUTPUT>              出力ファイルパス（指定しない場合は標準出力）
   -e, --exclude <PATTERN>            パッケージ除外パターン（ワイルドカード対応: *）
@@ -1332,6 +1403,9 @@ Options:
       --show-dependency-tree        依存関係グラフをASCIIツリーとして描画（Markdownフォーマットのみ）
       --dependency-tree-depth <DEPTH>  依存関係ツリー可視化の最大深度（デフォルト: 3）
                                      --show-dependency-treeが必要
+      --incident <ADVISORY_ID>       単一のアドバイザリ（GHSA-/PYSEC-/CVE-/OSV-/MAL- ID）がプロジェクトに影響するか、
+                                     修正版がリリース済みか、実行すべきコマンドを出力（デフォルトは Markdown）
+                                     --workspace、--diff、各チェック系フラグとの同時使用は不可（インシデント対応を参照）
   -h, --help                         ヘルプを表示
   -V, --version                      バージョンを表示
 ```
@@ -1345,7 +1419,8 @@ uv-sbomは以下の終了コードを返します：
 | 0 | 成功 | SBOMの生成成功、しきい値を超える脆弱性なし、`--help`や`--version`の表示 |
 | 1 | 脆弱性またはライセンス違反検出 | しきい値を超える脆弱性検出、ライセンスポリシー違反検出 |
 | 2 | 無効なコマンドライン引数 | 不明なオプション、無効な引数の型 |
-| 3 | アプリケーションエラー | uv.lockファイルの欠損、無効なプロジェクトパス、無効な除外パターン、ネットワークエラー、ファイル書き込みエラー |
+| 3 | アプリケーションエラー | uv.lockファイルの欠損、無効なプロジェクトパス、無効な除外パターン、ネットワークエラー、ファイル書き込みエラー、`--incident` の不明なアドバイザリ ID |
+| 4 | 影響あり・修正版なし（`--incident` のみ） | アドバイザリの影響を受けているが、修正版が PyPI 未リリース、または修正版が存在しない |
 
 ### 脆弱性・ライセンスチェック時の終了コード
 

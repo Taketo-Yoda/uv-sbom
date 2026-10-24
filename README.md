@@ -363,7 +363,7 @@ license_policy:
 
 #### Priority and Merge Rules
 
-- **CLI arguments override config file values** for scalar fields (`format`, `severity_threshold`, `cvss_threshold`)
+- **CLI arguments override config file values** for scalar fields (`format`, `severity_threshold`, `cvss_threshold`). An explicit `--format json` also overrides a config `format: markdown`
 - **`check_cve`** defaults to true when unset. Set to false in config to disable. Use --no-check-cve CLI flag to opt out
 - **`exclude_packages`** are **merged** from both CLI and config file, then deduplicated
 - **`ignore_cves`** are **merged** from both CLI (`--ignore-cve`) and config file, deduplicated by ID (CLI entry takes precedence for duplicates)
@@ -931,6 +931,77 @@ uv-sbom --diff main --cvss-threshold 7.0
 uv-sbom --diff origin/main --format markdown --output diff.md --severity-threshold high
 ```
 
+### Incident Response (`--incident`)
+
+When a new advisory is announced, `--incident <ADVISORY_ID>` answers three questions for your project in one command: **am I affected, is the patch out, and what do I run?**
+
+```bash
+# Look up a GHSA, PYSEC, CVE, OSV, or MAL ID
+uv-sbom --incident GHSA-v845-jxx5-vc9f
+
+# A CVE ID is resolved to its GHSA/PYSEC record automatically
+uv-sbom --incident CVE-2023-43804 -p path/to/project
+
+# JSON for automation, or write the report to a file
+uv-sbom --incident GHSA-v845-jxx5-vc9f --format json
+uv-sbom --incident GHSA-v845-jxx5-vc9f --output incident.md
+```
+
+**Accepted IDs:** IDs starting with `GHSA-`, `PYSEC-`, `CVE-`, `OSV-`, or `MAL-`. The prefix is case-insensitive; anything else is rejected with exit code `2`. When the record you ask for lists no PyPI package (typical for a `CVE-` ID), uv-sbom follows its `GHSA-` and then `PYSEC-` aliases and notes which ID the report was resolved from.
+
+**Output:** the report is **Markdown by default** (unlike SBOM generation, which defaults to JSON). It has three sections:
+
+1. **Impact** — each package the advisory names, its locked version, the verdict, and whether it is a direct or transitive dependency (with dependency paths).
+2. **Patch status** — the fixed version and whether it is released on PyPI.
+3. **Next action** — a copy-paste `uv lock --upgrade-package <name>==<fixed>` + `uv sync` command. It is verified with a dry-run resolution first, and your `uv.lock` is not modified. If the upgrade cannot be resolved, or no fix is released, you get guidance instead.
+
+Example against `examples/suggest-fix-project` (exit code `1`):
+
+````markdown
+## Incident Report: GHSA-v845-jxx5-vc9f
+
+- **Aliases**: CVE-2023-43804, PYSEC-2023-192
+- **Severity**: MEDIUM
+- **Summary**: `Cookie` HTTP header isn't stripped on cross-origin redirects
+- **Overall verdict**: Affected — fix released
+
+### 1. Impact
+
+- **urllib3** 2.0.4 — Affected — fix released (transitive dependency)
+  - Dependency path(s):
+    - `requests → urllib3`
+
+### 2. Patch status
+
+- **urllib3**: fixed in 2.0.6 — released
+
+### 3. Next action
+
+**urllib3** — Verified by a dry-run resolution (your uv.lock was not modified):
+```sh
+uv lock --upgrade-package urllib3==2.0.6
+uv sync
+```
+````
+
+**Exit codes:**
+
+| Verdict | Exit Code |
+|---------|-----------|
+| Not affected (including an advisory that names no PyPI package) | 0 |
+| Affected, fix released | 1 |
+| Affected, fix not yet released, or no fix available | 4 |
+| Unknown advisory ID, network error, or other application error | 3 |
+| Malformed advisory ID or conflicting flags | 2 |
+
+**Scope options honored:** `--path`, `--exclude`, `--exclude-groups`, `--production-only`, `--output`, `--format`, `--lang`, and `--config`. The config file's `exclude_packages` and `exclude_groups` also apply.
+
+**Ignored config keys:** the config file's `format` is never used in incident mode; only `--format` changes the output. The vulnerability, license, maintenance, and compatibility check keys (`check_cve`, `severity_threshold`, `cvss_threshold`, `ignore_cves`, `check_license`, `license_policy`, `check_abandoned`, `check_non_pypi`, `check_exploitability`, `target_python`, `suggest_fix`, `baseline_file`) are ignored too.
+
+**Mutual exclusion:** `--incident` cannot be combined with `--diff`, `--init`, `--dry-run`, `--explain`, `--show-dependency-tree`, `--no-check-cve`, `--baseline`, `--update-baseline`, `--suggest-fix`, `--check-license`, `--check-abandoned`, `--check-non-pypi`, `--check-exploitability`, `--target-python`, `--severity-threshold`, `--cvss-threshold`, `--ignore-cve`, `--verify-links`, or `--workspace`. Workspace support is planned.
+
+**Config file key:** None. `--incident` is intentionally CLI-only: it is a one-off query about a single advisory, not a persistent policy setting.
+
 ### Vulnerability Baseline
 
 Use `--baseline` to suppress previously-accepted vulnerability findings. A baseline file records `(package, version, vulnerability_id)` tuples. Only exact matches are suppressed — bumping a package version makes its previously-baselined findings count as new.
@@ -1304,7 +1375,7 @@ For more detailed security information, including threat model and attack vector
 
 ```
 Options:
-  -f, --format <FORMAT>              Output format: json or markdown [default: json]
+  -f, --format <FORMAT>              Output format: json or markdown [default: json; markdown in --incident mode]
   -p, --path <PATH>                  Path to the project directory [default: current directory]
   -o, --output <OUTPUT>              Output file path (if not specified, outputs to stdout)
   -e, --exclude <PATTERN>            Exclude packages matching patterns (supports wildcards: *)
@@ -1346,6 +1417,9 @@ Options:
       --show-dependency-tree        Render the dependency graph as an ASCII tree (Markdown format only)
       --dependency-tree-depth <DEPTH>  Maximum depth for the dependency tree visualization (default: 3)
                                      Requires --show-dependency-tree
+      --incident <ADVISORY_ID>       Check whether one advisory (GHSA-/PYSEC-/CVE-/OSV-/MAL- ID) affects the project,
+                                     whether the fix is released, and which command to run (Markdown by default)
+                                     Cannot be used with --workspace, --diff, or the check flags (see Incident Response)
   -h, --help                         Print help
   -V, --version                      Print version
 ```
@@ -1359,7 +1433,8 @@ uv-sbom returns the following exit codes:
 | 0 | Success | SBOM generated successfully, no vulnerabilities above threshold, `--help` or `--version` displayed |
 | 1 | Vulnerabilities or license violations detected | Vulnerabilities above threshold detected, license policy violations found |
 | 2 | Invalid command-line arguments | Unknown option, invalid argument type |
-| 3 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error |
+| 3 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error, unknown `--incident` advisory ID |
+| 4 | Affected, no released fix (`--incident` only) | The project is affected by the advisory, but the fix is not yet released on PyPI or no fix exists |
 
 ### Exit Codes with Vulnerability and License Checking
 

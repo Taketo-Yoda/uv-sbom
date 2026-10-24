@@ -30,7 +30,6 @@ pub struct SimulationResult {
 /// whether a suggested upgrade command is verified. Infrastructure failures
 /// (missing project files, temp-dir I/O, timeout) are reported as `Err` by the
 /// trait method instead, matching `simulate_upgrade`'s error contract.
-#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TargetedSimulationOutcome {
     /// The lock resolved, with the package at the target version or newer.
@@ -84,7 +83,6 @@ pub trait UvLockSimulator: Send + Sync {
     /// or `uv.lock` is missing from `project_path`, when the sandbox copy or the
     /// resulting lock cannot be read or parsed, or when uv times out or cannot
     /// be spawned.
-    #[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
     async fn simulate_upgrade_to(
         &self,
         package_name: &str,

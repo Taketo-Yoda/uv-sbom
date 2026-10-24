@@ -39,20 +39,13 @@ pub(super) fn resolve_flag(cli_flag: bool, config_value: Option<bool>) -> bool {
 
 /// Resolve `format`: CLI > config > default (json).
 ///
-/// clap always provides a default value for `--format` (default "json"), so we can't
-/// distinguish "user explicitly passed --format json" from "user passed nothing" —
-/// `cli` is always populated. Convention: CLI wins whenever it differs from the clap
-/// default; when it equals the default, config is allowed to override it. This means
-/// an explicit `--format json` loses to a config value other than json.
-pub(super) fn resolve_format(cli: OutputFormat, config: Option<&str>) -> OutputFormat {
-    let Some(config_format) = config else {
-        return cli;
-    };
-    if cli != OutputFormat::Json {
-        cli
-    } else {
-        config_format.parse::<OutputFormat>().unwrap_or(cli)
-    }
+/// `--format` has no clap default (#968), so `cli` is `None` exactly when the
+/// user passed no `--format` flag, and an explicit `--format json` wins over a
+/// config value. An unparseable config value falls through to the default.
+/// Incident mode does not use this resolver: it never reads the config `format`.
+pub(super) fn resolve_format(cli: Option<OutputFormat>, config: Option<&str>) -> OutputFormat {
+    cli.or_else(|| config.and_then(|c| c.parse::<OutputFormat>().ok()))
+        .unwrap_or(OutputFormat::Json)
 }
 
 /// Resolve `check_cve`: CLI opt-out (`--no-check-cve`) takes highest priority;
@@ -186,33 +179,46 @@ mod tests {
     // --- resolve_format ---
 
     #[test]
-    fn test_resolve_format_no_config_returns_cli() {
+    fn test_resolve_format_no_cli_no_config_defaults_to_json() {
+        assert_eq!(resolve_format(None, None), OutputFormat::Json);
+    }
+
+    #[test]
+    fn test_resolve_format_no_cli_uses_config() {
         assert_eq!(
-            resolve_format(OutputFormat::Markdown, None),
+            resolve_format(None, Some("markdown")),
             OutputFormat::Markdown
         );
     }
 
     #[test]
-    fn test_resolve_format_cli_non_json_wins() {
+    fn test_resolve_format_cli_json_wins_over_config() {
         assert_eq!(
-            resolve_format(OutputFormat::Markdown, Some("json")),
+            resolve_format(Some(OutputFormat::Json), Some("markdown")),
+            OutputFormat::Json
+        );
+    }
+
+    #[test]
+    fn test_resolve_format_cli_markdown_wins_over_config() {
+        assert_eq!(
+            resolve_format(Some(OutputFormat::Markdown), Some("json")),
             OutputFormat::Markdown
         );
     }
 
     #[test]
-    fn test_resolve_format_cli_json_yields_to_config() {
+    fn test_resolve_format_cli_without_config() {
         assert_eq!(
-            resolve_format(OutputFormat::Json, Some("markdown")),
+            resolve_format(Some(OutputFormat::Markdown), None),
             OutputFormat::Markdown
         );
     }
 
     #[test]
-    fn test_resolve_format_unparseable_config_falls_back_to_cli() {
+    fn test_resolve_format_unparseable_config_falls_back_to_default() {
         assert_eq!(
-            resolve_format(OutputFormat::Json, Some("not-a-format")),
+            resolve_format(None, Some("not-a-format")),
             OutputFormat::Json
         );
     }
