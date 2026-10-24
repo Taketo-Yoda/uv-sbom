@@ -1,14 +1,13 @@
 use super::GenerateSbomUseCase;
 use crate::application::dto::SbomRequest;
+use crate::application::use_cases::project_scope;
 use crate::i18n::Messages;
 use crate::ports::outbound::{
     ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
-    ProgressReporter, ProjectConfigError, ProjectConfigReader, PythonCompatibilityRepository,
-    VulnerabilityRepository,
+    ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
-use crate::sbom_generation::domain::services::GroupReachabilityAnalyzer;
 use crate::sbom_generation::domain::{DependencyGraph, Package, PackageName, UvLockSimulator};
-use crate::sbom_generation::services::{DependencyAnalyzer, PackageFilter};
+use crate::sbom_generation::services::DependencyAnalyzer;
 use crate::shared::Result;
 
 /// Type alias for package list with dependency map
@@ -84,20 +83,18 @@ where
         }
 
         let msgs = Messages::for_locale(self.locale);
-        let filter = PackageFilter::new(request.exclude_patterns.clone())?;
         let original_count = packages.len();
-        let filtered_pkgs = filter.filter_packages(packages);
+        let outcome = project_scope::filter_by_patterns(packages, &request.exclude_patterns)?;
 
-        let excluded_count = original_count - filtered_pkgs.len();
-        if excluded_count > 0 {
+        if outcome.excluded_count > 0 {
             self.progress_reporter.report(&Messages::format(
                 msgs.progress_packages_excluded,
-                &[&excluded_count.to_string()],
+                &[&outcome.excluded_count.to_string()],
             ));
         }
 
         // Check if all packages were excluded
-        if filtered_pkgs.is_empty() {
+        if outcome.packages.is_empty() {
             anyhow::bail!(
                 "{}",
                 Messages::format(
@@ -108,15 +105,14 @@ where
         }
 
         // Warn about unmatched patterns
-        let unmatched_patterns = filter.get_unmatched_patterns();
-        for pattern in unmatched_patterns {
+        for pattern in outcome.unmatched_patterns {
             self.progress_reporter.report_error(&Messages::format(
                 msgs.warn_exclude_pattern_unmatched,
                 &[&pattern],
             ));
         }
 
-        Ok(filtered_pkgs)
+        Ok(outcome.packages)
     }
 
     /// Applies group reachability filtering when `exclude_groups` is non-empty.
@@ -137,17 +133,14 @@ where
             return Ok(packages);
         }
 
-        let group_roots = self
-            .lockfile_reader
-            .read_and_parse_group_roots(&request.project_path)?;
-
         let original_count = packages.len();
-        let filtered = GroupReachabilityAnalyzer::filter_excluded_groups(
-            &packages,
+        let filtered = project_scope::filter_by_groups(
+            &self.lockfile_reader,
+            &request.project_path,
+            packages,
             dependency_map,
-            &group_roots,
             &request.exclude_groups,
-        );
+        )?;
 
         let excluded_count = original_count - filtered.len();
         if excluded_count > 0 {
@@ -187,17 +180,12 @@ where
         self.progress_reporter.report(msgs.progress_parsing_deps);
 
         // The adapter returns a typed ProjectConfigError rather than localized text;
-        // localize it here, where Locale/Messages are in scope. Replace (not wrap
-        // with .context()) so the English Display text is not printed as a cause.
-        let project_name = self
-            .project_config_reader
-            .read_project_name(&request.project_path)
-            .map_err(|e| match e.downcast_ref::<ProjectConfigError>() {
-                Some(ProjectConfigError::PyprojectNotFound) => {
-                    anyhow::anyhow!("{}", msgs.error_pyproject_not_found)
-                }
-                None => e,
-            })?;
+        // `read_project_name_localized` localizes it where Messages is in scope.
+        let project_name = project_scope::read_project_name_localized(
+            &self.project_config_reader,
+            &request.project_path,
+            msgs,
+        )?;
         let project_package_name = PackageName::new(project_name)?;
 
         let (graph, truncated_chains) =

@@ -1,6 +1,7 @@
 use crate::ports::outbound::{
-    MaintenanceInfo, MaintenanceRepository, ProgressCallback, PythonCompatibilityInfo,
-    PythonCompatibilityRepository, VulnerabilityRepository,
+    GroupRoots, LockfileParseResult, LockfileReader, MaintenanceInfo, MaintenanceRepository,
+    PackageSourceMap, ProgressCallback, ProjectConfigError, ProjectConfigReader,
+    PythonCompatibilityInfo, PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::{
     Package, PackageVulnerabilities, SimulationResult, TargetedSimulationOutcome, UvLockSimulator,
@@ -8,7 +9,62 @@ use crate::sbom_generation::domain::{
 use crate::shared::Result;
 use async_trait::async_trait;
 use std::collections::{HashMap, VecDeque};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
+
+/// In-memory `LockfileReader` returning fixed packages, dependency map, group
+/// roots, and source map regardless of the path. Shared by
+/// `GenerateSbomUseCase`'s tests and `RespondToIncidentUseCase`'s tests (moved
+/// here from `generate_sbom/mod.rs` once it gained a second consumer).
+#[derive(Default)]
+pub(crate) struct MockLockfileReader {
+    pub(crate) packages: Vec<Package>,
+    pub(crate) deps: HashMap<String, Vec<String>>,
+    pub(crate) group_roots: GroupRoots,
+    pub(crate) source_map: PackageSourceMap,
+}
+
+impl LockfileReader for MockLockfileReader {
+    fn read_lockfile(&self, _path: &Path) -> Result<String> {
+        Ok(String::new())
+    }
+
+    fn read_and_parse_lockfile(&self, _path: &Path) -> Result<LockfileParseResult> {
+        Ok((self.packages.clone(), self.deps.clone()))
+    }
+
+    fn read_and_parse_lockfile_for_member(
+        &self,
+        _path: &Path,
+        _member_name: &str,
+    ) -> Result<LockfileParseResult> {
+        Ok((self.packages.clone(), self.deps.clone()))
+    }
+
+    fn read_and_parse_group_roots(&self, _path: &Path) -> Result<GroupRoots> {
+        Ok(self.group_roots.clone())
+    }
+
+    fn read_and_parse_package_sources(&self, _path: &Path) -> Result<PackageSourceMap> {
+        Ok(self.source_map.clone())
+    }
+}
+
+/// In-memory `ProjectConfigReader`. When `pyproject_missing` is set, returns the
+/// typed `ProjectConfigError::PyprojectNotFound` the real adapter raises.
+pub(crate) struct MockProjectConfigReader {
+    pub(crate) project_name: String,
+    pub(crate) pyproject_missing: bool,
+}
+
+impl ProjectConfigReader for MockProjectConfigReader {
+    fn read_project_name(&self, _path: &Path) -> Result<String> {
+        if self.pyproject_missing {
+            return Err(ProjectConfigError::PyprojectNotFound.into());
+        }
+        Ok(self.project_name.clone())
+    }
+}
 
 /// Mock VulnerabilityRepository that returns pre-configured responses in order.
 ///
@@ -182,11 +238,18 @@ impl VulnerabilityRepository for MockVulnerabilityRepository {
 /// Records every `simulate_upgrade` call in `calls` so tests can assert on
 /// deduplication (e.g. that a package shared by multiple resolution entries
 /// is only simulated once).
+///
+/// `simulate_upgrade_to` (incident mode, #967) answers from `targeted`, keyed
+/// by package name: `Ok(outcome)` or `Err(message)`. An unconfigured package
+/// is an error. Each call is recorded as `(package, target_version)` in
+/// `targeted_calls`.
 #[derive(Default)]
 pub(crate) struct MockUvLockSimulator {
     results: HashMap<String, SimulationResult>,
     errors: HashMap<String, String>,
     calls: Mutex<Vec<String>>,
+    targeted: HashMap<String, std::result::Result<TargetedSimulationOutcome, String>>,
+    targeted_calls: Mutex<Vec<(String, String)>>,
 }
 
 impl MockUvLockSimulator {
@@ -195,8 +258,7 @@ impl MockUvLockSimulator {
         results.insert(package.to_string(), result);
         Self {
             results,
-            errors: HashMap::new(),
-            calls: Mutex::new(Vec::new()),
+            ..Self::default()
         }
     }
 
@@ -204,9 +266,8 @@ impl MockUvLockSimulator {
         let mut errors = HashMap::new();
         errors.insert(package.to_string(), error.to_string());
         Self {
-            results: HashMap::new(),
             errors,
-            calls: Mutex::new(Vec::new()),
+            ..Self::default()
         }
     }
 
@@ -217,13 +278,30 @@ impl MockUvLockSimulator {
         Self {
             results,
             errors,
-            calls: Mutex::new(Vec::new()),
+            ..Self::default()
         }
     }
 
     /// Returns the package names passed to `simulate_upgrade`, in call order.
     pub(crate) fn call_log(&self) -> Vec<String> {
         self.calls.lock().unwrap().clone()
+    }
+
+    /// Adds a `simulate_upgrade_to` response for `package` (`Err` holds the
+    /// error message to return).
+    pub(crate) fn with_targeted(
+        mut self,
+        package: &str,
+        outcome: std::result::Result<TargetedSimulationOutcome, String>,
+    ) -> Self {
+        self.targeted.insert(package.to_string(), outcome);
+        self
+    }
+
+    /// Returns the `(package, target_version)` pairs passed to
+    /// `simulate_upgrade_to`, in call order.
+    pub(crate) fn targeted_call_log(&self) -> Vec<(String, String)> {
+        self.targeted_calls.lock().unwrap().clone()
     }
 }
 
@@ -249,12 +327,21 @@ impl UvLockSimulator for MockUvLockSimulator {
     async fn simulate_upgrade_to(
         &self,
         package_name: &str,
-        _target_version: &str,
+        target_version: &str,
         _project_path: &std::path::Path,
     ) -> Result<TargetedSimulationOutcome> {
-        anyhow::bail!(
-            "MockUvLockSimulator: simulate_upgrade_to not configured for {}",
-            package_name
-        )
+        self.targeted_calls
+            .lock()
+            .unwrap()
+            .push((package_name.to_string(), target_version.to_string()));
+
+        match self.targeted.get(package_name) {
+            Some(Ok(outcome)) => Ok(outcome.clone()),
+            Some(Err(msg)) => Err(anyhow::anyhow!("{}", msg)),
+            None => anyhow::bail!(
+                "MockUvLockSimulator: simulate_upgrade_to not configured for {}",
+                package_name
+            ),
+        }
     }
 }

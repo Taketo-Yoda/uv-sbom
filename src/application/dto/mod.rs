@@ -4,12 +4,16 @@
 /// and adapters, keeping the domain layer isolated.
 mod diff_request;
 mod diff_result;
+#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
+mod incident_request;
 mod output_format;
 mod sbom_request;
 mod sbom_response;
 
 pub use diff_request::DiffRequest;
 pub use diff_result::DiffResult;
+#[allow(unused_imports)] // WIRE(#968): remove when --incident is wired into main.rs
+pub use incident_request::IncidentRequest;
 pub use output_format::OutputFormat;
 pub use sbom_request::SbomRequest;
 #[allow(unused_imports)]
