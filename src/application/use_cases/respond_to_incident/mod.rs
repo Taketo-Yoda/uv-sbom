@@ -1,7 +1,9 @@
-//! `--incident <ADVISORY_ID>` use case (#967; workspace mode #969).
+//! `--incident <ADVISORY_ID>` use case (#967; workspace mode #969; manual
+//! range specs #963).
 //!
 //! `mod.rs` holds the use case struct, the single-project entry point, and
-//! advisory resolution; `evaluation.rs` evaluates packages against the
+//! advisory resolution (an OSV lookup, or a synthetic advisory built from a
+//! manual range spec); `evaluation.rs` evaluates packages against the
 //! advisory (release lookup, dry-run, verdict, next action); `workspace.rs`
 //! holds the workspace entry point.
 
@@ -10,7 +12,7 @@ mod workspace;
 
 use crate::application::dto::IncidentRequest;
 use crate::application::read_models::incident_report::{
-    IncidentFinding, IncidentReport, MemberIncidentResult, WorkspaceIncidentReport,
+    IncidentFinding, IncidentReport, IncidentSource, MemberIncidentResult, WorkspaceIncidentReport,
 };
 use crate::application::read_models::vulnerability_view::SeverityView;
 use crate::application::use_cases::project_scope;
@@ -20,6 +22,7 @@ use crate::ports::outbound::{
     AdvisoryRepository, LockfileReader, PackageSourceMap, ProjectConfigReader, ReleaseRepository,
 };
 use crate::sbom_generation::domain::advisory::{Advisory, IncidentVerdict};
+use crate::sbom_generation::domain::incident_target::{IncidentTarget, ManualAffectedSpec};
 use crate::sbom_generation::domain::services::advisory_range_matcher::normalize_name;
 use crate::sbom_generation::domain::{DependencyGraph, Package, PackageName, UvLockSimulator};
 use crate::sbom_generation::services::DependencyAnalyzer;
@@ -58,8 +61,11 @@ struct ProjectScope {
 
 /// The advisory record used for evaluation, plus report metadata.
 struct ResolvedAdvisory {
-    /// The record actually used (an alias when one was followed).
+    /// The record actually used (an alias when one was followed, or the
+    /// synthetic record built from a manual spec).
     advisory: Advisory,
+    /// Where the record came from.
+    source: IncidentSource,
     /// The user-supplied ID when an alias was followed.
     resolved_from: Option<String>,
     severity: Option<SeverityView>,
@@ -69,6 +75,21 @@ struct ResolvedAdvisory {
 }
 
 impl ResolvedAdvisory {
+    /// The synthetic advisory for a user-supplied range spec (#963): no
+    /// aliases, severity, or summary, and no OSV lookup.
+    fn manual(spec: &ManualAffectedSpec) -> Self {
+        let advisory = spec.to_advisory();
+        let affected_packages = dedup_by_normalized_name(&advisory);
+        Self {
+            advisory,
+            source: IncidentSource::Manual,
+            resolved_from: None,
+            severity: None,
+            summary: None,
+            affected_packages,
+        }
+    }
+
     /// The single-project report for this advisory.
     fn into_report(
         self,
@@ -77,6 +98,7 @@ impl ResolvedAdvisory {
     ) -> IncidentReport {
         IncidentReport {
             advisory_id: self.advisory.id,
+            source: self.source,
             resolved_from: self.resolved_from,
             aliases: self.advisory.aliases,
             severity: self.severity,
@@ -95,6 +117,7 @@ impl ResolvedAdvisory {
     ) -> WorkspaceIncidentReport {
         WorkspaceIncidentReport {
             advisory_id: self.advisory.id,
+            source: self.source,
             resolved_from: self.resolved_from,
             aliases: self.advisory.aliases,
             severity: self.severity,
@@ -165,13 +188,14 @@ where
         }
     }
 
-    /// Builds the incident report for `request.advisory_id`.
+    /// Builds the incident report for `request.target`.
     ///
     /// 1. Reads the lockfile and applies the scope filters (an empty scope is
     ///    not an error — it yields a not-affected report), builds the
     ///    dependency graph, and reads package sources.
     /// 2. Fetches the advisory, following GHSA, then PYSEC aliases when the
-    ///    record lists no PyPI package.
+    ///    record lists no PyPI package. A manual range spec is converted into
+    ///    a synthetic advisory instead, and OSV is not queried (#963).
     /// 3. Evaluates every in-scope package the advisory names. Release status
     ///    is looked up once per `(package, fixed version)`, and only for
     ///    packages sourced from PyPI; a non-PyPI package yields
@@ -194,8 +218,8 @@ where
         // 1. Scope, dependency graph, and package sources.
         let (scope, sources) = self.load_scope(&request, msgs)?;
 
-        // 2. Advisory (following aliases) and metadata.
-        let resolved = self.resolve_advisory(&request.advisory_id).await?;
+        // 2. Advisory (following aliases, or built from a manual spec) and metadata.
+        let resolved = self.resolve_target(&request.target).await?;
 
         // 3-4. Findings, ordering, and overall verdict.
         let mut caches = EvaluationCaches::default();
@@ -255,6 +279,19 @@ where
         Ok((ProjectScope { packages, graph }, sources))
     }
 
+    /// Resolves the advisory to evaluate: an OSV lookup for an advisory ID, or
+    /// the synthetic advisory for a manual range spec, which makes no
+    /// `AdvisoryRepository` call (#963).
+    ///
+    /// # Errors
+    /// The same as `resolve_advisory`, for an advisory ID only.
+    async fn resolve_target(&self, target: &IncidentTarget) -> Result<ResolvedAdvisory> {
+        match target {
+            IncidentTarget::AdvisoryId(id) => self.resolve_advisory(id).await,
+            IncidentTarget::ManualSpec(spec) => Ok(ResolvedAdvisory::manual(spec)),
+        }
+    }
+
     /// Fetches the requested advisory, follows aliases when it lists no PyPI
     /// package, and collects the report metadata (severity and summary fall
     /// back to the requested record when the alias record lacks them).
@@ -284,6 +321,7 @@ where
 
         Ok(ResolvedAdvisory {
             advisory,
+            source: IncidentSource::Osv,
             resolved_from,
             severity,
             summary,
@@ -543,7 +581,7 @@ mod tests {
 
     pub(super) fn request(id: &str) -> IncidentRequest {
         IncidentRequest {
-            advisory_id: id.to_string(),
+            target: IncidentTarget::AdvisoryId(id.to_string()),
             project_path: PathBuf::from("/test/project"),
             exclude_patterns: vec![],
             exclude_groups: vec![],
@@ -578,6 +616,7 @@ mod tests {
         let report = uc.execute(request(GHSA)).await.unwrap();
 
         assert_eq!(report.advisory_id, GHSA);
+        assert_eq!(report.source, IncidentSource::Osv);
         assert_eq!(report.resolved_from, None);
         assert_eq!(report.aliases, vec![CVE.to_string(), PYSEC.to_string()]);
         assert_eq!(report.severity, Some(SeverityView::Medium));
@@ -828,5 +867,83 @@ mod tests {
             alias_candidates(&primary),
             vec!["GHSA-a", "ghsa-b", "pysec-1", "PYSEC-2"]
         );
+    }
+
+    pub(super) fn manual(spec: &str) -> IncidentTarget {
+        IncidentTarget::ManualSpec(ManualAffectedSpec::parse(spec).unwrap())
+    }
+
+    #[tokio::test]
+    async fn test_manual_spec_skips_advisory_repository_and_verifies_command() {
+        let uc = use_case(
+            direct_requests_lock(),
+            MockAdvisoryRepository::default(),
+            released("requests"),
+            MockUvLockSimulator::default().with_targeted("requests", resolved()),
+        );
+        let request = IncidentRequest {
+            target: manual("requests<2.31.0"),
+            ..request(GHSA)
+        };
+
+        let report = uc.execute(request).await.unwrap();
+
+        assert!(uc.advisory_repository.calls.lock().unwrap().is_empty());
+        assert_eq!(report.source, IncidentSource::Manual);
+        assert_eq!(report.advisory_id, "requests<2.31.0");
+        assert_eq!(report.resolved_from, None);
+        assert!(report.aliases.is_empty());
+        assert_eq!(report.severity, None);
+        assert_eq!(report.summary, None);
+        assert_eq!(report.affected_packages, vec!["requests".to_string()]);
+        assert_eq!(report.overall, IncidentVerdictView::AffectedFixReleased);
+        let finding = &report.findings[0];
+        assert_eq!(finding.fixed_version.as_deref(), Some("2.31.0"));
+        assert_eq!(
+            finding.upgrade_command.as_deref(),
+            Some("uv lock --upgrade-package requests==2.31.0")
+        );
+        assert!(finding.command_verified);
+    }
+
+    #[tokio::test]
+    async fn test_manual_spec_last_affected_is_no_fix_without_release_lookup() {
+        let uc = use_case(
+            direct_requests_lock(),
+            MockAdvisoryRepository::default(),
+            MockReleaseRepository::default(),
+            MockUvLockSimulator::default(),
+        );
+        let request = IncidentRequest {
+            target: manual("requests<=2.30.0"),
+            ..request(GHSA)
+        };
+
+        let report = uc.execute(request).await.unwrap();
+
+        assert!(uc.advisory_repository.calls.lock().unwrap().is_empty());
+        assert!(uc.release_repository.calls.lock().unwrap().is_empty());
+        assert_eq!(report.overall, IncidentVerdictView::AffectedNoFix);
+        assert_eq!(report.findings[0].upgrade_command, None);
+    }
+
+    #[tokio::test]
+    async fn test_manual_spec_outside_range_is_not_affected() {
+        let uc = use_case(
+            direct_requests_lock(),
+            MockAdvisoryRepository::default(),
+            MockReleaseRepository::default(),
+            MockUvLockSimulator::default(),
+        );
+        let request = IncidentRequest {
+            target: manual("requests>=2.26,<2.31.0"),
+            ..request(GHSA)
+        };
+
+        let report = uc.execute(request).await.unwrap();
+
+        assert!(uc.advisory_repository.calls.lock().unwrap().is_empty());
+        assert_eq!(report.overall, IncidentVerdictView::NotAffected);
+        assert_eq!(report.findings[0].verdict, IncidentVerdictView::NotAffected);
     }
 }

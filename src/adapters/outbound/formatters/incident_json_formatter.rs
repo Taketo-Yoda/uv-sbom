@@ -5,8 +5,9 @@ use crate::shared::Result;
 ///
 /// The output is a direct, pretty-printed serde serialization of the read
 /// model, so its keys are the read model's snake_case field names: report keys
-/// `advisory_id`, `resolved_from`, `aliases`, `severity`, `summary`,
-/// `affected_packages`, `findings`, `overall`. Absent options serialize as
+/// `advisory_id`, `source` (`"osv"` or `"manual"`, #963), `resolved_from`,
+/// `aliases`, `severity`, `summary`, `affected_packages`, `findings`,
+/// `overall`. Absent options serialize as
 /// `null` rather than being omitted, so the key set is stable.
 pub struct IncidentJsonFormatter;
 
@@ -48,8 +49,8 @@ impl Default for IncidentJsonFormatter {
 mod tests {
     use super::*;
     use crate::application::read_models::incident_report::{
-        IncidentFinding, IncidentGuidance, IncidentVerdictView, MemberIncidentResult,
-        ReleaseStatusView,
+        IncidentFinding, IncidentGuidance, IncidentSource, IncidentVerdictView,
+        MemberIncidentResult, ReleaseStatusView,
     };
     use crate::application::read_models::vulnerability_view::SeverityView;
     use serde_json::{json, Value};
@@ -58,6 +59,7 @@ mod tests {
     fn report() -> IncidentReport {
         IncidentReport {
             advisory_id: "GHSA-j8r2-6x86-q33q".to_string(),
+            source: IncidentSource::Osv,
             resolved_from: Some("CVE-2023-32681".to_string()),
             aliases: vec!["CVE-2023-32681".to_string()],
             severity: Some(SeverityView::Medium),
@@ -98,6 +100,7 @@ mod tests {
             keys(&parsed()),
             BTreeSet::from([
                 "advisory_id",
+                "source",
                 "resolved_from",
                 "aliases",
                 "severity",
@@ -107,6 +110,21 @@ mod tests {
                 "overall",
             ])
         );
+    }
+
+    #[test]
+    fn test_source_serializes_as_snake_case() {
+        assert_eq!(parsed()["source"], json!("osv"));
+
+        let manual = IncidentReport {
+            advisory_id: "requests<2.31.0".to_string(),
+            source: IncidentSource::Manual,
+            ..report()
+        };
+        let value: Value =
+            serde_json::from_str(&IncidentJsonFormatter::new().format(&manual).unwrap()).unwrap();
+        assert_eq!(value["source"], json!("manual"));
+        assert_eq!(value["advisory_id"], json!("requests<2.31.0"));
     }
 
     #[test]
@@ -180,6 +198,7 @@ mod tests {
         let single = report();
         let workspace = WorkspaceIncidentReport {
             advisory_id: single.advisory_id,
+            source: single.source,
             resolved_from: single.resolved_from,
             aliases: single.aliases,
             severity: single.severity,
@@ -211,6 +230,7 @@ mod tests {
             keys(&value),
             BTreeSet::from([
                 "advisory_id",
+                "source",
                 "resolved_from",
                 "aliases",
                 "severity",

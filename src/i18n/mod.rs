@@ -76,6 +76,17 @@ pub struct Messages {
     pub error_init_failed: &'static str,
     pub error_no_workspace_members: &'static str,
     pub error_incident_advisory_not_found: &'static str,
+    pub error_incident_invalid_target: &'static str,
+    pub error_incident_target_hint: &'static str,
+    pub error_incident_spec_empty: &'static str,
+    pub error_incident_spec_missing_name: &'static str,
+    pub error_incident_spec_invalid_name: &'static str,
+    pub error_incident_spec_missing_specifier: &'static str,
+    pub error_incident_spec_invalid_specifiers: &'static str,
+    pub error_incident_spec_unsupported_operator: &'static str,
+    pub error_incident_spec_multiple_lower: &'static str,
+    pub error_incident_spec_multiple_upper: &'static str,
+    pub error_incident_spec_empty_range: &'static str,
 
     // SBOM generation error messages (application layer, GenerateSbomUseCase)
     pub error_all_packages_excluded: &'static str,
@@ -338,6 +349,11 @@ pub struct Messages {
     pub incident_packages_not_in_member: &'static str,
     pub incident_status_not_applicable_workspace: &'static str,
     pub incident_workspace_aggregate: &'static str,
+
+    // Manual range spec strings (#963)
+    pub incident_title_manual: &'static str,
+    pub incident_manual_notice: &'static str,
+    pub incident_status_no_fixed_version_manual: &'static str,
 }
 
 impl Messages {
@@ -414,6 +430,17 @@ static EN_MESSAGES: Messages = Messages {
     error_init_failed: "Error: {}",
     error_no_workspace_members: "No workspace members found. Is this a uv workspace?",
     error_incident_advisory_not_found: "Advisory {} was not found in the OSV database. Check the ID, or search for it at https://osv.dev",
+    error_incident_invalid_target: "Invalid advisory ID or version-range spec: '{}'. {}",
+    error_incident_target_hint: "Expected an advisory ID starting with GHSA-, PYSEC-, CVE-, OSV-, or MAL-, or a package range such as \"foo<2.3.2\" or \"foo>=2.0,<2.3.2\" (operators >=, <, and <= only). Quote the range in the shell, because < is a redirection.",
+    error_incident_spec_empty: "The value is empty.",
+    error_incident_spec_missing_name: "No package name was given.",
+    error_incident_spec_invalid_name: "'{}' is not a valid package name.",
+    error_incident_spec_missing_specifier: "No version range was given for '{}'.",
+    error_incident_spec_invalid_specifiers: "Could not parse the version range '{}'.",
+    error_incident_spec_unsupported_operator: "'{}' uses an unsupported operator; only >=, <, and <= are allowed.",
+    error_incident_spec_multiple_lower: "Only one lower bound (>=) is allowed.",
+    error_incident_spec_multiple_upper: "Only one upper bound is allowed: use < for the fixed version, or <= for the last affected version.",
+    error_incident_spec_empty_range: "The range '{}' contains no versions.",
 
     // SBOM generation error messages (application layer, GenerateSbomUseCase)
     error_all_packages_excluded: "All {} package(s) were excluded by the provided filters. The SBOM would be empty. Please adjust your exclusion patterns.",
@@ -677,6 +704,11 @@ static EN_MESSAGES: Messages = Messages {
     incident_packages_not_in_member: "None of the affected packages ({}) are reachable from this member.",
     incident_status_not_applicable_workspace: "Not applicable — no workspace member is affected.",
     incident_workspace_aggregate: "**{} of {} members affected**: {}",
+
+    // Manual range spec strings (#963)
+    incident_title_manual: "## Incident Report (manual range): `{}`",
+    incident_manual_notice: "⚠️ This affected range was supplied by you. It is not taken from a vulnerability database and has not been verified.",
+    incident_status_no_fixed_version_manual: "the supplied range names no fixed version",
 };
 
 static JA_MESSAGES: Messages = Messages {
@@ -722,6 +754,17 @@ static JA_MESSAGES: Messages = Messages {
     error_init_failed: "エラー: {}",
     error_no_workspace_members: "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？",
     error_incident_advisory_not_found: "アドバイザリ {} は OSV データベースに見つかりませんでした。ID を確認するか、https://osv.dev で検索してください",
+    error_incident_invalid_target: "アドバイザリ ID またはバージョン範囲の指定が不正です: '{}'。{}",
+    error_incident_target_hint: "GHSA-、PYSEC-、CVE-、OSV-、MAL- で始まるアドバイザリ ID か、\"foo<2.3.2\" や \"foo>=2.0,<2.3.2\" のようなパッケージの範囲（演算子は >=、<、<= のみ）を指定してください。< はシェルのリダイレクトになるため、範囲は引用符で囲んでください。",
+    error_incident_spec_empty: "値が空です。",
+    error_incident_spec_missing_name: "パッケージ名が指定されていません。",
+    error_incident_spec_invalid_name: "'{}' はパッケージ名として不正です。",
+    error_incident_spec_missing_specifier: "'{}' のバージョン範囲が指定されていません。",
+    error_incident_spec_invalid_specifiers: "バージョン範囲 '{}' を解析できませんでした。",
+    error_incident_spec_unsupported_operator: "'{}' はサポートされていない演算子を使っています。使える演算子は >=、<、<= のみです。",
+    error_incident_spec_multiple_lower: "下限（>=）は 1 つだけ指定できます。",
+    error_incident_spec_multiple_upper: "上限は 1 つだけ指定できます。修正バージョンには <、影響を受ける最後のバージョンには <= を使ってください。",
+    error_incident_spec_empty_range: "範囲 '{}' に含まれるバージョンがありません。",
 
     // SBOM generation error messages (application layer, GenerateSbomUseCase)
     error_all_packages_excluded: "指定されたフィルターにより {} 個のパッケージがすべて除外されました。SBOM が空になります。除外パターンを見直してください。",
@@ -987,6 +1030,11 @@ static JA_MESSAGES: Messages = Messages {
     incident_packages_not_in_member: "影響対象パッケージ（{}）はこのメンバーから到達しません。",
     incident_status_not_applicable_workspace: "該当なし — 影響を受けるワークスペースメンバーはありません。",
     incident_workspace_aggregate: "**{} / {} メンバーが影響あり**: {}",
+
+    // Manual range spec strings (#963)
+    incident_title_manual: "## インシデントレポート（手動指定の範囲）: `{}`",
+    incident_manual_notice: "⚠️ この影響範囲はユーザーが指定したものです。脆弱性データベースの記録ではなく、検証もされていません。",
+    incident_status_no_fixed_version_manual: "指定された範囲に修正バージョンの記載なし",
 };
 
 #[cfg(test)]
@@ -1491,6 +1539,17 @@ mod tests {
             error_init_failed,
             error_no_workspace_members,
             error_incident_advisory_not_found,
+            error_incident_invalid_target,
+            error_incident_target_hint,
+            error_incident_spec_empty,
+            error_incident_spec_missing_name,
+            error_incident_spec_invalid_name,
+            error_incident_spec_missing_specifier,
+            error_incident_spec_invalid_specifiers,
+            error_incident_spec_unsupported_operator,
+            error_incident_spec_multiple_lower,
+            error_incident_spec_multiple_upper,
+            error_incident_spec_empty_range,
             error_all_packages_excluded,
             error_pyproject_not_found,
             error_config_already_exists,
@@ -1697,6 +1756,9 @@ mod tests {
             incident_packages_not_in_member,
             incident_status_not_applicable_workspace,
             incident_workspace_aggregate,
+            incident_title_manual,
+            incident_manual_notice,
+            incident_status_no_fixed_version_manual,
         );
         for (name, en, ja) in fields {
             let (en_count, ja_count) = (en.matches("{}").count(), ja.matches("{}").count());
