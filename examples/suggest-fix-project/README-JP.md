@@ -148,12 +148,16 @@ uv-sbom -p examples/suggest-fix-project --incident GHSA-v845-jxx5-vc9f --lang ja
 
 # 影響なし（requests は修正済みの 2.31.0 にロック）。CVE ID は GHSA レコードへ解決される → 終了コード 0
 uv-sbom -p examples/suggest-fix-project --incident CVE-2023-32681 --lang ja
+
+# 同じ確認を手動指定の範囲で行う（OSV 未登録のアドバイザリ向け。引用符が必要）→ 終了コード 1
+uv-sbom -p examples/suggest-fix-project --incident "urllib3<2.0.6" --lang ja
 ```
 
 **表示される内容:**
 - `### 1. 影響` に、`requests → urllib3` 経由の間接依存として `urllib3` 2.0.4
 - `### 2. パッチ状況` に `2.0.6 で修正 — リリース済み`
 - `### 3. 次のアクション` に、試行解決で検証済みの `uv lock --upgrade-package urllib3==2.0.6` + `uv sync` ブロック
+- 手動指定の範囲では、見出しが `` ## インシデントレポート（手動指定の範囲）: `urllib3<2.0.6` `` になり、その後に、範囲がユーザー指定であり脆弱性データベースで検証されていない旨の注意書きが続きます
 
 ## 出力例
 

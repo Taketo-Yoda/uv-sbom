@@ -10,6 +10,7 @@ impl<'a> From<&'a WorkspaceIncidentReport> for HeadingFields<'a> {
     fn from(report: &'a WorkspaceIncidentReport) -> Self {
         Self {
             advisory_id: &report.advisory_id,
+            source: report.source,
             resolved_from: report.resolved_from.as_deref(),
             aliases: &report.aliases,
             severity: report.severity,
@@ -65,6 +66,7 @@ impl IncidentMarkdownFormatter {
         self.push_patch_status(
             &mut lines,
             &findings,
+            report.source,
             msgs.incident_status_not_applicable_workspace,
         );
         if report.overall != IncidentVerdictView::NotAffected {
@@ -95,9 +97,13 @@ impl IncidentMarkdownFormatter {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{assert_no_english_labels, position, report, verified};
+    use super::super::tests::{
+        assert_no_english_labels, manual_report, position, report, verified,
+    };
     use super::*;
-    use crate::application::read_models::incident_report::{IncidentFinding, MemberIncidentResult};
+    use crate::application::read_models::incident_report::{
+        IncidentFinding, IncidentSource, MemberIncidentResult,
+    };
     use crate::i18n::Locale;
 
     fn workspace(members: Vec<(&str, Vec<IncidentFinding>)>) -> WorkspaceIncidentReport {
@@ -120,6 +126,7 @@ mod tests {
         let base = report(vec![]);
         WorkspaceIncidentReport {
             advisory_id: base.advisory_id,
+            source: base.source,
             resolved_from: base.resolved_from,
             aliases: base.aliases,
             severity: base.severity,
@@ -204,5 +211,26 @@ mod tests {
         for label in ["Member", "Verdict", "members affected", "reachable"] {
             assert!(!out.contains(label), "JA output contains {label:?}:\n{out}");
         }
+    }
+
+    #[test]
+    fn test_workspace_manual_source_heading_and_notice() {
+        let base = manual_report(vec![]);
+        let report = WorkspaceIncidentReport {
+            advisory_id: base.advisory_id,
+            source: IncidentSource::Manual,
+            resolved_from: None,
+            aliases: vec![],
+            severity: None,
+            summary: None,
+            ..workspace(vec![("api", vec![transitive_from("httpx")])])
+        };
+
+        let out = IncidentMarkdownFormatter::new(Locale::En).format_workspace(&report);
+
+        assert!(out.starts_with("## Incident Report (manual range): `requests<2.31.0`\n"));
+        assert!(out.contains("⚠️ This affected range was supplied by you."));
+        assert!(!out.contains("**Aliases**"));
+        assert!(out.contains("#### Member: api"));
     }
 }

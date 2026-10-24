@@ -933,7 +933,7 @@ uv-sbom --diff origin/main --format markdown --output diff.md --severity-thresho
 
 ### Incident Response (`--incident`)
 
-When a new advisory is announced, `--incident <ADVISORY_ID>` answers three questions for your project in one command: **am I affected, is the patch out, and what do I run?**
+When a new advisory is announced, `--incident <ADVISORY_ID>` (or a quoted version range for an advisory not yet in OSV) answers three questions for your project in one command: **am I affected, is the patch out, and what do I run?**
 
 ```bash
 # Look up a GHSA, PYSEC, CVE, OSV, or MAL ID
@@ -945,9 +945,12 @@ uv-sbom --incident CVE-2023-43804 -p path/to/project
 # JSON for automation, or write the report to a file
 uv-sbom --incident GHSA-v845-jxx5-vc9f --format json
 uv-sbom --incident GHSA-v845-jxx5-vc9f --output incident.md
+
+# Advisory not in OSV yet: pass the affected range yourself (quote it!)
+uv-sbom --incident "urllib3<2.0.6"
 ```
 
-**Accepted IDs:** IDs starting with `GHSA-`, `PYSEC-`, `CVE-`, `OSV-`, or `MAL-`. The prefix is case-insensitive; anything else is rejected with exit code `2`. When the record you ask for lists no PyPI package (typical for a `CVE-` ID), uv-sbom follows its `GHSA-` and then `PYSEC-` aliases and notes which ID the report was resolved from.
+**Accepted IDs:** IDs starting with `GHSA-`, `PYSEC-`, `CVE-`, `OSV-`, or `MAL-`. The prefix is case-insensitive. Any other value is read as a manual range (see below), and a value that is neither is rejected with exit code `2`. When the record you ask for lists no PyPI package (typical for a `CVE-` ID), uv-sbom follows its `GHSA-` and then `PYSEC-` aliases and notes which ID the report was resolved from.
 
 **Output:** the report is **Markdown by default** (unlike SBOM generation, which defaults to JSON). It has three sections:
 
@@ -1030,6 +1033,55 @@ uv sync
 **1 of 2 members affected**: api
 ````
 
+**Manual range (advisory not yet in OSV):** in the first hours after a disclosure, the advisory may not be in OSV yet, so an ID has nothing to look up. Security announcements usually state the affected range in plain text ("versions before 2.0.6 are affected"), so you can pass that range instead of an ID: a package name immediately followed by one or more comma-separated specifiers.
+
+```bash
+uv-sbom --incident "foo<2.3.2"          # affected below 2.3.2; 2.3.2 is the fix
+uv-sbom --incident "foo>=2.0,<2.3.2"    # affected from 2.0 up to (not including) 2.3.2
+uv-sbom --incident "foo<=2.3.1"         # affected up to 2.3.1; no fix known yet
+```
+
+| Specifier | Meaning |
+|-----------|---------|
+| `>=X` | First affected version (optional; without it, every version below the upper bound is affected) |
+| `<X` | Fixed version. Patch status and the verified upgrade command work exactly as with an advisory ID |
+| `<=X` | Last affected version. No fix is known, so the verdict is "no fix available" (exit `4`) |
+
+- **Quote the argument.** In the shell, `<` is an input redirection: `uv-sbom --incident foo<2.3.2` would try to read a file named `2.3.2`.
+- Only `>=`, `<`, and `<=` are accepted, with at most one lower bound and one upper bound (not `<` and `<=` together). Other operators (`==`, `!=`, `~=`, `>`, `===`), a bare package name, and a range that contains no versions (e.g. `"foo>=2.3,<2.0"`) are rejected with exit code `2`, not guessed.
+- With `>=` alone, the verdict is also "no fix available" (exit `4`).
+- One range per run. For fixes on several release lines, run the command once per range.
+- No OSV request is made. The report header shows the range and states that it was supplied by you and not verified against a vulnerability database. In JSON output, `source` is `"manual"` (it is `"osv"` for an advisory ID), and `advisory_id` holds the range.
+- Works with `--workspace`, `--format json`, and `--lang ja`, the same as an advisory ID, with the same exit codes.
+
+Example against `examples/suggest-fix-project` (exit code `1`):
+
+````markdown
+## Incident Report (manual range): `urllib3<2.0.6`
+
+⚠️ This affected range was supplied by you. It is not taken from a vulnerability database and has not been verified.
+
+- **Overall verdict**: Affected — fix released
+
+### 1. Impact
+
+- **urllib3** 2.0.4 — Affected — fix released (transitive dependency)
+  - Dependency path(s):
+    - `requests → urllib3`
+
+### 2. Patch status
+
+- **urllib3**: fixed in 2.0.6 — released
+
+### 3. Next action
+
+**urllib3** — Verified by a dry-run resolution (your uv.lock was not modified):
+```sh
+uv lock --upgrade-package urllib3==2.0.6
+uv sync
+```
+````
+
 **Exit codes:**
 
 | Verdict | Exit Code |
@@ -1038,7 +1090,7 @@ uv sync
 | Affected, fix released | 1 |
 | Affected, fix not yet released, or no fix available | 4 |
 | Unknown advisory ID, network error, or other application error | 3 |
-| Malformed advisory ID or conflicting flags | 2 |
+| Malformed advisory ID or range, or conflicting flags | 2 |
 
 **Scope options honored:** `--path`, `--exclude`, `--exclude-groups`, `--production-only`, `--output` (not with `--workspace`), `--format`, `--lang`, and `--config`. The config file's `exclude_packages` and `exclude_groups` also apply.
 
@@ -1046,7 +1098,7 @@ uv sync
 
 **Mutual exclusion:** `--incident` cannot be combined with `--diff`, `--init`, `--dry-run`, `--explain`, `--show-dependency-tree`, `--no-check-cve`, `--baseline`, `--update-baseline`, `--suggest-fix`, `--check-license`, `--check-abandoned`, `--check-non-pypi`, `--check-exploitability`, `--target-python`, `--severity-threshold`, `--cvss-threshold`, `--ignore-cve`, or `--verify-links`. It can be combined with `--workspace` (see above).
 
-**Config file key:** None. `--incident` is intentionally CLI-only: it is a one-off query about a single advisory, not a persistent policy setting.
+**Config file key:** None. `--incident` is intentionally CLI-only: it is a one-off query about a single advisory (or range), not a persistent policy setting.
 
 ### Vulnerability Baseline
 
@@ -1463,8 +1515,10 @@ Options:
       --show-dependency-tree        Render the dependency graph as an ASCII tree (Markdown format only)
       --dependency-tree-depth <DEPTH>  Maximum depth for the dependency tree visualization (default: 3)
                                      Requires --show-dependency-tree
-      --incident <ADVISORY_ID>       Check whether one advisory (GHSA-/PYSEC-/CVE-/OSV-/MAL- ID) affects the project,
+      --incident <ID_OR_RANGE>       Check whether one advisory (GHSA-/PYSEC-/CVE-/OSV-/MAL- ID) affects the project,
                                      whether the fix is released, and which command to run (Markdown by default)
+                                     For an advisory not yet in OSV, pass a quoted range such as "foo>=2.0,<2.3.2"
+                                     (operators >=, <, <= only)
                                      With --workspace, reports every member in one combined report
                                      Cannot be used with --diff or the check flags (see Incident Response)
   -h, --help                         Print help
@@ -1479,7 +1533,7 @@ uv-sbom returns the following exit codes:
 |-----------|-------------|----------|
 | 0 | Success | SBOM generated successfully, no vulnerabilities above threshold, `--help` or `--version` displayed |
 | 1 | Vulnerabilities or license violations detected | Vulnerabilities above threshold detected, license policy violations found |
-| 2 | Invalid command-line arguments | Unknown option, invalid argument type |
+| 2 | Invalid command-line arguments | Unknown option, invalid argument type, malformed `--incident` advisory ID or range |
 | 3 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error, unknown `--incident` advisory ID |
 | 4 | Affected, no released fix (`--incident` only) | The project is affected by the advisory, but the fix is not yet released on PyPI or no fix exists |
 

@@ -7,7 +7,9 @@
 //! unchanged.
 
 use crate::application::use_cases::IncidentError;
+use crate::cli::incident::IncidentTargetError;
 use crate::i18n::Messages;
+use crate::sbom_generation::domain::incident_target::ManualSpecError;
 use uv_sbom::config::ConfigError;
 
 /// Renders a single [`ConfigError`] in `msgs`'s locale.
@@ -51,11 +53,42 @@ pub fn render_incident_error(err: &IncidentError, msgs: &Messages) -> String {
     }
 }
 
+/// Renders a rejected `--incident` value (#963) in `msgs`'s locale: the
+/// value and the reason on one line, then a hint naming both accepted forms.
+pub fn render_incident_target_error(err: &IncidentTargetError, msgs: &Messages) -> String {
+    let reason = match &err.reason {
+        ManualSpecError::Empty => msgs.error_incident_spec_empty.to_string(),
+        ManualSpecError::MissingPackageName => msgs.error_incident_spec_missing_name.to_string(),
+        ManualSpecError::InvalidPackageName { name } => {
+            Messages::format(msgs.error_incident_spec_invalid_name, &[name])
+        }
+        ManualSpecError::MissingSpecifier { package } => {
+            Messages::format(msgs.error_incident_spec_missing_specifier, &[package])
+        }
+        ManualSpecError::InvalidSpecifiers { specifiers } => {
+            Messages::format(msgs.error_incident_spec_invalid_specifiers, &[specifiers])
+        }
+        ManualSpecError::UnsupportedOperator { specifier } => {
+            Messages::format(msgs.error_incident_spec_unsupported_operator, &[specifier])
+        }
+        ManualSpecError::MultipleLowerBounds => msgs.error_incident_spec_multiple_lower.to_string(),
+        ManualSpecError::MultipleUpperBounds => msgs.error_incident_spec_multiple_upper.to_string(),
+        ManualSpecError::EmptyRange { specifiers } => {
+            Messages::format(msgs.error_incident_spec_empty_range, &[specifiers])
+        }
+    };
+    format!(
+        "{}\n{}",
+        Messages::format(msgs.error_incident_invalid_target, &[&err.input, &reason]),
+        msgs.error_incident_target_hint
+    )
+}
+
 /// Renders an `anyhow::Error` and its full `source()` chain to a single string,
 /// localized via `msgs`.
 ///
 /// The top-level error is localized when it downcasts to a known typed error
-/// ([`ConfigError`] or [`IncidentError`]); everything else — including every error in
+/// ([`ConfigError`], [`IncidentError`], or [`IncidentTargetError`]); everything else — including every error in
 /// the `source()` chain, which is typically a third-party `std::io::Error` or
 /// `serde_yaml_ng::Error` — falls back to its own (English) `Display`, per the
 /// permanent-English-payload policy documented in `.claude/CLAUDE.md`.
@@ -69,6 +102,8 @@ pub fn render_error_chain(e: &anyhow::Error, msgs: &Messages) -> String {
         render_config_error(config_err, msgs)
     } else if let Some(incident_err) = e.downcast_ref::<IncidentError>() {
         render_incident_error(incident_err, msgs)
+    } else if let Some(target_err) = e.downcast_ref::<IncidentTargetError>() {
+        render_incident_target_error(target_err, msgs)
     } else {
         e.to_string()
     };
@@ -235,5 +270,84 @@ mod tests {
             "アドバイザリ GHSA-xxxx-xxxx-xxxx は OSV データベースに見つかりませんでした。"
         ));
         assert!(ja.starts_with("\n❌ エラーが発生しました:"));
+    }
+
+    fn target_error(input: &str, reason: ManualSpecError) -> IncidentTargetError {
+        IncidentTargetError {
+            input: input.to_string(),
+            reason,
+        }
+    }
+
+    fn all_spec_errors() -> Vec<ManualSpecError> {
+        vec![
+            ManualSpecError::Empty,
+            ManualSpecError::MissingPackageName,
+            ManualSpecError::InvalidPackageName {
+                name: "foo-".to_string(),
+            },
+            ManualSpecError::MissingSpecifier {
+                package: "requests".to_string(),
+            },
+            ManualSpecError::InvalidSpecifiers {
+                specifiers: "<abc".to_string(),
+            },
+            ManualSpecError::UnsupportedOperator {
+                specifier: "==2.25.0".to_string(),
+            },
+            ManualSpecError::MultipleLowerBounds,
+            ManualSpecError::MultipleUpperBounds,
+            ManualSpecError::EmptyRange {
+                specifiers: ">=2.3,<2.0".to_string(),
+            },
+        ]
+    }
+
+    #[test]
+    fn test_render_incident_target_error_en_starts_with_display_head() {
+        // Drift guard: the localized EN head line stays in step with the
+        // library `Display` head.
+        let err = target_error(
+            "requests==2.25.0",
+            ManualSpecError::UnsupportedOperator {
+                specifier: "==2.25.0".to_string(),
+            },
+        );
+        let out = render_incident_target_error(&err, Messages::for_locale(Locale::En));
+
+        let head = "Invalid advisory ID or version-range spec: 'requests==2.25.0'.";
+        assert!(err.to_string().starts_with(head));
+        assert!(out.starts_with(head), "{out}");
+        assert!(out
+            .contains("'==2.25.0' uses an unsupported operator; only >=, <, and <= are allowed."));
+        assert!(out.contains("Quote the range in the shell"));
+    }
+
+    #[test]
+    fn test_render_incident_target_error_every_reason_both_locales() {
+        for reason in all_spec_errors() {
+            let err = target_error("x", reason.clone());
+            let en = render_incident_target_error(&err, Messages::for_locale(Locale::En));
+            let ja = render_incident_target_error(&err, Messages::for_locale(Locale::Ja));
+            assert!(!en.contains("{}") && !ja.contains("{}"), "{reason:?}");
+            assert!(en.starts_with("Invalid advisory ID or version-range spec: 'x'."));
+            assert!(ja.starts_with("アドバイザリ ID またはバージョン範囲の指定が不正です: 'x'。"));
+            assert_eq!(en.lines().count(), 2, "{en}");
+            assert_eq!(ja.lines().count(), 2, "{ja}");
+        }
+    }
+
+    #[test]
+    fn test_render_error_chain_localizes_incident_target_error() {
+        let err = anyhow::Error::from(target_error(
+            "requests",
+            ManualSpecError::MissingSpecifier {
+                package: "requests".to_string(),
+            },
+        ));
+
+        let ja = render_error_chain(&err, Messages::for_locale(Locale::Ja));
+        assert!(ja.contains("'requests' のバージョン範囲が指定されていません。"));
+        assert!(ja.contains("範囲は引用符で囲んでください。"));
     }
 }

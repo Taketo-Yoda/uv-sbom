@@ -1,15 +1,17 @@
+use crate::sbom_generation::domain::incident_target::IncidentTarget;
 use std::path::PathBuf;
 
 /// IncidentRequest - Internal request DTO for `RespondToIncidentUseCase` (#967).
 ///
-/// Carries the advisory to look up and the project scope to evaluate it
+/// Carries the incident to evaluate (an advisory ID, or a manual range spec,
+/// #963) and the project scope to evaluate it
 /// against. `--production-only` is expanded into `exclude_groups` by the CLI,
 /// exactly as it is for `SbomRequest`. Vulnerability-report filters
 /// (`--ignore-cve`, baseline, severity/CVSS thresholds) do not apply here.
 #[derive(Debug, Clone)]
 pub struct IncidentRequest {
-    /// Advisory ID as supplied by the user (CVE, GHSA, PYSEC, ...).
-    pub advisory_id: String,
+    /// The advisory ID or manual range spec to evaluate.
+    pub target: IncidentTarget,
     /// Project root holding `uv.lock` and `pyproject.toml`.
     pub project_path: PathBuf,
     /// `--exclude` patterns; matching packages are out of scope.
@@ -27,8 +29,8 @@ pub struct IncidentRequest {
 /// for `IncidentRequest`.
 #[derive(Debug, Clone)]
 pub struct WorkspaceIncidentRequest {
-    /// Advisory ID as supplied by the user (CVE, GHSA, PYSEC, ...).
-    pub advisory_id: String,
+    /// The advisory ID or manual range spec to evaluate.
+    pub target: IncidentTarget,
     /// Workspace root holding the shared `uv.lock`; also the directory the
     /// upgrade dry-run is resolved in.
     pub workspace_root: PathBuf,
@@ -47,7 +49,7 @@ mod tests {
     #[test]
     fn test_incident_request_clone_preserves_fields() {
         let req = IncidentRequest {
-            advisory_id: "CVE-2023-32681".to_string(),
+            target: IncidentTarget::AdvisoryId("CVE-2023-32681".to_string()),
             project_path: PathBuf::from("/project"),
             exclude_patterns: vec!["internal-*".to_string()],
             exclude_groups: vec!["dev".to_string()],
@@ -55,7 +57,10 @@ mod tests {
 
         let cloned = req.clone();
 
-        assert_eq!(cloned.advisory_id, "CVE-2023-32681");
+        assert_eq!(
+            cloned.target,
+            IncidentTarget::AdvisoryId("CVE-2023-32681".to_string())
+        );
         assert_eq!(cloned.project_path, PathBuf::from("/project"));
         assert_eq!(cloned.exclude_patterns, vec!["internal-*".to_string()]);
         assert_eq!(cloned.exclude_groups, vec!["dev".to_string()]);

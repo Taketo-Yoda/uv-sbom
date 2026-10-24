@@ -4,7 +4,8 @@
 mod workspace;
 
 use crate::application::read_models::incident_report::{
-    IncidentFinding, IncidentGuidance, IncidentReport, IncidentVerdictView, ReleaseStatusView,
+    IncidentFinding, IncidentGuidance, IncidentReport, IncidentSource, IncidentVerdictView,
+    ReleaseStatusView,
 };
 use crate::application::read_models::vulnerability_view::SeverityView;
 use crate::i18n::{Locale, Messages};
@@ -13,6 +14,7 @@ use crate::i18n::{Locale, Messages};
 /// single-project and workspace layouts.
 struct HeadingFields<'a> {
     advisory_id: &'a str,
+    source: IncidentSource,
     resolved_from: Option<&'a str>,
     aliases: &'a [String],
     severity: Option<SeverityView>,
@@ -24,6 +26,7 @@ impl<'a> From<&'a IncidentReport> for HeadingFields<'a> {
     fn from(report: &'a IncidentReport) -> Self {
         Self {
             advisory_id: &report.advisory_id,
+            source: report.source,
             resolved_from: report.resolved_from.as_deref(),
             aliases: &report.aliases,
             severity: report.severity,
@@ -36,7 +39,8 @@ impl<'a> From<&'a IncidentReport> for HeadingFields<'a> {
 /// Formats an `IncidentReport` as a human-readable Markdown report (#967).
 ///
 /// Layout: a heading block (advisory ID, optional "resolved from" line,
-/// aliases, severity, summary, overall verdict), then three numbered sections
+/// aliases, severity, summary, overall verdict; for a manual range spec, #963,
+/// the spec and a "not verified" notice instead), then three numbered sections
 /// in order — `1. Impact`, `2. Patch status`, `3. Next action`. Section 3 is
 /// omitted when the overall verdict is "not affected". Every label comes from
 /// `Messages`, so `--lang ja` output is fully localized; commands stay
@@ -65,6 +69,7 @@ impl IncidentMarkdownFormatter {
         self.push_patch_status(
             &mut lines,
             &report.findings,
+            report.source,
             self.messages.incident_status_not_applicable,
         );
         if report.overall != IncidentVerdictView::NotAffected {
@@ -75,6 +80,10 @@ impl IncidentMarkdownFormatter {
 
     fn push_heading(&self, lines: &mut Vec<String>, report: HeadingFields<'_>) {
         let msgs = self.messages;
+        if report.source == IncidentSource::Manual {
+            self.push_manual_heading(lines, &report);
+            return;
+        }
         lines.push(Messages::format(
             msgs.incident_title,
             &[&single_line(report.advisory_id)],
@@ -109,6 +118,26 @@ impl IncidentMarkdownFormatter {
                 single_line(summary)
             ));
         }
+        lines.push(format!(
+            "- **{}**: {}",
+            msgs.incident_label_overall,
+            self.verdict_label(report.overall)
+        ));
+        lines.push(String::new());
+    }
+
+    /// Heading for a user-supplied range spec (#963): the spec in a code span
+    /// (so `<` and `>=` are not read as markup), the "not verified" notice,
+    /// and the overall verdict. A spec that parsed contains no backtick.
+    fn push_manual_heading(&self, lines: &mut Vec<String>, report: &HeadingFields<'_>) {
+        let msgs = self.messages;
+        lines.push(Messages::format(
+            msgs.incident_title_manual,
+            &[&single_line(report.advisory_id)],
+        ));
+        lines.push(String::new());
+        lines.push(msgs.incident_manual_notice.to_string());
+        lines.push(String::new());
         lines.push(format!(
             "- **{}**: {}",
             msgs.incident_label_overall,
@@ -168,6 +197,7 @@ impl IncidentMarkdownFormatter {
         &self,
         lines: &mut Vec<String>,
         findings: &[IncidentFinding],
+        source: IncidentSource,
         not_applicable: &str,
     ) {
         let msgs = self.messages;
@@ -181,7 +211,7 @@ impl IncidentMarkdownFormatter {
                 lines.push(format!(
                     "- **{}**: {}",
                     finding.package_name,
-                    self.patch_status(finding)
+                    self.patch_status(finding, source)
                 ));
             }
         }
@@ -255,12 +285,13 @@ impl IncidentMarkdownFormatter {
         vec![guidance]
     }
 
-    fn patch_status(&self, finding: &IncidentFinding) -> String {
+    fn patch_status(&self, finding: &IncidentFinding, source: IncidentSource) -> String {
         let msgs = self.messages;
         let Some(fixed) = &finding.fixed_version else {
-            return match finding.verdict {
-                IncidentVerdictView::NotAffected => msgs.incident_status_not_applicable,
-                _ => msgs.incident_status_no_fixed_version,
+            return match (finding.verdict, source) {
+                (IncidentVerdictView::NotAffected, _) => msgs.incident_status_not_applicable,
+                (_, IncidentSource::Osv) => msgs.incident_status_no_fixed_version,
+                (_, IncidentSource::Manual) => msgs.incident_status_no_fixed_version_manual,
             }
             .to_string();
         };
@@ -342,6 +373,7 @@ mod tests {
             .unwrap_or(IncidentVerdictView::NotAffected);
         IncidentReport {
             advisory_id: "GHSA-j8r2-6x86-q33q".to_string(),
+            source: IncidentSource::Osv,
             resolved_from: None,
             aliases: vec!["CVE-2023-32681".to_string(), "PYSEC-2023-74".to_string()],
             severity: Some(SeverityView::Medium),
@@ -786,6 +818,72 @@ uv sync
         };
         assert!(ja(&report(vec![unverified]))
             .contains("⚠️ 未検証（uv を利用できません）— 実行前に確認してください:"));
+    }
+
+    pub(super) fn manual_report(findings: Vec<IncidentFinding>) -> IncidentReport {
+        IncidentReport {
+            advisory_id: "requests<2.31.0".to_string(),
+            source: IncidentSource::Manual,
+            resolved_from: None,
+            aliases: vec![],
+            severity: None,
+            summary: None,
+            ..report(findings)
+        }
+    }
+
+    #[test]
+    fn test_manual_source_heading_and_notice_en() {
+        let out = en(&manual_report(vec![verified()]));
+
+        let expected_heading = "\
+## Incident Report (manual range): `requests<2.31.0`
+
+⚠️ This affected range was supplied by you. It is not taken from a vulnerability database and has not been verified.
+
+- **Overall verdict**: Affected — fix released
+
+### 1. Impact
+";
+        assert!(out.starts_with(expected_heading), "{out}");
+        for label in [
+            "**Aliases**",
+            "**Severity**",
+            "**Summary**",
+            "resolved from",
+        ] {
+            assert!(!out.contains(label), "manual output contains {label:?}");
+        }
+        assert!(out.contains("uv lock --upgrade-package requests==2.31.0"));
+    }
+
+    #[test]
+    fn test_manual_source_no_fix_names_supplied_range() {
+        let f = IncidentFinding {
+            fixed_version: None,
+            release_status: None,
+            guidance: Some(IncidentGuidance::NoReleasedFix),
+            ..finding(IncidentVerdictView::AffectedNoFix)
+        };
+
+        let out = en(&manual_report(vec![f]));
+
+        assert!(out.contains("- **requests**: the supplied range names no fixed version"));
+        assert!(!out.contains("the advisory names"));
+    }
+
+    #[test]
+    fn test_manual_source_ja_fully_localized() {
+        let out = ja(&manual_report(vec![verified()]));
+
+        assert!(out.starts_with("## インシデントレポート（手動指定の範囲）: `requests<2.31.0`\n"));
+        assert!(out.contains(
+            "⚠️ この影響範囲はユーザーが指定したものです。脆弱性データベースの記録ではなく、検証もされていません。"
+        ));
+        assert_no_english_labels(&out);
+        for label in ["manual range", "supplied by you"] {
+            assert!(!out.contains(label), "JA output contains {label:?}:\n{out}");
+        }
     }
 
     /// Every English label the formatter can emit; none may appear in JA output.
