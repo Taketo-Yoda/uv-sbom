@@ -3,7 +3,7 @@ use crate::ports::outbound::{
     PythonCompatibilityRepository, VulnerabilityRepository,
 };
 use crate::sbom_generation::domain::{
-    Package, PackageVulnerabilities, SimulationResult, UvLockSimulator,
+    Package, PackageVulnerabilities, SimulationResult, TargetedSimulationOutcome, UvLockSimulator,
 };
 use crate::shared::Result;
 use async_trait::async_trait;
@@ -245,5 +245,16 @@ impl UvLockSimulator for MockUvLockSimulator {
                 package_name
             )
         })
+    }
+    async fn simulate_upgrade_to(
+        &self,
+        package_name: &str,
+        _target_version: &str,
+        _project_path: &std::path::Path,
+    ) -> Result<TargetedSimulationOutcome> {
+        anyhow::bail!(
+            "MockUvLockSimulator: simulate_upgrade_to not configured for {}",
+            package_name
+        )
     }
 }

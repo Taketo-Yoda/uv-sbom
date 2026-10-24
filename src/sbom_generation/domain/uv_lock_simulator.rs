@@ -23,6 +23,26 @@ pub struct SimulationResult {
     pub resolved_versions: HashMap<String, String>,
 }
 
+/// Outcome of a version-targeted `uv lock --upgrade-package <name>==<version>`
+/// simulation (#966).
+///
+/// The three variants are the outcomes incident mode branches on when deciding
+/// whether a suggested upgrade command is verified. Infrastructure failures
+/// (missing project files, temp-dir I/O, timeout) are reported as `Err` by the
+/// trait method instead, matching `simulate_upgrade`'s error contract.
+#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TargetedSimulationOutcome {
+    /// The lock resolved, with the package at the target version or newer.
+    Resolved { resolved_version: String },
+    /// `uv` could not resolve the request (e.g. a conflicting constraint), or
+    /// the resolved lock lacks the package or holds a version older than the
+    /// target. `reason` carries uv's stderr summary or a description.
+    ResolutionFailed { reason: String },
+    /// The `uv` CLI is not runnable (not found on PATH).
+    SimulatorUnavailable,
+}
+
 /// Port for simulating dependency resolution with package upgrades
 #[async_trait::async_trait]
 pub trait UvLockSimulator: Send + Sync {
@@ -39,6 +59,38 @@ pub trait UvLockSimulator: Send + Sync {
         package_name: &str,
         project_path: &std::path::Path,
     ) -> Result<SimulationResult>;
+
+    /// Simulate upgrading a package to a specific target version.
+    ///
+    /// Runs `uv lock --upgrade-package <package_name>==<target_version>` (or
+    /// equivalent) against a copy of the project, so the original `uv.lock` is
+    /// never modified. Succeeds when the resolved lock contains the package at
+    /// `target_version` or newer.
+    ///
+    /// # Arguments
+    /// * `package_name` - The package to upgrade (untrusted; validated by implementors)
+    /// * `target_version` - The PEP 440 version to upgrade to (untrusted)
+    /// * `project_path` - Path to the project directory containing pyproject.toml
+    ///
+    /// # Returns
+    /// `Ok` with one of the three [`TargetedSimulationOutcome`] variants: the
+    /// resolved version when it is at or above `target_version`,
+    /// `ResolutionFailed` when uv rejects the request or the resolved lock does
+    /// not satisfy the target, or `SimulatorUnavailable` when `uv` is not runnable.
+    ///
+    /// # Errors
+    /// Returns `Err` when `package_name` or `target_version` is rejected as
+    /// unsafe input (the message starts with `Security:`), when `pyproject.toml`
+    /// or `uv.lock` is missing from `project_path`, when the sandbox copy or the
+    /// resulting lock cannot be read or parsed, or when uv times out or cannot
+    /// be spawned.
+    #[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
+    async fn simulate_upgrade_to(
+        &self,
+        package_name: &str,
+        target_version: &str,
+        project_path: &std::path::Path,
+    ) -> Result<TargetedSimulationOutcome>;
 }
 
 /// Null-object impl so `GenerateSbomUseCase`'s `USIM = ()` default satisfies the
@@ -54,6 +106,15 @@ impl UvLockSimulator for () {
         _package_name: &str,
         _project_path: &std::path::Path,
     ) -> Result<SimulationResult> {
+        unreachable!("UvLockSimulator not configured")
+    }
+
+    async fn simulate_upgrade_to(
+        &self,
+        _package_name: &str,
+        _target_version: &str,
+        _project_path: &std::path::Path,
+    ) -> Result<TargetedSimulationOutcome> {
         unreachable!("UvLockSimulator not configured")
     }
 }
