@@ -6,6 +6,7 @@
 //! domain/adapter `bail!` sites) fall through to their own `Display` impl
 //! unchanged.
 
+use crate::application::use_cases::IncidentError;
 use crate::i18n::Messages;
 use uv_sbom::config::ConfigError;
 
@@ -37,11 +38,24 @@ pub fn render_config_error(err: &ConfigError, msgs: &Messages) -> String {
     }
 }
 
+/// Renders a single [`IncidentError`] in `msgs`'s locale.
+///
+/// `IncidentError` is imported from the binary's own `mod application;` copy,
+/// because that is the copy `run_incident` builds the use case from; a
+/// `uv_sbom::` import would be a distinct type and never downcast.
+pub fn render_incident_error(err: &IncidentError, msgs: &Messages) -> String {
+    match err {
+        IncidentError::AdvisoryNotFound { advisory_id } => {
+            Messages::format(msgs.error_incident_advisory_not_found, &[advisory_id])
+        }
+    }
+}
+
 /// Renders an `anyhow::Error` and its full `source()` chain to a single string,
 /// localized via `msgs`.
 ///
 /// The top-level error is localized when it downcasts to a known typed error
-/// (currently only [`ConfigError`]); everything else — including every error in
+/// ([`ConfigError`] or [`IncidentError`]); everything else — including every error in
 /// the `source()` chain, which is typically a third-party `std::io::Error` or
 /// `serde_yaml_ng::Error` — falls back to its own (English) `Display`, per the
 /// permanent-English-payload policy documented in `.claude/CLAUDE.md`.
@@ -51,9 +65,12 @@ pub fn render_config_error(err: &ConfigError, msgs: &Messages) -> String {
 /// error, then one blank-line-prefixed "caused by" line per source, and a
 /// trailing blank line.
 pub fn render_error_chain(e: &anyhow::Error, msgs: &Messages) -> String {
-    let head = match e.downcast_ref::<ConfigError>() {
-        Some(config_err) => render_config_error(config_err, msgs),
-        None => e.to_string(),
+    let head = if let Some(config_err) = e.downcast_ref::<ConfigError>() {
+        render_config_error(config_err, msgs)
+    } else if let Some(incident_err) = e.downcast_ref::<IncidentError>() {
+        render_incident_error(incident_err, msgs)
+    } else {
+        e.to_string()
     };
 
     let mut out = format!("\n{}\n\n{}\n", msgs.error_header, head);
@@ -202,5 +219,21 @@ mod tests {
             rendered,
             "\n❌ エラーが発生しました:\n\n設定が不正です: ignore_cves[0].id は空にできません。\n\n💡 ヒント: ignore_cves の各エントリには空でない 'id' フィールドが必要です（例: \"CVE-2024-1234\"）。\n\n"
         );
+    }
+
+    #[test]
+    fn test_render_error_chain_localizes_incident_error() {
+        let err = anyhow::Error::from(IncidentError::AdvisoryNotFound {
+            advisory_id: "GHSA-xxxx-xxxx-xxxx".to_string(),
+        });
+
+        let en = render_error_chain(&err, Messages::for_locale(Locale::En));
+        assert!(en.contains("Advisory GHSA-xxxx-xxxx-xxxx was not found in the OSV database."));
+
+        let ja = render_error_chain(&err, Messages::for_locale(Locale::Ja));
+        assert!(ja.contains(
+            "アドバイザリ GHSA-xxxx-xxxx-xxxx は OSV データベースに見つかりませんでした。"
+        ));
+        assert!(ja.starts_with("\n❌ エラーが発生しました:"));
     }
 }

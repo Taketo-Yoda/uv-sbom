@@ -145,6 +145,25 @@ uv-sbom -p examples/suggest-fix-project --show-dependency-tree --dependency-tree
 - `## Dependency Tree` section with one root per direct dependency (`httpx`, `requests`)
 - At depth 2, `anyio`'s children are replaced with a `... (truncated)` marker and a trailing note naming the applied depth
 
+### Step 7: Incident response (`--incident`)
+
+The locked `urllib3` 2.0.4 is affected by GHSA-v845-jxx5-vc9f (CVE-2023-43804). That advisory has a backported fix
+(2.0.6) inside the range `requests` allows, so this project shows the "verified upgrade command" path.
+See the [main README](../../README.md)'s "Incident Response" section for the full, real output.
+
+```bash
+# Affected, fix released, verified command → exit code 1
+uv-sbom -p examples/suggest-fix-project --incident GHSA-v845-jxx5-vc9f
+
+# Not affected (requests is locked at the fixed 2.31.0); the CVE ID is resolved to its GHSA record → exit code 0
+uv-sbom -p examples/suggest-fix-project --incident CVE-2023-32681
+```
+
+**What you will see:**
+- `### 1. Impact` with `urllib3` 2.0.4 as a transitive dependency via `requests → urllib3`
+- `### 2. Patch status` with `fixed in 2.0.6 — released`
+- `### 3. Next action` with a dry-run-verified `uv lock --upgrade-package urllib3==2.0.6` + `uv sync` block
+
 ## Expected Output Excerpt
 
 ```markdown

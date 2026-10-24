@@ -1,4 +1,3 @@
-#[allow(dead_code)] // WIRE(#968): remove when --incident is wired into main.rs
 pub mod advisory;
 pub mod baseline;
 pub mod dependency_diff;

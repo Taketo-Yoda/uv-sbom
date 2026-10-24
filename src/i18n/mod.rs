@@ -75,6 +75,7 @@ pub struct Messages {
     pub info_config_template_created: &'static str,
     pub error_init_failed: &'static str,
     pub error_no_workspace_members: &'static str,
+    pub error_incident_advisory_not_found: &'static str,
 
     // SBOM generation error messages (application layer, GenerateSbomUseCase)
     pub error_all_packages_excluded: &'static str,
@@ -406,6 +407,7 @@ static EN_MESSAGES: Messages = Messages {
     info_config_template_created: "Created {} in {}",
     error_init_failed: "Error: {}",
     error_no_workspace_members: "No workspace members found. Is this a uv workspace?",
+    error_incident_advisory_not_found: "Advisory {} was not found in the OSV database. Check the ID, or search for it at https://osv.dev",
 
     // SBOM generation error messages (application layer, GenerateSbomUseCase)
     error_all_packages_excluded: "All {} package(s) were excluded by the provided filters. The SBOM would be empty. Please adjust your exclusion patterns.",
@@ -706,6 +708,7 @@ static JA_MESSAGES: Messages = Messages {
     info_config_template_created: "{} を {} に作成しました",
     error_init_failed: "エラー: {}",
     error_no_workspace_members: "ワークスペースメンバーが見つかりません。これは uv ワークスペースですか？",
+    error_incident_advisory_not_found: "アドバイザリ {} は OSV データベースに見つかりませんでした。ID を確認するか、https://osv.dev で検索してください",
 
     // SBOM generation error messages (application layer, GenerateSbomUseCase)
     error_all_packages_excluded: "指定されたフィルターにより {} 個のパッケージがすべて除外されました。SBOM が空になります。除外パターンを見直してください。",
@@ -1467,6 +1470,7 @@ mod tests {
             info_config_template_created,
             error_init_failed,
             error_no_workspace_members,
+            error_incident_advisory_not_found,
             error_all_packages_excluded,
             error_pyproject_not_found,
             error_config_already_exists,

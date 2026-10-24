@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Incident response for a single advisory (`--incident <ID>`)**: answer "am I affected, is the patch out, and what do I run?" in one command when a new advisory is announced. Pass a GHSA, PYSEC, CVE, OSV, or MAL ID; a CVE ID is resolved to its GHSA/PYSEC record automatically. The report (Markdown by default, JSON with `--format json`) lists each affected package with its locked version and dependency paths, whether the fixed version is released on PyPI, and a copy-paste `uv lock --upgrade-package <name>==<fixed>` + `uv sync` command verified by a dry-run resolution, so `uv.lock` is never modified. Exit codes: `0` not affected, `1` affected with a released fix, `4` (new) affected with no released fix, `3` unknown advisory ID. `--exclude`, `--exclude-groups`, and `--production-only` scope the check. Fully localized for EN and JA (#962, #964, #965, #966, #967, #968)
+
+### Changed
+- **An explicit `--format json` now overrides the config file's `format`**: previously `--format json` was indistinguishable from passing no `--format` flag, so a config `format: markdown` silently won over it. Passing no `--format` flag still uses the config value, then the `json` default (#968)
+
 ## [3.3.0] - 2026-10-23
 
 ### Added
