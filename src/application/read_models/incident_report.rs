@@ -15,6 +15,7 @@
 use crate::application::read_models::vulnerability_view::SeverityView;
 use crate::sbom_generation::domain::advisory::{IncidentVerdict, ReleaseStatus};
 use serde::{Serialize, Serializer};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Result of evaluating one advisory against a project's `uv.lock`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -151,6 +152,88 @@ pub enum IncidentGuidance {
         /// The error message (English, from the adapter).
         reason: String,
     },
+}
+
+/// Result of evaluating one advisory against every member of a uv workspace
+/// (`--incident --workspace`, #969).
+///
+/// The advisory metadata is shared; each member carries its own findings,
+/// because members differ in which packages they reach (they share one
+/// `uv.lock`, so locked versions never differ). Serialized as the workspace
+/// JSON output: the advisory fields, a `members` array, and `overall`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct WorkspaceIncidentReport {
+    /// ID of the advisory record actually used (an alias when one was followed).
+    pub advisory_id: String,
+    /// The ID the user supplied, when an alias was followed.
+    pub resolved_from: Option<String>,
+    /// Aliases listed by the advisory record that was used.
+    pub aliases: Vec<String>,
+    /// Advisory severity, serialized as its upper-case label.
+    #[serde(serialize_with = "serialize_severity")]
+    pub severity: Option<SeverityView>,
+    /// One-line advisory summary (untrusted text from OSV).
+    pub summary: Option<String>,
+    /// PyPI package names the advisory lists, deduplicated.
+    pub affected_packages: Vec<String>,
+    /// One result per workspace member, in workspace order.
+    pub members: Vec<MemberIncidentResult>,
+    /// The most actionable verdict across all members.
+    pub overall: IncidentVerdictView,
+}
+
+/// Evaluation of the advisory against one workspace member.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MemberIncidentResult {
+    /// Workspace member name as it appears in `uv.lock`.
+    pub name: String,
+    /// Findings for the packages this member reaches, sorted by package name
+    /// then version. Paths start at the member's own direct dependencies.
+    pub findings: Vec<IncidentFinding>,
+    /// The most actionable verdict across this member's findings.
+    pub overall: IncidentVerdictView,
+}
+
+impl WorkspaceIncidentReport {
+    /// Findings across all members, deduplicated by `(package, version)` and
+    /// sorted by package name then version. Release status, verdict, and
+    /// command do not depend on the member; only the dependency position does,
+    /// so the first member's position is kept and the `direct_roots` of
+    /// `ResolutionBlocked` guidance are unioned (sorted, deduplicated).
+    pub fn deduplicated_findings(&self) -> Vec<IncidentFinding> {
+        let mut merged: BTreeMap<(String, String), IncidentFinding> = BTreeMap::new();
+        for finding in self.members.iter().flat_map(|m| &m.findings) {
+            let key = (finding.package_name.clone(), finding.locked_version.clone());
+            match merged.get_mut(&key) {
+                None => {
+                    merged.insert(key, finding.clone());
+                }
+                Some(existing) => {
+                    if let (
+                        Some(IncidentGuidance::ResolutionBlocked { direct_roots }),
+                        Some(IncidentGuidance::ResolutionBlocked {
+                            direct_roots: other,
+                        }),
+                    ) = (&mut existing.guidance, &finding.guidance)
+                    {
+                        let union: BTreeSet<String> =
+                            direct_roots.iter().chain(other).cloned().collect();
+                        *direct_roots = union.into_iter().collect();
+                    }
+                }
+            }
+        }
+        merged.into_values().collect()
+    }
+
+    /// Names of the members whose verdict is not `NotAffected`, in workspace order.
+    pub fn affected_member_names(&self) -> Vec<&str> {
+        self.members
+            .iter()
+            .filter(|m| m.overall != IncidentVerdictView::NotAffected)
+            .map(|m| m.name.as_str())
+            .collect()
+    }
 }
 
 /// Serializes the severity as its upper-case label, or `null`.
@@ -298,5 +381,126 @@ mod tests {
         assert_eq!(value["resolved_from"], Value::Null);
         assert_eq!(value["summary"], Value::Null);
         assert_eq!(value["findings"][0]["guidance"], Value::Null);
+    }
+
+    fn member(name: &str, findings: Vec<IncidentFinding>) -> MemberIncidentResult {
+        let overall = findings
+            .iter()
+            .map(|f| f.verdict)
+            .find(|v| *v != IncidentVerdictView::NotAffected)
+            .unwrap_or(IncidentVerdictView::NotAffected);
+        MemberIncidentResult {
+            name: name.to_string(),
+            findings,
+            overall,
+        }
+    }
+
+    fn workspace(members: Vec<MemberIncidentResult>) -> WorkspaceIncidentReport {
+        WorkspaceIncidentReport {
+            advisory_id: "GHSA-j8r2-6x86-q33q".to_string(),
+            resolved_from: None,
+            aliases: vec![],
+            severity: None,
+            summary: None,
+            affected_packages: vec!["requests".to_string()],
+            members,
+            overall: IncidentVerdictView::AffectedFixReleased,
+        }
+    }
+
+    fn blocked(roots: &[&str]) -> IncidentFinding {
+        IncidentFinding {
+            upgrade_command: None,
+            command_verified: false,
+            guidance: Some(IncidentGuidance::ResolutionBlocked {
+                direct_roots: roots.iter().map(|r| r.to_string()).collect(),
+            }),
+            ..finding()
+        }
+    }
+
+    #[test]
+    fn test_deduplicated_findings_merges_same_package_version_across_members() {
+        let other = IncidentFinding {
+            package_name: "certifi".to_string(),
+            ..finding()
+        };
+        let report = workspace(vec![
+            member("api", vec![finding()]),
+            member("worker", vec![finding(), other]),
+        ]);
+
+        let merged = report.deduplicated_findings();
+
+        let names: Vec<&str> = merged.iter().map(|f| f.package_name.as_str()).collect();
+        assert_eq!(names, vec!["certifi", "requests"]);
+    }
+
+    #[test]
+    fn test_deduplicated_findings_unions_resolution_blocked_roots() {
+        let report = workspace(vec![
+            member("api", vec![blocked(&["httpx"])]),
+            member("worker", vec![blocked(&["celery", "httpx"])]),
+        ]);
+
+        let merged = report.deduplicated_findings();
+
+        assert_eq!(merged.len(), 1);
+        assert_eq!(
+            merged[0].guidance,
+            Some(IncidentGuidance::ResolutionBlocked {
+                direct_roots: vec!["celery".to_string(), "httpx".to_string()],
+            })
+        );
+    }
+
+    #[test]
+    fn test_affected_member_names_keeps_workspace_order() {
+        let report = workspace(vec![
+            member("worker", vec![finding()]),
+            member("api", vec![]),
+            member("admin", vec![finding()]),
+        ]);
+
+        assert_eq!(report.affected_member_names(), vec!["worker", "admin"]);
+    }
+
+    #[test]
+    fn test_workspace_report_json_shape() {
+        let value: Value =
+            serde_json::to_value(workspace(vec![member("api", vec![finding()])])).unwrap();
+
+        let keys: BTreeSet<&str> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(
+            keys,
+            BTreeSet::from([
+                "advisory_id",
+                "resolved_from",
+                "aliases",
+                "severity",
+                "summary",
+                "affected_packages",
+                "members",
+                "overall",
+            ])
+        );
+        let member_keys: BTreeSet<&str> = value["members"][0]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(member_keys, BTreeSet::from(["name", "findings", "overall"]));
+        assert_eq!(value["overall"], json!("affected_fix_released"));
+        assert_eq!(
+            value["members"][0]["overall"],
+            json!("affected_fix_released")
+        );
     }
 }

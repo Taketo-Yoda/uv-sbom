@@ -984,6 +984,52 @@ uv sync
 ```
 ````
 
+**Workspaces (`--workspace`):** in a uv workspace root, `--incident <ID> --workspace` checks every member in one run and prints **one combined report**: the advisory heading, a `1. Impact` subsection per member with that member's verdict and dependency paths, shared `2. Patch status` and `3. Next action` sections (the upgrade command is the same for every member, because the workspace shares one `uv.lock`), and a final "N of M members affected" line. The advisory and its PyPI release status are fetched once per run, not once per member, and the dry-run resolution runs against the workspace root. The exit code is the most actionable member verdict (using the same table as below). No per-member `sbom.*` file is written, and the report always goes to stdout (`--workspace` cannot be combined with `--output`).
+
+```bash
+uv-sbom --incident GHSA-82w8-qh3p-5jfq --workspace -p examples/workspace
+```
+
+Output against `examples/workspace`, where only the `api` member reaches `starlette` (through `fastapi`) (exit code `1`):
+
+````markdown
+## Incident Report: GHSA-82w8-qh3p-5jfq
+
+- **Aliases**: CVE-2026-54283, PYSEC-2026-249
+- **Severity**: HIGH
+- **Summary**: Starlette: request.form() limits silently ignored for application/x-www-form-urlencoded enable DoS
+- **Overall verdict**: Affected — fix released
+
+### 1. Impact
+
+#### Member: api
+
+- **Verdict**: Affected — fix released
+- **starlette** 1.0.0 — Affected — fix released (transitive dependency)
+  - Dependency path(s):
+    - `fastapi → starlette`
+
+#### Member: worker
+
+- **Verdict**: Not affected
+
+None of the affected packages (starlette) are reachable from this member.
+
+### 2. Patch status
+
+- **starlette**: fixed in 1.3.1 — released
+
+### 3. Next action
+
+**starlette** — Verified by a dry-run resolution (your uv.lock was not modified):
+```sh
+uv lock --upgrade-package starlette==1.3.1
+uv sync
+```
+
+**1 of 2 members affected**: api
+````
+
 **Exit codes:**
 
 | Verdict | Exit Code |
@@ -994,11 +1040,11 @@ uv sync
 | Unknown advisory ID, network error, or other application error | 3 |
 | Malformed advisory ID or conflicting flags | 2 |
 
-**Scope options honored:** `--path`, `--exclude`, `--exclude-groups`, `--production-only`, `--output`, `--format`, `--lang`, and `--config`. The config file's `exclude_packages` and `exclude_groups` also apply.
+**Scope options honored:** `--path`, `--exclude`, `--exclude-groups`, `--production-only`, `--output` (not with `--workspace`), `--format`, `--lang`, and `--config`. The config file's `exclude_packages` and `exclude_groups` also apply.
 
 **Ignored config keys:** the config file's `format` is never used in incident mode; only `--format` changes the output. The vulnerability, license, maintenance, and compatibility check keys (`check_cve`, `severity_threshold`, `cvss_threshold`, `ignore_cves`, `check_license`, `license_policy`, `check_abandoned`, `check_non_pypi`, `check_exploitability`, `target_python`, `suggest_fix`, `baseline_file`) are ignored too.
 
-**Mutual exclusion:** `--incident` cannot be combined with `--diff`, `--init`, `--dry-run`, `--explain`, `--show-dependency-tree`, `--no-check-cve`, `--baseline`, `--update-baseline`, `--suggest-fix`, `--check-license`, `--check-abandoned`, `--check-non-pypi`, `--check-exploitability`, `--target-python`, `--severity-threshold`, `--cvss-threshold`, `--ignore-cve`, `--verify-links`, or `--workspace`. Workspace support is planned.
+**Mutual exclusion:** `--incident` cannot be combined with `--diff`, `--init`, `--dry-run`, `--explain`, `--show-dependency-tree`, `--no-check-cve`, `--baseline`, `--update-baseline`, `--suggest-fix`, `--check-license`, `--check-abandoned`, `--check-non-pypi`, `--check-exploitability`, `--target-python`, `--severity-threshold`, `--cvss-threshold`, `--ignore-cve`, or `--verify-links`. It can be combined with `--workspace` (see above).
 
 **Config file key:** None. `--incident` is intentionally CLI-only: it is a one-off query about a single advisory, not a persistent policy setting.
 
@@ -1419,7 +1465,8 @@ Options:
                                      Requires --show-dependency-tree
       --incident <ADVISORY_ID>       Check whether one advisory (GHSA-/PYSEC-/CVE-/OSV-/MAL- ID) affects the project,
                                      whether the fix is released, and which command to run (Markdown by default)
-                                     Cannot be used with --workspace, --diff, or the check flags (see Incident Response)
+                                     With --workspace, reports every member in one combined report
+                                     Cannot be used with --diff or the check flags (see Incident Response)
   -h, --help                         Print help
   -V, --version                      Print version
 ```

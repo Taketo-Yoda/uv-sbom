@@ -1,4 +1,4 @@
-/// End-to-end tests for incident response mode (--incident flag, #968)
+/// End-to-end tests for incident response mode (--incident flag, #968; --workspace, #969)
 mod incident_tests {
     use assert_cmd::cargo::cargo_bin_cmd;
     use predicates::prelude::*;
@@ -7,12 +7,30 @@ mod incident_tests {
     use tempfile::TempDir;
 
     const SUGGEST_FIX_PROJECT: &str = "examples/suggest-fix-project";
+    const WORKSPACE_PROJECT: &str = "examples/workspace";
 
     /// Copies `pyproject.toml` and `uv.lock` of an example project into a temp dir.
     fn copy_project(src: &str) -> TempDir {
         let temp = TempDir::new().expect("failed to create temp dir");
         for file in ["pyproject.toml", "uv.lock"] {
             fs::copy(Path::new(src).join(file), temp.path().join(file)).unwrap();
+        }
+        temp
+    }
+
+    /// Copies the example workspace's root files and member `pyproject.toml`
+    /// files (no committed `sbom.*` outputs) into a temp dir.
+    fn copy_workspace() -> TempDir {
+        let temp = copy_project(WORKSPACE_PROJECT);
+        for member in ["packages/api", "packages/worker"] {
+            fs::create_dir_all(temp.path().join(member)).unwrap();
+            fs::copy(
+                Path::new(WORKSPACE_PROJECT)
+                    .join(member)
+                    .join("pyproject.toml"),
+                temp.path().join(member).join("pyproject.toml"),
+            )
+            .unwrap();
         }
         temp
     }
@@ -27,13 +45,67 @@ mod incident_tests {
             .stderr(predicate::str::contains("Invalid advisory ID"));
     }
 
-    /// --incident conflicts with --workspace until #969 (exit 2)
+    /// --incident --workspace still rejects --output, via --workspace (exit 2)
     #[test]
-    fn test_incident_conflicts_with_workspace() {
+    fn test_incident_workspace_conflicts_with_output() {
         cargo_bin_cmd!("uv-sbom")
-            .args(["--incident", "CVE-2023-32681", "--workspace"])
+            .args([
+                "--incident",
+                "CVE-2023-32681",
+                "--workspace",
+                "-o",
+                "report.md",
+            ])
             .assert()
             .code(2);
+    }
+
+    /// --incident --workspace with a nonexistent root is an application error (exit 3)
+    #[test]
+    fn test_incident_workspace_invalid_path_exits_3() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "CVE-2023-32681",
+                "--workspace",
+                "--path",
+                "/nonexistent/uv-sbom-incident-test",
+            ])
+            .assert()
+            .code(3);
+    }
+
+    /// One combined workspace report: only `api` reaches starlette, the
+    /// aggregate exit code is 1, and no per-member sbom file is written
+    #[test]
+    #[ignore = "requires network access to OSV and PyPI, and uv on PATH"]
+    fn test_incident_workspace_reports_per_member_and_writes_no_files() {
+        let temp = copy_workspace();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "GHSA-82w8-qh3p-5jfq",
+                "--workspace",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(1)
+            .stdout(predicate::str::contains("#### Member: api"))
+            .stdout(predicate::str::contains("#### Member: worker"))
+            .stdout(predicate::str::contains("`fastapi → starlette`"))
+            .stdout(predicate::str::contains("**1 of 2 members affected**: api"));
+
+        for member in ["packages/api", "packages/worker"] {
+            for ext in ["json", "md"] {
+                assert!(!temp
+                    .path()
+                    .join(member)
+                    .join(format!("sbom.{ext}"))
+                    .exists());
+            }
+        }
     }
 
     /// --incident conflicts with check flags that do not apply to it (exit 2)

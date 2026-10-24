@@ -1,4 +1,4 @@
-use crate::application::read_models::incident_report::IncidentReport;
+use crate::application::read_models::incident_report::{IncidentReport, WorkspaceIncidentReport};
 use crate::shared::Result;
 
 /// Formats an `IncidentReport` as machine-readable JSON (#967).
@@ -24,6 +24,18 @@ impl IncidentJsonFormatter {
     pub fn format(&self, report: &IncidentReport) -> Result<String> {
         serde_json::to_string_pretty(report).map_err(Into::into)
     }
+
+    /// Serializes a workspace report (#969) to a pretty-printed JSON string:
+    /// the advisory keys of `format`, then `members` (each with `name`,
+    /// `findings`, `overall`) in place of `findings`, then the workspace
+    /// `overall`.
+    ///
+    /// # Errors
+    /// Returns an error if JSON serialization fails (in practice this cannot
+    /// happen because all field types are serializable).
+    pub fn format_workspace(&self, report: &WorkspaceIncidentReport) -> Result<String> {
+        serde_json::to_string_pretty(report).map_err(Into::into)
+    }
 }
 
 impl Default for IncidentJsonFormatter {
@@ -36,7 +48,8 @@ impl Default for IncidentJsonFormatter {
 mod tests {
     use super::*;
     use crate::application::read_models::incident_report::{
-        IncidentFinding, IncidentGuidance, IncidentVerdictView, ReleaseStatusView,
+        IncidentFinding, IncidentGuidance, IncidentVerdictView, MemberIncidentResult,
+        ReleaseStatusView,
     };
     use crate::application::read_models::vulnerability_view::SeverityView;
     use serde_json::{json, Value};
@@ -160,5 +173,60 @@ mod tests {
                 json!("affected_fix_unreleased")
             );
         }
+    }
+
+    #[test]
+    fn test_workspace_report_keys_and_members() {
+        let single = report();
+        let workspace = WorkspaceIncidentReport {
+            advisory_id: single.advisory_id,
+            resolved_from: single.resolved_from,
+            aliases: single.aliases,
+            severity: single.severity,
+            summary: single.summary,
+            affected_packages: single.affected_packages,
+            members: vec![
+                MemberIncidentResult {
+                    name: "api".to_string(),
+                    findings: single.findings,
+                    overall: IncidentVerdictView::AffectedFixUnreleased,
+                },
+                MemberIncidentResult {
+                    name: "worker".to_string(),
+                    findings: vec![],
+                    overall: IncidentVerdictView::NotAffected,
+                },
+            ],
+            overall: IncidentVerdictView::AffectedFixUnreleased,
+        };
+
+        let value: Value = serde_json::from_str(
+            &IncidentJsonFormatter::new()
+                .format_workspace(&workspace)
+                .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            keys(&value),
+            BTreeSet::from([
+                "advisory_id",
+                "resolved_from",
+                "aliases",
+                "severity",
+                "summary",
+                "affected_packages",
+                "members",
+                "overall",
+            ])
+        );
+        assert_eq!(
+            keys(&value["members"][0]),
+            BTreeSet::from(["name", "findings", "overall"])
+        );
+        assert_eq!(value["members"][1]["name"], json!("worker"));
+        assert_eq!(value["members"][1]["findings"], json!([]));
+        assert_eq!(value["members"][1]["overall"], json!("not_affected"));
+        assert_eq!(value["overall"], json!("affected_fix_unreleased"));
     }
 }

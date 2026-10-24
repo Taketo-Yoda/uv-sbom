@@ -161,7 +161,9 @@ pub struct Args {
 
     /// Incident response: check whether one advisory (GHSA-, PYSEC-, CVE-, OSV- or
     /// MAL- ID) affects this project, whether the fix is released, and which
-    /// command to run. Outputs Markdown unless --format is given.
+    /// command to run. Outputs Markdown unless --format is given. With
+    /// --workspace, evaluates every workspace member and prints one combined
+    /// report.
     ///
     /// Intentionally has no config-file key: this is a one-off incident query,
     /// not a persistent policy setting (same rationale as `--explain`, see
@@ -177,9 +179,9 @@ pub struct Args {
 }
 
 /// Flags rejected together with `--incident`: other modes, and checks or
-/// filters that do not apply to a single-advisory report. `workspace` is
-/// temporary until #969 adds workspace support.
-const INCIDENT_CONFLICTS: [&str; 19] = [
+/// filters that do not apply to a single-advisory report. `--workspace` is
+/// allowed (#969); it still rejects `--output` on its own.
+const INCIDENT_CONFLICTS: [&str; 18] = [
     "diff",
     "init",
     "dry_run",
@@ -198,7 +200,6 @@ const INCIDENT_CONFLICTS: [&str; 19] = [
     "cvss_threshold",
     "ignore_cve",
     "verify_links",
-    "workspace",
 ];
 
 /// Advisory ID prefixes accepted by `--incident`, in their canonical case.
@@ -508,7 +509,7 @@ mod tests {
     fn test_incident_conflicts_with_each_listed_flag() {
         use clap::error::ErrorKind;
 
-        let cases: [&[&str]; 19] = [
+        let cases: [&[&str]; 18] = [
             &["--diff", "HEAD"],
             &["--init"],
             &["--dry-run"],
@@ -527,7 +528,6 @@ mod tests {
             &["--cvss-threshold", "7.0"],
             &["--ignore-cve", "CVE-2024-1"],
             &["--verify-links"],
-            &["--workspace"],
         ];
         assert_eq!(cases.len(), INCIDENT_CONFLICTS.len());
         for extra in cases {
@@ -572,5 +572,31 @@ mod tests {
             "--production-only",
         ]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_incident_accepts_workspace_but_not_with_output() {
+        use clap::error::ErrorKind;
+
+        let args = Args::try_parse_from([
+            "uv-sbom",
+            "--incident",
+            "CVE-2023-32681",
+            "--workspace",
+            "--production-only",
+        ])
+        .unwrap();
+        assert!(args.workspace);
+        assert_eq!(args.incident.as_deref(), Some("CVE-2023-32681"));
+
+        let result = Args::try_parse_from([
+            "uv-sbom",
+            "--incident",
+            "CVE-2023-32681",
+            "--workspace",
+            "-o",
+            "report.md",
+        ]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
     }
 }
