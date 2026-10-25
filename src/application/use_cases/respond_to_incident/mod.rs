@@ -563,6 +563,7 @@ mod tests {
             deps,
             group_roots: HashMap::new(),
             source_map: HashMap::from([(PROJECT.to_string(), PackageSourceKind::WorkspaceMember)]),
+            member_lockfile: None,
         }
     }
 

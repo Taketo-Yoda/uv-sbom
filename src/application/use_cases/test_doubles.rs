@@ -22,6 +22,10 @@ pub(crate) struct MockLockfileReader {
     pub(crate) deps: HashMap<String, Vec<String>>,
     pub(crate) group_roots: GroupRoots,
     pub(crate) source_map: PackageSourceMap,
+    /// Returned by `read_and_parse_lockfile_for_member` when set, so a test can
+    /// tell the member read from the single-project read (#1011). `None` falls
+    /// back to `packages` and `deps`.
+    pub(crate) member_lockfile: Option<LockfileParseResult>,
 }
 
 impl LockfileReader for MockLockfileReader {
@@ -38,7 +42,10 @@ impl LockfileReader for MockLockfileReader {
         _path: &Path,
         _member_name: &str,
     ) -> Result<LockfileParseResult> {
-        Ok((self.packages.clone(), self.deps.clone()))
+        match &self.member_lockfile {
+            Some(result) => Ok(result.clone()),
+            None => Ok((self.packages.clone(), self.deps.clone())),
+        }
     }
 
     fn read_and_parse_group_roots(&self, _path: &Path) -> Result<GroupRoots> {

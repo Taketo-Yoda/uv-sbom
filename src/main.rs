@@ -45,28 +45,26 @@ use std::path::{Path, PathBuf};
 use std::process;
 use uv_sbom::config;
 
-/// A LockfileReader adapter that reads the workspace-root uv.lock but returns
-/// only packages reachable from the specified workspace member.
+/// A LockfileReader adapter that redirects every read to the workspace-root
+/// uv.lock, for workspace mode.
 ///
-/// This adapter is used in workspace mode to scope the SBOM generation to a
-/// single workspace member, delegating to `read_and_parse_lockfile_for_member`.
-/// Group roots are not redirected: `read_and_parse_group_roots` returns the
-/// workspace root's own groups. Member scope comes only from an explicit
-/// `read_and_parse_group_roots_for_member` call, selected by
-/// `SbomRequest.workspace_member` (#1001, #1006), so a revision-3 lockfile never
-/// applies another member's groups (#992).
+/// It only redirects the path: each method delegates to the same method of the
+/// inner reader with `workspace_root`. Member scope comes only from explicit
+/// `read_and_parse_lockfile_for_member` and `read_and_parse_group_roots_for_member`
+/// calls, which `GenerateSbomUseCase` selects from `SbomRequest.workspace_member`
+/// (#1001, #1006, #1011). `run_workspace` must therefore pass the member name in
+/// the request; without it, a member SBOM would cover the whole workspace. This
+/// also keeps a revision-3 lockfile from applying another member's groups (#992).
 struct MemberScopedLockfileReader {
     inner: FileSystemReader,
     workspace_root: PathBuf,
-    member_name: String,
 }
 
 impl MemberScopedLockfileReader {
-    fn new(workspace_root: PathBuf, member_name: String) -> Self {
+    fn new(workspace_root: PathBuf) -> Self {
         Self {
             inner: FileSystemReader::new(),
             workspace_root,
-            member_name,
         }
     }
 }
@@ -77,8 +75,7 @@ impl LockfileReader for MemberScopedLockfileReader {
     }
 
     fn read_and_parse_lockfile(&self, _project_path: &Path) -> Result<LockfileParseResult> {
-        self.inner
-            .read_and_parse_lockfile_for_member(&self.workspace_root, &self.member_name)
+        self.inner.read_and_parse_lockfile(&self.workspace_root)
     }
 
     fn read_and_parse_lockfile_for_member(
@@ -714,8 +711,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             Messages::format(msgs.workspace_processing_member, &[&member.name])
         );
 
-        let lockfile_reader =
-            MemberScopedLockfileReader::new(workspace_root.clone(), member.name.clone());
+        let lockfile_reader = MemberScopedLockfileReader::new(workspace_root.clone());
         let use_case = build_use_case(lockfile_reader, locale, &merged)?;
 
         let request = build_sbom_request(
