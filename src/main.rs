@@ -28,6 +28,7 @@ use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase, RespondTo
 use clap::Parser;
 use cli::config_resolver::{load_config, merge_config, MergedConfig};
 use cli::error_display::{render_config_error, render_error_chain};
+use cli::exclude_groups::resolve_exclude_groups;
 use cli::incident::{incident_exit_code, parse_incident_target, resolve_incident_format};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFindings};
@@ -301,25 +302,6 @@ fn build_sbom_request(
         .build()
 }
 
-/// Resolves the groups to exclude: `--production-only` expands to every group
-/// name in `root`'s lockfile; otherwise the merged `--exclude-groups` / config
-/// value is used. Lives here rather than in `config_resolver` because it
-/// requires lockfile I/O.
-fn resolve_exclude_groups(
-    production_only: bool,
-    merged: &MergedConfig,
-    root: &Path,
-) -> Result<Vec<String>> {
-    if production_only {
-        Ok(FileSystemReader::new()
-            .read_and_parse_group_roots(root)?
-            .into_keys()
-            .collect())
-    } else {
-        Ok(merged.exclude_groups.clone())
-    }
-}
-
 /// Builds the `PresenterType` for `--output`: a file when given, else stdout.
 fn presenter_type_for(output: Option<String>) -> PresenterType {
     match output {
@@ -586,7 +568,13 @@ async fn run(args: Args) -> Result<bool> {
     let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path, msgs);
 
     // Resolve exclude_groups: --production-only expands to all group names in the lockfile.
-    let exclude_groups = resolve_exclude_groups(args.production_only, &merged, &project_path)?;
+    let exclude_groups = resolve_exclude_groups(
+        &FileSystemReader::new(),
+        args.production_only,
+        &merged.exclude_groups,
+        &project_path,
+        None,
+    )?;
 
     // Load vulnerability baseline if --baseline is set
     let baseline_repo = BaselineFileRepository;
@@ -698,9 +686,14 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     let config = load_config(&args, &workspace_root, locale)?;
     let merged = merge_config(&args, &config)?;
 
-    // --production-only reads group roots from the workspace-root lockfile.
-    let workspace_exclude_groups =
-        resolve_exclude_groups(args.production_only, &merged, &workspace_root)?;
+    // --production-only expands to the union of every member's group names.
+    let workspace_exclude_groups = resolve_exclude_groups(
+        &FileSystemReader::new(),
+        args.production_only,
+        &merged.exclude_groups,
+        &workspace_root,
+        Some(&members),
+    )?;
 
     let format_ext = match merged.format {
         OutputFormat::Json => "json",
@@ -824,7 +817,13 @@ async fn run_workspace_incident(
 
     let config = load_config(&args, &workspace_root, locale)?;
     let merged = merge_config(&args, &config)?;
-    let exclude_groups = resolve_exclude_groups(args.production_only, &merged, &workspace_root)?;
+    let exclude_groups = resolve_exclude_groups(
+        &FileSystemReader::new(),
+        args.production_only,
+        &merged.exclude_groups,
+        &workspace_root,
+        Some(&members),
+    )?;
 
     let request = WorkspaceIncidentRequest {
         target,
@@ -930,7 +929,13 @@ async fn run_incident(args: Args, target: IncidentTarget) -> Result<IncidentVerd
 
     let config = load_config(&args, &project_path, locale)?;
     let merged = merge_config(&args, &config)?;
-    let exclude_groups = resolve_exclude_groups(args.production_only, &merged, &project_path)?;
+    let exclude_groups = resolve_exclude_groups(
+        &FileSystemReader::new(),
+        args.production_only,
+        &merged.exclude_groups,
+        &project_path,
+        None,
+    )?;
 
     let request = IncidentRequest {
         target,

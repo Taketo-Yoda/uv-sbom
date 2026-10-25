@@ -407,4 +407,106 @@ mod incident_tests {
             ))
             .stdout(predicate::str::contains("**1 of 2 members affected**: api"));
     }
+
+    /// Writes a revision-3 workspace (no `[manifest.dependency-groups]`) where
+    /// member `a`, which sorts first, declares no `dev` group (only
+    /// `lint = [black]`), and member `b` declares `dev = [ruff]`.
+    fn rev3_workspace_with_dev_only_in_later_member() -> TempDir {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let root = temp.path();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.uv.workspace]\nmembers = [\"packages/a\", \"packages/b\"]\n",
+        )
+        .unwrap();
+        for name in ["a", "b"] {
+            let dir = root.join("packages").join(name);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join("pyproject.toml"),
+                format!(
+                    "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\n"
+                ),
+            )
+            .unwrap();
+        }
+        fs::write(
+            root.join("uv.lock"),
+            r#"version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[package.dev-dependencies]
+lint = [{ name = "black" }]
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+
+[package.dev-dependencies]
+dev = [{ name = "ruff" }]
+
+[[package]]
+name = "black"
+version = "24.1.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "ruff"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+"#,
+        )
+        .unwrap();
+        temp
+    }
+
+    /// --production-only in a revision-3 workspace excludes the `dev` group
+    /// even when only a later member declares it (#995). Offline: `<=` names
+    /// no fixed version.
+    #[test]
+    fn test_incident_workspace_production_only_excludes_group_of_later_member() {
+        let temp = rev3_workspace_with_dev_only_in_later_member();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "ruff<=99.0",
+                "--workspace",
+                "--production-only",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("**0 of 2 members affected**"));
+    }
+
+    /// Without --production-only the same workspace reports `b` as affected,
+    /// so the test above is not passing vacuously.
+    #[test]
+    fn test_incident_workspace_later_member_dev_group_is_affected_without_production_only() {
+        let temp = rev3_workspace_with_dev_only_in_later_member();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "ruff<=99.0",
+                "--workspace",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(4)
+            .stdout(predicate::str::contains("**1 of 2 members affected**: b"));
+    }
 }
