@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **An explicit `--format json` now overrides the config file's `format`**: previously `--format json` was indistinguishable from passing no `--format` flag, so a config `format: markdown` silently won over it. Passing no `--format` flag still uses the config value, then the `json` default (#968)
 
+### Fixed
+- **`--workspace` member SBOMs reported 0 direct dependencies**: each member's SBOM now lists the member's declared dependencies as direct dependencies, and the packages reachable through them as transitive, with dependency paths in vulnerability details, `--suggest-fix`, and `--show-dependency-tree`. `--exclude-groups` no longer drops a member's runtime dependency that is also listed in an excluded group (#986)
+
 ## [3.3.0] - 2026-10-23
 
 ### Added

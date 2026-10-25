@@ -121,8 +121,13 @@ pub trait LockfileReader {
     /// * `member_name` - The workspace member name to scope the result to
     ///
     /// # Returns
-    /// A tuple of (packages, dependency_map) containing only packages reachable
-    /// from the specified member (excluding the member itself).
+    /// A tuple of (packages, dependency_map). `packages` contains only packages
+    /// reachable from the specified member (excluding the member itself).
+    /// `dependency_map` contains each of those packages' entries plus the
+    /// member's own root entry (runtime dependencies only), so the member name
+    /// can be passed to `DependencyAnalyzer::analyze` as the project root.
+    /// Entries for other local packages it reaches (e.g. sibling members) may
+    /// also carry their `dev` group edges, unlike `read_and_parse_lockfile`.
     ///
     /// # Errors
     /// Returns an error if:
