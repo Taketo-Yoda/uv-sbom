@@ -956,7 +956,7 @@ uv-sbom --incident "urllib3<2.0.6"
 
 1. **Impact** — each package the advisory names, its locked version, the verdict, and whether it is a direct or transitive dependency (with dependency paths).
 2. **Patch status** — the fixed version and whether it is released on PyPI.
-3. **Next action** — a copy-paste `uv lock --upgrade-package <name>==<fixed>` + `uv sync` command. It is verified with a dry-run resolution first, and your `uv.lock` is not modified. If the upgrade cannot be resolved, or no fix is released, you get guidance instead.
+3. **Next action** — a copy-paste `uv lock --upgrade-package <name>==<fixed>` + `uv sync` command. It is verified with a dry-run resolution first, and your `uv.lock` is not modified. If the upgrade cannot be resolved, or no fix is released, you get guidance instead. When the blocked package is itself a direct dependency, the guidance tells you to relax its version requirement in `pyproject.toml` to allow the fixed version.
 
 Example against `examples/suggest-fix-project` (exit code `1`):
 

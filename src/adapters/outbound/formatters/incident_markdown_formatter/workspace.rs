@@ -102,7 +102,7 @@ mod tests {
     };
     use super::*;
     use crate::application::read_models::incident_report::{
-        IncidentFinding, IncidentSource, MemberIncidentResult,
+        IncidentFinding, IncidentGuidance, IncidentSource, MemberIncidentResult,
     };
     use crate::i18n::Locale;
 
@@ -184,6 +184,35 @@ mod tests {
             1
         );
         assert!(out.contains("**2 of 2 members affected**: api, worker"));
+    }
+
+    #[test]
+    fn test_workspace_direct_pin_wins_over_resolution_blocked() {
+        let pinned = IncidentFinding {
+            upgrade_command: None,
+            command_verified: false,
+            guidance: Some(IncidentGuidance::DirectPinBlocksUpgrade),
+            ..verified()
+        };
+        let blocked = IncidentFinding {
+            upgrade_command: None,
+            command_verified: false,
+            guidance: Some(IncidentGuidance::ResolutionBlocked {
+                direct_roots: vec!["httpx".to_string()],
+            }),
+            ..transitive_from("httpx")
+        };
+        let out = IncidentMarkdownFormatter::new(Locale::En).format_workspace(&workspace(vec![
+            ("api", vec![blocked]),
+            ("worker", vec![pinned]),
+        ]));
+
+        assert_eq!(
+            out.matches("Relax the requirement to allow `>=2.31.0`")
+                .count(),
+            1
+        );
+        assert!(!out.contains("--suggest-fix"));
     }
 
     #[test]

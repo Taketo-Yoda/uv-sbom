@@ -266,6 +266,10 @@ impl IncidentMarkdownFormatter {
                 msgs.incident_guidance_resolution_blocked,
                 &[name, fixed, &direct_roots.join(", ")],
             ),
+            Some(IncidentGuidance::DirectPinBlocksUpgrade) => Messages::format(
+                msgs.incident_guidance_direct_pin_blocks_upgrade,
+                &[name, fixed, fixed, fixed, name],
+            ),
             Some(IncidentGuidance::NoReleasedFix) => {
                 Messages::format(msgs.incident_guidance_no_released_fix, &[name])
             }
@@ -515,6 +519,23 @@ uv sync
     }
 
     #[test]
+    fn test_direct_pin_guidance_en() {
+        let f = IncidentFinding {
+            guidance: Some(IncidentGuidance::DirectPinBlocksUpgrade),
+            ..finding(IncidentVerdictView::AffectedFixReleased)
+        };
+
+        let out = en(&report(vec![f]));
+
+        assert!(out.contains(
+            "Upgrading **requests** to 2.31.0 could not be resolved. It is a direct dependency, so its version requirement in `pyproject.toml` likely does not allow 2.31.0. Relax the requirement to allow `>=2.31.0`, then run `uv lock --upgrade-package requests` and `uv sync`."
+        ));
+        assert!(!out.contains("--suggest-fix"));
+        assert!(!out.contains("blocking constraint"));
+        assert!(!out.contains("```sh"));
+    }
+
+    #[test]
     fn test_unreleased_statuses_en() {
         for (status, label) in [
             (Some(ReleaseStatusView::NotFound), "not published on PyPI"),
@@ -720,6 +741,10 @@ uv sync
                 ..finding(IncidentVerdictView::AffectedFixReleased)
             },
             IncidentFinding {
+                guidance: Some(IncidentGuidance::DirectPinBlocksUpgrade),
+                ..finding(IncidentVerdictView::AffectedFixReleased)
+            },
+            IncidentFinding {
                 release_status: Some(ReleaseStatusView::Yanked),
                 guidance: Some(IncidentGuidance::NoReleasedFix),
                 ..finding(IncidentVerdictView::AffectedFixUnreleased)
@@ -811,6 +836,16 @@ uv sync
         assert!(ja(&report(vec![blocked])).contains(
             "**requests** を 2.31.0 へ更新できませんでした。制約を保持している可能性が高い直接依存: flask。`uv-sbom --suggest-fix` で互換性のある更新を確認してください。"
         ));
+
+        let pinned = IncidentFinding {
+            guidance: Some(IncidentGuidance::DirectPinBlocksUpgrade),
+            ..finding(IncidentVerdictView::AffectedFixReleased)
+        };
+        let out = ja(&report(vec![pinned]));
+        assert!(out.contains(
+            "**requests** を 2.31.0 へ更新できませんでした。プロジェクトの直接依存のため、`pyproject.toml` のバージョン指定が 2.31.0 を許容していない可能性があります。`>=2.31.0` を許容するよう指定を緩めてから、`uv lock --upgrade-package requests` と `uv sync` を実行してください。"
+        ));
+        assert!(!out.contains("--suggest-fix"));
 
         let unverified = IncidentFinding {
             command_verified: false,

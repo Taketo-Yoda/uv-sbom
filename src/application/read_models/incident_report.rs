@@ -148,6 +148,11 @@ pub enum IncidentGuidance {
         /// Sorted, deduplicated direct dependency names.
         direct_roots: Vec<String>,
     },
+    /// The package is itself a direct dependency and the upgrade to the fixed
+    /// version could not be resolved: the project's own version requirement
+    /// in `pyproject.toml` likely excludes the fix (#984). The package name
+    /// and fixed version are the finding's own fields.
+    DirectPinBlocksUpgrade,
     /// No released fix exists yet: the fixed version is not published or is
     /// yanked on PyPI, or the advisory names no fixed version at all.
     NoReleasedFix,
@@ -217,7 +222,11 @@ impl WorkspaceIncidentReport {
     /// sorted by package name then version. Release status, verdict, and
     /// command do not depend on the member; only the dependency position does,
     /// so the first member's position is kept and the `direct_roots` of
-    /// `ResolutionBlocked` guidance are unioned (sorted, deduplicated).
+    /// `ResolutionBlocked` guidance are unioned (sorted, deduplicated). A
+    /// member's `DirectPinBlocksUpgrade` replaces another member's
+    /// `ResolutionBlocked`: members share one `uv.lock`, so that member's own
+    /// requirement blocks the upgrade for the whole workspace. Only the
+    /// guidance is replaced; `is_direct` and `paths` stay the first member's.
     pub fn deduplicated_findings(&self) -> Vec<IncidentFinding> {
         let mut merged: BTreeMap<(String, String), IncidentFinding> = BTreeMap::new();
         for finding in self.members.iter().flat_map(|m| &m.findings) {
@@ -226,19 +235,23 @@ impl WorkspaceIncidentReport {
                 None => {
                     merged.insert(key, finding.clone());
                 }
-                Some(existing) => {
-                    if let (
+                Some(existing) => match (&mut existing.guidance, &finding.guidance) {
+                    (
                         Some(IncidentGuidance::ResolutionBlocked { direct_roots }),
                         Some(IncidentGuidance::ResolutionBlocked {
                             direct_roots: other,
                         }),
-                    ) = (&mut existing.guidance, &finding.guidance)
-                    {
+                    ) => {
                         let union: BTreeSet<String> =
                             direct_roots.iter().chain(other).cloned().collect();
                         *direct_roots = union.into_iter().collect();
                     }
-                }
+                    (
+                        guidance @ Some(IncidentGuidance::ResolutionBlocked { .. }),
+                        Some(IncidentGuidance::DirectPinBlocksUpgrade),
+                    ) => *guidance = Some(IncidentGuidance::DirectPinBlocksUpgrade),
+                    _ => {}
+                },
             }
         }
         merged.into_values().collect()
@@ -362,6 +375,10 @@ mod tests {
             json!({"kind": "resolution_blocked", "direct_roots": ["flask"]})
         );
         assert_eq!(
+            serde_json::to_value(IncidentGuidance::DirectPinBlocksUpgrade).unwrap(),
+            json!({"kind": "direct_pin_blocks_upgrade"})
+        );
+        assert_eq!(
             serde_json::to_value(IncidentGuidance::NoReleasedFix).unwrap(),
             json!({"kind": "no_released_fix"})
         );
@@ -473,6 +490,35 @@ mod tests {
                 direct_roots: vec!["celery".to_string(), "httpx".to_string()],
             })
         );
+    }
+
+    #[test]
+    fn test_deduplicated_findings_prefers_direct_pin_in_either_member_order() {
+        let pinned = IncidentFinding {
+            is_direct: true,
+            upgrade_command: None,
+            command_verified: false,
+            guidance: Some(IncidentGuidance::DirectPinBlocksUpgrade),
+            ..finding()
+        };
+        for members in [
+            vec![
+                member("api", vec![pinned.clone()]),
+                member("worker", vec![blocked(&["httpx"])]),
+            ],
+            vec![
+                member("worker", vec![blocked(&["httpx"])]),
+                member("api", vec![pinned.clone()]),
+            ],
+        ] {
+            let merged = workspace(members).deduplicated_findings();
+
+            assert_eq!(merged.len(), 1);
+            assert_eq!(
+                merged[0].guidance,
+                Some(IncidentGuidance::DirectPinBlocksUpgrade)
+            );
+        }
     }
 
     #[test]
