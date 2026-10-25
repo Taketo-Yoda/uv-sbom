@@ -115,9 +115,10 @@ where
             .read_and_parse_lockfile_for_member(root, member)?;
         let pattern_outcome =
             project_scope::filter_by_patterns(packages, &request.exclude_patterns)?;
-        let packages = project_scope::filter_by_groups(
+        let packages = project_scope::filter_by_groups_for_member(
             &self.lockfile_reader,
             root,
+            member,
             pattern_outcome.packages,
             &member_map,
             &request.exclude_groups,
@@ -169,12 +170,13 @@ mod tests {
     /// the map (never in the packages) — mirroring
     /// `parse_lockfile_content_for_member`. `dev` holds each member's `dev`
     /// group: followed by the member read, but absent from `full` and from the
-    /// runtime-only root entry, as in a real lockfile.
+    /// runtime-only root entry, as in a real lockfile. `group_roots` holds
+    /// each member's own group roots, as a revision-3 lockfile does.
     struct MockWorkspaceLockfileReader {
         packages: Vec<Package>,
         full: HashMap<String, Vec<String>>,
         dev: HashMap<String, Vec<String>>,
-        group_roots: HashMap<String, Vec<String>>,
+        group_roots: HashMap<String, crate::ports::outbound::GroupRoots>,
         sources: PackageSourceMap,
     }
 
@@ -224,7 +226,19 @@ mod tests {
             &self,
             _path: &Path,
         ) -> Result<crate::ports::outbound::GroupRoots> {
-            Ok(self.group_roots.clone())
+            unreachable!("workspace mode must read each member's own group roots (#992)")
+        }
+
+        fn read_and_parse_group_roots_for_member(
+            &self,
+            _path: &Path,
+            member_name: &str,
+        ) -> Result<crate::ports::outbound::GroupRoots> {
+            Ok(self
+                .group_roots
+                .get(member_name)
+                .cloned()
+                .unwrap_or_default())
         }
 
         fn read_and_parse_package_sources(&self, _path: &Path) -> Result<PackageSourceMap> {
@@ -453,7 +467,10 @@ mod tests {
         // Make `celery` a dev-only dependency of `worker`.
         lock.full.insert("worker".to_string(), Vec::new());
         lock.dev = HashMap::from([("worker".to_string(), vec!["celery".to_string()])]);
-        lock.group_roots = HashMap::from([("dev".to_string(), vec!["celery".to_string()])]);
+        lock.group_roots = HashMap::from([(
+            "worker".to_string(),
+            HashMap::from([("dev".to_string(), vec!["celery".to_string()])]),
+        )]);
         let uc = workspace_use_case(
             lock,
             ghsa_repo("urllib3"),
@@ -468,6 +485,45 @@ mod tests {
         // `urllib3` is reachable only through the excluded group in `worker`,
         // but through production `requests` in `api`.
         assert_eq!(report.affected_member_names(), vec!["api"]);
+    }
+
+    #[tokio::test]
+    async fn test_workspace_exclude_groups_uses_each_members_own_group_roots() {
+        let mut lock = workspace_lock();
+        // `api` reaches `urllib3` only through its dev root `requests`, and
+        // `worker` only through its dev root `celery`.
+        lock.full
+            .insert("api".to_string(), vec!["fastapi".to_string()]);
+        lock.full.insert("worker".to_string(), Vec::new());
+        lock.dev = HashMap::from([
+            ("api".to_string(), vec!["requests".to_string()]),
+            ("worker".to_string(), vec!["celery".to_string()]),
+        ]);
+        lock.group_roots = HashMap::from([
+            (
+                "api".to_string(),
+                HashMap::from([("dev".to_string(), vec!["requests".to_string()])]),
+            ),
+            (
+                "worker".to_string(),
+                HashMap::from([("dev".to_string(), vec!["celery".to_string()])]),
+            ),
+        ]);
+        let uc = workspace_use_case(
+            lock,
+            ghsa_repo("urllib3"),
+            released("urllib3"),
+            MockUvLockSimulator::default().with_targeted("urllib3", resolved()),
+        );
+        let mut req = workspace_request(GHSA);
+        req.exclude_groups = vec!["dev".to_string()];
+
+        let report = uc.execute_workspace(req).await.unwrap();
+
+        // With one member's roots applied to both, the other member would
+        // keep its dev path to `urllib3` and be reported as affected.
+        assert!(report.affected_member_names().is_empty());
+        assert_eq!(report.overall, IncidentVerdictView::NotAffected);
     }
 
     #[test]

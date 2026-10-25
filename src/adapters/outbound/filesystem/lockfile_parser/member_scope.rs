@@ -46,10 +46,7 @@ pub fn parse_lockfile_content_for_member(
     for pkg in &packages {
         let deps = collect_all_deps(&pkg.dependencies, pkg.dev_group());
 
-        let is_member_root =
-            pkg.name == member_name && pkg.source.as_ref().map(|s| s.is_local()).unwrap_or(false);
-
-        if is_member_root {
+        if pkg.is_local_named(member_name) {
             member_direct_deps = Some(deps.clone());
             member_runtime_deps = pkg.dependencies.iter().map(|d| d.name.clone()).collect();
         }
@@ -476,12 +473,13 @@ source = { registry = "https://pypi.org/simple" }
     }
 
     fn exclude_dev(content: &str, member: &str) -> HashSet<String> {
-        use super::super::parse_group_roots;
+        use super::super::parse_group_roots_for_member;
         use crate::sbom_generation::domain::GroupReachabilityAnalyzer;
 
         let (packages, dep_map) =
             parse_lockfile_content_for_member(content, Path::new("/project"), member).unwrap();
-        let group_roots = parse_group_roots(content, Path::new("/project")).unwrap();
+        let group_roots =
+            parse_group_roots_for_member(content, Path::new("/project"), member).unwrap();
         GroupReachabilityAnalyzer::filter_excluded_groups(
             &packages,
             &dep_map,
@@ -501,6 +499,63 @@ source = { registry = "https://pypi.org/simple" }
             !names.contains("mypy"),
             "dev group package must be excluded"
         );
+    }
+
+    // Revision-3 workspace where each member declares a different `dev` group.
+    // `a` sorts first, so a first-local-package lookup would use `a`'s groups for `b`.
+    const WORKSPACE_LOCK_REV3_PER_MEMBER_DEV: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+dev = [{ name = "ruff" }]
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "ruff"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    // Regression (#992): `--workspace --exclude-groups dev` must use each member's
+    // own `[package.dev-dependencies]`, not the first local package's.
+    #[test]
+    fn test_parse_lockfile_for_member_exclude_dev_uses_members_own_groups_rev3() {
+        let a = exclude_dev(WORKSPACE_LOCK_REV3_PER_MEMBER_DEV, "a");
+        assert!(a.contains("requests"));
+        assert!(!a.contains("mypy"), "a's dev package must be excluded");
+
+        let b = exclude_dev(WORKSPACE_LOCK_REV3_PER_MEMBER_DEV, "b");
+        assert!(b.contains("requests"));
+        assert!(!b.contains("ruff"), "b's dev package must be excluded");
     }
 
     // `requests` is both a runtime dependency and a `dev` group root.
