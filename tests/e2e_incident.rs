@@ -584,4 +584,117 @@ source = { registry = "https://pypi.org/simple" }
         assert_eq!(finding["is_direct"], false);
         assert_eq!(finding["paths"], serde_json::json!([]));
     }
+
+    /// Writes a workspace whose virtual root declares `[dependency-groups]`, so
+    /// `uv.lock` has `[manifest.dependency-groups] docs = [sphinx]`, and whose
+    /// member `b` declares its own `lint = [black]` group (#999).
+    fn manifest_workspace_with_member_group() -> TempDir {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let root = temp.path();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.uv.workspace]\nmembers = [\"packages/a\", \"packages/b\"]\n\n[dependency-groups]\ndocs = [\"sphinx\"]\n",
+        )
+        .unwrap();
+        for name in ["a", "b"] {
+            let dir = root.join("packages").join(name);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join("pyproject.toml"),
+                format!(
+                    "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\n"
+                ),
+            )
+            .unwrap();
+        }
+        fs::write(
+            root.join("uv.lock"),
+            r#"version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[manifest.dependency-groups]
+docs = [{ name = "sphinx" }]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+lint = [{ name = "black" }]
+
+[[package]]
+name = "black"
+version = "24.1.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "sphinx"
+version = "7.2.6"
+source = { registry = "https://pypi.org/simple" }
+"#,
+        )
+        .unwrap();
+        temp
+    }
+
+    /// `b` reaches `black` only through its own `lint` group, next to the
+    /// manifest group `docs` (#999). Offline: `<=` names no fixed version.
+    #[test]
+    fn test_incident_workspace_manifest_groups_member_own_group_is_affected() {
+        let temp = manifest_workspace_with_member_group();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "black<=99.0",
+                "--workspace",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(4)
+            .stdout(predicate::str::contains("**1 of 2 members affected**: b"));
+    }
+
+    /// --exclude-groups and --production-only drop the member's own group in
+    /// incident mode when manifest groups exist (#999)
+    #[test]
+    fn test_incident_workspace_manifest_groups_exclude_member_own_group() {
+        for flags in [
+            &["--exclude-groups", "lint"][..],
+            &["--production-only"][..],
+        ] {
+            let temp = manifest_workspace_with_member_group();
+            let mut args = vec![
+                "--incident",
+                "black<=99.0",
+                "--workspace",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ];
+            args.extend_from_slice(flags);
+
+            cargo_bin_cmd!("uv-sbom")
+                .args(&args)
+                .assert()
+                .code(0)
+                .stdout(predicate::str::contains("**0 of 2 members affected**"));
+        }
+    }
 }

@@ -229,4 +229,51 @@ dev = [{ name = "ruff" }]
 
         assert_eq!(names, vec!["dev", "lint"]);
     }
+
+    #[test]
+    fn test_resolve_exclude_groups_workspace_includes_manifest_and_member_groups() {
+        // With `[manifest.dependency-groups]` present, a member's own groups
+        // are still collected (#999).
+        let temp = TempDir::new().unwrap();
+        fs::write(
+            temp.path().join("uv.lock"),
+            r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[manifest.dependency-groups]
+docs = [{ name = "sphinx" }]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+
+[package.dev-dependencies]
+lint = [{ name = "black" }]
+"#,
+        )
+        .unwrap();
+        let members = [member("a"), member("b")];
+
+        let names = resolve_exclude_groups(
+            &FileSystemReader::new(),
+            true,
+            &[],
+            temp.path(),
+            Some(&members),
+        )
+        .unwrap();
+
+        assert_eq!(names, vec!["docs", "lint"]);
+    }
 }
