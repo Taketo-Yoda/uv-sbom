@@ -164,6 +164,30 @@ mod tests {
     }
 
     #[test]
+    fn test_direct_pin_and_resolution_blocked_guidance_tags_differ() {
+        for (guidance, expected) in [
+            (
+                IncidentGuidance::DirectPinBlocksUpgrade,
+                json!({"kind": "direct_pin_blocks_upgrade"}),
+            ),
+            (
+                IncidentGuidance::ResolutionBlocked {
+                    direct_roots: vec!["flask".to_string()],
+                },
+                json!({"kind": "resolution_blocked", "direct_roots": ["flask"]}),
+            ),
+        ] {
+            let mut r = report();
+            r.findings[0].guidance = Some(guidance);
+
+            let json: Value =
+                serde_json::from_str(&IncidentJsonFormatter::new().format(&r).unwrap()).unwrap();
+
+            assert_eq!(json["findings"][0]["guidance"], expected);
+        }
+    }
+
+    #[test]
     fn test_release_lookup_and_non_pypi_guidance_tags() {
         for (guidance, expected) in [
             (

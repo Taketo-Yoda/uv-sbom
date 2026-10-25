@@ -317,21 +317,25 @@ fn next_action(
     match outcome {
         Ok(TargetedSimulationOutcome::Resolved { .. }) => command(true),
         Ok(TargetedSimulationOutcome::SimulatorUnavailable) => command(false),
+        // A direct dependency's own requirement is the likely blocker, so
+        // naming it as its own blocker would mislead (#984).
+        Ok(TargetedSimulationOutcome::ResolutionFailed { .. }) if is_direct => {
+            NextAction::guidance(Some(IncidentGuidance::DirectPinBlocksUpgrade))
+        }
         Ok(TargetedSimulationOutcome::ResolutionFailed { .. }) => {
             NextAction::guidance(Some(IncidentGuidance::ResolutionBlocked {
-                direct_roots: direct_roots(name, is_direct, paths),
+                direct_roots: direct_roots(name, paths),
             }))
         }
         Err(reason) => NextAction::guidance(Some(IncidentGuidance::SimulationError { reason })),
     }
 }
 
-/// The direct dependencies at the root of each path (plus the package itself
-/// when it is direct), sorted and deduplicated. Falls back to the package
-/// itself when no root is known.
-fn direct_roots(name: &str, is_direct: bool, paths: &[Vec<String>]) -> Vec<String> {
+/// The direct dependencies at the root of each path, sorted and deduplicated.
+/// Falls back to the package itself when no root is known.
+fn direct_roots(name: &str, paths: &[Vec<String>]) -> Vec<String> {
     let mut roots: BTreeSet<String> = paths.iter().filter_map(|p| p.first().cloned()).collect();
-    if is_direct || roots.is_empty() {
+    if roots.is_empty() {
         roots.insert(name.to_string());
     }
     roots.into_iter().collect()
@@ -473,6 +477,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_resolution_failure_on_direct_dependency_suggests_relaxing_pin() {
+        let uc = use_case(
+            direct_requests_lock(),
+            ghsa_repo("requests"),
+            released("requests"),
+            MockUvLockSimulator::default().with_targeted(
+                "requests",
+                Ok(TargetedSimulationOutcome::ResolutionFailed {
+                    reason: "conflict".to_string(),
+                }),
+            ),
+        );
+
+        let report = uc.execute(request(GHSA)).await.unwrap();
+
+        let finding = &report.findings[0];
+        assert!(finding.is_direct);
+        assert_eq!(finding.verdict, IncidentVerdictView::AffectedFixReleased);
+        assert_eq!(finding.upgrade_command, None);
+        assert!(!finding.command_verified);
+        assert_eq!(
+            finding.guidance,
+            Some(IncidentGuidance::DirectPinBlocksUpgrade)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_resolution_failure_on_direct_and_transitive_dependency_suggests_relaxing_pin() {
+        let lock = lock(
+            vec![pkg("flask", "3.0.0"), pkg("requests", "2.25.0")],
+            &[(PROJECT, &["flask", "requests"]), ("flask", &["requests"])],
+        );
+        let uc = use_case(
+            lock,
+            ghsa_repo("requests"),
+            released("requests"),
+            MockUvLockSimulator::default().with_targeted(
+                "requests",
+                Ok(TargetedSimulationOutcome::ResolutionFailed {
+                    reason: "conflict".to_string(),
+                }),
+            ),
+        );
+
+        let report = uc.execute(request(GHSA)).await.unwrap();
+
+        let finding = &report.findings[0];
+        assert!(finding.is_direct);
+        assert_eq!(
+            finding.guidance,
+            Some(IncidentGuidance::DirectPinBlocksUpgrade)
+        );
+    }
+
+    #[tokio::test]
     async fn test_simulator_unavailable_yields_unverified_command() {
         let uc = use_case(
             direct_requests_lock(),
@@ -610,8 +669,7 @@ mod tests {
             vec!["a".to_string(), "y".to_string(), "x".to_string()],
             vec!["b".to_string(), "z".to_string(), "x".to_string()],
         ];
-        assert_eq!(direct_roots("x", false, &paths), vec!["a", "b"]);
-        assert_eq!(direct_roots("x", true, &paths), vec!["a", "b", "x"]);
-        assert_eq!(direct_roots("x", false, &[]), vec!["x"]);
+        assert_eq!(direct_roots("x", &paths), vec!["a", "b"]);
+        assert_eq!(direct_roots("x", &[]), vec!["x"]);
     }
 }
