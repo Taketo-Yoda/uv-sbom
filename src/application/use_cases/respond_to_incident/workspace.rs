@@ -97,9 +97,10 @@ where
 
     /// Reads one workspace member's packages and applies the scope filters
     /// against the member-scoped dependency map. The graph is built from
-    /// `full_map` rooted at the member: the member-scoped map has no entry for
-    /// the member itself, so a graph built from it would have no direct
-    /// dependencies. Returns the `--exclude` patterns that matched nothing in
+    /// `full_map` rooted at the member, so every edge is runtime-only as in
+    /// single-project mode (the member-scoped map also carries `dev` edges of
+    /// local packages it reaches); the member map is used only for group
+    /// filtering. Returns the `--exclude` patterns that matched nothing in
     /// this member; the caller decides whether to warn.
     fn load_member_scope(
         &self,
@@ -164,11 +165,15 @@ mod tests {
 
     /// Workspace lockfile: `full` is the root-level dependency map (member
     /// keys included); a member read returns only the packages reachable from
-    /// the member's direct dependencies, without the member's own entry —
-    /// exactly what `parse_lockfile_content_for_member` returns.
+    /// the member's direct dependencies, plus the member's own root entry in
+    /// the map (never in the packages) — mirroring
+    /// `parse_lockfile_content_for_member`. `dev` holds each member's `dev`
+    /// group: followed by the member read, but absent from `full` and from the
+    /// runtime-only root entry, as in a real lockfile.
     struct MockWorkspaceLockfileReader {
         packages: Vec<Package>,
         full: HashMap<String, Vec<String>>,
+        dev: HashMap<String, Vec<String>>,
         group_roots: HashMap<String, Vec<String>>,
         sources: PackageSourceMap,
     }
@@ -195,6 +200,7 @@ mod tests {
                 anyhow::bail!("Workspace member '{}' not found in uv.lock", member_name);
             };
             let mut queue: Vec<String> = roots.clone();
+            queue.extend(self.dev.get(member_name).cloned().unwrap_or_default());
             while let Some(name) = queue.pop() {
                 if visited.insert(name.clone()) {
                     queue.extend(self.full.get(&name).cloned().unwrap_or_default());
@@ -206,10 +212,11 @@ mod tests {
                 .filter(|p| visited.contains(p.name()))
                 .cloned()
                 .collect();
-            let map = visited
+            let mut map: HashMap<String, Vec<String>> = visited
                 .iter()
                 .map(|name| (name.clone(), self.full[name].clone()))
                 .collect();
+            map.insert(member_name.to_string(), roots.clone());
             Ok((packages, map))
         }
 
@@ -260,6 +267,7 @@ mod tests {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.iter().map(|c| c.to_string()).collect()))
                 .collect(),
+            dev: HashMap::new(),
             group_roots: HashMap::new(),
             sources: HashMap::from([
                 ("api".to_string(), PackageSourceKind::WorkspaceMember),
@@ -442,6 +450,9 @@ mod tests {
     #[tokio::test]
     async fn test_workspace_exclude_groups_applies_per_member() {
         let mut lock = workspace_lock();
+        // Make `celery` a dev-only dependency of `worker`.
+        lock.full.insert("worker".to_string(), Vec::new());
+        lock.dev = HashMap::from([("worker".to_string(), vec!["celery".to_string()])]);
         lock.group_roots = HashMap::from([("dev".to_string(), vec!["celery".to_string()])]);
         let uc = workspace_use_case(
             lock,

@@ -13,8 +13,14 @@ use std::path::Path;
 /// Identifies the member root package by matching `name == member_name` with either
 /// `source.editable` or `source.virtual` set (uv < 0.5 uses `editable`; uv >= 0.5
 /// uses `virtual` for packages without a build system), then performs BFS over the
-/// dependency graph to collect all transitively reachable packages. The member root
-/// itself is excluded.
+/// dependency graph (runtime + `dev` group edges) to collect all transitively
+/// reachable packages. The member root itself is excluded from `packages`.
+///
+/// The returned dependency map holds every reachable package's entry plus the
+/// member root's own entry, so callers can pass the member name to
+/// `DependencyAnalyzer::analyze`. The root entry lists runtime dependencies only,
+/// matching `parse_lockfile_content`, so dev tools are not reported as direct
+/// dependencies and `--exclude-groups dev` can still exclude them.
 pub fn parse_lockfile_content_for_member(
     content: &str,
     project_path: &Path,
@@ -35,6 +41,7 @@ pub fn parse_lockfile_content_for_member(
     let mut full_dep_map: HashMap<String, Vec<String>> = HashMap::new();
     let mut pkg_lookup: HashMap<String, (String, String)> = HashMap::new();
     let mut member_direct_deps: Option<Vec<String>> = None;
+    let mut member_runtime_deps: Vec<String> = Vec::new();
 
     for pkg in &packages {
         let deps = collect_all_deps(&pkg.dependencies, pkg.dev_group());
@@ -44,6 +51,7 @@ pub fn parse_lockfile_content_for_member(
 
         if is_member_root {
             member_direct_deps = Some(deps.clone());
+            member_runtime_deps = pkg.dependencies.iter().map(|d| d.name.clone()).collect();
         }
 
         full_dep_map.insert(pkg.name.clone(), deps);
@@ -63,6 +71,10 @@ pub fn parse_lockfile_content_for_member(
     let mut dependency_map = HashMap::new();
 
     for name in &visited {
+        // A sibling member can depend back on this member; it is still not a component.
+        if name == member_name {
+            continue;
+        }
         if let Some((pkg_name, pkg_version)) = pkg_lookup.get(name) {
             packages.push(Package::new(pkg_name.clone(), pkg_version.clone())?);
             if let Some(deps) = full_dep_map.get(name) {
@@ -70,6 +82,7 @@ pub fn parse_lockfile_content_for_member(
             }
         }
     }
+    dependency_map.insert(member_name.to_string(), member_runtime_deps);
 
     Ok((packages, dependency_map))
 }
@@ -374,5 +387,206 @@ source = { registry = "https://pypi.org/simple" }
             !names.contains("pytest"),
             "test group must NOT be reachable"
         );
+    }
+
+    // --- member root entry (#986) ---
+
+    fn sorted(deps: &[String]) -> Vec<String> {
+        let mut deps = deps.to_vec();
+        deps.sort();
+        deps
+    }
+
+    #[test]
+    fn test_parse_lockfile_for_member_dep_map_contains_member_root_entry() {
+        let (packages, dep_map) = parse_lockfile_content_for_member(
+            WORKSPACE_LOCK_VIRTUAL_FORMAT,
+            Path::new("/workspace"),
+            "api",
+        )
+        .unwrap();
+
+        assert_eq!(
+            sorted(dep_map.get("api").expect("member root entry must exist")),
+            vec!["fastapi".to_string(), "requests".to_string()]
+        );
+        assert!(
+            !packages.iter().any(|p| p.name() == "api"),
+            "member root must stay out of packages"
+        );
+
+        let (_, dep_map) = parse_lockfile_content_for_member(
+            WORKSPACE_LOCK_FOR_MEMBER,
+            Path::new("/workspace"),
+            "alpha",
+        )
+        .unwrap();
+        assert_eq!(
+            sorted(dep_map.get("alpha").expect("member root entry must exist")),
+            vec!["certifi".to_string(), "requests".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_parse_lockfile_for_member_dependency_analyzer_finds_direct_deps() {
+        use crate::sbom_generation::domain::PackageName;
+        use crate::sbom_generation::services::DependencyAnalyzer;
+
+        let (_, dep_map) = parse_lockfile_content_for_member(
+            WORKSPACE_LOCK_FOR_MEMBER,
+            Path::new("/workspace"),
+            "alpha",
+        )
+        .unwrap();
+
+        let (graph, _) =
+            DependencyAnalyzer::analyze(&PackageName::new("alpha".to_string()).unwrap(), &dep_map)
+                .unwrap();
+
+        let mut direct: Vec<&str> = graph
+            .direct_dependencies()
+            .iter()
+            .map(|n| n.as_str())
+            .collect();
+        direct.sort();
+        assert_eq!(direct, vec!["certifi", "requests"]);
+        assert!(
+            graph
+                .transitive_dependencies()
+                .values()
+                .flatten()
+                .any(|n| n.as_str() == "urllib3"),
+            "urllib3 must be transitive through requests"
+        );
+    }
+
+    #[test]
+    fn test_parse_lockfile_for_member_root_entry_is_runtime_only() {
+        let (packages, dep_map) = parse_lockfile_content_for_member(
+            WORKSPACE_LOCK_MULTI_DEV_GROUPS,
+            Path::new("/project"),
+            "my-app",
+        )
+        .unwrap();
+
+        // Matches `parse_lockfile_content`: the root entry lists runtime deps only,
+        // while dev-group packages are still collected as components.
+        assert_eq!(dep_map.get("my-app"), Some(&vec!["requests".to_string()]));
+        assert!(packages.iter().any(|p| p.name() == "mypy"));
+    }
+
+    fn exclude_dev(content: &str, member: &str) -> HashSet<String> {
+        use super::super::parse_group_roots;
+        use crate::sbom_generation::domain::GroupReachabilityAnalyzer;
+
+        let (packages, dep_map) =
+            parse_lockfile_content_for_member(content, Path::new("/project"), member).unwrap();
+        let group_roots = parse_group_roots(content, Path::new("/project")).unwrap();
+        GroupReachabilityAnalyzer::filter_excluded_groups(
+            &packages,
+            &dep_map,
+            &group_roots,
+            &["dev".to_string()],
+        )
+        .iter()
+        .map(|p| p.name().to_string())
+        .collect()
+    }
+
+    #[test]
+    fn test_parse_lockfile_for_member_exclude_dev_group_still_excludes_dev_packages() {
+        let names = exclude_dev(WORKSPACE_LOCK_MULTI_DEV_GROUPS, "my-app");
+        assert!(names.contains("requests"));
+        assert!(
+            !names.contains("mypy"),
+            "dev group package must be excluded"
+        );
+    }
+
+    // `requests` is both a runtime dependency and a `dev` group root.
+    const WORKSPACE_LOCK_RUNTIME_AND_DEV_OVERLAP: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["my-app"]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }, { name = "requests" }]
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_lockfile_for_member_exclude_dev_group_keeps_runtime_dep_also_in_dev() {
+        let names = exclude_dev(WORKSPACE_LOCK_RUNTIME_AND_DEV_OVERLAP, "my-app");
+        assert!(
+            names.contains("requests"),
+            "a runtime dependency must survive excluding a group that also lists it"
+        );
+        assert!(!names.contains("mypy"));
+    }
+
+    // `lib` (another workspace member) depends back on `app`.
+    const WORKSPACE_LOCK_MEMBER_CYCLE: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["app", "lib"]
+
+[[package]]
+name = "app"
+version = "0.1.0"
+source = { virtual = "packages/app" }
+dependencies = [{ name = "lib" }]
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+
+[[package]]
+name = "lib"
+version = "0.1.0"
+source = { virtual = "packages/lib" }
+dependencies = [{ name = "app" }]
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_lockfile_for_member_cycle_back_to_member_keeps_it_out_of_packages() {
+        let (packages, dep_map) = parse_lockfile_content_for_member(
+            WORKSPACE_LOCK_MEMBER_CYCLE,
+            Path::new("/workspace"),
+            "app",
+        )
+        .unwrap();
+
+        let names: HashSet<String> = packages.iter().map(|p| p.name().to_string()).collect();
+        assert!(
+            !names.contains("app"),
+            "member root must stay out of packages"
+        );
+        assert!(names.contains("lib"));
+        assert_eq!(dep_map.get("app"), Some(&vec!["lib".to_string()]));
     }
 }
