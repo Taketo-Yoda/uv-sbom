@@ -941,3 +941,117 @@ fn create_test_license_repository() -> impl LicenseRepository + Clone {
 
     TestLicenseRepository::new()
 }
+
+/// End-to-end tests for single-project `--exclude-groups` (#1005)
+mod exclude_groups_tests {
+    use std::fs;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    /// Helper: run uv-sbom with given args, return (exit_code, stdout, stderr)
+    fn run_uv_sbom(args: &[&str]) -> (i32, String, String) {
+        let output = Command::new(env!("CARGO_BIN_EXE_uv-sbom"))
+            .args(args)
+            .output()
+            .expect("Failed to execute uv-sbom");
+
+        let exit_code = output.status.code().unwrap_or(-1);
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        (exit_code, stdout, stderr)
+    }
+
+    /// Writes a single project whose `dev` and `lint` groups share the root
+    /// `ruff`, plus its own `test = [pytest]` group. The lockfile has no
+    /// `[manifest.dependency-groups]`, so the groups come from the project
+    /// package's `[package.dev-dependencies]`.
+    fn single_project_with_shared_group_root() -> TempDir {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let root = temp.path();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[project]\nname = \"app\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\"requests\"]\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("uv.lock"),
+            r#"version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "app"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+dev = [{ name = "ruff" }]
+lint = [{ name = "ruff" }]
+test = [{ name = "pytest" }]
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "ruff"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+"#,
+        )
+        .unwrap();
+        temp
+    }
+
+    fn sbom(temp: &TempDir, extra: &[&str]) -> String {
+        let path = temp.path().to_str().unwrap();
+        let mut args = vec!["-p", path, "--no-check-cve", "-f", "json"];
+        args.extend_from_slice(extra);
+        let (code, stdout, stderr) = run_uv_sbom(&args);
+        assert_eq!(code, 0, "stderr: {stderr}");
+        stdout
+    }
+
+    /// Without group flags the shared root is listed, so the exclusion tests
+    /// below are not passing vacuously
+    #[test]
+    fn test_single_project_sbom_lists_shared_group_root() {
+        let temp = single_project_with_shared_group_root();
+
+        let sbom = sbom(&temp, &[]);
+        assert!(sbom.contains("\"ruff\""));
+        assert!(sbom.contains("\"pytest\""));
+    }
+
+    /// Excluding `dev` keeps `ruff`, which the non-excluded `lint` group also lists
+    #[test]
+    fn test_single_project_exclude_groups_keeps_root_shared_with_kept_group() {
+        let temp = single_project_with_shared_group_root();
+
+        let sbom = sbom(&temp, &["--exclude-groups", "dev"]);
+        assert!(sbom.contains("\"ruff\""), "lint still lists it");
+        assert!(sbom.contains("\"requests\""));
+    }
+
+    /// Excluding every group that lists the shared root drops it
+    #[test]
+    fn test_single_project_excluding_every_listing_group_drops_shared_root() {
+        for flags in [
+            &["--exclude-groups", "dev,lint"][..],
+            &["--production-only"][..],
+        ] {
+            let temp = single_project_with_shared_group_root();
+
+            let sbom = sbom(&temp, flags);
+            assert!(!sbom.contains("\"ruff\""), "{flags:?}");
+            assert!(sbom.contains("\"requests\""), "{flags:?}");
+        }
+    }
+}
