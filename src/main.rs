@@ -673,16 +673,9 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     let config = load_config(&args, &workspace_root, locale)?;
     let merged = merge_config(&args, &config)?;
 
-    // Resolve exclude_groups for workspace mode: --production-only reads group roots from
-    // the workspace-root lockfile. --exclude-groups / config value is used otherwise.
-    let workspace_exclude_groups = if args.production_only {
-        FileSystemReader::new()
-            .read_and_parse_group_roots(&workspace_root)?
-            .into_keys()
-            .collect::<Vec<_>>()
-    } else {
-        merged.exclude_groups.clone()
-    };
+    // --production-only reads group roots from the workspace-root lockfile.
+    let workspace_exclude_groups =
+        resolve_exclude_groups(args.production_only, &merged, &workspace_root)?;
 
     let format_ext = match merged.format {
         OutputFormat::Json => "json",
