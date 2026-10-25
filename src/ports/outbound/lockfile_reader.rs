@@ -155,11 +155,13 @@ pub trait LockfileReader {
 
     /// Extract dependency-group roots for the workspace member `member_name`.
     ///
-    /// Revision ≤ 2 `[manifest.dependency-groups]` are workspace-wide and returned
-    /// as by `read_and_parse_group_roots`. For revision 3, reads the
-    /// `[package.dev-dependencies]` of the local package whose `name == member_name`
-    /// (the same match as `read_and_parse_lockfile_for_member`), or returns an empty
-    /// map when there is no such package — never another member's groups.
+    /// Returns the union of the workspace-wide `[manifest.dependency-groups]` and
+    /// the `[package.dev-dependencies]` of the local package whose
+    /// `name == member_name` (the same match as `read_and_parse_lockfile_for_member`),
+    /// merged per group name (manifest roots first, then the member's own roots not
+    /// already listed), so every group the member's traversal follows can be
+    /// excluded. A member that is not a local package gets the manifest groups
+    /// only — never another member's groups.
     ///
     /// # Errors
     /// Returns an error if the uv.lock file cannot be read or parsed.

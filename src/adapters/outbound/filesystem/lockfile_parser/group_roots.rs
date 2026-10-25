@@ -43,11 +43,16 @@ pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoot
 
 /// Parse dependency-group roots for the workspace member named `member_name`.
 ///
-/// Revision ≤ 2 `[manifest.dependency-groups]` are workspace-wide, so they are
-/// returned as by [`parse_group_roots`]. The revision-3 fallback reads the
-/// `[package.dev-dependencies]` of the local package whose `name == member_name`
-/// (the same match `parse_lockfile_content_for_member` uses), and returns an
-/// empty map when there is no such package — never another member's groups.
+/// Returns the union of the workspace-wide `[manifest.dependency-groups]` and
+/// the `[package.dev-dependencies]` of the local package whose
+/// `name == member_name` (the same match `parse_lockfile_content_for_member`
+/// uses), merged per group name: manifest roots first, then the member's own
+/// roots not already listed (#999). The member's traversal follows all of its
+/// own groups (#997), so each of them must be excludable. A member that is not
+/// a local package gets the manifest groups only — never another member's groups.
+///
+/// Unlike [`parse_group_roots`], the member's own groups are read even when
+/// manifest groups exist.
 ///
 /// # Errors
 ///
@@ -72,14 +77,34 @@ fn parse_group_roots_impl(
 
     let UvLock { package, manifest } = lockfile;
 
-    // Revision ≤ 2: prefer [manifest.dependency-groups] when present and non-empty.
     let manifest_groups = manifest_groups_v2(manifest);
-    if !manifest_groups.is_empty() {
-        return Ok(manifest_groups);
+    match member {
+        // Single project: prefer [manifest.dependency-groups] when present and
+        // non-empty, else read [package.dev-dependencies] from the local project package.
+        None if !manifest_groups.is_empty() => Ok(manifest_groups),
+        None => Ok(package_dev_dependencies_v3(package, None)),
+        // Workspace member: workspace-wide groups plus the member's own (#999).
+        // The member traversal does not follow manifest groups, so their roots
+        // here only take part in exclusion (see #1001).
+        Some(name) => Ok(merge_group_roots(
+            manifest_groups,
+            package_dev_dependencies_v3(package, Some(name)),
+        )),
     }
+}
 
-    // Revision 3 fallback: read [package.dev-dependencies] from the local project package.
-    Ok(package_dev_dependencies_v3(package, member))
+/// Merges `extra` into `base` per group name; for a name in both, `extra`'s
+/// roots not already listed are appended in order.
+fn merge_group_roots(mut base: GroupRoots, extra: GroupRoots) -> GroupRoots {
+    for (group, roots) in extra {
+        let merged = base.entry(group).or_default();
+        for root in roots {
+            if !merged.contains(&root) {
+                merged.push(root);
+            }
+        }
+    }
+    base
 }
 
 /// Revision ≤ 2: reads `[manifest.dependency-groups]`.
@@ -438,6 +463,7 @@ source = { virtual = "." }
 dev = [{ name = "ruff" }]
 "#;
 
+    // Single-project mode only; the member variant merges both sources (#999).
     #[test]
     fn test_parse_group_roots_prefers_manifest_groups_over_package_dev_dependencies() {
         let roots = parse_group_roots(LOCK_BOTH_MANIFEST_AND_PACKAGE_GROUPS, Path::new("/project"))
@@ -563,11 +589,114 @@ source = { registry = "https://pypi.org/simple" }
 
     #[test]
     fn test_parse_group_roots_for_member_returns_manifest_groups_for_any_member() {
-        // Revision ≤ 2 manifest groups are workspace-wide by design.
+        // Manifest groups are workspace-wide, so a member without groups of its
+        // own (here, an unknown one) still gets them.
         let roots =
             parse_group_roots_for_member(LOCK_WITH_GROUPS, Path::new("/project"), "other").unwrap();
         assert_eq!(roots.len(), 2);
         assert_eq!(roots["lint"], vec!["ruff"]);
+    }
+
+    // --- manifest groups merged with a member's own groups (#999) ---
+
+    // Workspace whose virtual root declares groups: `[manifest.dependency-groups]`
+    // is present and member `b` declares groups of its own besides.
+    const LOCK_WORKSPACE_MANIFEST_AND_MEMBER_GROUPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[manifest.dependency-groups]
+dev = [{ name = "mypy" }]
+docs = [{ name = "sphinx" }]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+
+[package.dev-dependencies]
+dev = [{ name = "ruff" }, { name = "mypy" }]
+lint = [{ name = "black" }]
+"#;
+
+    #[test]
+    fn test_parse_group_roots_for_member_merges_manifest_and_own_groups() {
+        let roots = parse_group_roots_for_member(
+            LOCK_WORKSPACE_MANIFEST_AND_MEMBER_GROUPS,
+            Path::new("/ws"),
+            "b",
+        )
+        .unwrap();
+
+        assert_eq!(roots.len(), 3);
+        assert_eq!(roots["docs"], vec!["sphinx"]);
+        assert_eq!(roots["lint"], vec!["black"], "member-only group is kept");
+        assert_eq!(
+            roots["dev"],
+            vec!["mypy", "ruff"],
+            "a shared group name lists manifest roots first, without duplicates"
+        );
+    }
+
+    #[test]
+    fn test_parse_group_roots_for_member_without_own_groups_gets_manifest_groups_only() {
+        let roots = parse_group_roots_for_member(
+            LOCK_WORKSPACE_MANIFEST_AND_MEMBER_GROUPS,
+            Path::new("/ws"),
+            "a",
+        )
+        .unwrap();
+
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots["dev"], vec!["mypy"]);
+        assert_eq!(roots["docs"], vec!["sphinx"]);
+        assert!(
+            !roots.contains_key("lint"),
+            "another member's groups must not leak in"
+        );
+    }
+
+    #[test]
+    fn test_parse_group_roots_single_project_keeps_manifest_precedence() {
+        // Single-project mode keeps the manifest-first precedence (#999): merging
+        // would add the first local package's groups, an arbitrary member (#992).
+        let roots =
+            parse_group_roots(LOCK_WORKSPACE_MANIFEST_AND_MEMBER_GROUPS, Path::new("/ws")).unwrap();
+
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots["dev"], vec!["mypy"]);
+        assert_eq!(roots["docs"], vec!["sphinx"]);
+    }
+
+    #[test]
+    fn test_merge_group_roots_appends_new_roots_per_group() {
+        let base: GroupRoots = HashMap::from([
+            ("dev".to_string(), vec!["mypy".to_string()]),
+            ("docs".to_string(), vec!["sphinx".to_string()]),
+        ]);
+        let extra: GroupRoots = HashMap::from([
+            (
+                "dev".to_string(),
+                vec!["ruff".to_string(), "mypy".to_string(), "ruff".to_string()],
+            ),
+            ("lint".to_string(), vec!["black".to_string()]),
+        ]);
+
+        let merged = merge_group_roots(base, extra);
+
+        assert_eq!(merged.len(), 3);
+        assert_eq!(merged["dev"], vec!["mypy", "ruff"]);
+        assert_eq!(merged["docs"], vec!["sphinx"]);
+        assert_eq!(merged["lint"], vec!["black"]);
     }
 
     #[test]

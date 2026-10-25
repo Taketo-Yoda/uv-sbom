@@ -858,4 +858,60 @@ source = { registry = "https://pypi.org/simple" }
             "workspace-wide manifest groups must not be seeded"
         );
     }
+
+    // Manifest groups alongside a member-only group: excluding the member's
+    // own group must still work (#999).
+    const WORKSPACE_LOCK_MANIFEST_AND_MEMBER_GROUPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[manifest.dependency-groups]
+docs = [{ name = "sphinx" }]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+lint = [{ name = "black" }]
+
+[[package]]
+name = "black"
+version = "24.1.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "sphinx"
+version = "7.2.6"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_lockfile_for_member_exclude_own_group_with_manifest_groups_present() {
+        let names = exclude(WORKSPACE_LOCK_MANIFEST_AND_MEMBER_GROUPS, "b", &[]);
+        assert!(names.contains("black"), "lint group is listed by default");
+
+        let names = exclude(WORKSPACE_LOCK_MANIFEST_AND_MEMBER_GROUPS, "b", &["lint"]);
+        assert!(names.contains("requests"));
+        assert!(
+            !names.contains("black"),
+            "member-only group must be excludable when manifest groups exist"
+        );
+    }
 }

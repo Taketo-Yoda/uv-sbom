@@ -396,4 +396,103 @@ source = { registry = "https://pypi.org/simple" }
         assert!(!sbom.contains("\"click\""));
         assert!(!sbom.contains("\"mypy\""));
     }
+
+    /// Writes a workspace whose virtual root declares `[dependency-groups]`, so
+    /// `uv.lock` has `[manifest.dependency-groups] docs = [sphinx]`, and whose
+    /// member `b` declares its own `lint = [black]` group (#999).
+    fn manifest_workspace_with_member_group() -> TempDir {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let root = temp.path();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.uv.workspace]\nmembers = [\"packages/a\", \"packages/b\"]\n\n[dependency-groups]\ndocs = [\"sphinx\"]\n",
+        )
+        .unwrap();
+        for name in ["a", "b"] {
+            let dir = root.join("packages").join(name);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join("pyproject.toml"),
+                format!(
+                    "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\n"
+                ),
+            )
+            .unwrap();
+        }
+        fs::write(
+            root.join("uv.lock"),
+            r#"version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[manifest.dependency-groups]
+docs = [{ name = "sphinx" }]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+lint = [{ name = "black" }]
+
+[[package]]
+name = "black"
+version = "24.1.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "sphinx"
+version = "7.2.6"
+source = { registry = "https://pypi.org/simple" }
+"#,
+        )
+        .unwrap();
+        temp
+    }
+
+    /// With manifest groups present, a member's own group is still listed by
+    /// default, so the exclusion tests below are not passing vacuously (#999)
+    #[test]
+    fn test_workspace_manifest_groups_member_own_group_is_listed() {
+        let temp = manifest_workspace_with_member_group();
+
+        let sbom = member_b_sbom(&temp, &[]);
+        assert!(sbom.contains("\"black\""));
+        assert!(sbom.contains("\"requests\""));
+    }
+
+    /// --exclude-groups drops a member's own group when manifest groups exist (#999)
+    #[test]
+    fn test_workspace_manifest_groups_exclude_member_own_group() {
+        let temp = manifest_workspace_with_member_group();
+
+        let sbom = member_b_sbom(&temp, &["--exclude-groups", "lint"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(sbom.contains("\"requests\""), "runtime dep is kept");
+    }
+
+    /// --production-only drops a member's own group when manifest groups exist (#999)
+    #[test]
+    fn test_workspace_manifest_groups_production_only_drops_member_own_group() {
+        let temp = manifest_workspace_with_member_group();
+
+        let sbom = member_b_sbom(&temp, &["--production-only"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(sbom.contains("\"requests\""), "runtime dep is kept");
+    }
 }
