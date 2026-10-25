@@ -37,7 +37,7 @@ pub fn parse_lockfile_content(content: &str, project_path: &Path) -> Result<Lock
     for pkg in packages {
         result_packages.push(Package::new(pkg.name.clone(), pkg.version.clone())?);
 
-        let deps: Vec<String> = pkg.dependencies.iter().map(|d| d.name.clone()).collect();
+        let deps = pkg.runtime_dep_names();
         dependency_map.insert(pkg.name, deps);
     }
 

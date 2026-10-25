@@ -98,9 +98,8 @@ where
     /// Reads one workspace member's packages and applies the scope filters
     /// against the member-scoped dependency map. The graph is built from
     /// `full_map` rooted at the member, so every edge is runtime-only as in
-    /// single-project mode (the member-scoped map also carries `dev` edges of
-    /// local packages it reaches); the member map is used only for group
-    /// filtering. Returns the `--exclude` patterns that matched nothing in
+    /// single-project mode; the member map is used only for group filtering.
+    /// Returns the `--exclude` patterns that matched nothing in
     /// this member; the caller decides whether to warn.
     fn load_member_scope(
         &self,

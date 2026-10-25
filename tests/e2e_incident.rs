@@ -410,7 +410,8 @@ mod incident_tests {
 
     /// Writes a revision-3 workspace (no `[manifest.dependency-groups]`) where
     /// member `a`, which sorts first, declares no `dev` group (only
-    /// `lint = [black]`), and member `b` declares `dev = [ruff]`.
+    /// `lint = [black]`), and member `b` declares `dev = [ruff]`. Covers both the
+    /// later-member `dev` group (#995) and `a`'s non-`dev` group (#997).
     fn rev3_workspace_with_dev_only_in_later_member() -> TempDir {
         let temp = TempDir::new().expect("failed to create temp dir");
         let root = temp.path();
@@ -508,5 +509,79 @@ source = { registry = "https://pypi.org/simple" }
             .assert()
             .code(4)
             .stdout(predicate::str::contains("**1 of 2 members affected**: b"));
+    }
+
+    /// A member's non-`dev` group packages are evaluated (#997): `a` reaches
+    /// `black` only through its `lint` group. Offline: `<=` names no fixed version.
+    #[test]
+    fn test_incident_workspace_member_non_dev_group_is_affected() {
+        let temp = rev3_workspace_with_dev_only_in_later_member();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "black<=99.0",
+                "--workspace",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(4)
+            .stdout(predicate::str::contains("**1 of 2 members affected**: a"));
+    }
+
+    /// --exclude-groups drops the member's non-`dev` group in incident mode (#997)
+    #[test]
+    fn test_incident_workspace_exclude_non_dev_group_is_not_affected() {
+        let temp = rev3_workspace_with_dev_only_in_later_member();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "black<=99.0",
+                "--workspace",
+                "--exclude-groups",
+                "lint",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains("**0 of 2 members affected**"));
+    }
+
+    /// Dependency paths stay runtime-only (#997): `black` is reached only through
+    /// `a`'s `lint` group, so it is neither direct nor on any `a → black` path.
+    #[test]
+    fn test_incident_workspace_group_package_paths_stay_runtime_only() {
+        let temp = rev3_workspace_with_dev_only_in_later_member();
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "black<=99.0",
+                "--workspace",
+                "--format",
+                "json",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(4)
+            .get_output()
+            .stdout
+            .clone();
+
+        let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
+        let member_a = json["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["name"] == "a")
+            .expect("member a must be reported");
+        let finding = &member_a["findings"][0];
+        assert_eq!(finding["package_name"], "black");
+        assert_eq!(finding["is_direct"], false);
+        assert_eq!(finding["paths"], serde_json::json!([]));
     }
 }

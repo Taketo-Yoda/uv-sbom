@@ -114,8 +114,10 @@ pub trait LockfileReader {
     ///
     /// Performs a BFS traversal starting from the `[[package]]` entry whose
     /// `name == member_name` and `source.editable` (uv < 0.5) or `source.virtual`
-    /// (uv >= 0.5) is set, collecting all transitively reachable packages. The member
-    /// package itself is excluded from the result.
+    /// (uv >= 0.5) is set, collecting all packages transitively reachable from its
+    /// runtime dependencies and from every group of its own
+    /// `[package.dev-dependencies]`. Other packages contribute runtime edges only.
+    /// The member package itself is excluded from the result.
     ///
     /// # Arguments
     /// * `project_path` - Path to the project directory containing uv.lock
@@ -125,10 +127,9 @@ pub trait LockfileReader {
     /// A tuple of (packages, dependency_map). `packages` contains only packages
     /// reachable from the specified member (excluding the member itself).
     /// `dependency_map` contains each of those packages' entries plus the
-    /// member's own root entry (runtime dependencies only), so the member name
-    /// can be passed to `DependencyAnalyzer::analyze` as the project root.
-    /// Entries for other local packages it reaches (e.g. sibling members) may
-    /// also carry their `dev` group edges, unlike `read_and_parse_lockfile`.
+    /// member's own root entry, so the member name can be passed to
+    /// `DependencyAnalyzer::analyze` as the project root. Every entry, the root
+    /// included, lists runtime dependencies only, as in `read_and_parse_lockfile`.
     ///
     /// # Errors
     /// Returns an error if:
