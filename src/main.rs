@@ -266,6 +266,7 @@ fn build_sbom_request(
     project_path: PathBuf,
     merged: &MergedConfig,
     exclude_groups: Vec<String>,
+    workspace_member: Option<String>,
     suggest_fix: bool,
     dry_run: bool,
     cli_only: CliOnlyRequestOptions,
@@ -293,6 +294,7 @@ fn build_sbom_request(
         .check_non_pypi(merged.check_non_pypi)
         .check_exploitability(merged.check_exploitability)
         .exclude_groups(exclude_groups)
+        .workspace_member(workspace_member)
         .target_python(merged.target_python.clone())
         .explain_package(cli_only.explain_package)
         .show_dependency_tree(cli_only.show_dependency_tree)
@@ -606,6 +608,7 @@ async fn run(args: Args) -> Result<bool> {
         project_path.clone(),
         &merged,
         exclude_groups,
+        None,
         suggest_fix,
         args.dry_run,
         CliOnlyRequestOptions {
@@ -717,6 +720,7 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             member.absolute_path.clone(),
             &merged,
             workspace_exclude_groups.clone(),
+            Some(member.name.clone()),
             false,
             false,
             CliOnlyRequestOptions {

@@ -85,7 +85,8 @@ fn parse_group_roots_impl(
         None => Ok(package_dev_dependencies_v3(package, None)),
         // Workspace member: workspace-wide groups plus the member's own (#999).
         // The member traversal does not follow manifest groups, so their roots
-        // here only take part in exclusion (see #1001).
+        // here only take part in exclusion; a root shared with one of the
+        // member's non-excluded groups is kept (#1001).
         Some(name) => Ok(merge_group_roots(
             manifest_groups,
             package_dev_dependencies_v3(package, Some(name)),

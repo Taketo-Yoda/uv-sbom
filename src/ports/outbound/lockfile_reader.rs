@@ -163,6 +163,12 @@ pub trait LockfileReader {
     /// excluded. A member that is not a local package gets the manifest groups
     /// only — never another member's groups.
     ///
+    /// The manifest groups apply to every member. Member-scoped exclusion
+    /// (`project_scope::filter_by_groups_for_member`) keeps whatever one of the
+    /// member's non-excluded groups reaches, so excluding a group drops a package
+    /// only when no runtime dependency and no non-excluded group of the member
+    /// reaches it (#1001).
+    ///
     /// # Errors
     /// Returns an error if the uv.lock file cannot be read or parsed.
     fn read_and_parse_group_roots_for_member(
