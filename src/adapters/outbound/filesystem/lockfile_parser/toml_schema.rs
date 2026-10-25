@@ -1,12 +1,6 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
-/// The single dependency-group name that member-scoped dependency-graph traversal
-/// (`parse_lockfile_content_for_member`) folds into the reachability graph. Other
-/// groups (e.g. `test`, `lint`) are intentionally excluded — this matches
-/// pre-existing behavior, not a new restriction.
-pub(super) const DEV_GROUP: &str = "dev";
-
 #[derive(Debug, Deserialize)]
 pub(super) struct UvDependency {
     pub(super) name: String,
@@ -49,20 +43,26 @@ pub(super) struct UvPackage {
     pub(super) dependencies: Vec<UvDependency>,
     /// Every named dependency group under `[package.dev-dependencies]` (e.g. `dev`,
     /// `test`, `lint`), keyed by group name. `parse_group_roots` uses the full map;
-    /// `parse_lockfile_content_for_member` uses only the `dev` entry via
-    /// [`UvPackage::dev_group`].
+    /// `parse_lockfile_content_for_member` seeds its traversal with every group's
+    /// roots via [`UvPackage::group_dep_names`].
     #[serde(rename = "dev-dependencies")]
     pub(super) dev_dependencies: Option<HashMap<String, Vec<UvDependency>>>,
     pub(super) source: Option<PackageSource>,
 }
 
 impl UvPackage {
-    /// The legacy `dev` group of `[package.dev-dependencies]`, if present.
-    pub(super) fn dev_group(&self) -> Option<&[UvDependency]> {
+    /// Names of the runtime `dependencies`.
+    pub(super) fn runtime_dep_names(&self) -> Vec<String> {
+        self.dependencies.iter().map(|d| d.name.clone()).collect()
+    }
+
+    /// Root names of every group in `[package.dev-dependencies]` (all groups,
+    /// not only `dev`).
+    pub(super) fn group_dep_names(&self) -> impl Iterator<Item = &str> + '_ {
         self.dev_dependencies
-            .as_ref()?
-            .get(DEV_GROUP)
-            .map(Vec::as_slice)
+            .iter()
+            .flat_map(|groups| groups.values().flatten())
+            .map(|d| d.name.as_str())
     }
 
     /// Whether this is a local (`source.editable` / `source.virtual`) package.

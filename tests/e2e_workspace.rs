@@ -279,4 +279,121 @@ source = { virtual = "." }
         );
         assert!(!stderr.contains("license policy violations"));
     }
+
+    /// Writes a revision-3 workspace where member `b` declares a non-`dev`
+    /// group (`lint = [black]`, `black -> click`) besides `dev = [mypy]` (#997).
+    fn rev3_workspace_with_non_dev_group() -> TempDir {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let root = temp.path();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.uv.workspace]\nmembers = [\"packages/a\", \"packages/b\"]\n",
+        )
+        .unwrap();
+        for name in ["a", "b"] {
+            let dir = root.join("packages").join(name);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join("pyproject.toml"),
+                format!(
+                    "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\n"
+                ),
+            )
+            .unwrap();
+        }
+        fs::write(
+            root.join("uv.lock"),
+            r#"version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+lint = [{ name = "black" }]
+
+[[package]]
+name = "black"
+version = "24.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [{ name = "click" }]
+
+[[package]]
+name = "click"
+version = "8.1.7"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+"#,
+        )
+        .unwrap();
+        temp
+    }
+
+    /// Runs `--workspace` with `extra` args and returns member `b`'s sbom.json.
+    fn member_b_sbom(temp: &TempDir, extra: &[&str]) -> String {
+        let mut args = vec![
+            "--workspace",
+            "--path",
+            temp.path().to_str().unwrap(),
+            "--no-check-cve",
+            "--format",
+            "json",
+        ];
+        args.extend_from_slice(extra);
+        let (exit_code, _stdout, stderr) = run_uv_sbom(&args);
+        assert_eq!(exit_code, 0, "{stderr}");
+        fs::read_to_string(temp.path().join("packages/b/sbom.json")).unwrap()
+    }
+
+    /// A member's SBOM lists packages from its non-`dev` groups (#997)
+    #[test]
+    fn test_workspace_member_sbom_includes_non_dev_group_packages() {
+        let temp = rev3_workspace_with_non_dev_group();
+
+        let sbom = member_b_sbom(&temp, &[]);
+        assert!(sbom.contains("\"black\""), "lint group root must be listed");
+        assert!(
+            sbom.contains("\"click\""),
+            "lint group subtree must be listed"
+        );
+        assert!(sbom.contains("\"mypy\""));
+    }
+
+    /// --exclude-groups drops a member's non-`dev` group in workspace mode (#997)
+    #[test]
+    fn test_workspace_exclude_groups_drops_non_dev_group_packages() {
+        let temp = rev3_workspace_with_non_dev_group();
+
+        let sbom = member_b_sbom(&temp, &["--exclude-groups", "lint"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(!sbom.contains("\"click\""));
+        assert!(sbom.contains("\"mypy\""), "dev group is not excluded");
+    }
+
+    /// --production-only drops every group of a member in workspace mode (#997)
+    #[test]
+    fn test_workspace_production_only_drops_non_dev_group_packages() {
+        let temp = rev3_workspace_with_non_dev_group();
+
+        let sbom = member_b_sbom(&temp, &["--production-only"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(!sbom.contains("\"click\""));
+        assert!(!sbom.contains("\"mypy\""));
+    }
 }
