@@ -17,7 +17,7 @@ pub use dependency_diff_analyzer::DependencyDiffAnalyzer;
 pub use dependency_tree_builder::{DependencyTreeBuilder, TreeNode};
 #[allow(unused_imports)]
 pub use exploitability_sorter::ExploitabilitySorter;
-pub use group_reachability_analyzer::{GroupReachabilityAnalyzer, SharedRootPolicy};
+pub use group_reachability_analyzer::GroupReachabilityAnalyzer;
 pub use license_compliance_checker::LicenseComplianceChecker;
 pub use python_compatibility_checker::PythonCompatibilityChecker;
 pub use resolution_analyzer::ResolutionAnalyzer;

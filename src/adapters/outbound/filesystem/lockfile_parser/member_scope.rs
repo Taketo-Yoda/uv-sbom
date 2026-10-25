@@ -481,9 +481,7 @@ source = { registry = "https://pypi.org/simple" }
 
     fn exclude(content: &str, member: &str, groups: &[&str]) -> HashSet<String> {
         use super::super::parse_group_roots_for_member;
-        use crate::sbom_generation::domain::services::{
-            GroupReachabilityAnalyzer, SharedRootPolicy,
-        };
+        use crate::sbom_generation::domain::services::GroupReachabilityAnalyzer;
 
         let (packages, dep_map) =
             parse_lockfile_content_for_member(content, Path::new("/project"), member).unwrap();
@@ -494,7 +492,6 @@ source = { registry = "https://pypi.org/simple" }
             &dep_map,
             &group_roots,
             &groups.iter().map(|g| g.to_string()).collect::<Vec<_>>(),
-            SharedRootPolicy::KeptGroupWins,
         )
         .iter()
         .map(|p| p.name().to_string())

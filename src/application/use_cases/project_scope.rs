@@ -13,7 +13,7 @@
 use crate::i18n::Messages;
 use crate::ports::outbound::lockfile_reader::DependencyMap;
 use crate::ports::outbound::{GroupRoots, LockfileReader, ProjectConfigError, ProjectConfigReader};
-use crate::sbom_generation::domain::services::{GroupReachabilityAnalyzer, SharedRootPolicy};
+use crate::sbom_generation::domain::services::GroupReachabilityAnalyzer;
 use crate::sbom_generation::domain::Package;
 use crate::sbom_generation::services::PackageFilter;
 use crate::shared::Result;
@@ -65,7 +65,8 @@ pub(crate) fn filter_by_patterns(
 ///
 /// An empty `exclude_groups` slice is the identity and performs no I/O (the
 /// group roots are not read). Otherwise reads the group roots through `reader`
-/// and delegates to `GroupReachabilityAnalyzer::filter_excluded_groups`.
+/// and delegates to `GroupReachabilityAnalyzer::filter_excluded_groups`, so a
+/// package that any non-excluded group reaches is kept (#1005).
 /// `dependency_map` is only read, never filtered (issue #206 invariant).
 ///
 /// # Errors
@@ -77,13 +78,9 @@ pub(crate) fn filter_by_groups<LR: LockfileReader>(
     dependency_map: &DependencyMap,
     exclude_groups: &[String],
 ) -> Result<Vec<Package>> {
-    filter_by_group_roots(
-        packages,
-        dependency_map,
-        exclude_groups,
-        SharedRootPolicy::ExcludedWins,
-        || reader.read_and_parse_group_roots(project_path),
-    )
+    filter_by_group_roots(packages, dependency_map, exclude_groups, || {
+        reader.read_and_parse_group_roots(project_path)
+    })
 }
 
 /// [`filter_by_groups`] for one workspace member: the group roots are read
@@ -91,10 +88,9 @@ pub(crate) fn filter_by_groups<LR: LockfileReader>(
 /// another member's `[package.dev-dependencies]` (#992).
 ///
 /// A package that any of the member's non-excluded groups reaches is kept
-/// ([`SharedRootPolicy::KeptGroupWins`], #1001): the workspace-wide manifest
-/// groups are merged into every member's groups (#999), so excluding one of
-/// them must not drop a package the member still uses through its own group.
-/// This covers any two of the member's groups, unlike single-project mode (#1005).
+/// (#1001): the workspace-wide manifest groups are merged into every member's
+/// groups (#999), so excluding one of them must not drop a package the member
+/// still uses through its own group.
 ///
 /// # Errors
 /// Returns an error if the group roots cannot be read from the lockfile.
@@ -106,20 +102,15 @@ pub(crate) fn filter_by_groups_for_member<LR: LockfileReader>(
     dependency_map: &DependencyMap,
     exclude_groups: &[String],
 ) -> Result<Vec<Package>> {
-    filter_by_group_roots(
-        packages,
-        dependency_map,
-        exclude_groups,
-        SharedRootPolicy::KeptGroupWins,
-        || reader.read_and_parse_group_roots_for_member(project_path, member_name),
-    )
+    filter_by_group_roots(packages, dependency_map, exclude_groups, || {
+        reader.read_and_parse_group_roots_for_member(project_path, member_name)
+    })
 }
 
 fn filter_by_group_roots(
     packages: Vec<Package>,
     dependency_map: &DependencyMap,
     exclude_groups: &[String],
-    policy: SharedRootPolicy,
     read_roots: impl FnOnce() -> Result<GroupRoots>,
 ) -> Result<Vec<Package>> {
     if exclude_groups.is_empty() {
@@ -132,7 +123,6 @@ fn filter_by_group_roots(
         dependency_map,
         &group_roots,
         exclude_groups,
-        policy,
     ))
 }
 
@@ -282,7 +272,7 @@ mod tests {
         assert_eq!(names(&filtered), vec!["requests"]);
     }
 
-    /// `docs` and `lint` share the root `sphinx`; only `docs` is excluded (#1001).
+    /// `docs` and `lint` share the root `sphinx`; only `docs` is excluded (#1001, #1005).
     fn shared_root_scope() -> (MockLockfileReader, DependencyMap, Vec<Package>) {
         let reader = reader_with_groups(HashMap::from([
             ("docs".to_string(), vec!["sphinx".to_string()]),
@@ -315,8 +305,8 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_by_groups_drops_root_shared_with_kept_group() {
-        // Single-project semantics are unchanged by #1001.
+    fn test_filter_by_groups_keeps_root_shared_with_kept_group() {
+        // Single-project mode now matches member scope (#1005).
         let (reader, deps, packages) = shared_root_scope();
 
         let filtered = filter_by_groups(
@@ -328,7 +318,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(names(&filtered), vec!["requests"]);
+        assert_eq!(names(&filtered), vec!["requests", "sphinx"]);
     }
 
     #[test]
