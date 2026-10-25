@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **`--workspace` member SBOMs reported 0 direct dependencies**: each member's SBOM now lists the member's declared dependencies as direct dependencies, and the packages reachable through them as transitive, with dependency paths in vulnerability details, `--suggest-fix`, and `--show-dependency-tree`. `--exclude-groups` no longer drops a member's runtime dependency that is also listed in an excluded group (#986)
 - **`--workspace --exclude-groups` used one member's dependency groups for every member**: in workspaces with a revision-3 `uv.lock` (no `[manifest.dependency-groups]`), every member's groups were read from the alphabetically first member, so another member's group packages could stay in its SBOM. Each member's groups are now read from its own `[package.dev-dependencies]`; this also applies to `--incident --workspace` (#992)
+- **`--workspace --production-only` missed dependency groups declared only by later members**: in workspaces with a revision-3 `uv.lock`, the group names to exclude were taken from the alphabetically first member only, so if that member declared no `dev` group, another member's `dev` packages stayed in its SBOM. The names are now the union over all members; this also applies to `--incident --workspace` (#995)
 
 ## [3.3.0] - 2026-10-23
 

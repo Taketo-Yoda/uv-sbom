@@ -1,5 +1,6 @@
 pub mod config_resolver;
 pub mod error_display;
+pub mod exclude_groups;
 pub mod incident;
 pub mod runner;
 pub mod workspace_summary;
