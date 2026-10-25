@@ -343,6 +343,11 @@ pub struct Messages {
     pub incident_guidance_release_lookup_failed: &'static str,
     pub incident_guidance_not_from_pypi: &'static str,
     pub warn_incident_release_lookup_failed: &'static str,
+    // Incident progress lines (#982)
+    pub progress_incident_fetching_advisory: &'static str,
+    pub progress_incident_following_alias: &'static str,
+    pub progress_incident_checking_release: &'static str,
+    pub progress_incident_verifying_upgrade: &'static str,
     // Workspace incident report strings (#969)
     pub incident_member_heading: &'static str,
     pub incident_label_member_verdict: &'static str,
@@ -697,6 +702,10 @@ static EN_MESSAGES: Messages = Messages {
     incident_guidance_release_lookup_failed: "Could not check whether **{}** {} is released: {}. Check PyPI manually before upgrading.",
     incident_guidance_not_from_pypi: "**{}** is not installed from PyPI; check its source for a release containing the fix ({}).",
     warn_incident_release_lookup_failed: "⚠️  Could not check the release status of {} {}: {}",
+    progress_incident_fetching_advisory: "🔍 Fetching advisory {}...",
+    progress_incident_following_alias: "🔍 Following alias {}...",
+    progress_incident_checking_release: "🔍 Checking release status of {} {}...",
+    progress_incident_verifying_upgrade: "🔍 Verifying upgrade to {} {} (dry run)...",
 
     // Workspace incident report strings (#969)
     incident_member_heading: "#### Member: {}",
@@ -1023,6 +1032,10 @@ static JA_MESSAGES: Messages = Messages {
     incident_guidance_release_lookup_failed: "**{}** {} のリリース状況を確認できませんでした: {}。更新前に PyPI を手動で確認してください。",
     incident_guidance_not_from_pypi: "**{}** は PyPI 以外からインストールされています。修正（{}）を含むリリースをソース側で確認してください。",
     warn_incident_release_lookup_failed: "⚠️  {} {} のリリース状況を確認できませんでした: {}",
+    progress_incident_fetching_advisory: "🔍 アドバイザリ {} を取得中...",
+    progress_incident_following_alias: "🔍 エイリアス {} を参照中...",
+    progress_incident_checking_release: "🔍 {} {} のリリース状況を確認中...",
+    progress_incident_verifying_upgrade: "🔍 {} {} へのアップグレードを検証中（ドライラン）...",
 
     // Workspace incident report strings (#969)
     incident_member_heading: "#### メンバー: {}",
@@ -1751,6 +1764,10 @@ mod tests {
             incident_guidance_release_lookup_failed,
             incident_guidance_not_from_pypi,
             warn_incident_release_lookup_failed,
+            progress_incident_fetching_advisory,
+            progress_incident_following_alias,
+            progress_incident_checking_release,
+            progress_incident_verifying_upgrade,
             incident_member_heading,
             incident_label_member_verdict,
             incident_packages_not_in_member,
@@ -2076,6 +2093,16 @@ mod tests {
             result,
             "🔍 Analyzing upgrade paths for 3 direct dependencies..."
         );
+    }
+
+    #[test]
+    fn test_progress_incident_checking_release_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let result = Messages::format(
+            msgs.progress_incident_checking_release,
+            &["urllib3", "2.0.6"],
+        );
+        assert_eq!(result, "🔍 urllib3 2.0.6 のリリース状況を確認中...");
     }
 
     #[test]
