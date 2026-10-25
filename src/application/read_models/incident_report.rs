@@ -20,8 +20,11 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Result of evaluating one advisory against a project's `uv.lock`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct IncidentReport {
-    /// ID of the advisory record actually used (an alias when one was followed).
+    /// ID of the advisory record actually used (an alias when one was followed);
+    /// the user-supplied range spec when `source` is `Manual` (#963).
     pub advisory_id: String,
+    /// Where the affected range came from (#963).
+    pub source: IncidentSource,
     /// The ID the user supplied, when an alias was followed to find a record
     /// with PyPI entries; `None` when the supplied ID was used directly.
     pub resolved_from: Option<String>,
@@ -72,6 +75,18 @@ pub struct IncidentFinding {
     /// Explanation shown when there is no command (or the command could not
     /// be verified because of an error).
     pub guidance: Option<IncidentGuidance>,
+}
+
+/// Where the affected range of a report came from (#963), serialized as a
+/// snake_case string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IncidentSource {
+    /// An OSV advisory record.
+    Osv,
+    /// A version-range spec supplied by the user, not verified against any
+    /// vulnerability database.
+    Manual,
 }
 
 /// View of the domain `IncidentVerdict`, serialized as a snake_case string.
@@ -163,8 +178,11 @@ pub enum IncidentGuidance {
 /// JSON output: the advisory fields, a `members` array, and `overall`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkspaceIncidentReport {
-    /// ID of the advisory record actually used (an alias when one was followed).
+    /// ID of the advisory record actually used (an alias when one was followed);
+    /// the user-supplied range spec when `source` is `Manual` (#963).
     pub advisory_id: String,
+    /// Where the affected range came from (#963).
+    pub source: IncidentSource,
     /// The ID the user supplied, when an alias was followed.
     pub resolved_from: Option<String>,
     /// Aliases listed by the advisory record that was used.
@@ -270,6 +288,7 @@ mod tests {
     fn report(severity: Option<SeverityView>) -> IncidentReport {
         IncidentReport {
             advisory_id: "GHSA-j8r2-6x86-q33q".to_string(),
+            source: IncidentSource::Osv,
             resolved_from: None,
             aliases: vec!["CVE-2023-32681".to_string()],
             severity,
@@ -399,6 +418,7 @@ mod tests {
     fn workspace(members: Vec<MemberIncidentResult>) -> WorkspaceIncidentReport {
         WorkspaceIncidentReport {
             advisory_id: "GHSA-j8r2-6x86-q33q".to_string(),
+            source: IncidentSource::Osv,
             resolved_from: None,
             aliases: vec![],
             severity: None,
@@ -481,6 +501,7 @@ mod tests {
             keys,
             BTreeSet::from([
                 "advisory_id",
+                "source",
                 "resolved_from",
                 "aliases",
                 "severity",

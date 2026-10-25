@@ -1,4 +1,5 @@
-/// End-to-end tests for incident response mode (--incident flag, #968; --workspace, #969)
+/// End-to-end tests for incident response mode (--incident flag, #968; --workspace, #969;
+/// manual range specs, #963)
 mod incident_tests {
     use assert_cmd::cargo::cargo_bin_cmd;
     use predicates::prelude::*;
@@ -7,6 +8,7 @@ mod incident_tests {
     use tempfile::TempDir;
 
     const SUGGEST_FIX_PROJECT: &str = "examples/suggest-fix-project";
+    const SAMPLE_PROJECT: &str = "examples/sample-project";
     const WORKSPACE_PROJECT: &str = "examples/workspace";
 
     /// Copies `pyproject.toml` and `uv.lock` of an example project into a temp dir.
@@ -235,5 +237,174 @@ mod incident_tests {
             .clone();
         let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
         assert_eq!(json["overall"], "not_affected");
+    }
+
+    // ---- manual range specs (#963) ----
+
+    /// Unsupported operators and a bare name are argument errors (exit 2)
+    #[test]
+    fn test_incident_manual_spec_rejections_exit_2() {
+        for (spec, reason) in [
+            (
+                "requests==2.25.0",
+                "'==2.25.0' uses an unsupported operator",
+            ),
+            ("requests", "No version range was given for 'requests'."),
+            ("requests>2.0", "'>2.0' uses an unsupported operator"),
+            ("requests>=2.3,<2.0", "contains no versions"),
+        ] {
+            cargo_bin_cmd!("uv-sbom")
+                .args(["--incident", spec, "--path", SAMPLE_PROJECT])
+                .assert()
+                .code(2)
+                .stdout(predicate::str::is_empty())
+                .stderr(predicate::str::contains(format!(
+                    "Invalid advisory ID or version-range spec: '{spec}'."
+                )))
+                .stderr(predicate::str::contains(reason));
+        }
+    }
+
+    /// A rejected spec is reported in the --lang locale
+    #[test]
+    fn test_incident_manual_spec_rejection_localized_ja() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["--incident", "requests>2.0", "--lang", "ja"])
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains(
+                "アドバイザリ ID またはバージョン範囲の指定が不正です: 'requests>2.0'。",
+            ));
+    }
+
+    /// Outside the supplied range: not affected, exit 0. No fixed version
+    /// means no PyPI or OSV request, so this runs offline.
+    #[test]
+    fn test_incident_manual_spec_not_affected_exits_0() {
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "requests>=2.26,<2.31.0",
+                "--path",
+                SAMPLE_PROJECT,
+            ])
+            .assert()
+            .code(0)
+            .stdout(predicate::str::contains(
+                "## Incident Report (manual range): `requests>=2.26,<2.31.0`",
+            ))
+            .stdout(predicate::str::contains(
+                "not taken from a vulnerability database",
+            ))
+            .stdout(predicate::str::contains("Not affected"));
+    }
+
+    /// `<=` names no fix: affected, no command, exit 4 (offline)
+    #[test]
+    fn test_incident_manual_spec_last_affected_exits_4() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["--incident", "requests<=2.30.0", "--path", SAMPLE_PROJECT])
+            .assert()
+            .code(4)
+            .stdout(predicate::str::contains("Affected — no fix available"))
+            .stdout(predicate::str::contains(
+                "the supplied range names no fixed version",
+            ))
+            .stdout(predicate::str::contains("uv lock").not());
+    }
+
+    /// JSON output marks the source as manual (offline)
+    #[test]
+    fn test_incident_manual_spec_format_json() {
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "requests<=2.30.0",
+                "--path",
+                SAMPLE_PROJECT,
+                "--format",
+                "json",
+            ])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(4));
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(value["source"], "manual");
+        assert_eq!(value["advisory_id"], "requests<=2.30.0");
+        assert_eq!(value["overall"], "affected_no_fix");
+    }
+
+    /// A fixed version that is not on PyPI: fix not yet released, exit 4
+    #[test]
+    #[ignore = "requires network access to PyPI"]
+    fn test_incident_manual_spec_unreleased_fix_exits_4() {
+        cargo_bin_cmd!("uv-sbom")
+            .args(["--incident", "requests<9999.0", "--path", SAMPLE_PROJECT])
+            .assert()
+            .code(4)
+            .stdout(predicate::str::contains(
+                "fixed in 9999.0 — not published on PyPI",
+            ));
+    }
+
+    /// Affected with a released fix on an exact pin: exit 1, resolution blocked
+    #[test]
+    #[ignore = "requires network access to PyPI, and uv on PATH"]
+    fn test_incident_manual_spec_pinned_fix_released_exits_1() {
+        let temp = copy_project(SAMPLE_PROJECT);
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "requests<2.31.0",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(1)
+            .stdout(predicate::str::contains("fixed in 2.31.0 — released"))
+            .stdout(predicate::str::contains("could not be resolved"));
+    }
+
+    /// Affected with a released fix: verified command, exit 1
+    #[test]
+    #[ignore = "requires network access to PyPI, and uv on PATH"]
+    fn test_incident_manual_spec_verified_command_exits_1() {
+        let temp = copy_project(SUGGEST_FIX_PROJECT);
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "urllib3<2.0.6",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(1)
+            .stdout(predicate::str::contains("`requests → urllib3`"))
+            .stdout(predicate::str::contains(
+                "uv lock --upgrade-package urllib3==2.0.6",
+            ));
+    }
+
+    /// --workspace with a manual spec: one combined report (offline for `<=`)
+    #[test]
+    fn test_incident_manual_spec_workspace_exits_4() {
+        let temp = copy_workspace();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "starlette<=1.0.0",
+                "--workspace",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(4)
+            .stdout(predicate::str::contains(
+                "## Incident Report (manual range): `starlette<=1.0.0`",
+            ))
+            .stdout(predicate::str::contains("**1 of 2 members affected**: api"));
     }
 }

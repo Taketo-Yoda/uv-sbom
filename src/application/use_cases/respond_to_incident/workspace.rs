@@ -36,7 +36,8 @@ where
     ///    full map rooted at the member, so paths start at the member's own
     ///    direct dependencies. An `--exclude` pattern is reported as unmatched
     ///    only when it matches nothing in any member.
-    /// 2. Fetches the advisory once (following aliases as `execute` does).
+    /// 2. Resolves the advisory once, as `execute` does (an OSV lookup
+    ///    following aliases, or a manual range spec with no lookup).
     /// 3. Evaluates every member with one shared set of caches, so each
     ///    `(package, fixed version)` gets at most one release lookup and one
     ///    dry-run resolution, which runs in the workspace root.
@@ -70,8 +71,8 @@ where
             );
         }
 
-        // 2. Advisory, fetched once for the whole workspace.
-        let resolved = self.resolve_advisory(&request.advisory_id).await?;
+        // 2. Advisory, resolved once for the whole workspace.
+        let resolved = self.resolve_target(&request.target).await?;
 
         // 3. Per-member evaluation with shared caches.
         let mut caches = EvaluationCaches::default();
@@ -146,7 +147,7 @@ fn unmatched_in_every_member(per_member: Vec<Vec<String>>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::read_models::incident_report::IncidentVerdictView;
+    use crate::application::read_models::incident_report::{IncidentSource, IncidentVerdictView};
     use crate::application::use_cases::respond_to_incident::tests::*;
     use crate::application::use_cases::respond_to_incident::IncidentError;
     use crate::application::use_cases::test_doubles::{
@@ -154,6 +155,7 @@ mod tests {
     };
     use crate::i18n::Locale;
     use crate::ports::outbound::{PackageSourceKind, PackageSourceMap};
+    use crate::sbom_generation::domain::incident_target::IncidentTarget;
     use crate::sbom_generation::domain::Package;
     use std::collections::{BTreeSet, HashMap};
     use std::path::{Path, PathBuf};
@@ -287,7 +289,7 @@ mod tests {
 
     fn workspace_request(id: &str) -> WorkspaceIncidentRequest {
         WorkspaceIncidentRequest {
-            advisory_id: id.to_string(),
+            target: IncidentTarget::AdvisoryId(id.to_string()),
             workspace_root: PathBuf::from(WS_ROOT),
             member_names: vec!["api".to_string(), "worker".to_string()],
             exclude_patterns: vec![],
@@ -482,5 +484,34 @@ mod tests {
 
         assert!(err.to_string().contains("ghost"), "{err}");
         assert!(uc.advisory_repository.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_workspace_manual_spec_skips_advisory_repository() {
+        let uc = workspace_use_case(
+            workspace_lock(),
+            MockAdvisoryRepository::default(),
+            MockReleaseRepository::default(),
+            MockUvLockSimulator::default(),
+        );
+        let request = WorkspaceIncidentRequest {
+            target: manual("starlette<=0.27.0"),
+            ..workspace_request(GHSA)
+        };
+
+        let report = uc.execute_workspace(request).await.unwrap();
+
+        assert!(uc.advisory_repository.calls.lock().unwrap().is_empty());
+        assert_eq!(report.source, IncidentSource::Manual);
+        assert_eq!(report.advisory_id, "starlette<=0.27.0");
+        assert_eq!(
+            member_result(&report, "api").overall,
+            IncidentVerdictView::AffectedNoFix
+        );
+        assert_eq!(
+            member_result(&report, "worker").overall,
+            IncidentVerdictView::NotAffected
+        );
+        assert_eq!(report.overall, IncidentVerdictView::AffectedNoFix);
     }
 }

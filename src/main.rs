@@ -28,7 +28,7 @@ use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase, RespondTo
 use clap::Parser;
 use cli::config_resolver::{load_config, merge_config, MergedConfig};
 use cli::error_display::{render_config_error, render_error_chain};
-use cli::incident::{incident_exit_code, resolve_incident_format};
+use cli::incident::{incident_exit_code, parse_incident_target, resolve_incident_format};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
 use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFindings};
 use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
@@ -37,6 +37,7 @@ use ports::outbound::{
     BaselineRepository, DiffSource, GroupRoots, LockfileParseResult, LockfileReader,
     PackageSourceMap, ProjectConfigReader, WorkspaceMember, WorkspaceReader,
 };
+use sbom_generation::domain::incident_target::IncidentTarget;
 use shared::error::ExitCode;
 use shared::Result;
 use std::path::{Path, PathBuf};
@@ -437,11 +438,23 @@ async fn main() {
     // the error and --init messages can still be localized.
     let msgs = Messages::for_locale(args.lang);
 
+    // Classify and validate --incident here rather than in a clap value parser,
+    // so a malformed value is reported in the --lang locale (#963). Runs before
+    // any file or network access; a rejected value is an argument error.
+    let incident_target = match args.incident.as_deref().map(parse_incident_target) {
+        None => None,
+        Some(Ok(target)) => Some(target),
+        Some(Err(e)) => {
+            print_error_chain(&anyhow::Error::from(e), msgs);
+            process::exit(ExitCode::InvalidArguments.as_i32());
+        }
+    };
+
     // Handle --workspace mode before normal flow
     if args.workspace {
         let workspace_root = PathBuf::from(args.path.as_deref().unwrap_or("."));
-        if let Some(advisory_id) = args.incident.clone() {
-            match run_workspace_incident(args, workspace_root, advisory_id).await {
+        if let Some(target) = incident_target {
+            match run_workspace_incident(args, workspace_root, target).await {
                 Ok(verdict) => process::exit(incident_exit_code(verdict).as_i32()),
                 Err(e) => {
                     print_error_chain(&e, msgs);
@@ -500,8 +513,8 @@ async fn main() {
     }
 
     // Handle --incident before normal flow
-    if let Some(advisory_id) = args.incident.clone() {
-        match run_incident(args, advisory_id).await {
+    if let Some(target) = incident_target {
+        match run_incident(args, target).await {
             Ok(verdict) => process::exit(incident_exit_code(verdict).as_i32()),
             Err(e) => {
                 print_error_chain(&e, msgs);
@@ -776,7 +789,7 @@ fn load_workspace_members(workspace_root: &Path, msgs: &Messages) -> Result<Vec<
 }
 
 /// Runs --incident together with --workspace (#969): evaluates one advisory
-/// against every workspace member and prints one combined report to stdout.
+/// (or manual range spec, #963) against every workspace member and prints one combined report to stdout.
 ///
 /// Returns the workspace's overall verdict (the most actionable member
 /// verdict), which `main` maps to the exit code. No per-member `sbom.*` file
@@ -789,7 +802,7 @@ fn load_workspace_members(workspace_root: &Path, msgs: &Messages) -> Result<Vec<
 async fn run_workspace_incident(
     args: Args,
     workspace_root: PathBuf,
-    advisory_id: String,
+    target: IncidentTarget,
 ) -> Result<IncidentVerdictView> {
     display_banner();
 
@@ -802,7 +815,7 @@ async fn run_workspace_incident(
     let exclude_groups = resolve_exclude_groups(args.production_only, &merged, &workspace_root)?;
 
     let request = WorkspaceIncidentRequest {
-        advisory_id,
+        target,
         workspace_root,
         member_names: members.into_iter().map(|member| member.name).collect(),
         exclude_patterns: merged.exclude_patterns.clone(),
@@ -880,7 +893,8 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     Ok(check_cve && cve_delta.is_some_and(|d| !d.new.is_empty()))
 }
 
-/// Runs --incident mode: evaluates one advisory against the project.
+/// Runs --incident mode: evaluates one advisory against the project, or a
+/// manual range spec without querying OSV (#963).
 ///
 /// Returns the report's overall verdict, which `main` maps to the exit code.
 ///
@@ -894,7 +908,7 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
 /// when the advisory ID is unknown to OSV, and an error when the project path
 /// or config file is invalid, the lockfile cannot be read, a network request
 /// fails, or the report cannot be written.
-async fn run_incident(args: Args, advisory_id: String) -> Result<IncidentVerdictView> {
+async fn run_incident(args: Args, target: IncidentTarget) -> Result<IncidentVerdictView> {
     display_banner();
 
     let locale = args.lang;
@@ -907,7 +921,7 @@ async fn run_incident(args: Args, advisory_id: String) -> Result<IncidentVerdict
     let exclude_groups = resolve_exclude_groups(args.production_only, &merged, &project_path)?;
 
     let request = IncidentRequest {
-        advisory_id,
+        target,
         project_path,
         exclude_patterns: merged.exclude_patterns.clone(),
         exclude_groups,

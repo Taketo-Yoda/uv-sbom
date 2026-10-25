@@ -157,12 +157,16 @@ uv-sbom -p examples/suggest-fix-project --incident GHSA-v845-jxx5-vc9f
 
 # Not affected (requests is locked at the fixed 2.31.0); the CVE ID is resolved to its GHSA record → exit code 0
 uv-sbom -p examples/suggest-fix-project --incident CVE-2023-32681
+
+# Same check with a manually supplied range (for an advisory not yet in OSV; quote it) → exit code 1
+uv-sbom -p examples/suggest-fix-project --incident "urllib3<2.0.6"
 ```
 
 **What you will see:**
 - `### 1. Impact` with `urllib3` 2.0.4 as a transitive dependency via `requests → urllib3`
 - `### 2. Patch status` with `fixed in 2.0.6 — released`
 - `### 3. Next action` with a dry-run-verified `uv lock --upgrade-package urllib3==2.0.6` + `uv sync` block
+- With the manual range, the heading is `` ## Incident Report (manual range): `urllib3<2.0.6` `` followed by a notice that the range was supplied by you and not verified against a vulnerability database
 
 ## Expected Output Excerpt
 

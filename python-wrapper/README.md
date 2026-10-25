@@ -66,6 +66,11 @@ uv-sbom --format json
 
 # Generate Markdown SBOM
 uv-sbom --format markdown --output SBOM.md
+
+# Incident response: am I affected, is the fix out, what do I run?
+# Pass an advisory ID, or a quoted range for one not yet in OSV
+uv-sbom --incident GHSA-v845-jxx5-vc9f
+uv-sbom --incident "urllib3<2.0.6"
 ```
 
 ### Vulnerability Checking
