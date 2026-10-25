@@ -300,6 +300,11 @@ where
     /// `IncidentError::AdvisoryNotFound` when the requested ID has no record;
     /// any advisory or alias lookup error.
     async fn resolve_advisory(&self, advisory_id: &str) -> Result<ResolvedAdvisory> {
+        let msgs = Messages::for_locale(self.locale);
+        eprintln!(
+            "{}",
+            Messages::format(msgs.progress_incident_fetching_advisory, &[advisory_id])
+        );
         let primary = self
             .advisory_repository
             .fetch_advisory(advisory_id)
@@ -340,7 +345,12 @@ where
         if !primary.affected.is_empty() {
             return Ok(None);
         }
+        let msgs = Messages::for_locale(self.locale);
         for alias in alias_candidates(primary) {
+            eprintln!(
+                "{}",
+                Messages::format(msgs.progress_incident_following_alias, &[alias])
+            );
             match self.advisory_repository.fetch_advisory(alias).await? {
                 Some(record) if !record.affected.is_empty() => return Ok(Some(record)),
                 _ => continue,

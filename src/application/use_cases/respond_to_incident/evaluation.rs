@@ -157,7 +157,7 @@ where
             (IncidentVerdict::NotAffected, _) => NextAction::none(),
             (IncidentVerdict::AffectedFixReleased, Some(fixed)) => {
                 let outcome = self
-                    .cached_simulation(&mut caches.simulation, simulation_root, name, fixed)
+                    .cached_simulation(&mut caches.simulation, simulation_root, name, fixed, msgs)
                     .await;
                 next_action(name, fixed, outcome, is_direct, &paths)
             }
@@ -199,6 +199,10 @@ where
         if let Some(lookup) = cache.get(&key) {
             return lookup.clone();
         }
+        eprintln!(
+            "{}",
+            Messages::format(msgs.progress_incident_checking_release, &[name, fixed])
+        );
         let lookup = match self.release_repository.release_status(name, fixed).await {
             Ok(status) => ReleaseLookup::Found(status),
             Err(e) => {
@@ -218,18 +222,24 @@ where
     }
 
     /// Runs the version-targeted dry-run resolution at most once per
-    /// `(name, fixed)`. An `Err` from the simulator is kept as its message.
+    /// `(name, fixed)`, printing a progress line only when it actually runs.
+    /// An `Err` from the simulator is kept as its message.
     async fn cached_simulation(
         &self,
         cache: &mut HashMap<FixKey, SimulationAttempt>,
         project_path: &Path,
         name: &str,
         fixed: &str,
+        msgs: &Messages,
     ) -> SimulationAttempt {
         let key = (name.to_string(), fixed.to_string());
         if let Some(outcome) = cache.get(&key) {
             return outcome.clone();
         }
+        eprintln!(
+            "{}",
+            Messages::format(msgs.progress_incident_verifying_upgrade, &[name, fixed])
+        );
         let outcome = self
             .simulator
             .simulate_upgrade_to(name, fixed, project_path)
