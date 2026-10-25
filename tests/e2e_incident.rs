@@ -589,6 +589,12 @@ source = { registry = "https://pypi.org/simple" }
     /// `uv.lock` has `[manifest.dependency-groups] docs = [sphinx]`, and whose
     /// member `b` declares its own `lint = [black]` group (#999).
     fn manifest_workspace_with_member_group() -> TempDir {
+        manifest_workspace_with_member_lint_root("black")
+    }
+
+    /// [`manifest_workspace_with_member_group`] with `b`'s `lint` group rooted
+    /// at `lint_root`; `"sphinx"` makes it share the manifest `docs` root (#1001).
+    fn manifest_workspace_with_member_lint_root(lint_root: &str) -> TempDir {
         let temp = TempDir::new().expect("failed to create temp dir");
         let root = temp.path();
         fs::write(
@@ -631,7 +637,7 @@ source = { editable = "packages/b" }
 dependencies = [{ name = "requests" }]
 
 [package.dev-dependencies]
-lint = [{ name = "black" }]
+lint = [{ name = "LINT_ROOT" }]
 
 [[package]]
 name = "black"
@@ -647,7 +653,8 @@ source = { registry = "https://pypi.org/simple" }
 name = "sphinx"
 version = "7.2.6"
 source = { registry = "https://pypi.org/simple" }
-"#,
+"#
+            .replace("LINT_ROOT", lint_root),
         )
         .unwrap();
         temp
@@ -695,6 +702,47 @@ source = { registry = "https://pypi.org/simple" }
                 .assert()
                 .code(0)
                 .stdout(predicate::str::contains("**0 of 2 members affected**"));
+        }
+    }
+
+    /// `--incident --workspace` keeps a root that `b`'s non-excluded group shares
+    /// with an excluded manifest group, and drops it once both are excluded (#1001).
+    /// Offline: `<=` names no fixed version.
+    #[test]
+    fn test_incident_workspace_shared_group_root_follows_kept_group() {
+        for (flags, code, summary) in [
+            (
+                &["--exclude-groups", "docs"][..],
+                4,
+                "**1 of 2 members affected**: b",
+            ),
+            (
+                &["--exclude-groups", "lint"][..],
+                4,
+                "**1 of 2 members affected**: b",
+            ),
+            (
+                &["--exclude-groups", "docs,lint"][..],
+                0,
+                "**0 of 2 members affected**",
+            ),
+            (&["--production-only"][..], 0, "**0 of 2 members affected**"),
+        ] {
+            let temp = manifest_workspace_with_member_lint_root("sphinx");
+            let mut args = vec![
+                "--incident",
+                "sphinx<=99.0",
+                "--workspace",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ];
+            args.extend_from_slice(flags);
+
+            cargo_bin_cmd!("uv-sbom")
+                .args(&args)
+                .assert()
+                .code(code)
+                .stdout(predicate::str::contains(summary));
         }
     }
 }

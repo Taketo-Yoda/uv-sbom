@@ -48,6 +48,9 @@ pub struct SbomRequest {
     /// Dependency group names to exclude from the SBOM (e.g. ["dev", "lint"]).
     /// Empty = no group filtering.
     pub exclude_groups: Vec<String>,
+    /// Workspace member this request scans (`--workspace`), or `None` for a
+    /// single project. Selects the member's group-exclusion semantics (#1001).
+    pub workspace_member: Option<String>,
     /// Target Python version for compatibility checking (PEP 440 format, e.g. "3.13").
     /// `None` disables the check.
     pub target_python: Option<String>,
@@ -129,6 +132,7 @@ pub struct SbomRequestBuilder {
     check_non_pypi: bool,
     check_exploitability: bool,
     exclude_groups: Vec<String>,
+    workspace_member: Option<String>,
     target_python: Option<String>,
     explain_package: Option<String>,
     show_dependency_tree: bool,
@@ -166,6 +170,7 @@ impl SbomRequestBuilder {
             check_non_pypi: false,
             check_exploitability: false,
             exclude_groups: Vec::new(),
+            workspace_member: None,
             target_python: None,
             explain_package: None,
             show_dependency_tree: false,
@@ -279,6 +284,12 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets the workspace member this request scans (`None` for a single project).
+    pub fn workspace_member(mut self, member: Option<String>) -> Self {
+        self.workspace_member = member;
+        self
+    }
+
     /// Sets the target Python version for compatibility checking (PEP 440 format).
     pub fn target_python(mut self, target: Option<String>) -> Self {
         self.target_python = target;
@@ -342,6 +353,7 @@ impl SbomRequestBuilder {
             check_non_pypi: self.check_non_pypi,
             check_exploitability: self.check_exploitability,
             exclude_groups: self.exclude_groups,
+            workspace_member: self.workspace_member,
             target_python: self.target_python,
             explain_package: self.explain_package,
             show_dependency_tree: self.show_dependency_tree,
@@ -379,6 +391,7 @@ mod tests {
         assert!(request.cvss_threshold.is_none());
         assert!(request.ignore_cves.is_empty());
         assert!(request.exclude_groups.is_empty());
+        assert!(request.workspace_member.is_none());
         assert!(request.explain_package.is_none());
     }
 
@@ -394,6 +407,17 @@ mod tests {
             request.exclude_groups,
             vec!["dev".to_string(), "lint".to_string()]
         );
+    }
+
+    #[test]
+    fn test_workspace_member_builder() {
+        let request = SbomRequest::builder()
+            .project_path("/ws")
+            .workspace_member(Some("b".to_string()))
+            .build()
+            .unwrap();
+
+        assert_eq!(request.workspace_member.as_deref(), Some("b"));
     }
 
     #[test]

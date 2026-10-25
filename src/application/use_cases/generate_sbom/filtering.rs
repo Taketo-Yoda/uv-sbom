@@ -119,7 +119,9 @@ where
     ///
     /// Reads `[manifest.dependency-groups]` from the lockfile, then delegates to
     /// `GroupReachabilityAnalyzer::filter_excluded_groups` to remove packages that are
-    /// exclusively reachable from the specified groups.
+    /// exclusively reachable from the specified groups. With `request.workspace_member`
+    /// set, uses the member variant, which keeps a root that one of the member's
+    /// non-excluded groups also lists (#1001).
     ///
     /// `dependency_map` is intentionally NOT filtered — Step 3 relies on the full map
     /// to classify direct vs transitive dependencies (issue #206 invariant).
@@ -134,13 +136,23 @@ where
         }
 
         let original_count = packages.len();
-        let filtered = project_scope::filter_by_groups(
-            &self.lockfile_reader,
-            &request.project_path,
-            packages,
-            dependency_map,
-            &request.exclude_groups,
-        )?;
+        let filtered = match request.workspace_member.as_deref() {
+            Some(member) => project_scope::filter_by_groups_for_member(
+                &self.lockfile_reader,
+                &request.project_path,
+                member,
+                packages,
+                dependency_map,
+                &request.exclude_groups,
+            )?,
+            None => project_scope::filter_by_groups(
+                &self.lockfile_reader,
+                &request.project_path,
+                packages,
+                dependency_map,
+                &request.exclude_groups,
+            )?,
+        };
 
         let excluded_count = original_count - filtered.len();
         if excluded_count > 0 {

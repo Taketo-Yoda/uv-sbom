@@ -9,6 +9,17 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// (must be retained).
 pub struct GroupReachabilityAnalyzer;
 
+/// How a root listed by both an excluded and a non-excluded group is treated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SharedRootPolicy {
+    /// The root counts as excluded (single-project semantics).
+    ExcludedWins,
+    /// Every root of a non-excluded group is a production seed, even one with
+    /// a parent inside an excluded group's subtree, so a non-excluded group
+    /// keeps everything it reaches (workspace members, #1001).
+    KeptGroupWins,
+}
+
 impl GroupReachabilityAnalyzer {
     /// Returns the subset of `all_packages` after removing packages that are
     /// exclusively reachable from the specified dependency groups.
@@ -18,7 +29,8 @@ impl GroupReachabilityAnalyzer {
     /// - It is NOT reachable from any production root.
     ///
     /// Production roots are packages in `dep_graph` that have no incoming edges
-    /// and are not roots of any excluded group.
+    /// and are not excluded roots. With [`SharedRootPolicy::KeptGroupWins`], the
+    /// roots of every group not in `groups_to_exclude` are production roots too.
     ///
     /// Unknown group names in `groups_to_exclude` are silently ignored.
     pub fn filter_excluded_groups(
@@ -26,13 +38,21 @@ impl GroupReachabilityAnalyzer {
         dep_graph: &HashMap<String, Vec<String>>,
         group_roots: &HashMap<String, Vec<String>>,
         groups_to_exclude: &[String],
+        policy: SharedRootPolicy,
     ) -> Vec<Package> {
         if groups_to_exclude.is_empty() {
             return all_packages.to_vec();
         }
 
         let excluded_root_names = collect_excluded_root_names(group_roots, groups_to_exclude);
-        let production_reachable = compute_production_reachable(dep_graph, &excluded_root_names);
+        let kept_group_roots = match policy {
+            SharedRootPolicy::ExcludedWins => Vec::new(),
+            SharedRootPolicy::KeptGroupWins => {
+                collect_kept_group_roots(group_roots, groups_to_exclude)
+            }
+        };
+        let production_reachable =
+            compute_production_reachable(dep_graph, &excluded_root_names, &kept_group_roots);
         let exclude_set = compute_exclude_set(
             dep_graph,
             group_roots,
@@ -59,9 +79,22 @@ fn collect_excluded_root_names<'a>(
         .collect()
 }
 
+/// Roots of every group not in `groups_to_exclude`.
+fn collect_kept_group_roots<'a>(
+    group_roots: &'a HashMap<String, Vec<String>>,
+    groups_to_exclude: &[String],
+) -> Vec<&'a str> {
+    group_roots
+        .iter()
+        .filter(|(group, _)| !groups_to_exclude.contains(group))
+        .flat_map(|(_, roots)| roots.iter().map(|s| s.as_str()))
+        .collect()
+}
+
 fn compute_production_reachable(
     dep_graph: &HashMap<String, Vec<String>>,
     excluded_root_names: &HashSet<&str>,
+    extra_seeds: &[&str],
 ) -> HashSet<String> {
     let mut has_parent: HashSet<&str> = HashSet::new();
     for deps in dep_graph.values() {
@@ -70,11 +103,13 @@ fn compute_production_reachable(
         }
     }
 
-    // Production seeds: DAG roots that are not an excluded-group root.
+    // Production seeds: DAG roots that are not an excluded-group root, plus
+    // `extra_seeds` (kept group roots under `KeptGroupWins`), whatever their parents.
     let seeds: Vec<&str> = dep_graph
         .keys()
         .map(|k| k.as_str())
         .filter(|name| !has_parent.contains(name) && !excluded_root_names.contains(name))
+        .chain(extra_seeds.iter().copied())
         .collect();
 
     bfs_reachable(dep_graph, &seeds)
@@ -170,6 +205,7 @@ mod tests {
             &dep_graph,
             &group_roots,
             &["dev".to_string()],
+            SharedRootPolicy::ExcludedWins,
         );
 
         let names: Vec<&str> = result.iter().map(|p| p.name()).collect();
@@ -198,6 +234,7 @@ mod tests {
             &dep_graph,
             &group_roots,
             &["dev".to_string()],
+            SharedRootPolicy::ExcludedWins,
         );
 
         let names: Vec<&str> = result.iter().map(|p| p.name()).collect();
@@ -227,6 +264,7 @@ mod tests {
             &dep_graph,
             &group_roots,
             &["dev".to_string()],
+            SharedRootPolicy::ExcludedWins,
         );
 
         let names: Vec<&str> = result.iter().map(|p| p.name()).collect();
@@ -248,6 +286,7 @@ mod tests {
             &dep_graph,
             &group_roots,
             &["nonexistent".to_string()],
+            SharedRootPolicy::ExcludedWins,
         );
 
         assert_eq!(result.len(), all_packages.len());
@@ -268,6 +307,7 @@ mod tests {
             &dep_graph,
             &group_roots,
             &[],
+            SharedRootPolicy::ExcludedWins,
         );
 
         assert_eq!(result.len(), all_packages.len());
@@ -296,6 +336,7 @@ mod tests {
             &dep_graph,
             &group_roots,
             &["dev".to_string(), "lint".to_string()],
+            SharedRootPolicy::ExcludedWins,
         );
 
         let names: Vec<&str> = result.iter().map(|p| p.name()).collect();
@@ -323,6 +364,7 @@ mod tests {
             &dep_graph,
             &group_roots,
             &["dev".to_string()],
+            SharedRootPolicy::ExcludedWins,
         );
 
         let names: Vec<&str> = result.iter().map(|p| p.name()).collect();
@@ -330,5 +372,128 @@ mod tests {
         assert!(!names.contains(&"b"));
         assert!(names.contains(&"requests"));
         assert!(names.contains(&"myapp"));
+    }
+
+    // --- SharedRootPolicy (#1001) ---
+
+    /// A dependency graph or a group-roots map.
+    type Graph = HashMap<String, Vec<String>>;
+
+    /// Member `b`: runtime dep `requests`; `docs = [sphinx]` and `lint = [sphinx]`
+    /// share a root, `sphinx -> docutils`; `test = [pytest]` is its own.
+    fn shared_root_fixture() -> (Vec<Package>, Graph, Graph) {
+        let all_packages = vec![
+            pkg("b"),
+            pkg("requests"),
+            pkg("sphinx"),
+            pkg("docutils"),
+            pkg("pytest"),
+        ];
+        let dep_graph = make_dep_graph(&[
+            ("b", &["requests"]),
+            ("requests", &[]),
+            ("sphinx", &["docutils"]),
+            ("docutils", &[]),
+            ("pytest", &[]),
+        ]);
+        let group_roots = make_group_roots(&[
+            ("docs", &["sphinx"]),
+            ("lint", &["sphinx"]),
+            ("test", &["pytest"]),
+        ]);
+        (all_packages, dep_graph, group_roots)
+    }
+
+    fn names_with_policy(groups: &[&str], policy: SharedRootPolicy) -> Vec<String> {
+        let (all_packages, dep_graph, group_roots) = shared_root_fixture();
+        GroupReachabilityAnalyzer::filter_excluded_groups(
+            &all_packages,
+            &dep_graph,
+            &group_roots,
+            &groups.iter().map(|g| g.to_string()).collect::<Vec<_>>(),
+            policy,
+        )
+        .iter()
+        .map(|p| p.name().to_string())
+        .collect()
+    }
+
+    #[test]
+    fn test_kept_group_wins_retains_root_shared_with_non_excluded_group() {
+        let names = names_with_policy(&["docs"], SharedRootPolicy::KeptGroupWins);
+        assert!(names.contains(&"sphinx".to_string()), "lint still lists it");
+        assert!(
+            names.contains(&"docutils".to_string()),
+            "a transitive dep of the shared root is retained"
+        );
+        assert!(names.contains(&"pytest".to_string()));
+    }
+
+    #[test]
+    fn test_excluded_wins_drops_root_shared_with_non_excluded_group() {
+        // Pins the single-project semantics (`project_scope::filter_by_groups`).
+        let names = names_with_policy(&["docs"], SharedRootPolicy::ExcludedWins);
+        assert!(!names.contains(&"sphinx".to_string()));
+        assert!(!names.contains(&"docutils".to_string()));
+        assert!(names.contains(&"requests".to_string()));
+    }
+
+    #[test]
+    fn test_kept_group_wins_drops_root_when_every_listing_group_is_excluded() {
+        let names = names_with_policy(&["docs", "lint"], SharedRootPolicy::KeptGroupWins);
+        assert!(!names.contains(&"sphinx".to_string()));
+        assert!(!names.contains(&"docutils".to_string()));
+        assert!(names.contains(&"pytest".to_string()));
+        assert!(names.contains(&"requests".to_string()));
+    }
+
+    #[test]
+    fn test_kept_group_wins_drops_unshared_root_of_excluded_group() {
+        let names = names_with_policy(&["test"], SharedRootPolicy::KeptGroupWins);
+        assert!(!names.contains(&"pytest".to_string()));
+        assert!(names.contains(&"sphinx".to_string()));
+    }
+
+    #[test]
+    fn test_kept_group_wins_retains_kept_root_reached_from_excluded_subtree() {
+        // `docs = [furo]`, `furo -> sphinx`, `lint = [sphinx]`: `sphinx` has a
+        // parent, so only an explicit seed keeps it when `docs` is excluded.
+        let all_packages = vec![pkg("b"), pkg("furo"), pkg("sphinx"), pkg("docutils")];
+        let dep_graph = make_dep_graph(&[
+            ("b", &[]),
+            ("furo", &["sphinx"]),
+            ("sphinx", &["docutils"]),
+            ("docutils", &[]),
+        ]);
+        let group_roots = make_group_roots(&[("docs", &["furo"]), ("lint", &["sphinx"])]);
+        let names = |policy| -> Vec<String> {
+            GroupReachabilityAnalyzer::filter_excluded_groups(
+                &all_packages,
+                &dep_graph,
+                &group_roots,
+                &["docs".to_string()],
+                policy,
+            )
+            .iter()
+            .map(|p| p.name().to_string())
+            .collect()
+        };
+
+        let kept = names(SharedRootPolicy::KeptGroupWins);
+        assert!(!kept.contains(&"furo".to_string()));
+        assert!(kept.contains(&"sphinx".to_string()));
+        assert!(kept.contains(&"docutils".to_string()));
+
+        let excluded = names(SharedRootPolicy::ExcludedWins);
+        assert!(!excluded.contains(&"sphinx".to_string()));
+    }
+
+    #[test]
+    fn test_kept_group_wins_matches_excluded_wins_when_all_groups_excluded() {
+        let all = ["docs", "lint", "test"];
+        assert_eq!(
+            names_with_policy(&all, SharedRootPolicy::KeptGroupWins),
+            names_with_policy(&all, SharedRootPolicy::ExcludedWins)
+        );
     }
 }
