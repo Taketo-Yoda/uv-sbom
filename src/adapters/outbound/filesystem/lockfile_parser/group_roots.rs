@@ -30,10 +30,41 @@ use std::path::Path;
 /// test = [{ name = "pytest" }]
 /// ```
 ///
+/// In a workspace every member is a local package, so the revision-3 fallback
+/// picks the first one; use [`parse_group_roots_for_member`] to read a specific
+/// member's groups.
+///
 /// # Errors
 ///
 /// Returns `SbomError::LockfileParseError` if `content` is not valid `uv.lock` TOML.
 pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoots> {
+    parse_group_roots_impl(content, project_path, None)
+}
+
+/// Parse dependency-group roots for the workspace member named `member_name`.
+///
+/// Revision ≤ 2 `[manifest.dependency-groups]` are workspace-wide, so they are
+/// returned as by [`parse_group_roots`]. The revision-3 fallback reads the
+/// `[package.dev-dependencies]` of the local package whose `name == member_name`
+/// (the same match `parse_lockfile_content_for_member` uses), and returns an
+/// empty map when there is no such package — never another member's groups.
+///
+/// # Errors
+///
+/// Returns `SbomError::LockfileParseError` if `content` is not valid `uv.lock` TOML.
+pub fn parse_group_roots_for_member(
+    content: &str,
+    project_path: &Path,
+    member_name: &str,
+) -> Result<GroupRoots> {
+    parse_group_roots_impl(content, project_path, Some(member_name))
+}
+
+fn parse_group_roots_impl(
+    content: &str,
+    project_path: &Path,
+    member: Option<&str>,
+) -> Result<GroupRoots> {
     let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
         path: project_path.join("uv.lock"),
         details: e.to_string(),
@@ -47,9 +78,8 @@ pub fn parse_group_roots(content: &str, project_path: &Path) -> Result<GroupRoot
         return Ok(manifest_groups);
     }
 
-    // Revision 3 fallback: read [package.dev-dependencies] from the local project package
-    // (identified by source.virtual or source.editable pointing to ".").
-    Ok(package_dev_dependencies_v3(package))
+    // Revision 3 fallback: read [package.dev-dependencies] from the local project package.
+    Ok(package_dev_dependencies_v3(package, member))
 }
 
 /// Revision ≤ 2: reads `[manifest.dependency-groups]`.
@@ -59,13 +89,20 @@ fn manifest_groups_v2(manifest: Option<Manifest>) -> GroupRoots {
         .unwrap_or_default()
 }
 
-/// Revision 3 fallback: reads `[package.dev-dependencies]` from the local project package
-/// (identified by `source.virtual` or `source.editable` pointing to `.`).
-fn package_dev_dependencies_v3(packages: Option<Vec<UvPackage>>) -> GroupRoots {
+/// Revision 3 fallback: reads `[package.dev-dependencies]` from a local package
+/// (`source.virtual` or `source.editable`): the one named `member` when given,
+/// otherwise the first local package.
+fn package_dev_dependencies_v3(
+    packages: Option<Vec<UvPackage>>,
+    member: Option<&str>,
+) -> GroupRoots {
     packages
         .unwrap_or_default()
         .into_iter()
-        .find(|pkg| pkg.source.as_ref().map(|s| s.is_local()).unwrap_or(false))
+        .find(|pkg| match member {
+            Some(name) => pkg.is_local_named(name),
+            None => pkg.is_local(),
+        })
         .and_then(|pkg| pkg.dev_dependencies)
         .map(deps_map_to_group_roots)
         .unwrap_or_default()
@@ -353,7 +390,7 @@ source = { registry = "https://pypi.org/simple" }
 
     #[test]
     fn test_package_dev_dependencies_v3_reads_local_project_package() {
-        let roots = package_dev_dependencies_v3(parse(LOCK_REV3_MULTIPLE_GROUPS).package);
+        let roots = package_dev_dependencies_v3(parse(LOCK_REV3_MULTIPLE_GROUPS).package, None);
 
         assert_eq!(roots.len(), 2);
         let mut dev = roots["dev"].clone();
@@ -363,19 +400,19 @@ source = { registry = "https://pypi.org/simple" }
 
     #[test]
     fn test_package_dev_dependencies_v3_returns_empty_when_packages_is_none() {
-        let roots = package_dev_dependencies_v3(None);
+        let roots = package_dev_dependencies_v3(None, None);
         assert!(roots.is_empty());
     }
 
     #[test]
     fn test_package_dev_dependencies_v3_returns_empty_when_no_local_package() {
-        let roots = package_dev_dependencies_v3(parse(LOCK_REV3_NO_PROJECT_PACKAGE).package);
+        let roots = package_dev_dependencies_v3(parse(LOCK_REV3_NO_PROJECT_PACKAGE).package, None);
         assert!(roots.is_empty());
     }
 
     #[test]
     fn test_package_dev_dependencies_v3_accepts_editable_source() {
-        let roots = package_dev_dependencies_v3(parse(LOCK_REV3_EDITABLE_SOURCE).package);
+        let roots = package_dev_dependencies_v3(parse(LOCK_REV3_EDITABLE_SOURCE).package, None);
         assert_eq!(roots["dev"], vec!["ruff"]);
     }
 
@@ -444,5 +481,113 @@ dev = [{ name = "ruff" }]
             "must fall back to package dev-dependencies when manifest has a [manifest] \
              section but no non-empty dependency-groups"
         );
+    }
+
+    // --- parse_group_roots_for_member tests (#992) ---
+
+    // Revision-3 workspace: every member is a local package, listed in name order.
+    const LOCK_REV3_WORKSPACE_TWO_MEMBERS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+
+[package.dev-dependencies]
+dev = [{ name = "ruff" }]
+lint = [{ name = "black" }]
+
+[[package]]
+name = "black"
+version = "24.1.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "ruff"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+    #[test]
+    fn test_parse_group_roots_for_member_reads_each_members_own_groups() {
+        let path = Path::new("/ws");
+
+        let a = parse_group_roots_for_member(LOCK_REV3_WORKSPACE_TWO_MEMBERS, path, "a").unwrap();
+        assert_eq!(a.len(), 1);
+        assert_eq!(a["dev"], vec!["mypy"]);
+
+        let b = parse_group_roots_for_member(LOCK_REV3_WORKSPACE_TWO_MEMBERS, path, "b").unwrap();
+        assert_eq!(b.len(), 2);
+        assert_eq!(b["dev"], vec!["ruff"]);
+        assert_eq!(b["lint"], vec!["black"]);
+    }
+
+    #[test]
+    fn test_parse_group_roots_for_member_returns_empty_for_unknown_member() {
+        let roots =
+            parse_group_roots_for_member(LOCK_REV3_WORKSPACE_TWO_MEMBERS, Path::new("/ws"), "c")
+                .unwrap();
+        assert!(
+            roots.is_empty(),
+            "an unknown member must not fall back to another member's groups"
+        );
+    }
+
+    #[test]
+    fn test_parse_group_roots_for_member_ignores_registry_package_with_member_name() {
+        // Only a local package can be a member root, as in `parse_lockfile_content_for_member`.
+        let roots =
+            parse_group_roots_for_member(LOCK_REV3_WORKSPACE_TWO_MEMBERS, Path::new("/ws"), "ruff")
+                .unwrap();
+        assert!(roots.is_empty());
+    }
+
+    #[test]
+    fn test_parse_group_roots_for_member_returns_manifest_groups_for_any_member() {
+        // Revision ≤ 2 manifest groups are workspace-wide by design.
+        let roots =
+            parse_group_roots_for_member(LOCK_WITH_GROUPS, Path::new("/project"), "other").unwrap();
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots["lint"], vec!["ruff"]);
+    }
+
+    #[test]
+    fn test_parse_group_roots_for_member_returns_error_on_invalid_toml() {
+        let result = parse_group_roots_for_member("invalid [[[ toml", Path::new("/ws"), "a");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_group_roots_single_project_still_reads_first_local_package() {
+        // Single-project mode keeps the first-local-package fallback.
+        let roots = parse_group_roots(LOCK_REV3_WORKSPACE_TWO_MEMBERS, Path::new("/ws")).unwrap();
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots["dev"], vec!["mypy"]);
+    }
+
+    #[test]
+    fn test_package_dev_dependencies_v3_selects_named_member() {
+        let roots =
+            package_dev_dependencies_v3(parse(LOCK_REV3_WORKSPACE_TWO_MEMBERS).package, Some("b"));
+        assert_eq!(roots["dev"], vec!["ruff"]);
     }
 }

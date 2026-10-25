@@ -64,6 +64,17 @@ impl UvPackage {
             .get(DEV_GROUP)
             .map(Vec::as_slice)
     }
+
+    /// Whether this is a local (`source.editable` / `source.virtual`) package.
+    pub(super) fn is_local(&self) -> bool {
+        self.source.as_ref().map(|s| s.is_local()).unwrap_or(false)
+    }
+
+    /// Whether this is the local package named `name` — how a workspace
+    /// member's root entry is identified.
+    pub(super) fn is_local_named(&self, name: &str) -> bool {
+        self.name == name && self.is_local()
+    }
 }
 
 #[derive(Debug, Deserialize)]

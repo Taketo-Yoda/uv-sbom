@@ -45,6 +45,14 @@ impl LockfileReader for MockLockfileReader {
         Ok(self.group_roots.clone())
     }
 
+    fn read_and_parse_group_roots_for_member(
+        &self,
+        _path: &Path,
+        _member_name: &str,
+    ) -> Result<GroupRoots> {
+        Ok(self.group_roots.clone())
+    }
+
     fn read_and_parse_package_sources(&self, _path: &Path) -> Result<PackageSourceMap> {
         Ok(self.source_map.clone())
     }

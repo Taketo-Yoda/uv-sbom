@@ -11,8 +11,9 @@ pub type LockfileParseResult = (Vec<Package>, DependencyMap);
 
 /// Group name -> list of root package names declared for that dependency group.
 ///
-/// Extracted from `[manifest.dependency-groups]` in `uv.lock`.
-/// Empty map when no `[manifest.dependency-groups]` section is present.
+/// Extracted from `[manifest.dependency-groups]` in `uv.lock` (revision ≤ 2), or from
+/// a local package's `[package.dev-dependencies]` (revision 3).
+/// Empty map when neither is present.
 pub type GroupRoots = HashMap<String, Vec<String>>;
 
 /// Classification of a package's `source` field in `uv.lock`.
@@ -140,11 +141,32 @@ pub trait LockfileReader {
         member_name: &str,
     ) -> Result<LockfileParseResult>;
 
-    /// Extract dependency-group roots from `[manifest.dependency-groups]` in `uv.lock`.
+    /// Extract dependency-group roots from `uv.lock`.
     ///
-    /// Returns an empty map when no `[manifest.dependency-groups]` section is present,
-    /// preserving backward compatibility with lock files that have no groups.
+    /// Reads `[manifest.dependency-groups]` (revision ≤ 2), falling back to the
+    /// `[package.dev-dependencies]` of the first local package (revision 3).
+    /// Returns an empty map when no group information is present, preserving
+    /// backward compatibility with lock files that have no groups.
+    ///
+    /// In a workspace the revision-3 fallback picks an arbitrary member; use
+    /// `read_and_parse_group_roots_for_member` to scope to one member.
     fn read_and_parse_group_roots(&self, project_path: &Path) -> Result<GroupRoots>;
+
+    /// Extract dependency-group roots for the workspace member `member_name`.
+    ///
+    /// Revision ≤ 2 `[manifest.dependency-groups]` are workspace-wide and returned
+    /// as by `read_and_parse_group_roots`. For revision 3, reads the
+    /// `[package.dev-dependencies]` of the local package whose `name == member_name`
+    /// (the same match as `read_and_parse_lockfile_for_member`), or returns an empty
+    /// map when there is no such package — never another member's groups.
+    ///
+    /// # Errors
+    /// Returns an error if the uv.lock file cannot be read or parsed.
+    fn read_and_parse_group_roots_for_member(
+        &self,
+        project_path: &Path,
+        member_name: &str,
+    ) -> Result<GroupRoots>;
 
     /// Read `uv.lock` and classify each package's `source` field.
     ///

@@ -8,7 +8,7 @@ use crate::ports::outbound::{LockfileParseResult, PackageSourceMap};
 use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
-pub use group_roots::parse_group_roots;
+pub use group_roots::{parse_group_roots, parse_group_roots_for_member};
 pub use member_scope::parse_lockfile_content_for_member;
 use std::collections::HashMap;
 use std::path::Path;

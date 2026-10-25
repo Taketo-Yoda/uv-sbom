@@ -12,7 +12,7 @@
 
 use crate::i18n::Messages;
 use crate::ports::outbound::lockfile_reader::DependencyMap;
-use crate::ports::outbound::{LockfileReader, ProjectConfigError, ProjectConfigReader};
+use crate::ports::outbound::{GroupRoots, LockfileReader, ProjectConfigError, ProjectConfigReader};
 use crate::sbom_generation::domain::services::GroupReachabilityAnalyzer;
 use crate::sbom_generation::domain::Package;
 use crate::sbom_generation::services::PackageFilter;
@@ -64,10 +64,9 @@ pub(crate) fn filter_by_patterns(
 /// Removes packages reachable only from the dependency groups in `exclude_groups`.
 ///
 /// An empty `exclude_groups` slice is the identity and performs no I/O (the
-/// group roots are not read). Otherwise reads `[manifest.dependency-groups]`
-/// through `reader` and delegates to
-/// `GroupReachabilityAnalyzer::filter_excluded_groups`. `dependency_map` is
-/// only read, never filtered (issue #206 invariant).
+/// group roots are not read). Otherwise reads the group roots through `reader`
+/// and delegates to `GroupReachabilityAnalyzer::filter_excluded_groups`.
+/// `dependency_map` is only read, never filtered (issue #206 invariant).
 ///
 /// # Errors
 /// Returns an error if the group roots cannot be read from the lockfile.
@@ -78,11 +77,41 @@ pub(crate) fn filter_by_groups<LR: LockfileReader>(
     dependency_map: &DependencyMap,
     exclude_groups: &[String],
 ) -> Result<Vec<Package>> {
+    filter_by_group_roots(packages, dependency_map, exclude_groups, || {
+        reader.read_and_parse_group_roots(project_path)
+    })
+}
+
+/// [`filter_by_groups`] for one workspace member: the group roots are read
+/// from `member_name`'s own entry, so a revision-3 lockfile does not apply
+/// another member's `[package.dev-dependencies]` (#992).
+///
+/// # Errors
+/// Returns an error if the group roots cannot be read from the lockfile.
+pub(crate) fn filter_by_groups_for_member<LR: LockfileReader>(
+    reader: &LR,
+    project_path: &Path,
+    member_name: &str,
+    packages: Vec<Package>,
+    dependency_map: &DependencyMap,
+    exclude_groups: &[String],
+) -> Result<Vec<Package>> {
+    filter_by_group_roots(packages, dependency_map, exclude_groups, || {
+        reader.read_and_parse_group_roots_for_member(project_path, member_name)
+    })
+}
+
+fn filter_by_group_roots(
+    packages: Vec<Package>,
+    dependency_map: &DependencyMap,
+    exclude_groups: &[String],
+    read_roots: impl FnOnce() -> Result<GroupRoots>,
+) -> Result<Vec<Package>> {
     if exclude_groups.is_empty() {
         return Ok(packages);
     }
 
-    let group_roots = reader.read_and_parse_group_roots(project_path)?;
+    let group_roots = read_roots()?;
     Ok(GroupReachabilityAnalyzer::filter_excluded_groups(
         &packages,
         dependency_map,
@@ -122,7 +151,6 @@ mod tests {
         MockLockfileReader, MockProjectConfigReader,
     };
     use crate::i18n::Locale;
-    use crate::ports::outbound::GroupRoots;
     use std::collections::HashMap;
 
     fn pkg(name: &str, version: &str) -> Package {
@@ -211,6 +239,31 @@ mod tests {
         .unwrap();
 
         assert_eq!(names(&filtered), vec!["app", "requests"]);
+    }
+
+    #[test]
+    fn test_filter_by_groups_for_member_removes_group_only_packages() {
+        let reader = reader_with_groups(HashMap::from([(
+            "dev".to_string(),
+            vec!["pytest".to_string()],
+        )]));
+        let deps: DependencyMap = HashMap::from([
+            ("app".to_string(), vec!["requests".to_string()]),
+            ("requests".to_string(), vec![]),
+            ("pytest".to_string(), vec![]),
+        ]);
+
+        let filtered = filter_by_groups_for_member(
+            &reader,
+            Path::new("/ws"),
+            "app",
+            vec![pkg("requests", "2.0.0"), pkg("pytest", "7.0.0")],
+            &deps,
+            &["dev".to_string()],
+        )
+        .unwrap();
+
+        assert_eq!(names(&filtered), vec!["requests"]);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use super::lockfile_parser::{
-    parse_group_roots, parse_lockfile_content, parse_lockfile_content_for_member,
-    parse_package_sources,
+    parse_group_roots, parse_group_roots_for_member, parse_lockfile_content,
+    parse_lockfile_content_for_member, parse_package_sources,
 };
 use crate::ports::outbound::{
     GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap, ProjectConfigError,
@@ -87,6 +87,15 @@ impl LockfileReader for FileSystemReader {
     fn read_and_parse_group_roots(&self, project_path: &Path) -> Result<GroupRoots> {
         let lockfile_content = self.read_lockfile(project_path)?;
         parse_group_roots(&lockfile_content, project_path)
+    }
+
+    fn read_and_parse_group_roots_for_member(
+        &self,
+        project_path: &Path,
+        member_name: &str,
+    ) -> Result<GroupRoots> {
+        let lockfile_content = self.read_lockfile(project_path)?;
+        parse_group_roots_for_member(&lockfile_content, project_path, member_name)
     }
 
     fn read_and_parse_package_sources(&self, project_path: &Path) -> Result<PackageSourceMap> {
@@ -260,6 +269,51 @@ source = { virtual = "." }
 
         let reader = FileSystemReader::new();
         let result = reader.read_and_parse_group_roots(temp_dir.path());
+        assert!(result.is_err());
+    }
+
+    const REV3_WORKSPACE_LOCK: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+
+[package.dev-dependencies]
+dev = [{ name = "ruff" }]
+"#;
+
+    #[test]
+    fn test_read_and_parse_group_roots_for_member_reads_members_own_groups() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("uv.lock"), REV3_WORKSPACE_LOCK).unwrap();
+
+        let reader = FileSystemReader::new();
+        let roots = reader
+            .read_and_parse_group_roots_for_member(temp_dir.path(), "b")
+            .unwrap();
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots["dev"], vec!["ruff"]);
+    }
+
+    #[test]
+    fn test_read_and_parse_group_roots_for_member_returns_error_when_lockfile_missing() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let reader = FileSystemReader::new();
+        let result = reader.read_and_parse_group_roots_for_member(temp_dir.path(), "b");
         assert!(result.is_err());
     }
 
