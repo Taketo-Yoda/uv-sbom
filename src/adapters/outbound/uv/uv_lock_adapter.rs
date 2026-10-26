@@ -11,6 +11,7 @@ use tokio::time::timeout;
 
 use super::UvWorkspaceReader;
 use crate::ports::outbound::WorkspaceReader;
+use crate::sbom_generation::domain::package::normalize_name;
 use crate::sbom_generation::domain::{
     SimulationResult, TargetedSimulationOutcome, UvLockSimulator,
 };
@@ -247,25 +248,6 @@ impl UvLockAdapter {
         }
     }
 
-    /// PEP 503 name normalization: lowercase, and runs of `-`, `_`, `.` collapse
-    /// to a single `-`.
-    fn normalize_name(name: &str) -> String {
-        let mut normalized = String::with_capacity(name.len());
-        let mut previous_was_separator = false;
-        for c in name.trim().chars() {
-            if matches!(c, '-' | '_' | '.') {
-                if !previous_was_separator {
-                    normalized.push('-');
-                }
-                previous_was_separator = true;
-            } else {
-                normalized.push(c.to_ascii_lowercase());
-                previous_was_separator = false;
-            }
-        }
-        normalized
-    }
-
     /// Summarizes a failed `uv lock` run as its trimmed stderr, falling back to
     /// the exit status when stderr is empty.
     fn summarize_stderr(stderr: &[u8], status: ExitStatus) -> String {
@@ -311,10 +293,10 @@ impl UvLockAdapter {
             .map_err(|e| anyhow!("Failed to read resulting uv.lock: {}", e))?;
         let new_versions = Self::parse_versions(&new_content)?;
 
-        let normalized_name = Self::normalize_name(package_name);
+        let normalized_name = normalize_name(package_name);
         let Some(resolved_version) = new_versions
             .iter()
-            .find(|(k, _)| Self::normalize_name(k) == normalized_name)
+            .find(|(k, _)| normalize_name(k) == normalized_name)
             .map(|(_, v)| v.clone())
         else {
             return Ok(TargetedSimulationOutcome::ResolutionFailed {
@@ -628,13 +610,6 @@ version = "0.1.0"
                 version
             );
         }
-    }
-
-    #[test]
-    fn test_normalize_name_follows_pep503() {
-        assert_eq!(UvLockAdapter::normalize_name("Foo_Bar.baz"), "foo-bar-baz");
-        assert_eq!(UvLockAdapter::normalize_name("a--_.b"), "a-b");
-        assert_eq!(UvLockAdapter::normalize_name("Requests"), "requests");
     }
 
     #[cfg(unix)]
