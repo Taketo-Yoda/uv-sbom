@@ -50,8 +50,11 @@ use uv_sbom::config;
 ///
 /// This adapter is used in workspace mode to scope the SBOM generation to a
 /// single workspace member, delegating to `read_and_parse_lockfile_for_member`.
-/// Group roots are scoped to the member too (`read_and_parse_group_roots_for_member`),
-/// so a revision-3 lockfile never applies another member's groups (#992).
+/// Group roots are not redirected: `read_and_parse_group_roots` returns the
+/// workspace root's own groups. Member scope comes only from an explicit
+/// `read_and_parse_group_roots_for_member` call, selected by
+/// `SbomRequest.workspace_member` (#1001, #1006), so a revision-3 lockfile never
+/// applies another member's groups (#992).
 struct MemberScopedLockfileReader {
     inner: FileSystemReader,
     workspace_root: PathBuf,
@@ -88,8 +91,7 @@ impl LockfileReader for MemberScopedLockfileReader {
     }
 
     fn read_and_parse_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
-        self.inner
-            .read_and_parse_group_roots_for_member(&self.workspace_root, &self.member_name)
+        self.inner.read_and_parse_group_roots(&self.workspace_root)
     }
 
     fn read_and_parse_group_roots_for_member(
