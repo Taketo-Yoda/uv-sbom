@@ -224,6 +224,8 @@ pub struct Messages {
     pub workspace_aggregate_non_pypi: &'static str,
     pub workspace_aggregate_python_incompatible: &'static str,
     pub workspace_aggregate_none: &'static str,
+    pub warn_workspace_root_groups_uncovered: &'static str,
+    pub warn_workspace_root_groups_uncovered_hint: &'static str,
 
     // Executive summary section
     pub section_summary: &'static str,
@@ -584,6 +586,8 @@ static EN_MESSAGES: Messages = Messages {
     workspace_aggregate_non_pypi: "Members with non-PyPI packages: {}",
     workspace_aggregate_python_incompatible: "Members with Python-incompatible packages: {}",
     workspace_aggregate_none: "none",
+    warn_workspace_root_groups_uncovered: "⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: {}",
+    warn_workspace_root_groups_uncovered_hint: "   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.",
 
     // Executive summary section
     section_summary: "## Summary",
@@ -915,6 +919,8 @@ static JA_MESSAGES: Messages = Messages {
     workspace_aggregate_non_pypi: "非PyPIパッケージがあるメンバー: {}",
     workspace_aggregate_python_incompatible: "Python非互換パッケージがあるメンバー: {}",
     workspace_aggregate_none: "なし",
+    warn_workspace_root_groups_uncovered: "⚠️  警告: どのメンバーの SBOM にも含まれないワークスペースルートの依存グループ: {}",
+    warn_workspace_root_groups_uncovered_hint: "   これらのグループからのみ到達するパッケージは、どの SBOM にも含まれません。この警告を抑止するには、これらのグループを --exclude-groups に追加してください。",
 
     // Executive summary section
     section_summary: "## サマリー",
@@ -1666,6 +1672,8 @@ mod tests {
             workspace_aggregate_non_pypi,
             workspace_aggregate_python_incompatible,
             workspace_aggregate_none,
+            warn_workspace_root_groups_uncovered,
+            warn_workspace_root_groups_uncovered_hint,
             section_summary,
             col_item,
             col_count,
@@ -1967,6 +1975,14 @@ mod tests {
             "Members with Python-incompatible packages: {}"
         );
         assert_eq!(msgs.workspace_aggregate_none, "none");
+        assert_eq!(
+            msgs.warn_workspace_root_groups_uncovered,
+            "⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: {}"
+        );
+        assert_eq!(
+            msgs.warn_workspace_root_groups_uncovered_hint,
+            "   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning."
+        );
     }
 
     #[test]
@@ -2009,6 +2025,14 @@ mod tests {
             "Python非互換パッケージがあるメンバー: {}"
         );
         assert_eq!(msgs.workspace_aggregate_none, "なし");
+        assert_eq!(
+            msgs.warn_workspace_root_groups_uncovered,
+            "⚠️  警告: どのメンバーの SBOM にも含まれないワークスペースルートの依存グループ: {}"
+        );
+        assert_eq!(
+            msgs.warn_workspace_root_groups_uncovered_hint,
+            "   これらのグループからのみ到達するパッケージは、どの SBOM にも含まれません。この警告を抑止するには、これらのグループを --exclude-groups に追加してください。"
+        );
     }
 
     #[test]

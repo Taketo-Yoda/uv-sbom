@@ -537,4 +537,98 @@ source = { registry = "https://pypi.org/simple" }
             assert!(sbom.contains("\"requests\""), "{flags:?}");
         }
     }
+
+    // --- Virtual root [dependency-groups] warning (#1009) ---
+
+    const ROOT_GROUPS_WARNING_EN: &str =
+        "Workspace root dependency group(s) not covered by any member SBOM";
+    const ROOT_GROUPS_WARNING_JA: &str =
+        "どのメンバーの SBOM にも含まれないワークスペースルートの依存グループ";
+
+    /// Runs `--workspace` on `temp` with `extra` args; returns (stdout, stderr).
+    fn run_workspace(temp: &TempDir, extra: &[&str]) -> (String, String) {
+        let mut args = vec![
+            "--workspace",
+            "--path",
+            temp.path().to_str().unwrap(),
+            "--no-check-cve",
+            "--format",
+            "json",
+        ];
+        args.extend_from_slice(extra);
+        let (exit_code, stdout, stderr) = run_uv_sbom(&args);
+        assert_eq!(exit_code, 0, "{stderr}");
+        (stdout, stderr)
+    }
+
+    /// A virtual root's group is named on stderr, never on stdout or in an SBOM;
+    /// a member's own group is not named
+    #[test]
+    fn test_workspace_warns_about_uncovered_virtual_root_groups() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (stdout, stderr) = run_workspace(&temp, &[]);
+
+        let line = stderr
+            .lines()
+            .find(|l| l.contains(ROOT_GROUPS_WARNING_EN))
+            .unwrap_or_else(|| panic!("warning missing from stderr:\n{stderr}"));
+        assert!(line.ends_with(": docs"), "{line}");
+        assert!(stderr.contains("--exclude-groups"), "hint missing");
+        assert!(!stdout.contains(ROOT_GROUPS_WARNING_EN));
+        for member in ["a", "b"] {
+            let sbom = fs::read_to_string(temp.path().join(format!("packages/{member}/sbom.json")))
+                .unwrap();
+            assert!(!sbom.contains(ROOT_GROUPS_WARNING_EN), "{member}");
+        }
+    }
+
+    /// The warning is localized with --lang ja
+    #[test]
+    fn test_workspace_root_groups_warning_ja() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (_stdout, stderr) = run_workspace(&temp, &["--lang", "ja"]);
+
+        assert!(stderr.contains(ROOT_GROUPS_WARNING_JA), "{stderr}");
+        assert!(!stderr.contains(ROOT_GROUPS_WARNING_EN));
+    }
+
+    /// Excluding a member's group only does not silence the root warning
+    #[test]
+    fn test_workspace_root_groups_warning_survives_member_group_exclusion() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (_stdout, stderr) = run_workspace(&temp, &["--exclude-groups", "lint"]);
+
+        assert!(stderr.contains(ROOT_GROUPS_WARNING_EN), "{stderr}");
+    }
+
+    /// Excluding every root group, directly or via --production-only, prints no warning
+    #[test]
+    fn test_workspace_no_root_groups_warning_when_all_root_groups_excluded() {
+        for flags in [
+            &["--exclude-groups", "docs"][..],
+            &["--production-only"][..],
+        ] {
+            let temp = manifest_workspace_with_member_group();
+
+            let (_stdout, stderr) = run_workspace(&temp, flags);
+
+            assert!(
+                !stderr.contains(ROOT_GROUPS_WARNING_EN),
+                "{flags:?}: {stderr}"
+            );
+        }
+    }
+
+    /// A root without [dependency-groups] prints no warning
+    #[test]
+    fn test_workspace_no_root_groups_warning_without_root_groups() {
+        let temp = setup_workspace_temp();
+
+        let (_stdout, stderr) = run_workspace(&temp, &[]);
+
+        assert!(!stderr.contains(ROOT_GROUPS_WARNING_EN), "{stderr}");
+    }
 }

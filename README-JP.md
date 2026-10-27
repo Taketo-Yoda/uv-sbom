@@ -1350,13 +1350,34 @@ worker               /path/to/workspace/packages/worker/sbom.json
 
 📊 Workspace Aggregate Summary
 ────────────────────────────────────────────────────────────
-Total actionable CVEs: 17
+Total actionable CVEs: 28
 ────────────────────────────────────────────────────────────
+
+⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: lint
+   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.
 ```
 
 各メンバーは、そのメンバーから到達可能なパッケージのみを含む独自の `sbom.json` を取得します。推移的依存関係は含まれますが、他のメンバーに属するパッケージは除外されます。
 
 **メンバー横断の集計サマリー:** メンバーごとのテーブルの後に、`--workspace` は各メンバーの SBOM ファイルを開かなくてもモノレポ全体の健全性が分かる集計サマリーも出力します — CVE の合計件数、ライセンスポリシー違反があるメンバー、メンテナンス停止／非PyPI／Python非互換パッケージが検出されたメンバーです。この行は、その実行で実際に有効化されたチェック（例: `--check-license`）についてのみ表示されます。実行されなかったチェックの行は、空であっても一切表示されません。
+
+**ワークスペースルートの依存グループ:** 仮想ワークスペースルート（`[project]` を持たないルートの `pyproject.toml`）は、リポジトリ全体で使うツール用の `lint` グループのように、独自の `[dependency-groups]` を宣言できます。これらのグループはどのメンバーの SBOM からもたどられないため、`--workspace` は除外されていないルートのグループ名を挙げる警告を stderr に出力します（上の出力例の最後の行。`examples/workspace` はルートで `lint = ["ruff"]` を宣言しています）。メンバーが自身の依存関係を通じて到達するパッケージは、引き続きそのメンバーの SBOM に含まれます。警告を抑止するには、ルートのグループを `--exclude-groups` に追加してください（`--production-only` でも抑止されます）。stdout とメンバーの SBOM ファイルは変わりません。`[project]` を持つルートはそれ自体がメンバーであり、そのグループは自身の SBOM でカバーされます。
+
+`--lang ja` を指定すると、警告も日本語で出力されます:
+
+```bash
+uv-sbom --workspace --path examples/workspace --lang ja
+```
+
+```
+📊 ワークスペース集計サマリー
+────────────────────────────────────────────────────────────
+対応が必要なCVE合計: 28
+────────────────────────────────────────────────────────────
+
+⚠️  警告: どのメンバーの SBOM にも含まれないワークスペースルートの依存グループ: lint
+   これらのグループからのみ到達するパッケージは、どの SBOM にも含まれません。この警告を抑止するには、これらのグループを --exclude-groups に追加してください。
+```
 
 **他のオプションとの組み合わせ:**
 
@@ -1371,9 +1392,12 @@ uv-sbom --workspace --path examples/workspace --check-license
 ```
 📊 Workspace Aggregate Summary
 ────────────────────────────────────────────────────────────
-Total actionable CVEs: 17
+Total actionable CVEs: 28
 Members with license policy violations: none
 ────────────────────────────────────────────────────────────
+
+⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: lint
+   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.
 ```
 
 > **注意:** `--workspace` と `--output` は同時に使用できません。ワークスペースモードでは、各メンバーの SBOM は自動的にメンバー自身のディレクトリ内の `sbom.json`（Markdown の場合は `sbom.md`）に書き込まれます。

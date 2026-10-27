@@ -60,6 +60,10 @@ impl LockfileReader for MockLockfileReader {
         Ok(self.group_roots.clone())
     }
 
+    fn read_and_parse_virtual_root_group_roots(&self, _path: &Path) -> Result<GroupRoots> {
+        Ok(GroupRoots::new())
+    }
+
     fn read_and_parse_package_sources(&self, _path: &Path) -> Result<PackageSourceMap> {
         Ok(self.source_map.clone())
     }

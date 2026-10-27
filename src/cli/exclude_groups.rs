@@ -97,6 +97,10 @@ mod tests {
             Ok(self.by_member.get(member_name).cloned().unwrap_or_default())
         }
 
+        fn read_and_parse_virtual_root_group_roots(&self, _path: &Path) -> Result<GroupRoots> {
+            unreachable!("not used by resolve_exclude_groups")
+        }
+
         fn read_and_parse_package_sources(&self, _path: &Path) -> Result<PackageSourceMap> {
             unreachable!("not used by resolve_exclude_groups")
         }

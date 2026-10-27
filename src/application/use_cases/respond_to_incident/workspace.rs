@@ -240,6 +240,13 @@ mod tests {
                 .unwrap_or_default())
         }
 
+        fn read_and_parse_virtual_root_group_roots(
+            &self,
+            _path: &Path,
+        ) -> Result<crate::ports::outbound::GroupRoots> {
+            unreachable!("the incident use case does not read the virtual root's groups")
+        }
+
         fn read_and_parse_package_sources(&self, _path: &Path) -> Result<PackageSourceMap> {
             Ok(self.sources.clone())
         }

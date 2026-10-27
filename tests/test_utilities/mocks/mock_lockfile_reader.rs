@@ -109,6 +109,10 @@ impl LockfileReader for MockLockfileReader {
         Ok(HashMap::new())
     }
 
+    fn read_and_parse_virtual_root_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
+        Ok(HashMap::new())
+    }
+
     fn read_and_parse_package_sources(&self, _project_path: &Path) -> Result<PackageSourceMap> {
         Ok(HashMap::new())
     }

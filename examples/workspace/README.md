@@ -7,7 +7,7 @@ with two member packages, designed to demonstrate `uv-sbom --workspace`.
 
 ```
 workspace/
-├── pyproject.toml          # Workspace root — declares [tool.uv.workspace]
+├── pyproject.toml          # Workspace root — declares [tool.uv.workspace] and a root lint group (ruff)
 ├── uv.lock                 # Committed lock file shared by all members
 ├── packages/
 │   ├── api/
@@ -47,11 +47,24 @@ Member               Output File
 api                  examples/workspace/packages/api/sbom.json
 worker               examples/workspace/packages/worker/sbom.json
 ────────────────────────────────────────────────────────────
+
+📊 Workspace Aggregate Summary
+────────────────────────────────────────────────────────────
+Total actionable CVEs: 28
+────────────────────────────────────────────────────────────
+
+⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: lint
+   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.
 ```
 
 Each member gets its own `sbom.json` containing only the packages reachable
 from that member (transitive dependencies are included, but packages belonging
 to other members are excluded).
+
+The root `pyproject.toml` declares `[dependency-groups] lint = ["ruff"]`.
+No member SBOM covers the virtual root's own groups, so the run ends with a
+warning naming `lint`. `--exclude-groups lint` or `--production-only`
+silences it.
 
 ### Markdown output
 

@@ -2,11 +2,15 @@
 //!
 //! This module extracts per-member check results from a `SbomResponse` before
 //! it is consumed by rendering/output, then renders an aggregate summary
-//! covering only the checks that were actually enabled for the run.
+//! covering only the checks that were actually enabled for the run. It also
+//! renders the warning about a virtual root's dependency groups that no member
+//! SBOM covers (#1009).
 
 use crate::application::dto::SbomResponse;
 use crate::cli::config_resolver::MergedConfig;
 use crate::i18n::Messages;
+use crate::ports::outbound::GroupRoots;
+use std::collections::BTreeSet;
 
 /// Per-member check results extracted from a `SbomResponse`.
 ///
@@ -170,6 +174,36 @@ pub fn render_workspace_aggregate(
 
     lines.push(separator);
     lines
+}
+
+/// Renders the warning about the virtual workspace root's dependency groups
+/// that no member SBOM covers: the root's group names minus `excluded`, sorted.
+///
+/// Member traversal never follows the root's `[manifest.dependency-groups]`, so
+/// packages reachable only through them are in no SBOM. Names are compared
+/// exactly, as `--exclude-groups` matches them. Returns `None` when every root
+/// group is excluded or the root declares none. Shared by `run_workspace` and,
+/// in #1010, `run_workspace_incident`.
+pub fn render_uncovered_root_groups_warning(
+    root_groups: &GroupRoots,
+    excluded: &[String],
+    msgs: &Messages,
+) -> Option<String> {
+    let uncovered: BTreeSet<&str> = root_groups
+        .keys()
+        .map(String::as_str)
+        .filter(|group| !excluded.iter().any(|e| e == group))
+        .collect();
+    if uncovered.is_empty() {
+        return None;
+    }
+
+    let names = uncovered.into_iter().collect::<Vec<_>>().join(", ");
+    Some(format!(
+        "{}\n{}",
+        Messages::format(msgs.warn_workspace_root_groups_uncovered, &[&names]),
+        msgs.warn_workspace_root_groups_uncovered_hint
+    ))
 }
 
 #[cfg(test)]
@@ -371,5 +405,87 @@ mod tests {
 
         let none_enabled = disabled_checks();
         assert!(!none_enabled.any_enabled());
+    }
+
+    // --- render_uncovered_root_groups_warning tests (#1009) ---
+
+    fn root_groups(names: &[&str]) -> GroupRoots {
+        names
+            .iter()
+            .map(|name| (name.to_string(), vec![format!("{name}-root")]))
+            .collect()
+    }
+
+    fn excluded(names: &[&str]) -> Vec<String> {
+        names.iter().map(|n| n.to_string()).collect()
+    }
+
+    #[test]
+    fn test_root_groups_warning_none_without_root_groups() {
+        let msgs = Messages::for_locale(Locale::En);
+
+        let warning = render_uncovered_root_groups_warning(&root_groups(&[]), &[], msgs);
+
+        assert!(warning.is_none());
+    }
+
+    #[test]
+    fn test_root_groups_warning_none_when_every_root_group_is_excluded() {
+        let msgs = Messages::for_locale(Locale::En);
+
+        let warning = render_uncovered_root_groups_warning(
+            &root_groups(&["lint", "docs"]),
+            &excluded(&["docs", "lint", "dev"]),
+            msgs,
+        );
+
+        assert!(warning.is_none());
+    }
+
+    #[test]
+    fn test_root_groups_warning_lists_only_uncovered_groups_sorted() {
+        let msgs = Messages::for_locale(Locale::En);
+
+        let warning = render_uncovered_root_groups_warning(
+            &root_groups(&["test", "lint", "docs"]),
+            &excluded(&["test", "unrelated"]),
+            msgs,
+        )
+        .unwrap();
+
+        assert_eq!(
+            warning,
+            format!(
+                "⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: docs, lint\n{}",
+                msgs.warn_workspace_root_groups_uncovered_hint
+            )
+        );
+    }
+
+    #[test]
+    fn test_root_groups_warning_matches_group_names_exactly() {
+        let msgs = Messages::for_locale(Locale::En);
+
+        let warning = render_uncovered_root_groups_warning(
+            &root_groups(&["lint"]),
+            &excluded(&["Lint"]),
+            msgs,
+        )
+        .unwrap();
+
+        assert!(warning.contains(": lint\n"));
+    }
+
+    #[test]
+    fn test_root_groups_warning_renders_in_japanese() {
+        let msgs = Messages::for_locale(Locale::Ja);
+
+        let warning =
+            render_uncovered_root_groups_warning(&root_groups(&["lint"]), &[], msgs).unwrap();
+
+        assert!(warning.starts_with(
+            "⚠️  警告: どのメンバーの SBOM にも含まれないワークスペースルートの依存グループ: lint\n"
+        ));
+        assert!(warning.ends_with(msgs.warn_workspace_root_groups_uncovered_hint));
     }
 }

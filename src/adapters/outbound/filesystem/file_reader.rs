@@ -1,6 +1,6 @@
 use super::lockfile_parser::{
     parse_group_roots, parse_group_roots_for_member, parse_lockfile_content,
-    parse_lockfile_content_for_member, parse_package_sources,
+    parse_lockfile_content_for_member, parse_package_sources, parse_virtual_root_group_roots,
 };
 use crate::ports::outbound::{
     GroupRoots, LockfileParseResult, LockfileReader, PackageSourceMap, ProjectConfigError,
@@ -96,6 +96,11 @@ impl LockfileReader for FileSystemReader {
     ) -> Result<GroupRoots> {
         let lockfile_content = self.read_lockfile(project_path)?;
         parse_group_roots_for_member(&lockfile_content, project_path, member_name)
+    }
+
+    fn read_and_parse_virtual_root_group_roots(&self, project_path: &Path) -> Result<GroupRoots> {
+        let lockfile_content = self.read_lockfile(project_path)?;
+        parse_virtual_root_group_roots(&lockfile_content, project_path)
     }
 
     fn read_and_parse_package_sources(&self, project_path: &Path) -> Result<PackageSourceMap> {
@@ -269,6 +274,29 @@ source = { virtual = "." }
 
         let reader = FileSystemReader::new();
         let result = reader.read_and_parse_group_roots(temp_dir.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_and_parse_virtual_root_group_roots_reads_manifest_groups() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("uv.lock"), LOCK_WITH_GROUPS).unwrap();
+
+        let reader = FileSystemReader::new();
+        let roots = reader
+            .read_and_parse_virtual_root_group_roots(temp_dir.path())
+            .unwrap();
+
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots["lint"], vec!["ruff"]);
+    }
+
+    #[test]
+    fn test_read_and_parse_virtual_root_group_roots_returns_error_when_lockfile_missing() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let reader = FileSystemReader::new();
+        let result = reader.read_and_parse_virtual_root_group_roots(temp_dir.path());
         assert!(result.is_err());
     }
 
