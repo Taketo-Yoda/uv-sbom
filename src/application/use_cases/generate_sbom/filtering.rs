@@ -30,6 +30,11 @@ where
 {
     /// Reads and parses the lockfile, reporting progress
     ///
+    /// With `request.workspace_member` set, calls
+    /// `read_and_parse_lockfile_for_member`, so the request — not the reader —
+    /// selects member scope (#1011, as `apply_group_filter` does for group roots).
+    /// Otherwise calls `read_and_parse_lockfile`.
+    ///
     /// # Arguments
     /// * `request` - The SBOM request containing project path
     ///
@@ -45,9 +50,14 @@ where
             &[&request.project_path.display().to_string()],
         ));
 
-        let (packages, dependency_map) = self
-            .lockfile_reader
-            .read_and_parse_lockfile(&request.project_path)?;
+        let (packages, dependency_map) = match request.workspace_member.as_deref() {
+            Some(member) => self
+                .lockfile_reader
+                .read_and_parse_lockfile_for_member(&request.project_path, member)?,
+            None => self
+                .lockfile_reader
+                .read_and_parse_lockfile(&request.project_path)?,
+        };
 
         self.progress_reporter.report(&Messages::format(
             msgs.progress_detected_packages,
@@ -236,6 +246,43 @@ mod tests {
     use crate::i18n::Locale;
     use crate::ports::outbound::GroupRoots;
     use std::collections::HashMap;
+
+    mod tests_read_lockfile {
+        use super::*;
+
+        fn builder_with_both_reads() -> UseCaseBuilder {
+            UseCaseBuilder::default()
+                .with_lockfile(vec![pkg("root-only", "1.0.0")])
+                .with_member_lockfile(vec![pkg("member-only", "2.0.0")], HashMap::new())
+        }
+
+        #[test]
+        fn test_read_and_report_lockfile_member_request_reads_member_lockfile() {
+            let use_case = builder_with_both_reads().build();
+            let request = SbomRequest::builder()
+                .project_path("/test/workspace/member")
+                .workspace_member(Some("member".to_string()))
+                .build()
+                .unwrap();
+
+            let (packages, _) = use_case.read_and_report_lockfile(&request).unwrap();
+
+            let names: Vec<&str> = packages.iter().map(|p| p.name()).collect();
+            assert_eq!(names, vec!["member-only"]);
+        }
+
+        #[test]
+        fn test_read_and_report_lockfile_plain_request_reads_project_lockfile() {
+            let use_case = builder_with_both_reads().build();
+
+            let (packages, _) = use_case
+                .read_and_report_lockfile(&default_request())
+                .unwrap();
+
+            let names: Vec<&str> = packages.iter().map(|p| p.name()).collect();
+            assert_eq!(names, vec!["root-only"]);
+        }
+    }
 
     mod tests_exclusion {
         use super::*;

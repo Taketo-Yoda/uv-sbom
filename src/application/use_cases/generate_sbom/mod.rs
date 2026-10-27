@@ -253,7 +253,7 @@ mod tests {
         MockLockfileReader, MockMaintenanceRepository, MockProjectConfigReader,
         MockPythonCompatibilityRepository, MockUvLockSimulator, MockVulnerabilityRepository,
     };
-    use crate::ports::outbound::{GroupRoots, PackageSourceMap, PyPiMetadata};
+    use crate::ports::outbound::{GroupRoots, LockfileParseResult, PackageSourceMap, PyPiMetadata};
     use crate::sbom_generation::domain::Package;
     use std::collections::HashMap;
 
@@ -306,6 +306,7 @@ mod tests {
             deps: HashMap<String, Vec<String>>,
             group_roots: GroupRoots,
             source_map: PackageSourceMap,
+            member_lockfile: Option<LockfileParseResult>,
             project_name: String,
             pyproject_missing: bool,
             locale: Locale,
@@ -322,6 +323,7 @@ mod tests {
                     deps: HashMap::new(),
                     group_roots: HashMap::new(),
                     source_map: PackageSourceMap::new(),
+                    member_lockfile: None,
                     project_name: "test-project".to_string(),
                     pyproject_missing: false,
                     locale: Locale::default(),
@@ -346,6 +348,15 @@ mod tests {
             ) -> Self {
                 self.packages = packages;
                 self.deps = deps;
+                self
+            }
+
+            pub(crate) fn with_member_lockfile(
+                mut self,
+                packages: Vec<Package>,
+                deps: HashMap<String, Vec<String>>,
+            ) -> Self {
+                self.member_lockfile = Some((packages, deps));
                 self
             }
 
@@ -404,6 +415,7 @@ mod tests {
                         deps: self.deps,
                         group_roots: self.group_roots,
                         source_map: self.source_map,
+                        member_lockfile: self.member_lockfile,
                     },
                     MockProjectConfigReader {
                         project_name: self.project_name,
