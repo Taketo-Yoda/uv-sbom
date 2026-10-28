@@ -23,7 +23,7 @@ use crate::ports::outbound::{
 };
 use crate::sbom_generation::domain::advisory::{Advisory, IncidentVerdict};
 use crate::sbom_generation::domain::incident_target::{IncidentTarget, ManualAffectedSpec};
-use crate::sbom_generation::domain::services::advisory_range_matcher::normalize_name;
+use crate::sbom_generation::domain::package::normalize_name;
 use crate::sbom_generation::domain::{DependencyGraph, Package, PackageName, UvLockSimulator};
 use crate::sbom_generation::services::DependencyAnalyzer;
 use crate::shared::Result;

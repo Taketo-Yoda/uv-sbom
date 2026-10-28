@@ -3,6 +3,7 @@
 use crate::sbom_generation::domain::advisory::{
     Advisory, AffectedRange, IncidentVerdict, ReleaseStatus,
 };
+use crate::sbom_generation::domain::package::normalize_name;
 use pep440_rs::Version;
 use std::str::FromStr;
 
@@ -144,25 +145,6 @@ fn rank(verdict: IncidentVerdict) -> u8 {
         IncidentVerdict::AffectedFixUnreleased => 2,
         IncidentVerdict::AffectedFixReleased => 3,
     }
-}
-
-/// PEP 503 name normalization: lowercase, and runs of `-`, `_`, `.` collapse
-/// to a single `-`. Surrounding whitespace is ignored.
-pub fn normalize_name(name: &str) -> String {
-    let mut normalized = String::with_capacity(name.len());
-    let mut previous_was_separator = false;
-    for c in name.trim().chars() {
-        if matches!(c, '-' | '_' | '.') {
-            if !previous_was_separator {
-                normalized.push('-');
-            }
-            previous_was_separator = true;
-        } else {
-            normalized.push(c.to_ascii_lowercase());
-            previous_was_separator = false;
-        }
-    }
-    normalized
 }
 
 fn parse_version(raw: &str) -> Option<Version> {
@@ -581,11 +563,5 @@ mod tests {
             fixed_of(&advisory, "requests", "2.25.0"),
             Some(Some("2.31.0".to_string()))
         );
-    }
-
-    #[test]
-    fn test_normalize_name_is_pep503() {
-        assert_eq!(normalize_name(" Flask__Login.Ext "), "flask-login-ext");
-        assert_eq!(normalize_name("requests"), "requests");
     }
 }

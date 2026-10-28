@@ -8,7 +8,7 @@
 //! user's locale (#832).
 
 use super::advisory::{Advisory, AffectedPackage, AffectedRange};
-use super::services::advisory_range_matcher::normalize_name;
+use super::package::normalize_name;
 use pep440_rs::{Operator, Version, VersionSpecifiers};
 use std::str::FromStr;
 
