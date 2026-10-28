@@ -97,7 +97,9 @@ mod incident_tests {
             .stdout(predicate::str::contains("#### Member: api"))
             .stdout(predicate::str::contains("#### Member: worker"))
             .stdout(predicate::str::contains("`fastapi → starlette`"))
-            .stdout(predicate::str::contains("**1 of 2 members affected**: api"));
+            .stdout(predicate::str::contains("**1 of 2 members affected**: api"))
+            .stderr(predicate::str::contains(ROOT_GROUPS_WARNING_EN))
+            .stdout(predicate::str::contains(ROOT_GROUPS_WARNING_EN).not());
 
         for member in ["packages/api", "packages/worker"] {
             for ext in ["json", "md"] {
@@ -405,7 +407,10 @@ mod incident_tests {
             .stdout(predicate::str::contains(
                 "## Incident Report (manual range): `starlette<=1.0.0`",
             ))
-            .stdout(predicate::str::contains("**1 of 2 members affected**: api"));
+            .stdout(predicate::str::contains("**1 of 2 members affected**: api"))
+            .stderr(predicate::str::contains(format!(
+                "{ROOT_GROUPS_WARNING_EN}: lint"
+            )));
     }
 
     /// Writes a revision-3 workspace (no `[manifest.dependency-groups]`) where
@@ -744,5 +749,141 @@ source = { registry = "https://pypi.org/simple" }
                 .code(code)
                 .stdout(predicate::str::contains(summary));
         }
+    }
+
+    // --- Virtual root [dependency-groups] warning (#1010) ---
+
+    const ROOT_GROUPS_WARNING_EN: &str =
+        "Workspace root dependency group(s) not covered by any member SBOM";
+    const ROOT_GROUPS_WARNING_JA: &str =
+        "どのメンバーの SBOM にも含まれないワークスペースルートの依存グループ";
+
+    /// Runs `--incident <target> --workspace` on `temp` with `extra` args;
+    /// returns (exit code, stdout, stderr).
+    fn run_incident_workspace(
+        temp: &TempDir,
+        target: &str,
+        extra: &[&str],
+    ) -> (i32, String, String) {
+        let mut args = vec![
+            "--incident",
+            target,
+            "--workspace",
+            "--path",
+            temp.path().to_str().unwrap(),
+        ];
+        args.extend_from_slice(extra);
+        let output = cargo_bin_cmd!("uv-sbom").args(&args).output().unwrap();
+        (
+            output.status.code().unwrap(),
+            String::from_utf8(output.stdout).unwrap(),
+            String::from_utf8(output.stderr).unwrap(),
+        )
+    }
+
+    /// A virtual root's group is named on stderr, never on stdout; a member's
+    /// own group is not named, and the report and exit code are unchanged.
+    /// Offline: `<=` names no fixed version.
+    #[test]
+    fn test_incident_workspace_warns_about_uncovered_virtual_root_groups() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (code, stdout, stderr) = run_incident_workspace(&temp, "black<=99.0", &[]);
+
+        assert_eq!(code, 4, "{stderr}");
+        let line = stderr
+            .lines()
+            .find(|l| l.contains(ROOT_GROUPS_WARNING_EN))
+            .unwrap_or_else(|| panic!("warning missing from stderr:\n{stderr}"));
+        assert!(line.ends_with(": docs"), "{line}");
+        assert!(stderr.contains("--exclude-groups"), "hint missing");
+        assert!(!stdout.contains(ROOT_GROUPS_WARNING_EN));
+        assert!(
+            stdout.contains("**1 of 2 members affected**: b"),
+            "{stdout}"
+        );
+    }
+
+    /// With --format json the warning stays on stderr and stdout is valid JSON
+    #[test]
+    fn test_incident_workspace_root_groups_warning_json_keeps_stdout_valid() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (code, stdout, stderr) =
+            run_incident_workspace(&temp, "black<=99.0", &["--format", "json"]);
+
+        assert_eq!(code, 4, "{stderr}");
+        let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        assert_eq!(json["overall"], "affected_no_fix");
+        assert!(stderr.contains(ROOT_GROUPS_WARNING_EN), "{stderr}");
+    }
+
+    /// The warning is localized with --lang ja
+    #[test]
+    fn test_incident_workspace_root_groups_warning_ja() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (code, _stdout, stderr) =
+            run_incident_workspace(&temp, "black<=99.0", &["--lang", "ja"]);
+
+        assert_eq!(code, 4, "{stderr}");
+        assert!(stderr.contains(ROOT_GROUPS_WARNING_JA), "{stderr}");
+        assert!(!stderr.contains(ROOT_GROUPS_WARNING_EN));
+    }
+
+    /// Excluding a member's group only does not silence the root warning
+    #[test]
+    fn test_incident_workspace_root_groups_warning_survives_member_group_exclusion() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (code, _stdout, stderr) =
+            run_incident_workspace(&temp, "black<=99.0", &["--exclude-groups", "lint"]);
+
+        assert_eq!(code, 0, "{stderr}");
+        assert!(stderr.contains(ROOT_GROUPS_WARNING_EN), "{stderr}");
+    }
+
+    /// Excluding every root group, directly or via --production-only, prints no
+    /// warning and leaves the exit code unchanged
+    #[test]
+    fn test_incident_workspace_no_root_groups_warning_when_all_root_groups_excluded() {
+        for (flags, expected_code) in [
+            (&["--exclude-groups", "docs"][..], 4),
+            (&["--production-only"][..], 0),
+        ] {
+            let temp = manifest_workspace_with_member_group();
+
+            let (code, _stdout, stderr) = run_incident_workspace(&temp, "black<=99.0", flags);
+
+            assert_eq!(code, expected_code, "{flags:?}: {stderr}");
+            assert!(
+                !stderr.contains(ROOT_GROUPS_WARNING_EN),
+                "{flags:?}: {stderr}"
+            );
+        }
+    }
+
+    /// A root without [dependency-groups] prints no warning
+    #[test]
+    fn test_incident_workspace_no_root_groups_warning_without_root_groups() {
+        let temp = rev3_workspace_with_dev_only_in_later_member();
+
+        let (code, stdout, stderr) = run_incident_workspace(&temp, "black<=99.0", &[]);
+
+        assert_eq!(code, 4, "{stderr}");
+        assert!(!stderr.contains(ROOT_GROUPS_WARNING_EN), "{stderr}");
+        assert!(stdout.contains("members affected**"), "{stdout}");
+    }
+
+    /// An unknown advisory ID is an error, and no warning follows it
+    #[test]
+    #[ignore = "requires network access to OSV"]
+    fn test_incident_workspace_unknown_advisory_prints_no_root_groups_warning() {
+        let temp = copy_workspace();
+
+        let (code, _stdout, stderr) = run_incident_workspace(&temp, "GHSA-xxxx-xxxx-xxxx", &[]);
+
+        assert_eq!(code, 3, "{stderr}");
+        assert!(!stderr.contains(ROOT_GROUPS_WARNING_EN), "{stderr}");
     }
 }

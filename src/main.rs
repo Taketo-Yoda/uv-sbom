@@ -821,6 +821,8 @@ fn load_workspace_members(workspace_root: &Path, msgs: &Messages) -> Result<Vec<
 /// verdict), which `main` maps to the exit code. No per-member `sbom.*` file
 /// is written. `--output` cannot reach here: `--workspace` conflicts with it.
 /// Config handling is the same as `run_incident`, rooted at the workspace.
+/// Prints the uncovered virtual-root `[dependency-groups]` warning (#1009) on
+/// stderr before the report, only when the run succeeds (#1010).
 ///
 /// # Errors
 /// The same as `run_incident`, plus an error when the workspace has no
@@ -845,6 +847,12 @@ async fn run_workspace_incident(
         &workspace_root,
         Some(&members),
     )?;
+    // Read before any network request, so a failure leaves no partial run (#1009).
+    let root_groups =
+        FileSystemReader::new().read_and_parse_virtual_root_group_roots(&workspace_root)?;
+    // Rendered now because `exclude_groups` moves into the request below.
+    let root_groups_warning =
+        render_uncovered_root_groups_warning(&root_groups, &exclude_groups, msgs);
 
     let request = WorkspaceIncidentRequest {
         target,
@@ -868,6 +876,12 @@ async fn run_workspace_incident(
         OutputFormat::Markdown => IncidentMarkdownFormatter::new(locale).format_workspace(&report),
         OutputFormat::Json => IncidentJsonFormatter::new().format_workspace(&report)?,
     };
+
+    // No member scope follows the virtual root's own groups (#1009); stderr
+    // only, so a piped report stays clean (#1010).
+    if let Some(warning) = root_groups_warning {
+        eprintln!("\n{}", warning);
+    }
 
     let presenter = PresenterFactory::create(PresenterType::Stdout, locale);
     presenter.present(&formatted)?;

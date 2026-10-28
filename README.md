@@ -1033,6 +1033,13 @@ uv sync
 **1 of 2 members affected**: api
 ````
 
+**Workspace root dependency groups in incident mode:** like `--workspace` (see **Workspace root dependency groups** under [uv Workspace Support](#uv-workspace-support)), `--incident --workspace` prints a warning on stderr naming each virtual-root `[dependency-groups]` group that is not excluded, because no member scope follows those groups and packages reachable only through them are not checked against the advisory. The warning is printed after the progress lines and before the report, only when the run succeeds. The report on stdout (Markdown or JSON) and the exit code are unchanged, so `--format json | jq` keeps working. Add the root groups to `--exclude-groups` (or use `--production-only`) to silence it. The stderr of the command above ends with:
+
+```
+⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: lint
+   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.
+```
+
 **Manual range (advisory not yet in OSV):** in the first hours after a disclosure, the advisory may not be in OSV yet, so an ID has nothing to look up. Security announcements usually state the affected range in plain text ("versions before 2.0.6 are affected"), so you can pass that range instead of an ID: a package name immediately followed by one or more comma-separated specifiers.
 
 ```bash

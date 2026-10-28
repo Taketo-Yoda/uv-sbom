@@ -182,8 +182,8 @@ pub fn render_workspace_aggregate(
 /// Member traversal never follows the root's `[manifest.dependency-groups]`, so
 /// packages reachable only through them are in no SBOM. Names are compared
 /// exactly, as `--exclude-groups` matches them. Returns `None` when every root
-/// group is excluded or the root declares none. Shared by `run_workspace` and,
-/// in #1010, `run_workspace_incident`.
+/// group is excluded or the root declares none. Shared by `run_workspace` and
+/// `run_workspace_incident` (#1010).
 pub fn render_uncovered_root_groups_warning(
     root_groups: &GroupRoots,
     excluded: &[String],
