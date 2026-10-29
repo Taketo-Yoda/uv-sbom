@@ -65,17 +65,39 @@ pub fn parse_group_roots_for_member(
     parse_group_roots_impl(content, project_path, Some(member_name))
 }
 
+/// Parse the virtual workspace root's own dependency groups:
+/// `[manifest.dependency-groups]` only, in any lockfile revision.
+///
+/// Unlike [`parse_group_roots`], this never falls back to a local package's
+/// `[package.dev-dependencies]`, which in a workspace would be a member's (#1009).
+/// A root with a `[project]` is itself a member, and uv records its groups on its
+/// own `[[package]]`, so the result is empty for it.
+///
+/// # Errors
+///
+/// Returns `SbomError::LockfileParseError` if `content` is not valid `uv.lock` TOML.
+pub fn parse_virtual_root_group_roots(content: &str, project_path: &Path) -> Result<GroupRoots> {
+    Ok(manifest_groups_v2(
+        parse_uv_lock(content, project_path)?.manifest,
+    ))
+}
+
+fn parse_uv_lock(content: &str, project_path: &Path) -> Result<UvLock> {
+    toml::from_str(content).map_err(|e| {
+        SbomError::LockfileParseError {
+            path: project_path.join("uv.lock"),
+            details: e.to_string(),
+        }
+        .into()
+    })
+}
+
 fn parse_group_roots_impl(
     content: &str,
     project_path: &Path,
     member: Option<&str>,
 ) -> Result<GroupRoots> {
-    let lockfile: UvLock = toml::from_str(content).map_err(|e| SbomError::LockfileParseError {
-        path: project_path.join("uv.lock"),
-        details: e.to_string(),
-    })?;
-
-    let UvLock { package, manifest } = lockfile;
+    let UvLock { package, manifest } = parse_uv_lock(content, project_path)?;
 
     let manifest_groups = manifest_groups_v2(manifest);
     match member {
@@ -108,7 +130,8 @@ fn merge_group_roots(mut base: GroupRoots, extra: GroupRoots) -> GroupRoots {
     base
 }
 
-/// Revision ≤ 2: reads `[manifest.dependency-groups]`.
+/// Reads `[manifest.dependency-groups]`: a single project's groups in revision ≤ 2,
+/// and a virtual workspace root's groups in every revision.
 fn manifest_groups_v2(manifest: Option<Manifest>) -> GroupRoots {
     manifest
         .map(|m| deps_map_to_group_roots(m.dependency_groups))
@@ -719,5 +742,86 @@ lint = [{ name = "black" }]
         let roots =
             package_dev_dependencies_v3(parse(LOCK_REV3_WORKSPACE_TWO_MEMBERS).package, Some("b"));
         assert_eq!(roots["dev"], vec!["ruff"]);
+    }
+
+    // --- parse_virtual_root_group_roots tests (#1009) ---
+
+    /// uv 0.9.20 shape: a virtual root's `[dependency-groups]` land in
+    /// `[manifest.dependency-groups]` in revision 3 too.
+    const LOCK_REV3_VIRTUAL_ROOT_GROUPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[manifest.dependency-groups]
+lint = [{ name = "ruff" }]
+docs = [{ name = "sphinx" }]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { virtual = "packages/a" }
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+"#;
+
+    /// uv 0.9.20 shape: a root with a `[project]` is a member, and its groups are
+    /// on its own `[[package]]`, not in the manifest.
+    const LOCK_REV3_PROJECT_ROOT_GROUPS: &str = r#"
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "root"]
+
+[[package]]
+name = "root"
+version = "0.1.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+lint = [{ name = "ruff" }]
+"#;
+
+    #[test]
+    fn test_parse_virtual_root_group_roots_reads_manifest_groups_in_rev3() {
+        let roots = parse_virtual_root_group_roots(LOCK_REV3_VIRTUAL_ROOT_GROUPS, Path::new("/ws"))
+            .unwrap();
+
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots["lint"], vec!["ruff"]);
+        assert_eq!(roots["docs"], vec!["sphinx"]);
+    }
+
+    #[test]
+    fn test_parse_virtual_root_group_roots_ignores_local_package_dev_dependencies() {
+        // Neither a member's groups nor a `[project]` root's groups count: there
+        // is no first-local-package fallback.
+        for content in [
+            LOCK_REV3_PROJECT_ROOT_GROUPS,
+            LOCK_REV3_WORKSPACE_TWO_MEMBERS,
+        ] {
+            let roots = parse_virtual_root_group_roots(content, Path::new("/ws")).unwrap();
+            assert!(roots.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_parse_virtual_root_group_roots_returns_empty_without_manifest_groups() {
+        for content in [LOCK_WITH_MANIFEST_NO_GROUPS, LOCK_WITHOUT_MANIFEST] {
+            let roots = parse_virtual_root_group_roots(content, Path::new("/ws")).unwrap();
+            assert!(roots.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_parse_virtual_root_group_roots_returns_error_on_invalid_toml() {
+        let result = parse_virtual_root_group_roots("invalid [[[ toml", Path::new("/ws"));
+        assert!(result.is_err());
     }
 }

@@ -31,7 +31,9 @@ use cli::error_display::{render_config_error, render_error_chain};
 use cli::exclude_groups::resolve_exclude_groups;
 use cli::incident::{incident_exit_code, parse_incident_target, resolve_incident_format};
 use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
-use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFindings};
+use cli::workspace_summary::{
+    render_uncovered_root_groups_warning, render_workspace_aggregate, EnabledChecks, MemberFindings,
+};
 use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
 use i18n::{Locale, Messages};
 use ports::outbound::{
@@ -98,6 +100,11 @@ impl LockfileReader for MemberScopedLockfileReader {
     ) -> Result<GroupRoots> {
         self.inner
             .read_and_parse_group_roots_for_member(&self.workspace_root, member_name)
+    }
+
+    fn read_and_parse_virtual_root_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
+        self.inner
+            .read_and_parse_virtual_root_group_roots(&self.workspace_root)
     }
 
     fn read_and_parse_package_sources(&self, _project_path: &Path) -> Result<PackageSourceMap> {
@@ -676,7 +683,9 @@ async fn run(args: Args) -> Result<bool> {
 ///
 /// Reads `[manifest].members` from `workspace_root/uv.lock`, then for each
 /// member runs `GenerateSbomUseCase` scoped to that member and writes the
-/// output to `{member_path}/sbom.{ext}`. Prints a summary table when done.
+/// output to `{member_path}/sbom.{ext}`. Prints a summary table when done,
+/// then a warning naming the virtual root's dependency groups that no member
+/// SBOM covers, if any (#1009).
 async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     display_banner();
 
@@ -696,6 +705,9 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
         &workspace_root,
         Some(&members),
     )?;
+    // Read before any member output is written, so a failure leaves no partial run.
+    let root_groups =
+        FileSystemReader::new().read_and_parse_virtual_root_group_roots(&workspace_root)?;
 
     let format_ext = match merged.format {
         OutputFormat::Json => "json",
@@ -766,6 +778,13 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
         for line in aggregate_lines {
             eprintln!("{}", line);
         }
+    }
+
+    // No member SBOM follows the virtual root's own groups (#1009).
+    if let Some(warning) =
+        render_uncovered_root_groups_warning(&root_groups, &workspace_exclude_groups, msgs)
+    {
+        eprintln!("\n{}", warning);
     }
 
     Ok(())

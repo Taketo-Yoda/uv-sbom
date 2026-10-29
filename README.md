@@ -1357,8 +1357,11 @@ worker               /path/to/workspace/packages/worker/sbom.json
 
 📊 Workspace Aggregate Summary
 ────────────────────────────────────────────────────────────
-Total actionable CVEs: 17
+Total actionable CVEs: 28
 ────────────────────────────────────────────────────────────
+
+⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: lint
+   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.
 ```
 
 Each member gets its own `sbom.json` containing only the packages reachable from that member.
@@ -1370,6 +1373,15 @@ CVE count, which members have license policy violations, and which members have 
 non-PyPI / Python-incompatible packages flagged. A line only appears for a check that was actually
 enabled for the run (e.g. `--check-license`); a check that wasn't run never prints a line, even an
 empty one.
+
+**Workspace root dependency groups:** A virtual workspace root (a root `pyproject.toml` with no
+`[project]`) can declare its own `[dependency-groups]`, for example a `lint` group for repository-wide
+tooling. No member SBOM follows those groups, so `--workspace` prints a warning on stderr naming each
+root group that is not excluded, as in the last lines of the output above (`examples/workspace` declares
+`lint = ["ruff"]` at its root). Packages a member reaches through its own dependencies still appear in
+that member's SBOM. To silence the warning, add the root groups to `--exclude-groups` (or use
+`--production-only`). stdout and the member SBOM files are unchanged. A root with a `[project]` is a
+member itself, and its groups are covered by its own SBOM.
 
 **With other options:**
 
@@ -1384,9 +1396,12 @@ uv-sbom --workspace --path examples/workspace --check-license
 ```
 📊 Workspace Aggregate Summary
 ────────────────────────────────────────────────────────────
-Total actionable CVEs: 17
+Total actionable CVEs: 28
 Members with license policy violations: none
 ────────────────────────────────────────────────────────────
+
+⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: lint
+   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.
 ```
 
 > **Note:** `--workspace` and `--output` are mutually exclusive. In workspace mode, each member's SBOM is
