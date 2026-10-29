@@ -690,6 +690,7 @@ source = { registry = "https://pypi.org/simple" }
     fn test_incident_workspace_manifest_groups_exclude_member_own_group() {
         for flags in [
             &["--exclude-groups", "lint"][..],
+            &["--exclude-groups", "Lint"][..],
             &["--production-only"][..],
         ] {
             let temp = manifest_workspace_with_member_group();
@@ -849,6 +850,7 @@ source = { registry = "https://pypi.org/simple" }
     fn test_incident_workspace_no_root_groups_warning_when_all_root_groups_excluded() {
         for (flags, expected_code) in [
             (&["--exclude-groups", "docs"][..], 4),
+            (&["--exclude-groups", "DOCS"][..], 4),
             (&["--production-only"][..], 0),
         ] {
             let temp = manifest_workspace_with_member_group();

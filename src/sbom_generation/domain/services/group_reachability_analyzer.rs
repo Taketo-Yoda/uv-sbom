@@ -1,3 +1,4 @@
+use crate::sbom_generation::domain::package::normalize_name;
 use crate::sbom_generation::domain::Package;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -22,7 +23,10 @@ impl GroupReachabilityAnalyzer {
     /// `groups_to_exclude` — even one with a parent inside an excluded group's
     /// subtree — so a non-excluded group keeps everything it reaches (#1001, #1005).
     ///
-    /// Unknown group names in `groups_to_exclude` are silently ignored.
+    /// Group names are compared after PEP 735 normalization (`normalize_name`),
+    /// on both the `groups_to_exclude` and the `group_roots` side: case is
+    /// ignored and runs of `-`, `_`, `.` match a single `-` (#1015). Unknown
+    /// group names in `groups_to_exclude` are silently ignored.
     pub fn filter_excluded_groups(
         all_packages: &[Package],
         dep_graph: &HashMap<String, Vec<String>>,
@@ -33,16 +37,12 @@ impl GroupReachabilityAnalyzer {
             return all_packages.to_vec();
         }
 
-        let excluded_root_names = collect_excluded_root_names(group_roots, groups_to_exclude);
-        let kept_group_roots = collect_kept_group_roots(group_roots, groups_to_exclude);
+        let (excluded_root_names, kept_group_roots) =
+            partition_group_roots(group_roots, groups_to_exclude);
         let production_reachable =
             compute_production_reachable(dep_graph, &excluded_root_names, &kept_group_roots);
-        let exclude_set = compute_exclude_set(
-            dep_graph,
-            group_roots,
-            groups_to_exclude,
-            &production_reachable,
-        );
+        let exclude_set =
+            compute_exclude_set(dep_graph, &excluded_root_names, &production_reachable);
 
         all_packages
             .iter()
@@ -52,27 +52,29 @@ impl GroupReachabilityAnalyzer {
     }
 }
 
-fn collect_excluded_root_names<'a>(
+/// Splits the group roots into the roots of excluded groups and the roots of
+/// every other group, matching group names after normalization so that two
+/// spellings of one group are never split across the two sets.
+fn partition_group_roots<'a>(
     group_roots: &'a HashMap<String, Vec<String>>,
     groups_to_exclude: &[String],
-) -> HashSet<&'a str> {
-    groups_to_exclude
+) -> (HashSet<&'a str>, Vec<&'a str>) {
+    let excluded: HashSet<String> = groups_to_exclude
         .iter()
-        .filter_map(|g| group_roots.get(g.as_str()))
-        .flat_map(|roots| roots.iter().map(|s| s.as_str()))
-        .collect()
-}
+        .map(|group| normalize_name(group))
+        .collect();
 
-/// Roots of every group not in `groups_to_exclude`.
-fn collect_kept_group_roots<'a>(
-    group_roots: &'a HashMap<String, Vec<String>>,
-    groups_to_exclude: &[String],
-) -> Vec<&'a str> {
-    group_roots
-        .iter()
-        .filter(|(group, _)| !groups_to_exclude.contains(group))
-        .flat_map(|(_, roots)| roots.iter().map(|s| s.as_str()))
-        .collect()
+    let mut excluded_root_names = HashSet::new();
+    let mut kept_group_roots = Vec::new();
+    for (group, roots) in group_roots {
+        let roots = roots.iter().map(String::as_str);
+        if excluded.contains(&normalize_name(group)) {
+            excluded_root_names.extend(roots);
+        } else {
+            kept_group_roots.extend(roots);
+        }
+    }
+    (excluded_root_names, kept_group_roots)
 }
 
 fn compute_production_reachable(
@@ -99,26 +101,18 @@ fn compute_production_reachable(
     bfs_reachable(dep_graph, &seeds)
 }
 
+/// Packages reachable from an excluded group's root but from no production
+/// root.
 fn compute_exclude_set(
     dep_graph: &HashMap<String, Vec<String>>,
-    group_roots: &HashMap<String, Vec<String>>,
-    groups_to_exclude: &[String],
+    excluded_root_names: &HashSet<&str>,
     production_reachable: &HashSet<String>,
 ) -> HashSet<String> {
-    let mut exclude_set = HashSet::new();
-    for group in groups_to_exclude {
-        let Some(roots) = group_roots.get(group.as_str()) else {
-            continue;
-        };
-        let seeds: Vec<&str> = roots.iter().map(|s| s.as_str()).collect();
-        let group_reachable = bfs_reachable(dep_graph, &seeds);
-        for pkg in group_reachable {
-            if !production_reachable.contains(&pkg) {
-                exclude_set.insert(pkg);
-            }
-        }
-    }
-    exclude_set
+    let seeds: Vec<&str> = excluded_root_names.iter().copied().collect();
+    bfs_reachable(dep_graph, &seeds)
+        .into_iter()
+        .filter(|pkg| !production_reachable.contains(pkg))
+        .collect()
 }
 
 fn bfs_reachable(dep_graph: &HashMap<String, Vec<String>>, seeds: &[&str]) -> HashSet<String> {
@@ -460,5 +454,102 @@ mod tests {
             names_excluding(&["docs", "lint", "test"]),
             vec!["b", "requests"]
         );
+    }
+
+    // --- PEP 735 group name normalization (#1015) ---
+
+    /// Project `app`: runtime dep `requests`; `lint = [ruff]` and
+    /// `type-check = [mypy]`, `mypy -> typing-extensions`.
+    fn kept_names(group_roots: &[(&str, &[&str])], exclude: &[&str]) -> Vec<String> {
+        let all_packages = vec![
+            pkg("app"),
+            pkg("requests"),
+            pkg("ruff"),
+            pkg("black"),
+            pkg("mypy"),
+            pkg("typing-extensions"),
+        ];
+        let dep_graph = make_dep_graph(&[
+            ("app", &["requests"]),
+            ("requests", &[]),
+            ("ruff", &[]),
+            ("black", &[]),
+            ("mypy", &["typing-extensions"]),
+            ("typing-extensions", &[]),
+        ]);
+        GroupReachabilityAnalyzer::filter_excluded_groups(
+            &all_packages,
+            &dep_graph,
+            &make_group_roots(group_roots),
+            &exclude.iter().map(|g| g.to_string()).collect::<Vec<_>>(),
+        )
+        .iter()
+        .map(|p| p.name().to_string())
+        .collect()
+    }
+
+    const LINT_AND_TYPE_CHECK: &[(&str, &[&str])] =
+        &[("lint", &["ruff"]), ("type-check", &["mypy"])];
+
+    #[test]
+    fn test_excluded_group_name_matches_case_insensitively() {
+        for spelling in ["Lint", "LINT", "lint"] {
+            let names = kept_names(LINT_AND_TYPE_CHECK, &[spelling]);
+            assert!(!names.contains(&"ruff".to_string()), "{spelling}");
+            assert!(names.contains(&"mypy".to_string()), "{spelling}");
+            assert!(names.contains(&"requests".to_string()), "{spelling}");
+        }
+    }
+
+    #[test]
+    fn test_excluded_group_name_matches_across_separators() {
+        for spelling in ["type_check", "Type.Check", "type-check"] {
+            let names = kept_names(LINT_AND_TYPE_CHECK, &[spelling]);
+            assert!(!names.contains(&"mypy".to_string()), "{spelling}");
+            assert!(
+                !names.contains(&"typing-extensions".to_string()),
+                "{spelling}"
+            );
+            assert!(names.contains(&"ruff".to_string()), "{spelling}");
+        }
+    }
+
+    #[test]
+    fn test_excluded_group_name_collapses_separator_runs() {
+        for spelling in ["type__check", "Type-_.Check"] {
+            let names = kept_names(LINT_AND_TYPE_CHECK, &[spelling]);
+            assert!(!names.contains(&"mypy".to_string()), "{spelling}");
+        }
+    }
+
+    #[test]
+    fn test_lockfile_group_name_is_normalized_before_matching() {
+        let names = kept_names(&[("Type_Check", &["mypy"])], &["type-check"]);
+        assert!(!names.contains(&"mypy".to_string()));
+        assert!(!names.contains(&"typing-extensions".to_string()));
+    }
+
+    #[test]
+    fn test_normalized_exclusion_removes_group_from_kept_roots() {
+        // `lint` must not stay a kept group because it was spelled `LINT`:
+        // its root `sphinx` would be re-seeded and retained.
+        let names = names_excluding(&["Docs", "LINT"]);
+        assert!(!names.contains(&"sphinx".to_string()));
+        assert!(!names.contains(&"docutils".to_string()));
+        assert!(names.contains(&"pytest".to_string()));
+    }
+
+    #[test]
+    fn test_lockfile_groups_normalizing_to_same_name_are_excluded_together() {
+        let names = kept_names(&[("lint", &["ruff"]), ("Lint", &["black"])], &["lint"]);
+        assert!(!names.contains(&"ruff".to_string()));
+        assert!(!names.contains(&"black".to_string()));
+    }
+
+    #[test]
+    fn test_non_matching_normalized_name_is_ignored() {
+        let names = kept_names(LINT_AND_TYPE_CHECK, &["lint-extra", "type"]);
+        assert!(names.contains(&"ruff".to_string()));
+        assert!(names.contains(&"mypy".to_string()));
     }
 }

@@ -238,7 +238,7 @@ uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 
 ### 依存関係グループによるパッケージの除外
 
-`--exclude-groups` を使用すると、指定した[依存関係グループ](https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups)（例: `dev`, `test`, `lint`）からのみ到達可能なパッケージを除外できます。本番の依存関係と共有されているパッケージは常に保持されます。
+`--exclude-groups` を使用すると、指定した[依存関係グループ](https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups)（例: `dev`, `test`, `lint`）からのみ到達可能なパッケージを除外できます。本番の依存関係と共有されているパッケージは常に保持されます。グループ名は大文字・小文字および区切り文字（`-`、`_`、`.`）を区別せずに照合されるため（[PEP 735](https://peps.python.org/pep-0735/)）、`--exclude-groups Lint` や `--exclude-groups type_check` でもグループ `lint` や `type-check` が除外されます。設定ファイルの `exclude_groups` も同様です。
 
 ```bash
 # "dev"グループからのみ到達可能なパッケージを除外
