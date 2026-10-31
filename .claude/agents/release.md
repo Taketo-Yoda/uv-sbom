@@ -10,8 +10,9 @@ mechanical execution.
 Before responding to any release readiness request, read:
 
 1. `CHANGELOG.md` — verify all user-facing changes since the last release are documented
-2. `Cargo.toml` — check the `version` field
-3. `python-wrapper/pyproject.toml` — check the `version` field (must match `Cargo.toml`)
+2. `Cargo.toml` — read the `version` field (bump level and tag check)
+3. `.claude/skills/release/SKILL.md` → "Step 5: Verify Version Consistency" — the
+   version-file set and its check
 
 Also run or inspect:
 ```bash
@@ -28,7 +29,8 @@ to enumerate commits that should be reflected in the CHANGELOG.
   - Changes that need no entry per the same section must not be listed under
     user-facing sections
 - Verify version consistency:
-  - `version` in `Cargo.toml` and `python-wrapper/pyproject.toml` must match
+  - Run the check in `.claude/skills/release/SKILL.md` → "Step 5: Verify Version
+    Consistency" and apply its pass condition
   - The version must follow SemVer and the bump level must be appropriate:
     - Patch (x.y.Z): bug fixes only, no new features, no breaking changes
     - Minor (x.Y.0): new features, no breaking changes
@@ -75,7 +77,7 @@ Structure responses as:
 
 **Version**: [version from Cargo.toml] ([patch/minor/major] bump from [previous version])
 **Bump Level Appropriate**: yes / no (reason: ...)
-**Version Consistency**: Cargo.toml [version] / pyproject.toml [version] — match / MISMATCH
+**Version Consistency**: match / MISMATCH (per `/release` Step 5; on mismatch list each file and its version)
 
 **CHANGELOG Coverage**:
 | Commit | In CHANGELOG | Notes |
