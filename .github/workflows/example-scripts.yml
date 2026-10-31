@@ -1,0 +1,49 @@
+name: Example Scripts
+
+# ShellChecks the shell scripts shipped under examples/ (e.g. the --incident
+# patch-wait loop from #970).
+# Kept separate from ci.yml on purpose: ci.yml lists 'examples/**' in
+# paths-ignore so Rust CI skips example-only PRs, which means a step added there
+# would never run on the PRs this check guards. Same pattern as
+# claude-conventions.yml (#901 / #911).
+
+concurrency:
+  group: example-scripts-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    # Keep in sync with ci.yml on.push.branches.
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'bugfix/**'
+      - 'fix/**'        # Legacy: kept for backward compatibility
+      - 'refactor/**'
+      - 'doc/**'
+      - 'docs/**'
+      - 'hotfix/**'
+    paths:
+      - 'examples/**/*.sh'
+      - '.github/workflows/example-scripts.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'examples/**/*.sh'
+      - '.github/workflows/example-scripts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck example scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: ShellCheck examples/incident-response
+        run: shellcheck examples/incident-response/*.sh
