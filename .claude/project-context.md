@@ -14,63 +14,13 @@ This file provides complete project context for Claude Code and other developers
 - Check for known vulnerabilities with configurable thresholds for CI integration
 
 ### Version Information
-- Current Version: 1.0.0
 - Rust Edition: 2021
 - CycloneDX Specification: 1.6
 - Architecture: Hexagonal Architecture + DDD
 
-### Version Update Checklist
-
-When updating the version number, verify and update all of the following files:
-
-#### Required Updates (Dynamic Version Reference)
-These files automatically retrieve the version using `env!("CARGO_PKG_VERSION")` or similar mechanisms. Updating Cargo.toml will automatically reflect the changes:
-
-1. **Cargo.toml** - `version = "X.Y.Z"` (Main version management)
-2. **src/cli.rs** - `#[command(version)]` (Auto-retrieved from Cargo.toml)
-3. **src/main.rs** - Uses `env!("CARGO_PKG_VERSION")` in `display_banner()` function
-4. **src/adapters/outbound/network/pypi_client.rs** - Uses `env!("CARGO_PKG_VERSION")` in User-Agent
-
-#### Python Wrapper Files (Manual Update Required)
-5. **python-wrapper/pyproject.toml** - `version = "X.Y.Z"`
-6. **python-wrapper/uv_sbom_bin/__init__.py** - `__version__ = "X.Y.Z"`
-7. **python-wrapper/uv_sbom_bin/install.py** - `UV_SBOM_VERSION = "X.Y.Z"`
-
-#### Documentation Files (Manual Update Required)
-8. **.claude/project-context.md** - "Current Version" section in this file
-
-#### Auto-generated/Sample Files (No Update Required)
-The following files do **NOT** need updates:
-- `Cargo.lock` - Auto-generated
-- `CHANGELOG.md` - Kept as history
-- `RELEASE.md` - Kept for release comparison URLs
-- `README.md` / `README-JP.md` - Uses `/latest/download/` URL (version-independent)
-- `docs/DISTRIBUTION_GUIDE.md` - Uses placeholder (X.Y.Z)
-- `src/sbom_generation/domain/sbom_metadata.rs` - Test code (dynamically generated in practice)
-- `examples/sample-project/pyproject.toml` - Sample project
-- `docs/PYPI_WRAPPER_SETUP.md` - Listed as documentation example
-
-#### Version Update Procedure
-```bash
-# 1. Update Cargo.toml version
-sed -i '' 's/version = "1.0.0"/version = "1.1.0"/' Cargo.toml
-
-# 2. Update Python wrapper version
-sed -i '' 's/version = "1.0.0"/version = "1.1.0"/' python-wrapper/pyproject.toml
-sed -i '' 's/__version__ = "1.0.0"/__version__ = "1.1.0"/' python-wrapper/uv_sbom_bin/__init__.py
-sed -i '' 's/UV_SBOM_VERSION = "1.0.0"/UV_SBOM_VERSION = "1.1.0"/' python-wrapper/uv_sbom_bin/install.py
-
-# 3. Update this file's version
-sed -i '' 's/Current Version: 1.0.0/Current Version: 1.1.0/' .claude/project-context.md
-
-# 4. Build and test
-cargo build
-cargo test --all
-
-# 5. Commit
-git add Cargo.toml python-wrapper/ .claude/project-context.md
-git commit -m "chore: bump version to 1.1.0"
-```
+The release version lives in `Cargo.toml`. To change it, run `/release`, which bumps
+the version files listed in `.claude/skills/release/SKILL.md` → "Step 3: Update
+Version Files".
 
 ## Technology Stack
 
