@@ -1,6 +1,13 @@
 """Python wrapper for uv-sbom CLI tool."""
 
-__version__ = "1.0.0"
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _version
+
+try:
+    __version__ = _version("uv-sbom-bin")
+except _PackageNotFoundError:
+    # Running from an uninstalled source checkout
+    __version__ = "0.0.0+unknown"
 
 from .install import ensure_binary, get_binary_path
 
