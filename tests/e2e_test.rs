@@ -962,7 +962,7 @@ mod exclude_groups_tests {
     }
 
     /// Writes a single project whose `dev` and `lint` groups share the root
-    /// `ruff`, plus its own `test = [pytest]` group. The lockfile has no
+    /// `ruff`, plus its own `test = [pytest]` and `type-check = [mypy]` groups. The lockfile has no
     /// `[manifest.dependency-groups]`, so the groups come from the project
     /// package's `[package.dev-dependencies]`.
     fn single_project_with_shared_group_root() -> TempDir {
@@ -989,6 +989,12 @@ dependencies = [{ name = "requests" }]
 dev = [{ name = "ruff" }]
 lint = [{ name = "ruff" }]
 test = [{ name = "pytest" }]
+type-check = [{ name = "mypy" }]
+
+[[package]]
+name = "mypy"
+version = "1.10.0"
+source = { registry = "https://pypi.org/simple" }
 
 [[package]]
 name = "pytest"
@@ -1028,6 +1034,7 @@ source = { registry = "https://pypi.org/simple" }
         let sbom = sbom(&temp, &[]);
         assert!(sbom.contains("\"ruff\""));
         assert!(sbom.contains("\"pytest\""));
+        assert!(sbom.contains("\"mypy\""));
     }
 
     /// Excluding `dev` keeps `ruff`, which the non-excluded `lint` group also lists
@@ -1053,5 +1060,42 @@ source = { registry = "https://pypi.org/simple" }
             assert!(!sbom.contains("\"ruff\""), "{flags:?}");
             assert!(sbom.contains("\"requests\""), "{flags:?}");
         }
+    }
+
+    /// `--exclude-groups` names match the lockfile groups after PEP 735
+    /// normalization: case and `-` / `_` / `.` are ignored (#1015)
+    #[test]
+    fn test_single_project_exclude_groups_matches_normalized_names() {
+        let temp = single_project_with_shared_group_root();
+
+        let sbom_ruff = sbom(&temp, &["--exclude-groups", "DEV,Lint"]);
+        assert!(
+            !sbom_ruff.contains("\"ruff\""),
+            "both listing groups excluded"
+        );
+        assert!(sbom_ruff.contains("\"requests\""));
+
+        for spelling in ["type_check", "Type.Check"] {
+            let sbom = sbom(&temp, &["--exclude-groups", spelling]);
+            assert!(!sbom.contains("\"mypy\""), "{spelling}");
+            assert!(sbom.contains("\"pytest\""), "{spelling}");
+        }
+    }
+
+    /// The config file's `exclude_groups` is normalized the same way (#1015)
+    #[test]
+    fn test_single_project_config_exclude_groups_matches_normalized_names() {
+        let temp = single_project_with_shared_group_root();
+        fs::write(
+            temp.path().join("uv-sbom.config.yml"),
+            "exclude_groups:\n  - Type_Check\n  - LINT\n  - Dev\n",
+        )
+        .unwrap();
+
+        let sbom = sbom(&temp, &[]);
+        assert!(!sbom.contains("\"mypy\""));
+        assert!(!sbom.contains("\"ruff\""));
+        assert!(sbom.contains("\"pytest\""));
+        assert!(sbom.contains("\"requests\""));
     }
 }

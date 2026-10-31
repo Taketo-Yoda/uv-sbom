@@ -386,6 +386,17 @@ source = { registry = "https://pypi.org/simple" }
         assert!(sbom.contains("\"mypy\""), "dev group is not excluded");
     }
 
+    /// --exclude-groups matches a member's group after PEP 735 normalization (#1015)
+    #[test]
+    fn test_workspace_exclude_groups_matches_normalized_name() {
+        let temp = rev3_workspace_with_non_dev_group();
+
+        let sbom = member_b_sbom(&temp, &["--exclude-groups", "LINT"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(!sbom.contains("\"click\""));
+        assert!(sbom.contains("\"mypy\""), "dev group is not excluded");
+    }
+
     /// --production-only drops every group of a member in workspace mode (#997)
     #[test]
     fn test_workspace_production_only_drops_non_dev_group_packages() {
@@ -604,11 +615,13 @@ source = { registry = "https://pypi.org/simple" }
         assert!(stderr.contains(ROOT_GROUPS_WARNING_EN), "{stderr}");
     }
 
-    /// Excluding every root group, directly or via --production-only, prints no warning
+    /// Excluding every root group, directly or via --production-only, prints no warning,
+    /// whatever the spelling of the excluded name (#1015)
     #[test]
     fn test_workspace_no_root_groups_warning_when_all_root_groups_excluded() {
         for flags in [
             &["--exclude-groups", "docs"][..],
+            &["--exclude-groups", "Docs"][..],
             &["--production-only"][..],
         ] {
             let temp = manifest_workspace_with_member_group();

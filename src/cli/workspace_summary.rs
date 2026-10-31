@@ -10,7 +10,8 @@ use crate::application::dto::SbomResponse;
 use crate::cli::config_resolver::MergedConfig;
 use crate::i18n::Messages;
 use crate::ports::outbound::GroupRoots;
-use std::collections::BTreeSet;
+use crate::sbom_generation::domain::package::normalize_name;
+use std::collections::{BTreeSet, HashSet};
 
 /// Per-member check results extracted from a `SbomResponse`.
 ///
@@ -181,7 +182,8 @@ pub fn render_workspace_aggregate(
 ///
 /// Member traversal never follows the root's `[manifest.dependency-groups]`, so
 /// packages reachable only through them are in no SBOM. Names are compared
-/// exactly, as `--exclude-groups` matches them. Returns `None` when every root
+/// after PEP 735 normalization, as `--exclude-groups` matches them (#1015);
+/// the warning prints the lockfile's own spelling. Returns `None` when every root
 /// group is excluded or the root declares none. Shared by `run_workspace` and
 /// `run_workspace_incident` (#1010).
 pub fn render_uncovered_root_groups_warning(
@@ -189,10 +191,11 @@ pub fn render_uncovered_root_groups_warning(
     excluded: &[String],
     msgs: &Messages,
 ) -> Option<String> {
+    let excluded: HashSet<String> = excluded.iter().map(|e| normalize_name(e)).collect();
     let uncovered: BTreeSet<&str> = root_groups
         .keys()
         .map(String::as_str)
-        .filter(|group| !excluded.iter().any(|e| e == group))
+        .filter(|group| !excluded.contains(&normalize_name(group)))
         .collect();
     if uncovered.is_empty() {
         return None;
@@ -463,17 +466,43 @@ mod tests {
     }
 
     #[test]
-    fn test_root_groups_warning_matches_group_names_exactly() {
+    fn test_root_groups_warning_matches_normalized_group_names() {
         let msgs = Messages::for_locale(Locale::En);
 
         let warning = render_uncovered_root_groups_warning(
-            &root_groups(&["lint"]),
-            &excluded(&["Lint"]),
+            &root_groups(&["lint", "type-check"]),
+            &excluded(&["Lint", "Type.Check"]),
+            msgs,
+        );
+
+        assert!(warning.is_none());
+    }
+
+    #[test]
+    fn test_root_groups_warning_normalizes_lockfile_group_names() {
+        let msgs = Messages::for_locale(Locale::En);
+
+        let warning = render_uncovered_root_groups_warning(
+            &root_groups(&["Type_Check"]),
+            &excluded(&["type--check"]),
+            msgs,
+        );
+
+        assert!(warning.is_none());
+    }
+
+    #[test]
+    fn test_root_groups_warning_prints_lockfile_spelling() {
+        let msgs = Messages::for_locale(Locale::En);
+
+        let warning = render_uncovered_root_groups_warning(
+            &root_groups(&["Docs_Site", "lint"]),
+            &excluded(&["LINT"]),
             msgs,
         )
         .unwrap();
 
-        assert!(warning.contains(": lint\n"));
+        assert!(warning.contains(": Docs_Site\n"));
     }
 
     #[test]

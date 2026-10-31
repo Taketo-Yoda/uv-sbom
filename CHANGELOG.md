@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **An explicit `--format json` now overrides the config file's `format`**: previously `--format json` was indistinguishable from passing no `--format` flag, so a config `format: markdown` silently won over it. Passing no `--format` flag still uses the config value, then the `json` default (#968)
+- **`--exclude-groups` and `exclude_groups` match group names case- and separator-insensitively**: names are normalized per PEP 735 before they are compared with the dependency groups in `uv.lock`, so `--exclude-groups Lint` or `--exclude-groups type_check` now excludes `lint` / `type-check` instead of silently excluding nothing. This applies to single-project, `--workspace`, `--incident`, and `--incident --workspace` runs, and to the warning about a virtual root's uncovered dependency groups. Exact names behave as before (#1015)
 
 ### Fixed
 - **`--workspace` member SBOMs reported 0 direct dependencies**: each member's SBOM now lists the member's declared dependencies as direct dependencies, and the packages reachable through them as transitive, with dependency paths in vulnerability details, `--suggest-fix`, and `--show-dependency-tree`. `--exclude-groups` no longer drops a member's runtime dependency that is also listed in an excluded group (#986)

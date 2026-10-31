@@ -239,7 +239,7 @@ Use the `--exclude` option to skip specific internal or proprietary libraries. T
 
 ### Excluding packages by dependency group
 
-Use `--exclude-groups` to exclude packages that are **exclusively reachable** through specified [dependency groups](https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups) (e.g., `dev`, `test`, `lint`). Packages shared with production dependencies are always retained.
+Use `--exclude-groups` to exclude packages that are **exclusively reachable** through specified [dependency groups](https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups) (e.g., `dev`, `test`, `lint`). Packages shared with production dependencies are always retained. Group names are matched case- and separator-insensitively ([PEP 735](https://peps.python.org/pep-0735/)), so `--exclude-groups Lint` or `--exclude-groups type_check` excludes the groups `lint` and `type-check`; the same applies to `exclude_groups` in the config file.
 
 ```bash
 # Exclude packages only reachable via the "dev" group
