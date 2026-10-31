@@ -7,30 +7,18 @@ name: Example Scripts
 # paths-ignore so Rust CI skips example-only PRs, which means a step added there
 # would never run on the PRs this check guards. Same pattern as
 # claude-conventions.yml (#901 / #911).
+#
+# Runs on pull requests only (#1028): these files rarely change, and a push
+# trigger only duplicated the PR run. Unlike ci.yml and claude-conventions.yml,
+# there is deliberately no on.push block -- do not "sync" one back in.
 
 concurrency:
   group: example-scripts-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref }}
   cancel-in-progress: true
 
 on:
-  push:
-    # Keep in sync with ci.yml on.push.branches.
-    branches:
-      - main
-      - develop
-      - 'feature/**'
-      - 'bugfix/**'
-      - 'fix/**'        # Legacy: kept for backward compatibility
-      - 'refactor/**'
-      - 'doc/**'
-      - 'docs/**'
-      - 'hotfix/**'
-    paths:
-      - 'examples/**/*.sh'
-      - 'examples/**/*.yml'
-      - 'examples/**/*.yaml'
-      - '!examples/**/uv-sbom.config.yml'
-      - '.github/workflows/example-scripts.yml'
+  # PR-only (#1028). A stacked PR based on a sibling branch gets no run until
+  # it is retargeted to main/develop.
   pull_request:
     branches:
       - main
