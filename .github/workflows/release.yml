@@ -256,7 +256,7 @@ jobs:
 
       - name: Authenticate with crates.io via OIDC
         id: auth
-        uses: rust-lang/crates-io-auth-action@v1.0.5
+        uses: rust-lang/crates-io-auth-action@v1.0.6
 
       - name: Publish to crates.io
         run: cargo publish --locked  # Use committed Cargo.lock to avoid dependency drift at release time
