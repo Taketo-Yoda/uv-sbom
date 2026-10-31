@@ -117,13 +117,18 @@ If any check fails:
 
 ### Step 3: Update Version Files
 
-Update version in exactly these 3 files:
+Update version in exactly these 4 files:
 
 | File | Pattern | Example |
 |------|---------|---------|
 | `Cargo.toml` | `version = "X.Y.Z"` | `version = "1.1.0"` |
 | `python-wrapper/pyproject.toml` | `version = "X.Y.Z"` | `version = "1.1.0"` |
 | `python-wrapper/uv_sbom_bin/install.py` | `UV_SBOM_VERSION = "X.Y.Z"` | `UV_SBOM_VERSION = "1.1.0"` |
+| `examples/incident-response/incident-watch.yml` | `uv-sbom-bin==X.Y.Z` | `uv-sbom-bin==1.1.0` |
+
+In `incident-watch.yml`, change only the version after `uv-sbom-bin==` in the
+"Install uv and uv-sbom" `run:` line. Leave the rest of
+`pip install uv "uv-sbom-bin==…"` alone.
 
 ### Step 3.5: Regenerate Cargo.lock
 
@@ -291,9 +296,11 @@ typically means one of two things:
 grep 'version = "' Cargo.toml | head -1
 grep 'version = "' python-wrapper/pyproject.toml
 grep 'UV_SBOM_VERSION = "' python-wrapper/uv_sbom_bin/install.py
+grep -o 'uv-sbom-bin==[0-9][0-9.]*' examples/incident-response/incident-watch.yml
 ```
 
-All three must show the same version. If not, stop and fix.
+All four must show the same version, and the `incident-watch.yml` grep must print
+exactly one match. If not, stop and fix.
 
 ### Step 6: Create Release Branch
 
@@ -308,7 +315,7 @@ Branch naming: `release/v{version}` (e.g., `release/v1.1.0`)
 Stage and commit all version changes using `/commit` skill conventions:
 
 ```bash
-git add Cargo.toml Cargo.lock python-wrapper/pyproject.toml python-wrapper/uv_sbom_bin/install.py CHANGELOG.md
+git add Cargo.toml Cargo.lock python-wrapper/pyproject.toml python-wrapper/uv_sbom_bin/install.py examples/incident-response/incident-watch.yml CHANGELOG.md
 ```
 
 Commit message format:
@@ -336,6 +343,7 @@ gh pr create --base develop --title "chore(release): prepare v{version}" --body 
 - `Cargo.toml`: version = "{version}"
 - `python-wrapper/pyproject.toml`: version = "{version}"
 - `python-wrapper/uv_sbom_bin/install.py`: UV_SBOM_VERSION = "{version}"
+- `examples/incident-response/incident-watch.yml`: uv-sbom-bin=={version}
 
 ## CHANGELOG
 - Converted [Unreleased] to [{version}] - {date}
@@ -422,6 +430,7 @@ If versions don't match after update:
 Cargo.toml: {version1}
 pyproject.toml: {version2}
 install.py: {version3}
+incident-watch.yml: {version4}
 
 Please fix manually and retry.
 ```
@@ -446,14 +455,15 @@ Claude executes /release skill:
 4. Updates Cargo.toml version
 5. Updates pyproject.toml version
 6. Updates install.py UV_SBOM_VERSION
-7. Runs `cargo check` to regenerate Cargo.lock ✓
-8. Removes non-user-facing sections from [Unreleased] (Testing, Dependencies, CI, etc.) ✓
-9. Updates CHANGELOG.md (promotes cleaned [Unreleased] to [1.1.0])
-10. Verifies all versions match ✓
-11. Creates branch `release/v1.1.0`
-12. Commits: "chore(release): prepare v1.1.0" (includes Cargo.lock)
-13. Creates PR to `develop` (NOT main)
-14. Outputs manual next steps (including develop → main PR)
+7. Updates the uv-sbom-bin== pin in examples/incident-response/incident-watch.yml
+8. Runs `cargo check` to regenerate Cargo.lock ✓
+9. Removes non-user-facing sections from [Unreleased] (Testing, Dependencies, CI, etc.) ✓
+10. Updates CHANGELOG.md (promotes cleaned [Unreleased] to [1.1.0])
+11. Verifies all versions match ✓
+12. Creates branch `release/v1.1.0`
+13. Commits: "chore(release): prepare v1.1.0" (includes Cargo.lock)
+14. Creates PR to `develop` (NOT main)
+15. Outputs manual next steps (including develop → main PR)
 
 Final output:
 ```
