@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--workspace --exclude-groups` dropped a member's package that one of its non-excluded groups also lists**: when a workspace-wide group (e.g. `docs = ["sphinx"]` in the root `[dependency-groups]`) and a member's own group (e.g. `lint = ["sphinx"]`) list the same package, excluding only one of them removed the package from the member's SBOM. A package is now dropped from a member only when neither its runtime dependencies nor any of its non-excluded groups reach it, for any two of the member's groups; excluding every group that reaches it, or `--production-only`, still drops it. This also applies to `--incident --workspace` (#1001)
 - **`--exclude-groups` dropped a package that a non-excluded group also lists (single project)**: when two dependency groups list the same package (e.g. `dev = ["ruff"]` and `lint = ["ruff"]`), excluding only one of them removed it from the SBOM. A package is now dropped only when neither the runtime dependencies nor any non-excluded group reach it, as in `--workspace` mode; excluding every group that lists it, or `--production-only`, still drops it. This also applies to `--incident` (#1005)
 
+### Security
+- Updated `rustls` to 0.23.46 (TLS 1.3 traffic key update before exhaustion, secret removal from `Debug` output, HPKE sequence advancement fix) (#1019)
+
 ## [3.3.0] - 2026-10-23
 
 ### Added
