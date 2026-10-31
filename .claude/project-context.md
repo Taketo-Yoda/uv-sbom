@@ -1,6 +1,8 @@
 # uv-sbom Project Context
 
-This file provides complete project context for Claude Code and other developers.
+Orientation for Claude Code and contributors: what uv-sbom is and why it is built this
+way. For facts that have an owner elsewhere, this file links to the owner instead of
+copying it.
 
 ## Project Overview
 
@@ -11,7 +13,9 @@ This file provides complete project context for Claude Code and other developers
 - Generate SBOMs for security audits and compliance
 - Automatically collect and report license information
 - Analyze direct and transitive dependencies
-- Check for known vulnerabilities with configurable thresholds for CI integration
+- Check for known vulnerabilities and license policy violations, and respond to a single advisory (`--incident`), with exit codes suited to CI
+
+Full feature list: [README.md → Features](../README.md#features).
 
 ### Version Information
 - Rust Edition: 2021
@@ -24,29 +28,9 @@ Version Files".
 
 ## Technology Stack
 
-### Main Dependencies
-```toml
-# CLI & Configuration
-clap = "4.5"                 # CLI argument parsing (using derive feature)
-
-# Serialization
-serde = "1.0"                # Serialization (using derive feature)
-serde_json = "1.0"           # JSON processing
-toml = "0.8"                 # TOML (uv.lock) parsing
-
-# Error Handling
-anyhow = "1.0"               # Error handling
-
-# HTTP Client
-reqwest = "0.12"             # HTTP client (using blocking feature)
-
-# Utilities
-chrono = "0.4"               # Date/time handling
-uuid = "1.10"                # UUID generation (using v4 feature)
-
-# Testing
-tempfile = "3.8"             # Temporary file creation
-```
+Rust CLI. Crates and their versions: see `[dependencies]` / `[dev-dependencies]` in
+[Cargo.toml](../Cargo.toml), the only source; this file lists no crate versions. Which
+layer may depend on what: [instructions.md → Adding Dependencies](instructions.md#adding-dependencies).
 
 ## Architecture: Hexagonal Architecture + DDD
 
@@ -62,67 +46,34 @@ This project adopts **Hexagonal Architecture (Ports & Adapters pattern)** and **
 
 ### Layer Structure
 
-The project consists of four main layers:
+- Module/layer structure, key types, and invariants:
+  [CLAUDE.md → Architecture Overview](CLAUDE.md#architecture-overview) (authoritative)
+- Quick summary: [instructions.md → Layer Rules](instructions.md#layer-rules)
+- Longer narrative: [ARCHITECTURE.md](../ARCHITECTURE.md) /
+  [ARCHITECTURE-JP.md](../ARCHITECTURE-JP.md) (may lag behind CLAUDE.md, which wins on
+  conflict)
 
-1. **Domain Layer** (`sbom_generation/`)
-   - Pure business logic, no infrastructure dependencies
-   - Value objects, aggregates, domain services, policies
+### Exit Codes
 
-2. **Application Layer** (`application/`)
-   - Use case orchestration
-   - DTOs (Data Transfer Objects), factories
-
-3. **Ports Layer** (`ports/`)
-   - Interface definitions (traits)
-   - Inbound/outbound ports
-
-4. **Adapters Layer** (`adapters/`)
-   - Concrete infrastructure implementations
-   - File system, network, formatters, console
-
-5. **Shared Kernel** (`shared/`)
-   - Error types, security validation, etc.
-
-**Detailed Directory Structure**: See [ARCHITECTURE-JP.md](../ARCHITECTURE-JP.md)
-
-### Key Features
-
-#### Vulnerability Threshold Checking
-The tool supports configurable vulnerability thresholds for CI/CD integration:
-
-- **Severity Threshold** (`--severity-threshold`): Filter vulnerabilities by severity level
-  - Values: `low`, `medium`, `high`, `critical`
-  - Example: `--severity-threshold high` only triggers exit code 1 for High/Critical vulnerabilities
-
-- **CVSS Threshold** (`--cvss-threshold`): Filter vulnerabilities by CVSS score
-  - Values: `0.0` to `10.0`
-  - Example: `--cvss-threshold 7.0` only triggers exit code 1 for CVSS >= 7.0
-
-**Exit Code Behavior with Thresholds:**
-| Scenario | Exit Code |
-|----------|-----------|
-| No vulnerabilities | 0 |
-| Vulnerabilities below threshold | 0 |
-| Vulnerabilities above threshold | 1 |
-
-**Architecture Components:**
-- `VulnerabilityChecker` (Domain Service): Pure business logic for threshold evaluation
-- `CheckVulnerabilitiesUseCase` (Application Layer): Orchestrates the vulnerability check workflow
+See [README.md → Exit Codes](../README.md#exit-codes), backed by `ExitCode` in
+`src/shared/error.rs`.
 
 ## Resources
 
 ### Documentation
 - `README.md`: User guide
-- `.claude/instructions.md`: Instructions for Claude Code
-- `.claude/skills/`: Agent Skills for Git workflows (`/issue`, `/pr`, `/commit`, `/pre-push`)
+- `.claude/CLAUDE.md`: Architecture, skill routing, Issue-First rule
+- `.claude/instructions.md`: Quick reference for Claude Code
+- `.claude/conventions/README.md`: Which file owns which cross-file convention
+- `.claude/skills/`: Workflow skills; the routing table is
+  [CLAUDE.md → Skill Invocation Rules](CLAUDE.md#skill-invocation-rules)
+- `.claude/agents/`: Role-based agents; see
+  [CLAUDE.md → Agent Invocation Rules](CLAUDE.md#agent-invocation-rules)
 - `.claude/product-vision.md`: Product vision and competitive positioning
+- `.claude/feature-triage.md`: Triage checklist for feature proposals
 - `.claude/output-design.md`: Output structure rules, anti-patterns, and formatting standards
 
 ### External References
 - [CycloneDX 1.6 Specification](https://cyclonedx.org/docs/1.6/)
-- [PyPI JSON API](https://warehouse.pypa.io/api-reference/json.html)
+- [PyPI JSON API](https://docs.pypi.org/api/json/)
 - [uv](https://github.com/astral-sh/uv)
-
----
-
-Last Updated: 2025-01-24

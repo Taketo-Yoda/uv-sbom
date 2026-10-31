@@ -119,7 +119,7 @@ pub type PyPiMetadata = (Option<String>, Option<String>, Vec<String>, Option<Str
 | Application | `anyhow`, basic utilities |
 | Adapters | I/O libraries |
 
-Always use only required `features`. Update `.claude/project-context.md`.
+Always use only required `features`. `Cargo.toml` is the only list of crates and versions; do not copy it into other docs.
 
 ---
 
@@ -279,12 +279,13 @@ Implement `LicenseRepository` trait → new adapter in `adapters/outbound/` → 
 
 ---
 
-Last Updated: 2026-10-12
+Last Updated: 2026-10-31
 
 ## Change History
 
 | Date | Change | Reference |
 |------|--------|-----------|
+| 2026-10-31 | "Adding Dependencies" no longer asks to update a dependency list in `project-context.md`; `Cargo.toml` is the only crate list | Issue #1034 |
 | 2026-10-12 | "Format check" row links to `ci-checks.md` instead of quoting `cargo fmt` inline | Issue #919 |
 | 2026-10-11 | Charter now points at `.claude/conventions/README.md` instead of restating the ownership rule and the owner list | Issue #918 |
 | 2026-10-04 | Added non-overlap charter; replaced branching/CI-check restatements with pointers to `.claude/conventions/`; removed the duplicate "Agent Skills" table (CLAUDE.md's Skill Invocation Rules is the only routing table) | Issue #849 |
