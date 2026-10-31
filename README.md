@@ -10,8 +10,65 @@
 
 Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](https://github.com/astral-sh/uv).
 
+## 🚨 Incident Response: Am I affected? Is the patch out? What do I run?
+
+A new advisory just dropped. One command tells you whether your project is affected, whether the fix is on PyPI yet, and what to run: an upgrade command already checked against your `uv.lock`, or guidance when the upgrade can't resolve.
+
+```bash
+uv-sbom --incident GHSA-v845-jxx5-vc9f
+```
+
+Real output against [`examples/suggest-fix-project`](examples/suggest-fix-project) (exit code `1`):
+
+````markdown
+## Incident Report: GHSA-v845-jxx5-vc9f
+
+- **Aliases**: CVE-2023-43804, PYSEC-2023-192
+- **Severity**: MEDIUM
+- **Summary**: `Cookie` HTTP header isn't stripped on cross-origin redirects
+- **Overall verdict**: Affected — fix released
+
+### 1. Impact
+
+- **urllib3** 2.0.4 — Affected — fix released (transitive dependency)
+  - Dependency path(s):
+    - `requests → urllib3`
+
+### 2. Patch status
+
+- **urllib3**: fixed in 2.0.6 — released
+
+### 3. Next action
+
+**urllib3** — Verified by a dry-run resolution (your uv.lock was not modified):
+```sh
+uv lock --upgrade-package urllib3==2.0.6
+uv sync
+```
+````
+
+The exit code tells you, or your script, what to do next:
+
+| Exit code | Verdict | What to do next |
+|-----------|---------|-----------------|
+| `0` | Not affected | Nothing. Move on |
+| `1` | Affected, fix released | Run the command in **Next action** |
+| `4` | Affected, no released fix yet | Wait for a fix, and check again later (automate it below) |
+
+Workspaces (`--workspace`), advisories not yet in OSV (pass a range such as `"urllib3<2.0.6"`), JSON output, and the full exit-code list are covered in [Incident Response (`--incident`)](#incident-response---incident).
+
+### Stop watching advisories by hand
+
+Exit code `4` means "not yet", so let a scheduler do the waiting. [`examples/incident-response/`](examples/incident-response/) ships two ready-to-use options:
+
+- [`wait-for-patch.sh`](examples/incident-response/wait-for-patch.sh): re-runs the check until the fix is out, then prints the report and optionally runs your own `ON_FIX_COMMAND` (a notification, an upgrade PR, and so on).
+- [`incident-watch.yml`](examples/incident-response/incident-watch.yml): a scheduled GitHub Actions workflow. It succeeds with "still waiting" while you wait, and fails, with the report in the job summary, once the fix is released.
+
+uv-sbom does not monitor anything. Your cron job or CI schedule re-runs it, and it answers each time. It never modifies your `uv.lock`. Note that OSV can take a while to index a newly announced advisory. Until then, pass the affected range yourself ([#963](https://github.com/Taketo-Yoda/uv-sbom/issues/963)).
+
 ## Features
 
+- 🚨 **Incident Response** (`--incident`) - For one advisory, answers in one command: are you affected, is the fix released, and which dry-run-verified `uv lock --upgrade-package` command to run. Its exit codes make it easy to script waiting for a patch ([see above](#-incident-response-am-i-affected-is-the-patch-out-what-do-i-run))
 - 📦 Parses `uv.lock` files to extract dependency information
 - 🔍 Automatically fetches license information from PyPI with retry logic
 - 🛡️ Checks for known vulnerabilities using OSV API (Markdown format only)

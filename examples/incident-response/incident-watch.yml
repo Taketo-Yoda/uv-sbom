@@ -1,0 +1,97 @@
+# incident-watch.yml - re-run `uv-sbom --incident` on a schedule until a fix is released.
+#
+# Copy this file to .github/workflows/ in your own repository, then set the
+# INCIDENT_ADVISORY repository variable (Settings > Secrets and variables >
+# Actions > Variables), or run it manually with the `advisory` input.
+#
+# uv-sbom answers once per run; the schedule below is what does the waiting.
+#   exit 0 - not affected: the job succeeds
+#   exit 4 - affected, no released fix yet: the job succeeds ("still waiting")
+#   exit 1 - affected, fix released: the job FAILS, with the report (including
+#            the next action) in the job summary
+#   other  - uv-sbom error: the job fails
+# A failed run is reported through GitHub's usual workflow-failure notifications.
+# Disable the workflow (or clear the variable) once you have upgraded.
+
+name: Incident watch
+
+on:
+  schedule:
+    - cron: '17 * * * *' # hourly, off the top of the hour
+  workflow_dispatch:
+    inputs:
+      advisory:
+        description: 'Advisory ID (GHSA-/PYSEC-/CVE-/OSV-/MAL-) or quoted range such as urllib3<2.0.6'
+        required: false
+        type: string
+      project_path:
+        description: 'Path to the uv project (directory containing uv.lock)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: incident-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check advisory
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+
+      # uv is needed for the dry-run that verifies the upgrade command.
+      # Pin uv-sbom-bin and bump it deliberately.
+      - name: Install uv and uv-sbom
+        run: pip install uv "uv-sbom-bin==3.3.0"
+
+      - name: Run uv-sbom --incident
+        env:
+          # Passed through env, never interpolated into the script.
+          ADVISORY: ${{ inputs.advisory || vars.INCIDENT_ADVISORY }}
+          PROJECT_PATH: ${{ inputs.project_path || vars.INCIDENT_PROJECT_PATH || '.' }}
+        run: |
+          if [ -z "$ADVISORY" ]; then
+            echo "::error::Set the INCIDENT_ADVISORY repository variable or the 'advisory' input."
+            exit 2
+          fi
+
+          rc=0
+          uv-sbom --incident "$ADVISORY" --format markdown -p "$PROJECT_PATH" > report.md || rc=$?
+
+          case "$rc" in
+            0)
+              echo "### ✅ Not affected by \`$ADVISORY\`" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            4)
+              {
+                echo "### ⏳ Still waiting: affected by \`$ADVISORY\`, no released fix yet"
+                echo
+                cat report.md
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            1)
+              {
+                echo "### 🚨 Fix released for \`$ADVISORY\`: action needed"
+                echo
+                cat report.md
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::A fix is released. See the job summary for the next action."
+              exit 1
+              ;;
+            *)
+              {
+                echo "### ❌ uv-sbom failed (exit $rc) for \`$ADVISORY\`"
+                echo
+                echo "See the step log for details."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit "$rc"
+              ;;
+          esac

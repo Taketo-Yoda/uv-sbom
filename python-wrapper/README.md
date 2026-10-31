@@ -11,6 +11,7 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 
 ## Features
 
+- **Incident response** - `uv-sbom --incident <ADVISORY_ID>` tells you in one command whether you are affected, whether the fix is released, and what to run next (a dry-run-verified `uv lock --upgrade-package` command, or guidance)
 - **Fast and standalone** - Written in Rust, no Python dependencies required at runtime
 - **Multiple output formats** - CycloneDX 1.6 JSON (standard) and Markdown (human-readable)
 - **Vulnerability scanning** - CVE checking via OSV API is **enabled by default**; use `--no-check-cve` to opt out
@@ -34,6 +35,8 @@ Unlike other SBOM tools that scan the entire virtual environment, `uv-sbom` focu
 | **Use Case** | Production security scanning | Comprehensive audit |
 
 This focused approach reduces noise in security scanning by excluding build-time dependencies that don't ship with your application.
+
+When a new advisory drops, `--incident` answers "am I affected, is the patch out, what do I run?" for your `uv.lock`, and its exit codes let a scheduled job wait for the patch for you. See [Incident Response](https://github.com/Taketo-Yoda/uv-sbom#-incident-response-am-i-affected-is-the-patch-out-what-do-i-run).
 
 ## Installation
 
