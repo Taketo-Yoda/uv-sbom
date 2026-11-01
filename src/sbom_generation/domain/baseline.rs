@@ -41,15 +41,21 @@ impl VulnerabilityBaseline {
     /// Collects every `(package_name, current_version, vulnerability_id)` tuple
     /// present in the report. This is the data source for `--update-baseline`,
     /// which must save the **unfiltered** list.
+    ///
+    /// Malicious-package advisories (`MAL-`) are never recorded: malware must
+    /// not be accepted in bulk by a baseline snapshot.
     pub fn from_report(report: &[PackageVulnerabilities]) -> Self {
         let entries = report
             .iter()
             .flat_map(|pkg| {
-                pkg.vulnerabilities().iter().map(move |vuln| BaselineEntry {
-                    package: pkg.package_name().to_string(),
-                    version: pkg.current_version().to_string(),
-                    id: vuln.id().to_string(),
-                })
+                pkg.vulnerabilities()
+                    .iter()
+                    .filter(|vuln| !vuln.is_malicious())
+                    .map(move |vuln| BaselineEntry {
+                        package: pkg.package_name().to_string(),
+                        version: pkg.current_version().to_string(),
+                        id: vuln.id().to_string(),
+                    })
             })
             .collect();
         Self { entries }
@@ -240,5 +246,19 @@ mod tests {
     fn test_default_is_empty() {
         let baseline = VulnerabilityBaseline::default();
         assert!(baseline.is_empty());
+    }
+
+    #[test]
+    fn test_from_report_skips_malicious_advisories() {
+        let report = vec![make_pkg(
+            "evil-pkg",
+            "1.0.0",
+            vec![make_vuln("MAL-2024-0001"), make_vuln("CVE-2024-001")],
+        )];
+
+        let baseline = VulnerabilityBaseline::from_report(&report);
+        assert_eq!(baseline.len(), 1);
+        assert!(baseline.contains("evil-pkg", "1.0.0", "CVE-2024-001"));
+        assert!(!baseline.contains("evil-pkg", "1.0.0", "MAL-2024-0001"));
     }
 }
