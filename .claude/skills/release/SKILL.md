@@ -157,8 +157,8 @@ candidate numbers appears among the entry references described in
 
 - the PR number
 - the Issues it closes, or the Issue number in its branch name if it closes none
-- each such Issue's parent epic: a `Part of #N` line in its body, or a GitHub
-  sub-issue parent
+- each such Issue's parent epic, read per `.claude/conventions/subtask-links.md` →
+  "Reading the Parent"
 
 ```bash
 git fetch origin --tags

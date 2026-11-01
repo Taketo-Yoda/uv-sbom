@@ -14,7 +14,7 @@ Decomposes a large GitHub Issue into subtask Issues, each implementable autonomo
 ## Workflow Overview
 
 ```
-Read Parent Issue → Propose Decomposition → Wait for Confirmation → Create Subtask Issues → Comment on Parent
+Read Parent Issue → Propose Decomposition → Wait for Confirmation → Create Subtasks as Sub-Issues (with blocked-by) → Comment Implementation Order on Parent
 ```
 
 ## Steps
@@ -102,7 +102,7 @@ Proposed split for #<parent>:
 ...
 
 Dependencies:
-- #2 depends on #1 (reason)
+- Subtask 2 depends on Subtask 1 (reason)
 
 Shared files every converging subtask must also update:
 - `path/to/shared_item.rs` — [which subtasks, and what each adds]
@@ -116,6 +116,11 @@ CHANGELOG owner:
 
 Proceed? (yes / adjust / cancel)
 ```
+
+Number the subtasks in dependency order, so that no subtask depends on a
+later-numbered one. Step 4 creates them in this order, which lets each `--blocked-by`
+name an Issue that already exists. If the user reorders them in Step 3, renumber
+before creating.
 
 **Always print the `Shared files`, `Rule owners`, and `CHANGELOG owner` blocks**, even
 when their check did not trigger. In that case, print `- none — no shared-dependency
@@ -182,10 +187,10 @@ Part of #<parent-number>
 </details>
 ```
 
-**Placement rules**: `Part of #<parent>` is a standalone line directly under `## Summary`
-(no `## Parent Issue` heading — it is one line and does not need one). `Dependencies on
-other subtasks` is a bullet in `## Context & Constraints`, never a top-level heading, so
-that section names stay identical across all templates. Include `## Design Sketch` in the
+**Placement rules**: place the parent link and the dependency bullet per
+`.claude/conventions/subtask-links.md` → "Parent Link" and "Dependency Link".
+`Dependencies on other subtasks` is never a top-level heading, so that section names
+stay identical across all templates. Include `## Design Sketch` in the
 human section only if the subtask introduces or changes types.
 
 **Shared-file carry-over**: if Step 2's Shared-Dependency Convergence Check listed shared
@@ -205,35 +210,60 @@ entry each one writes or extends.
 Choose each subtask's label as `/issue` would; for a `.claude/`-only subtask, per
 `.claude/conventions/labels.md` → "Label for `.claude/`-only Issues".
 
-Use the `gh` CLI. The body contains HTML tags and backticks — pass it via a quoted
-heredoc so the shell does not mangle `<details>` or fenced blocks:
+Create the subtasks in proposal order (dependency order, per Step 2), and keep a
+mapping from subtask number to created Issue number as you go. Use that mapping to
+write real Issue numbers into each body's `Dependencies on other subtasks` bullet and
+`## Scope > Out` sibling references.
+
+Use the `gh` CLI. Register each subtask as a sub-issue of the parent and its sibling
+dependencies as blocked-by links, per `.claude/conventions/subtask-links.md` → "Parent
+Link" and "Dependency Link". The body contains HTML tags and backticks — pass it via a
+quoted heredoc so the shell does not mangle `<details>` or fenced blocks:
 
 ```bash
 gh issue create \
   --title "<subtask title>" \
   --label "<appropriate label>" \
   --assignee "<same assignee as parent, if any>" \
+  --parent <parent-number> \
+  --blocked-by <N1>,<N2> \
   --body "$(cat <<'EOF'
 <subtask body>
 EOF
 )"
 ```
 
-Record each created Issue number as you go.
+Omit `--blocked-by` for a subtask with no dependencies.
+
+**If `gh issue create` fails**, do not blindly retry — check first whether the Issue
+was created anyway (`gh issue list --search "<subtask title> in:title" --state open`):
+
+- Created → add the missing link with `gh issue edit <N> --parent <parent-number>` or
+  `--add-blocked-by <M>`.
+- Not created → retry the same command once. Drop `--parent` or `--blocked-by` only
+  if the error message names that flag (e.g. a permission or limit error on the link).
+- If a dropped `--blocked-by` leaves a later sibling depending on this one, add the
+  link once both exist: `gh issue edit <N> --add-blocked-by <M>`.
+
+Either way, record every link that could not be made for Step 6. Never drop the
+subtask itself.
 
 ### Step 5: Comment on Parent Issue
 
-After all subtask Issues are created, post a comment on the parent Issue with a task list:
+After all subtask Issues are created, post the recommended implementation order on the
+parent Issue. Do not post a checkbox task list — the parent's sub-issue panel already
+tracks progress, and checkboxes in a comment are never ticked automatically.
 
 ```bash
 gh issue comment <parent-number> --body "$(cat <<'EOF'
 ## Subtasks
 
-- [ ] #N1 — Title of subtask 1
-- [ ] #N2 — Title of subtask 2
-...
+Registered as sub-issues by /split — see the sub-issue panel for progress.
 
-Created by /split. Dependencies noted in each subtask's description.
+Recommended implementation order:
+1. #N1 — Title of subtask 1
+2. #N2 — Title of subtask 2 (blocked by #N1)
+...
 EOF
 )"
 ```
@@ -245,6 +275,9 @@ The parent Issue is always left open as a tracking issue. Do not close it.
 Output:
 - Parent Issue number
 - List of created subtask Issue numbers and URLs
+- Confirmation that each subtask is linked as a sub-issue of the parent, and the
+  blocked-by links created (`gh issue view <parent-number>` lists the sub-issues)
+- Any link that could not be made, each with the `gh issue edit` command that adds it
 - Confirmation that the parent Issue remains open as a tracking issue
 
 ## Subtask Issue Template Reference
@@ -266,6 +299,6 @@ Claude executes /split skill:
 1. Reads issue #120 (a large refactor touching 5 modules)
 2. Proposes 4 subtasks with rationale and dependency order
 3. Waits for user confirmation: "yes"
-4. Creates Issues #121, #122, #123, #124 with proper templates
-5. Posts task-list comment on #120
-6. Reports: "Created 4 subtask Issues: #121, #122, #123, #124"
+4. Creates Issues #121, #122, #123, #124 as sub-issues of #120 (#122 blocked by #121)
+5. Posts the implementation-order comment on #120
+6. Reports: "Created 4 sub-issues of #120: #121, #122, #123, #124 (#122 blocked by #121)"
