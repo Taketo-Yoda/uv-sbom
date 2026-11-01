@@ -59,7 +59,7 @@ uv sync
 
 ### アドバイザリを手作業で見張るのはもうやめよう
 
-終了コード `4` は「まだ」という意味です。待つのはスクリプトやスケジューラーに任せましょう。たとえば [`wait-for-patch.sh`](examples/incident-response/wait-for-patch.sh) をプロジェクトのルートにコピーして実行権限を付け、1時間ごとにチェックするには、次のように実行します:
+`--incident` の終了コード `4` は、プロジェクトが影響を受けているものの、脆弱性を修正したバージョンがまだリリースされていないことを表します。リリースを待つのはスクリプトやスケジューラーに任せましょう。たとえば [`wait-for-patch.sh`](examples/incident-response/wait-for-patch.sh) をプロジェクトのルートにコピーして実行権限を付け、1時間ごとにチェックするには、次のように実行します:
 
 ```bash
 POLL_INTERVAL=3600 ./wait-for-patch.sh GHSA-v845-jxx5-vc9f
