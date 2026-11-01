@@ -27,6 +27,7 @@ change-history rows describe past events, so they do not count as consumers.
 | Rust test placement | `testing.md` |
 | What needs a CHANGELOG entry, per-feature entry ownership, reference numbers, non-owner PR line | `changelog.md` |
 | Label list and label choice for `.claude/`-only Issues | `labels.md` |
+| How a subtask names its parent epic and sibling dependencies | `subtask-links.md` |
 
 A new convention gets its own `.claude/conventions/<topic>.md` and a row in this
 table, both in the same change.
