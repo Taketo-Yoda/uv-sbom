@@ -56,6 +56,15 @@ pub(in super::super) fn render(
     let mut has_warning = false;
     if let Some(vuln_report) = vulnerabilities {
         let counts = vuln_report.counts_by_severity();
+        // Malicious row is emitted only when present, so reports without
+        // malicious advisories keep their existing summary unchanged.
+        if counts.malicious > 0 {
+            has_critical = true;
+            output.push_str(&format!(
+                "| {} | {} | ❌ |\n",
+                messages.label_vuln_malicious, counts.malicious
+            ));
+        }
         let critical_status = if counts.critical > 0 {
             has_critical = true;
             "❌"
@@ -188,6 +197,7 @@ mod tests {
             source_url: None,
             epss_percentile: None,
             in_kev: None,
+            is_malicious: false,
         }
     }
 
@@ -329,6 +339,68 @@ mod tests {
         let output = render_summary(Locale::En, &[], Some(&report), None);
         assert!(output.contains("| Vulnerabilities (CRITICAL) | 1 | ❌ |"));
         assert!(output.contains("**Overall: Action required**"));
+    }
+
+    fn make_malicious_vuln() -> VulnerabilityView {
+        VulnerabilityView {
+            is_malicious: true,
+            ..make_vuln(SeverityView::None)
+        }
+    }
+
+    #[test]
+    fn test_malicious_row_en() {
+        let report = VulnerabilityReportView {
+            actionable: vec![make_malicious_vuln()],
+            ..Default::default()
+        };
+        let output = render_summary(Locale::En, &[], Some(&report), None);
+        assert!(output.contains("| Malicious packages | 1 | ❌ |"));
+        assert!(output.contains("**Overall: Action required**"));
+    }
+
+    #[test]
+    fn test_malicious_row_ja() {
+        let report = VulnerabilityReportView {
+            informational: vec![make_malicious_vuln()],
+            ..Default::default()
+        };
+        let output = render_summary(Locale::Ja, &[], Some(&report), None);
+        assert!(output.contains("| 悪意のあるパッケージ | 1 | ❌ |"));
+        assert!(output.contains(Messages::for_locale(Locale::Ja).overall_action_required));
+    }
+
+    #[test]
+    fn test_malicious_row_precedes_critical_row() {
+        let report = VulnerabilityReportView {
+            actionable: vec![make_malicious_vuln()],
+            ..Default::default()
+        };
+        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let malicious = output.find("| Malicious packages |").unwrap();
+        let critical = output.find("| Vulnerabilities (CRITICAL) |").unwrap();
+        assert!(malicious < critical);
+    }
+
+    #[test]
+    fn test_malicious_row_absent_when_zero() {
+        let report = VulnerabilityReportView {
+            actionable: vec![make_vuln(SeverityView::Critical)],
+            ..Default::default()
+        };
+        let output = render_summary(Locale::En, &[], Some(&report), None);
+        assert!(!output.contains("Malicious"));
+    }
+
+    #[test]
+    fn test_malicious_not_counted_in_severity_rows() {
+        let report = VulnerabilityReportView {
+            actionable: vec![make_malicious_vuln(), make_vuln(SeverityView::Critical)],
+            ..Default::default()
+        };
+        let output = render_summary(Locale::En, &[], Some(&report), None);
+        assert!(output.contains("| Malicious packages | 1 | ❌ |"));
+        assert!(output.contains("| Vulnerabilities (CRITICAL) | 1 | ❌ |"));
     }
 
     #[test]

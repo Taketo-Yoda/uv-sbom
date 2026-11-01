@@ -85,6 +85,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             },
             VulnerabilityView {
                 bom_ref: "v2".to_string(),
@@ -100,6 +101,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             },
             VulnerabilityView {
                 bom_ref: "v3".to_string(),
@@ -115,6 +117,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             },
         ];
 

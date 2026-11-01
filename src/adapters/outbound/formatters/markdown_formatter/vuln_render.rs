@@ -303,6 +303,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             },
             VulnerabilityView {
                 bom_ref: "vuln-002".to_string(),
@@ -318,6 +319,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             },
         ];
 
@@ -349,6 +351,7 @@ mod tests {
             source_url: None,
             epss_percentile: None,
             in_kev: None,
+            is_malicious: false,
         }];
 
         let mut output = String::new();
@@ -378,6 +381,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             },
             VulnerabilityView {
                 bom_ref: "vuln-002".to_string(),
@@ -393,6 +397,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             },
         ];
 
@@ -418,6 +423,7 @@ mod tests {
             source_url: None,
             epss_percentile: Some(0.97),
             in_kev: Some(true),
+            is_malicious: false,
         };
 
         let mut output = String::new();
@@ -443,6 +449,7 @@ mod tests {
             source_url: None,
             epss_percentile: None,
             in_kev: None,
+            is_malicious: false,
         };
 
         let mut output = String::new();
