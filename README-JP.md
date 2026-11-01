@@ -59,7 +59,13 @@ uv sync
 
 ### アドバイザリを手作業で見張るのはもうやめよう
 
-終了コード `4` は「まだ」という意味です。待つのはスケジューラーに任せましょう。[`examples/incident-response/`](examples/incident-response/) に、すぐ使える2つの方法を用意しています:
+終了コード `4` は「まだ」という意味です。待つのはスクリプトやスケジューラーに任せましょう。たとえば [`wait-for-patch.sh`](examples/incident-response/wait-for-patch.sh) をプロジェクトのルートにコピーして実行権限を付け、1時間ごとにチェックするには、次のように実行します:
+
+```bash
+POLL_INTERVAL=3600 ./wait-for-patch.sh GHSA-v845-jxx5-vc9f
+```
+
+[`examples/incident-response/`](examples/incident-response/) には、このスクリプトを含めて、すぐ使える2つの方法を用意しています:
 
 - [`wait-for-patch.sh`](examples/incident-response/wait-for-patch.sh): 修正版が出るまでチェックを繰り返し、出たらレポートを表示します。任意で `ON_FIX_COMMAND`（通知やアップグレード PR の作成など）も実行できます。
 - [`incident-watch.yml`](examples/incident-response/incident-watch.yml): 定期実行する GitHub Actions ワークフローです。待っている間は「Still waiting」として成功し、修正版がリリースされるとジョブサマリーにレポートを載せて失敗します。

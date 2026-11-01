@@ -76,6 +76,13 @@ uv-sbom --incident GHSA-v845-jxx5-vc9f
 uv-sbom --incident "urllib3<2.0.6"
 ```
 
+`--incident` exit codes:
+- `0`: not affected
+- `1`: affected, fix released (run the suggested command)
+- `4`: affected, no released fix (check again later; a scheduled job can wait on this)
+
+Other codes (`2` invalid arguments, `3` errors) are listed in [Exit Codes](https://github.com/Taketo-Yoda/uv-sbom#exit-codes).
+
 ### Vulnerability Checking
 
 CVE checking is **enabled by default**. Use `--no-check-cve` to opt out.
