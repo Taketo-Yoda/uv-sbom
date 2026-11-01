@@ -59,7 +59,13 @@ Workspaces (`--workspace`), advisories not yet in OSV (pass a range such as `"ur
 
 ### Stop watching advisories by hand
 
-Exit code `4` means "not yet", so let a scheduler do the waiting. [`examples/incident-response/`](examples/incident-response/) ships two ready-to-use options:
+`--incident` exits with `4` when your project is affected but no version that fixes the vulnerability has been released yet, so let a script or scheduler do the waiting. For example, copy [`wait-for-patch.sh`](examples/incident-response/wait-for-patch.sh) into your project root, make it executable, and have it check once an hour:
+
+```bash
+POLL_INTERVAL=3600 ./wait-for-patch.sh GHSA-v845-jxx5-vc9f
+```
+
+[`examples/incident-response/`](examples/incident-response/) ships two ready-to-use options, this script included:
 
 - [`wait-for-patch.sh`](examples/incident-response/wait-for-patch.sh): re-runs the check until the fix is out, then prints the report and optionally runs your own `ON_FIX_COMMAND` (a notification, an upgrade PR, and so on).
 - [`incident-watch.yml`](examples/incident-response/incident-watch.yml): a scheduled GitHub Actions workflow. It succeeds with "still waiting" while you wait, and fails, with the report in the job summary, once the fix is released.
