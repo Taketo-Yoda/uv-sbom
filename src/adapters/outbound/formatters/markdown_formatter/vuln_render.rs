@@ -145,9 +145,10 @@ fn render_malicious_vulnerabilities(
 
 /// Formats an untrusted OSV advisory summary as a single Markdown table cell.
 ///
-/// Whitespace runs (including `\r`, which `escape_markdown_table_cell` keeps)
-/// collapse to one space, so the row stays on one line. The text is truncated
-/// before it is escaped, so truncation cannot split an escaped `\|`.
+/// Whitespace runs (including tabs) collapse to one space, and whitespace-only
+/// text renders as `-`. The text is collapsed before it is truncated, so the
+/// length limit applies to the collapsed text, and truncated before it is
+/// escaped, so truncation cannot split an escaped `\|`.
 fn advisory_summary_cell(summary: Option<&str>) -> String {
     let normalized = summary
         .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))

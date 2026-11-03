@@ -22,9 +22,14 @@ pub(crate) fn truncate_for_table(text: &str, max_len: usize) -> Cow<'_, str> {
     }
 }
 
-/// Escapes pipe characters and newlines for safe Markdown table rendering
+/// Escapes pipe characters and line breaks for safe Markdown table rendering.
+///
+/// `\r\n` becomes one space, and any remaining `\r` or `\n` becomes a space,
+/// so untrusted text with CRLF line endings stays on one table row.
 pub(crate) fn escape_markdown_table_cell(text: &str) -> String {
-    text.replace('|', "\\|").replace('\n', " ")
+    text.replace('|', "\\|")
+        .replace("\r\n", " ")
+        .replace(['\r', '\n'], " ")
 }
 
 /// Generates a Markdown table separator row from column header strings.
@@ -135,6 +140,28 @@ mod tests {
         let input = "Text with | pipe and\nnewline";
         let escaped = escape_markdown_table_cell(input);
         assert_eq!(escaped, "Text with \\| pipe and newline");
+    }
+
+    #[test]
+    fn test_escape_markdown_table_cell_crlf_becomes_single_space() {
+        assert_eq!(escape_markdown_table_cell("a\r\nb"), "a b");
+    }
+
+    #[test]
+    fn test_escape_markdown_table_cell_lone_cr_becomes_space() {
+        assert_eq!(escape_markdown_table_cell("a\rb"), "a b");
+    }
+
+    #[test]
+    fn test_escape_markdown_table_cell_lone_lf_becomes_space() {
+        assert_eq!(escape_markdown_table_cell("a\nb"), "a b");
+    }
+
+    #[test]
+    fn test_escape_markdown_table_cell_mixed_pipe_and_line_breaks() {
+        let escaped = escape_markdown_table_cell("x|y\r\nz\rw");
+        assert_eq!(escaped, "x\\|y z w");
+        assert!(!escaped.contains('\r'));
     }
 
     #[test]
