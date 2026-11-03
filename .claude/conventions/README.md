@@ -25,6 +25,7 @@ change-history rows describe past events, so they do not count as consumers.
 | Branch naming, branch base, PR base, Stacked Mode, who merges | `branching.md` |
 | Local CI-check commands | `ci-checks.md` |
 | Rust test placement | `testing.md` |
+| Message catalog location and new-key procedure | `i18n.md` |
 | What needs a CHANGELOG entry, per-feature entry ownership, reference numbers, non-owner PR line | `changelog.md` |
 | Label list and label choice for `.claude/`-only Issues | `labels.md` |
 | How a subtask names its parent epic and sibling dependencies | `subtask-links.md` |

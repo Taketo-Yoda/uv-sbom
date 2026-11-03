@@ -224,8 +224,8 @@ If no matches are found, continue to Step 4 without interruption.
 - Add tests for new functionality
 - Update documentation as needed
 - **i18n**: Every new user-visible string output via `eprintln!` or `println!`
-  MUST be added as a named key in both `EN_MESSAGES` and `JA_MESSAGES` in
-  `src/i18n/mod.rs`. Never hardcode English text in output paths.
+  MUST be added as a named key per `.claude/conventions/i18n.md` → "Rule".
+  Never hardcode English text in output paths.
 
 ### Step 4.3: CLI Flag Documentation Gate (conditional)
 

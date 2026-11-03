@@ -275,12 +275,13 @@ Sensitive data:
 User-visible string bypass (🔴 MUST FIX if any):
 - Does any new user-visible string bypass the i18n system (hardcoded English
   in `eprintln!`/`println!` output)?
-- Is a new message key missing from either `EN_MESSAGES` or `JA_MESSAGES`
-  in `src/i18n/mod.rs`?
+- Is a new message key missing from any location required by
+  `.claude/conventions/i18n.md` → "Rule"?
 
 Test coverage (🟡 SHOULD FIX):
 - If `{}` placeholder order differs between EN and JA templates, is this
-  covered by a dedicated unit test in `src/i18n/mod.rs`?
+  covered by a dedicated cross-locale unit test (location per
+  `.claude/conventions/i18n.md` → "Rule")?
 
 ---
 
