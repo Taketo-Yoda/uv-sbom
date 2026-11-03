@@ -917,7 +917,7 @@ uv-sbom --format markdown --cvss-threshold 9.0
 - Vulnerabilities below the threshold are still shown in the report but don't trigger exit code 1
 - When using `--cvss-threshold`, vulnerabilities without CVSS scores (N/A) are excluded from threshold evaluation
 
-**Malicious packages:** OSV malicious-package advisories (IDs starting with `MAL-`, either as the primary ID or as an alias) always fail the run with exit code 1, regardless of `--severity-threshold` or `--cvss-threshold`. Malware has no CVSS score, so it would otherwise fall below every threshold. These advisories are never written to a [vulnerability baseline](#vulnerability-baseline), and an existing baseline entry for one does not suppress it. To accept one deliberately, ignore it by its exact primary ID with `--ignore-cve` or `ignore_cves`.
+**Malicious packages:** OSV malicious-package advisories (IDs starting with `MAL-`, either as the primary ID or as an alias) always fail the run with exit code 1, regardless of `--severity-threshold` or `--cvss-threshold`. Malware has no CVSS score, so it would otherwise fall below every threshold. These advisories are never written to a [vulnerability baseline](#vulnerability-baseline), and an existing baseline entry for one does not suppress it. To accept one deliberately, ignore it by its exact primary ID with `--ignore-cve` or `ignore_cves`. In the Markdown report, they are listed in a dedicated block at the top of the vulnerability section, with an instruction to remove the package, and are not repeated in the regular vulnerability tables.
 
 ### PyPI Link Verification
 
