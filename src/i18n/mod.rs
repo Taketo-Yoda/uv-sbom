@@ -175,6 +175,10 @@ pub struct Messages {
     pub warn_vuln_found: &'static str,
     pub info_vuln_found: &'static str,
 
+    // Malicious-package (OSV `MAL-`) block in the vulnerability report
+    pub warn_malicious_found: &'static str,
+    pub action_remove_malicious: &'static str,
+
     // Singular/plural unit labels for vulnerability count templates
     pub label_vulnerability_singular: &'static str,
     pub label_vulnerability_plural: &'static str,
@@ -539,6 +543,10 @@ static EN_MESSAGES: Messages = Messages {
     warn_vuln_found: "### ⚠️Warning Found {} {} in {} {}.",
     info_vuln_found: "### ℹ️Info Found {} {} in {} {}.",
 
+    // Malicious-package (OSV `MAL-`) block in the vulnerability report
+    warn_malicious_found: "### 🚨Alert Malicious packages detected.",
+    action_remove_malicious: "Remove these packages and rotate any credentials they may have accessed.",
+
     // Singular/plural unit labels for vulnerability count templates
     label_vulnerability_singular: "vulnerability",
     label_vulnerability_plural: "vulnerabilities",
@@ -871,6 +879,11 @@ static JA_MESSAGES: Messages = Messages {
     warn_no_vuln_above_threshold: "### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。",
     warn_vuln_found: "### ⚠️警告 {}{}が{}{}で見つかりました。",
     info_vuln_found: "### ℹ️情報 {}{}が{}{}で見つかりました。",
+
+    // Malicious-package (OSV `MAL-`) block in the vulnerability report
+    warn_malicious_found: "### 🚨危険 悪意のあるパッケージが検出されました。",
+    action_remove_malicious:
+        "このパッケージを削除し、アクセスされた可能性のある認証情報をすべてローテーションしてください。",
 
     // Singular/plural unit labels (no distinction in Japanese)
     label_vulnerability_singular: "件の脆弱性",
@@ -1642,6 +1655,8 @@ mod tests {
             warn_no_vuln_above_threshold,
             warn_vuln_found,
             info_vuln_found,
+            warn_malicious_found,
+            action_remove_malicious,
             label_vulnerability_singular,
             label_vulnerability_plural,
             label_package_singular,
@@ -1885,6 +1900,14 @@ mod tests {
         );
         assert_eq!(msgs.warn_vuln_found, "### ⚠️Warning Found {} {} in {} {}.");
         assert_eq!(msgs.info_vuln_found, "### ℹ️Info Found {} {} in {} {}.");
+        assert_eq!(
+            msgs.warn_malicious_found,
+            "### 🚨Alert Malicious packages detected."
+        );
+        assert_eq!(
+            msgs.action_remove_malicious,
+            "Remove these packages and rotate any credentials they may have accessed."
+        );
         assert_eq!(msgs.label_vulnerability_singular, "vulnerability");
         assert_eq!(msgs.label_vulnerability_plural, "vulnerabilities");
         assert_eq!(msgs.label_package_singular, "package");
@@ -1921,6 +1944,14 @@ mod tests {
         assert_eq!(
             msgs.warn_no_vuln_above_threshold,
             "### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。"
+        );
+        assert_eq!(
+            msgs.warn_malicious_found,
+            "### 🚨危険 悪意のあるパッケージが検出されました。"
+        );
+        assert_eq!(
+            msgs.action_remove_malicious,
+            "このパッケージを削除し、アクセスされた可能性のある認証情報をすべてローテーションしてください。"
         );
         assert_eq!(msgs.label_vulnerability_singular, "件の脆弱性");
         assert_eq!(msgs.label_vulnerability_plural, "件の脆弱性");

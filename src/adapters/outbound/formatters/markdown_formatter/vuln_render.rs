@@ -4,11 +4,13 @@ use crate::application::read_models::{
 use crate::i18n::Messages;
 use std::collections::HashSet;
 
-fn has_exploitability_data(vulns: &VulnerabilityReportView) -> bool {
-    vulns
-        .actionable
+fn has_exploitability_data(
+    actionable: &[VulnerabilityView],
+    informational: &[VulnerabilityView],
+) -> bool {
+    actionable
         .iter()
-        .chain(vulns.informational.iter())
+        .chain(informational.iter())
         .any(|v| v.epss_percentile.is_some())
 }
 
@@ -24,32 +26,58 @@ pub(super) fn render_vulnerabilities(
     output.push_str(messages.section_vuln_report);
     output.push_str("\n\n");
 
-    let show_exploitability = has_exploitability_data(vulns);
+    // Malicious-package advisories get their own block and are kept out of the
+    // regular tables. #1042 always places them in `actionable`; `informational`
+    // is split too so a differently built read model cannot show one twice.
+    let (malicious_actionable, actionable): (Vec<_>, Vec<_>) = vulns
+        .actionable
+        .iter()
+        .cloned()
+        .partition(|v| v.is_malicious);
+    let (malicious_informational, informational): (Vec<_>, Vec<_>) = vulns
+        .informational
+        .iter()
+        .cloned()
+        .partition(|v| v.is_malicious);
+    let malicious: Vec<&VulnerabilityView> = malicious_actionable
+        .iter()
+        .chain(malicious_informational.iter())
+        .collect();
+
+    // The malicious block has no EPSS/KEV columns, so only the regular tables
+    // decide whether those columns and their attribution are shown.
+    let show_exploitability = has_exploitability_data(&actionable, &informational);
 
     // Summary section
     render_vulnerability_summary(messages, output, &vulns.summary);
 
+    if !malicious.is_empty() {
+        render_malicious_vulnerabilities(messages, verified_packages, output, &malicious);
+    }
+
     // Actionable vulnerabilities (warning section)
-    if vulns.actionable.is_empty() {
-        output.push_str(messages.warn_no_vuln_above_threshold);
-        output.push_str("\n\n");
+    if actionable.is_empty() {
+        if malicious.is_empty() {
+            output.push_str(messages.warn_no_vuln_above_threshold);
+            output.push_str("\n\n");
+        }
     } else {
         render_actionable_vulnerabilities(
             messages,
             verified_packages,
             output,
-            &vulns.actionable,
+            &actionable,
             show_exploitability,
         );
     }
 
     // Informational vulnerabilities
-    if !vulns.informational.is_empty() {
+    if !informational.is_empty() {
         render_informational_vulnerabilities(
             messages,
             verified_packages,
             output,
-            &vulns.informational,
+            &informational,
             show_exploitability,
         );
     }
@@ -72,6 +100,42 @@ pub(super) fn render_vulnerabilities(
         output.push_str(messages.label_epss_kev_attribution);
         output.push('\n');
     }
+}
+
+/// Renders the block for OSV malicious-package (`MAL-`) advisories.
+///
+/// Severity, CVSS and EPSS/KEV are omitted: malware has no meaningful score,
+/// and showing "NONE" would understate it.
+fn render_malicious_vulnerabilities(
+    messages: &'static Messages,
+    verified_packages: Option<&HashSet<String>>,
+    output: &mut String,
+    vulns: &[&VulnerabilityView],
+) {
+    output.push_str(messages.warn_malicious_found);
+    output.push_str("\n\n");
+    output.push_str(messages.action_remove_malicious);
+    output.push_str("\n\n");
+
+    output.push_str(&format!(
+        "| {} | {} | {} |\n",
+        messages.col_package, messages.col_current_version, messages.col_vuln_id,
+    ));
+    output.push_str(&super::table::make_separator(&[
+        messages.col_package,
+        messages.col_current_version,
+        messages.col_vuln_id,
+    ]));
+
+    for vuln in vulns {
+        output.push_str(&format!(
+            "| {} | {} | {} |\n",
+            super::links::format_package_name(&vuln.affected_component_name, verified_packages),
+            super::table::escape_markdown_table_cell(&vuln.affected_version),
+            super::links::vulnerability_id_to_link(&vuln.id),
+        ));
+    }
+    output.push('\n');
 }
 
 /// Renders vulnerability summary statistics
@@ -253,7 +317,9 @@ fn ordinal_suffix(n: u32) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::read_models::{SeverityView, VulnerabilitySummary, VulnerabilityView};
+    use crate::application::read_models::{
+        SeverityView, VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
+    };
     use crate::i18n::{Locale, Messages};
 
     fn messages() -> &'static Messages {
@@ -457,6 +523,276 @@ mod tests {
 
         assert!(!output.contains("percentile"));
         assert!(!output.contains("Yes"));
+    }
+
+    fn make_vuln(
+        id: &str,
+        name: &str,
+        version: &str,
+        severity: SeverityView,
+        is_malicious: bool,
+        epss_percentile: Option<f32>,
+    ) -> VulnerabilityView {
+        VulnerabilityView {
+            bom_ref: format!("vuln-{id}"),
+            id: id.to_string(),
+            affected_component: format!("pkg:pypi/{name}@{version}"),
+            affected_component_name: name.to_string(),
+            affected_version: version.to_string(),
+            cvss_score: if is_malicious { None } else { Some(9.8) },
+            cvss_vector: None,
+            severity,
+            fixed_version: None,
+            description: None,
+            source_url: None,
+            epss_percentile,
+            in_kev: epss_percentile.map(|_| false),
+            is_malicious,
+        }
+    }
+
+    fn report(
+        actionable: Vec<VulnerabilityView>,
+        informational: Vec<VulnerabilityView>,
+    ) -> VulnerabilityReportView {
+        VulnerabilityReportView {
+            summary: VulnerabilitySummary {
+                total_count: actionable.len() + informational.len(),
+                affected_package_count: 1,
+            },
+            actionable,
+            informational,
+        }
+    }
+
+    fn render(messages: &'static Messages, vulns: &VulnerabilityReportView) -> String {
+        let mut output = String::new();
+        render_vulnerabilities(messages, None, &mut output, vulns, 0);
+        output
+    }
+
+    #[test]
+    fn test_render_vulnerabilities_without_malicious_is_unchanged() {
+        let vulns = report(
+            vec![make_vuln(
+                "CVE-2024-1111",
+                "requests",
+                "2.31.0",
+                SeverityView::Critical,
+                false,
+                None,
+            )],
+            vec![make_vuln(
+                "CVE-2024-3333",
+                "requests",
+                "2.31.0",
+                SeverityView::Low,
+                false,
+                None,
+            )],
+        );
+
+        let expected = "\n## Vulnerability Report\n\n\
+**Found 2 vulnerabilities in 1 package.**\n\n\
+### ⚠️Warning Found 1 vulnerability in 1 package.\n\n\
+| Package | Current Version | Fixed Version | CVSS | Severity | Vulnerability ID |\n\
+|---------|-----------------|---------------|------|----------|------------------|\n\
+| [requests](https://pypi.org/project/requests/) | 2.31.0 | N/A | 9.8 | 🔴 CRITICAL | [CVE-2024-1111](https://nvd.nist.gov/vuln/detail/CVE-2024-1111) |\n\
+\n\
+### ℹ️Info Found 1 vulnerability in 1 package.\n\n\
+| Package | Current Version | Fixed Version | CVSS | Severity | Vulnerability ID |\n\
+|---------|-----------------|---------------|------|----------|------------------|\n\
+| [requests](https://pypi.org/project/requests/) | 2.31.0 | N/A | 9.8 | 🟢 LOW | [CVE-2024-3333](https://nvd.nist.gov/vuln/detail/CVE-2024-3333) |\n\
+\n---\n\n";
+        let output = render(messages(), &vulns);
+        assert!(output.starts_with(expected), "unexpected output:\n{output}");
+        assert_eq!(
+            output,
+            format!("{expected}{}\n", messages().label_osv_attribution)
+        );
+    }
+
+    #[test]
+    fn test_render_vulnerabilities_without_malicious_empty_actionable_is_unchanged() {
+        let vulns = report(vec![], vec![]);
+        let output = render(messages(), &vulns);
+        assert_eq!(
+            output,
+            format!(
+                "\n## Vulnerability Report\n\n\
+**Found 0 vulnerabilities in 1 package.**\n\n\
+### ⚠️Warning No vulnerabilities found above threshold.\n\n\
+\n---\n\n{}\n",
+                messages().label_osv_attribution
+            )
+        );
+    }
+
+    #[test]
+    fn test_render_malicious_block_en() {
+        let vulns = report(
+            vec![make_vuln(
+                "MAL-2024-1234",
+                "evil-pkg",
+                "1.0.0",
+                SeverityView::None,
+                true,
+                None,
+            )],
+            vec![],
+        );
+
+        let output = render(messages(), &vulns);
+
+        assert!(output.contains(
+            "### 🚨Alert Malicious packages detected.\n\n\
+Remove these packages and rotate any credentials they may have accessed.\n\n\
+| Package | Current Version | Vulnerability ID |\n\
+|---------|-----------------|------------------|\n\
+| [evil-pkg](https://pypi.org/project/evil-pkg/) | 1.0.0 | [MAL-2024-1234](https://osv.dev/vulnerability/MAL-2024-1234) |\n"
+        ));
+        assert!(!output.contains("NONE"));
+    }
+
+    #[test]
+    fn test_render_malicious_block_ja() {
+        let vulns = report(
+            vec![make_vuln(
+                "MAL-2024-1234",
+                "evil-pkg",
+                "1.0.0",
+                SeverityView::None,
+                true,
+                None,
+            )],
+            vec![],
+        );
+
+        let ja = Messages::for_locale(Locale::Ja);
+        let output = render(ja, &vulns);
+
+        assert!(output.contains("### 🚨危険 悪意のあるパッケージが検出されました。"));
+        assert!(output.contains(
+            "このパッケージを削除し、アクセスされた可能性のある認証情報をすべてローテーションしてください。"
+        ));
+        assert!(output.contains("[MAL-2024-1234](https://osv.dev/vulnerability/MAL-2024-1234)"));
+        assert!(!output.contains(ja.warn_no_vuln_above_threshold));
+    }
+
+    #[test]
+    fn test_render_malicious_block_before_actionable_and_not_duplicated() {
+        let vulns = report(
+            vec![
+                make_vuln(
+                    "CVE-2024-1111",
+                    "requests",
+                    "2.31.0",
+                    SeverityView::Critical,
+                    false,
+                    None,
+                ),
+                make_vuln(
+                    "MAL-2024-1234",
+                    "evil-pkg",
+                    "1.0.0",
+                    SeverityView::None,
+                    true,
+                    None,
+                ),
+            ],
+            vec![make_vuln(
+                "MAL-2024-5678",
+                "evil-pkg",
+                "1.0.0",
+                SeverityView::None,
+                true,
+                None,
+            )],
+        );
+
+        let output = render(messages(), &vulns);
+
+        let block = output.find("### 🚨Alert").expect("malicious block");
+        let actionable = output
+            .find("### ⚠️Warning Found")
+            .expect("actionable table");
+        assert!(block < actionable);
+        // Only the non-malicious entry is counted in the actionable table.
+        assert!(output.contains("### ⚠️Warning Found 1 vulnerability in 1 package."));
+        assert_eq!(output.matches("MAL-2024-1234](").count(), 1);
+        assert_eq!(output.matches("MAL-2024-5678](").count(), 1);
+        assert!(!output.contains("### ℹ️Info"));
+    }
+
+    #[test]
+    fn test_render_only_malicious_omits_no_vuln_above_threshold() {
+        let vulns = report(
+            vec![make_vuln(
+                "MAL-2024-1234",
+                "evil-pkg",
+                "1.0.0",
+                SeverityView::None,
+                true,
+                None,
+            )],
+            vec![],
+        );
+
+        let output = render(messages(), &vulns);
+
+        assert!(output.contains("### 🚨Alert"));
+        assert!(!output.contains(messages().warn_no_vuln_above_threshold));
+        assert!(!output.contains("### ⚠️Warning"));
+    }
+
+    #[test]
+    fn test_render_malicious_epss_does_not_enable_exploitability_columns() {
+        let vulns = report(
+            vec![
+                make_vuln(
+                    "CVE-2024-1111",
+                    "requests",
+                    "2.31.0",
+                    SeverityView::Critical,
+                    false,
+                    None,
+                ),
+                make_vuln(
+                    "MAL-2024-1234",
+                    "evil-pkg",
+                    "1.0.0",
+                    SeverityView::None,
+                    true,
+                    Some(0.5),
+                ),
+            ],
+            vec![],
+        );
+
+        let output = render(messages(), &vulns);
+
+        assert!(!output.contains(messages().col_epss));
+        assert!(!output.contains(messages().label_epss_kev_attribution));
+    }
+
+    #[test]
+    fn test_render_regular_epss_still_enables_exploitability_columns() {
+        let vulns = report(
+            vec![make_vuln(
+                "CVE-2024-1111",
+                "requests",
+                "2.31.0",
+                SeverityView::Critical,
+                false,
+                Some(0.97),
+            )],
+            vec![],
+        );
+
+        let output = render(messages(), &vulns);
+
+        assert!(output.contains("97th percentile"));
+        assert!(output.contains(messages().label_epss_kev_attribution));
     }
 
     #[test]
