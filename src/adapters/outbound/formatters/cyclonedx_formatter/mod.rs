@@ -187,6 +187,11 @@ mod tests {
         assert!(json.contains("CVE-2024-1234"));
         assert!(json.contains("\"severity\": \"HIGH\""));
         assert!(json.contains("\"score\": 7.5"));
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            parsed["vulnerabilities"][0]["description"],
+            "Test vulnerability"
+        );
     }
 
     #[test]
@@ -461,6 +466,13 @@ mod tests {
 
         // No properties field when no resolution guide
         assert!(!json.contains("\"uv-sbom:introduced-by\""));
+        // No description key when OSV supplied no summary
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed["vulnerabilities"][0]
+            .as_object()
+            .unwrap()
+            .get("description")
+            .is_none());
     }
 
     // ============================================================
