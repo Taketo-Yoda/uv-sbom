@@ -118,24 +118,46 @@ fn render_malicious_vulnerabilities(
     output.push_str("\n\n");
 
     output.push_str(&format!(
-        "| {} | {} | {} |\n",
-        messages.col_package, messages.col_current_version, messages.col_vuln_id,
+        "| {} | {} | {} | {} |\n",
+        messages.col_package,
+        messages.col_current_version,
+        messages.col_vuln_id,
+        messages.col_description,
     ));
     output.push_str(&super::table::make_separator(&[
         messages.col_package,
         messages.col_current_version,
         messages.col_vuln_id,
+        messages.col_description,
     ]));
 
     for vuln in vulns {
         output.push_str(&format!(
-            "| {} | {} | {} |\n",
+            "| {} | {} | {} | {} |\n",
             super::links::format_package_name(&vuln.affected_component_name, verified_packages),
             super::table::escape_markdown_table_cell(&vuln.affected_version),
             super::links::vulnerability_id_to_link(&vuln.id),
+            advisory_summary_cell(vuln.description.as_deref()),
         ));
     }
     output.push('\n');
+}
+
+/// Formats an untrusted OSV advisory summary as a single Markdown table cell.
+///
+/// Whitespace runs (including `\r`, which `escape_markdown_table_cell` keeps)
+/// collapse to one space, so the row stays on one line. The text is truncated
+/// before it is escaped, so truncation cannot split an escaped `\|`.
+fn advisory_summary_cell(summary: Option<&str>) -> String {
+    let normalized = summary
+        .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
+        .unwrap_or_default();
+    if normalized.is_empty() {
+        return "-".to_string();
+    }
+    let truncated =
+        super::table::truncate_for_table(&normalized, super::table::ADVISORY_SUMMARY_MAX_LEN);
+    super::table::escape_markdown_table_cell(&truncated)
 }
 
 /// Renders vulnerability summary statistics
@@ -647,9 +669,9 @@ mod tests {
         assert!(output.contains(
             "### 🚨Alert Malicious packages detected.\n\n\
 Remove these packages and rotate any credentials they may have accessed.\n\n\
-| Package | Current Version | Vulnerability ID |\n\
-|---------|-----------------|------------------|\n\
-| [evil-pkg](https://pypi.org/project/evil-pkg/) | 1.0.0 | [MAL-2024-1234](https://osv.dev/vulnerability/MAL-2024-1234) |\n"
+| Package | Current Version | Vulnerability ID | Description |\n\
+|---------|-----------------|------------------|-------------|\n\
+| [evil-pkg](https://pypi.org/project/evil-pkg/) | 1.0.0 | [MAL-2024-1234](https://osv.dev/vulnerability/MAL-2024-1234) | - |\n"
         ));
         assert!(!output.contains("NONE"));
     }
@@ -677,6 +699,92 @@ Remove these packages and rotate any credentials they may have accessed.\n\n\
         ));
         assert!(output.contains("[MAL-2024-1234](https://osv.dev/vulnerability/MAL-2024-1234)"));
         assert!(!output.contains(ja.warn_no_vuln_above_threshold));
+    }
+
+    fn malicious_with_summary(summary: &str) -> VulnerabilityReportView {
+        let mut vuln = make_vuln(
+            "MAL-2024-1234",
+            "evil-pkg",
+            "1.0.0",
+            SeverityView::None,
+            true,
+            None,
+        );
+        vuln.description = Some(summary.to_string());
+        report(vec![vuln], vec![])
+    }
+
+    #[test]
+    fn test_render_malicious_block_shows_summary_en() {
+        let output = render(
+            messages(),
+            &malicious_with_summary("Malicious code in evil-pkg (PyPI)"),
+        );
+
+        assert!(output.contains(
+            "| [evil-pkg](https://pypi.org/project/evil-pkg/) | 1.0.0 | \
+[MAL-2024-1234](https://osv.dev/vulnerability/MAL-2024-1234) | \
+Malicious code in evil-pkg (PyPI) |\n"
+        ));
+    }
+
+    #[test]
+    fn test_render_malicious_block_shows_summary_ja() {
+        let ja = Messages::for_locale(Locale::Ja);
+        let output = render(
+            ja,
+            &malicious_with_summary("Malicious code in evil-pkg (PyPI)"),
+        );
+
+        assert!(output.contains("| パッケージ | "));
+        assert!(output.contains(" | 説明 |\n"));
+        assert!(output.contains(" | Malicious code in evil-pkg (PyPI) |\n"));
+    }
+
+    #[test]
+    fn test_advisory_summary_cell_none_is_dash() {
+        assert_eq!(advisory_summary_cell(None), "-");
+    }
+
+    #[test]
+    fn test_advisory_summary_cell_whitespace_only_is_dash() {
+        assert_eq!(advisory_summary_cell(Some(" \r\n\t ")), "-");
+    }
+
+    #[test]
+    fn test_advisory_summary_cell_escapes_pipes_and_line_breaks() {
+        assert_eq!(advisory_summary_cell(Some("a|b\nc\r\nd")), "a\\|b c d");
+    }
+
+    #[test]
+    fn test_render_malicious_block_summary_keeps_row_on_one_line() {
+        let output = render(messages(), &malicious_with_summary("a|b\nc\r\nd"));
+
+        let row = output
+            .lines()
+            .find(|line| line.contains("MAL-2024-1234"))
+            .unwrap();
+        assert!(row.ends_with(" | a\\|b c d |"));
+        assert!(!output.contains('\r'));
+    }
+
+    #[test]
+    fn test_advisory_summary_cell_truncates_long_text() {
+        let summary = "x".repeat(150);
+
+        let cell = advisory_summary_cell(Some(&summary));
+
+        assert_eq!(cell, format!("{}...", "x".repeat(100)));
+    }
+
+    #[test]
+    fn test_advisory_summary_cell_truncation_does_not_split_escaped_pipe() {
+        // The 100th character is a pipe: it is kept whole and escaped.
+        let summary = format!("{}|{}", "x".repeat(99), "y".repeat(10));
+
+        let cell = advisory_summary_cell(Some(&summary));
+
+        assert_eq!(cell, format!("{}\\|...", "x".repeat(99)));
     }
 
     #[test]

@@ -7,6 +7,10 @@ use crate::i18n::Messages;
 /// human-readable Markdown tables concise.
 pub(crate) const LICENSE_TEXT_MAX_LEN: usize = 100;
 
+/// Maximum characters for an OSV advisory summary in Markdown table cells.
+/// The summary is untrusted text; CycloneDX output keeps it in full.
+pub(crate) const ADVISORY_SUMMARY_MAX_LEN: usize = 100;
+
 /// Truncates `text` to at most `max_len` characters, appending "..." if truncated.
 /// Returns `Cow::Borrowed` when no truncation is needed to avoid allocation.
 pub(crate) fn truncate_for_table(text: &str, max_len: usize) -> Cow<'_, str> {
