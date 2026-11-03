@@ -457,7 +457,7 @@ mod tests {
         // Regression test for the #825 fix: when the per-vulnerability detail
         // fetch fails, the package is soft-failed (excluded from results, no
         // panic/error propagation) rather than aborting the whole check. The
-        // exact localized warning text is covered by src/i18n/mod.rs's
+        // exact localized warning text is covered by src/i18n/'s
         // `test_warn_vuln_detail_fetch_failed_{en,ja}_format` tests; capturing
         // real stderr output in-process is unreliable, so this test instead
         // exercises the actual soft-fail code path end-to-end.
@@ -484,7 +484,7 @@ mod tests {
     async fn test_fetch_vulnerabilities_detail_fetch_failure_ja_locale_soft_fails() {
         // Same as above, but with Locale::Ja, to prove the failure path
         // works regardless of which locale the client was constructed with
-        // (the localized string itself is verified in src/i18n/mod.rs).
+        // (the localized string itself is verified in src/i18n/).
         let mock_server = MockServer::start().await;
         mount_batch_with_one_vuln(&mock_server).await;
         Mock::given(method("GET"))

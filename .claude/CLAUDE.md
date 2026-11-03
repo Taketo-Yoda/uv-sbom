@@ -249,7 +249,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `src/adapters/outbound/console/` | Console/progress reporter adapter |
 | `src/shared/` | Common error types and utilities |
 | `src/config.rs` | `ConfigFile` struct (deserialized from TOML config) |
-| `src/i18n/` | Locale and message catalog |
+| `src/i18n/` | Locale and message catalog, split by locale since #1054: `mod.rs` (`Locale`, `Messages`, `for_locale`/`format`, cross-locale placeholder-parity tests), `en.rs` (`EN_MESSAGES` + EN-only tests), `ja.rs` (`JA_MESSAGES` + JA-only tests) |
 
 ### Key Types
 
