@@ -628,3 +628,100 @@ source = { registry = "https://pypi.org/simple" }
     // but preserves dependency_map for correct direct/transitive classification
     assert_eq!(graph.transitive_dependency_count(), 1);
 }
+
+// Regression tests for #1042: OSV malicious-package advisories (`MAL-`) must
+// exceed any threshold and must not be suppressed by a baseline.
+
+const SINGLE_PACKAGE_LOCKFILE: &str = r#"
+version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "evil-pkg"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+
+fn unscored_vulnerability(id: &str) -> uv_sbom::sbom_generation::domain::Vulnerability {
+    use uv_sbom::sbom_generation::domain::{Severity, Vulnerability};
+    Vulnerability::new(id.to_string(), None, Severity::None, None, None, vec![]).unwrap()
+}
+
+async fn execute_with_findings(
+    vulnerability_id: &str,
+    baseline: Option<uv_sbom::sbom_generation::domain::VulnerabilityBaseline>,
+) -> SbomResponse {
+    use uv_sbom::sbom_generation::domain::{PackageVulnerabilities, Severity};
+
+    let findings = vec![PackageVulnerabilities::new(
+        "evil-pkg".to_string(),
+        "1.0.0".to_string(),
+        vec![unscored_vulnerability(vulnerability_id)],
+    )];
+
+    let use_case: GenerateSbomUseCase<_, _, _, _, MockVulnerabilityRepository, (), ()> =
+        GenerateSbomUseCase::new(
+            MockLockfileReader::new(SINGLE_PACKAGE_LOCKFILE.to_string()),
+            MockProjectConfigReader::new("test-project".to_string()),
+            MockLicenseRepository::new(),
+            MockProgressReporter::new(),
+            Some(MockVulnerabilityRepository::new(findings)),
+            None,
+            None,
+            None,
+            None,
+            uv_sbom::i18n::Locale::En,
+        );
+
+    let request = SbomRequest::builder()
+        .project_path(".")
+        .check_cve(true)
+        .severity_threshold_opt(Some(Severity::Low))
+        .baseline(baseline)
+        .build()
+        .unwrap();
+
+    use_case.execute(request).await.unwrap()
+}
+
+#[tokio::test]
+async fn test_malicious_advisory_exceeds_severity_threshold() {
+    let response = execute_with_findings("MAL-2024-0001", None).await;
+
+    assert!(response.has_vulnerabilities_above_threshold);
+    let result = response.vulnerability_check_result.unwrap();
+    assert!(result.threshold_exceeded);
+    assert_eq!(
+        result.above_threshold[0].vulnerabilities()[0].id(),
+        "MAL-2024-0001"
+    );
+}
+
+#[tokio::test]
+async fn test_unscored_non_malicious_advisory_stays_below_threshold() {
+    let response = execute_with_findings("GHSA-xxxx-yyyy-zzzz", None).await;
+
+    assert!(!response.has_vulnerabilities_above_threshold);
+    let result = response.vulnerability_check_result.unwrap();
+    assert!(!result.threshold_exceeded);
+    assert!(result.above_threshold.is_empty());
+    assert_eq!(
+        result.below_threshold[0].vulnerabilities()[0].id(),
+        "GHSA-xxxx-yyyy-zzzz"
+    );
+}
+
+#[tokio::test]
+async fn test_malicious_advisory_not_suppressed_by_baseline() {
+    use uv_sbom::sbom_generation::domain::{BaselineEntry, VulnerabilityBaseline};
+
+    let baseline = VulnerabilityBaseline::from_entries(vec![BaselineEntry {
+        package: "evil-pkg".to_string(),
+        version: "1.0.0".to_string(),
+        id: "MAL-2024-0001".to_string(),
+    }]);
+    let response = execute_with_findings("MAL-2024-0001", Some(baseline)).await;
+
+    assert!(response.has_vulnerabilities_above_threshold);
+    assert_eq!(response.baseline_suppressed_count, 0);
+}
