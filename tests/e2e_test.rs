@@ -683,7 +683,7 @@ mod lang_option_tests {
 // the test runner. Reproducing this PATH-shim trick portably on Windows (where
 // `Command::new("uv")` does not resolve extension-less names the same way) is
 // out of scope here; the underlying strings are still covered cross-platform by
-// the unit tests in `src/i18n/mod.rs`.
+// the unit tests in `src/i18n/`.
 #[cfg(unix)]
 mod suggest_fix_i18n_tests {
     use assert_cmd::cargo::cargo_bin_cmd;
