@@ -64,15 +64,16 @@ license policy.
 
 ## Competitive Positioning
 
-| Aspect | uv-sbom | cyclonedx-python | pip-audit | Syft |
-|--------|---------|-----------------|-----------|------|
-| Primary format | Human-readable Markdown | CycloneDX JSON | Terminal text | Multiple formats |
-| Data source | `uv.lock` (locked deps) | `.venv` (all installed) | pip/requirements | Installed env |
-| Actionability | Resolution Guide + Upgrade Advisor | None | None | None |
-| uv support | Native | Not supported (as of v7.2.1) | Indirect | Limited |
-| Target audience | Developers & security engineers | Security toolchains | Quick CLI scans | Enterprise SBOM pipelines |
+| Aspect | uv-sbom | cyclonedx-python | pip-audit | Syft | uv audit |
+|--------|---------|-----------------|-----------|------|----------|
+| Primary format | Human-readable Markdown | CycloneDX JSON | Terminal text | Multiple formats | Terminal text / JSON / SARIF |
+| Data source | `uv.lock` (locked deps) | `.venv` (all installed) | pip/requirements | Installed env | `uv.lock` (built into uv) |
+| Actionability | Resolution Guide + Upgrade Advisor | None | None | None | None (`--fix` on roadmap) |
+| uv support | Native | Not supported (as of v7.2.1) | Indirect | Limited | Native (since uv 0.13.4) |
+| Target audience | Developers & security engineers | Security toolchains | Quick CLI scans | Enterprise SBOM pipelines | uv users wanting a built-in audit |
 
 > **Note**: The table above reflects the founding competitive analysis (snapshot from 2026-03-07).
+> The `uv audit` column was added on 2026-11-05 (Issue #959); the other columns are unchanged.
 > For current tool versions and feature status, see `.claude/competitive-landscape.md`.
 
 ### What we intentionally do differently
@@ -87,6 +88,13 @@ provide upgrade paths, not just vulnerability lists.
 **vs. Syft**: We are purpose-built for uv. We understand uv's lock file format and
 can accurately distinguish direct from transitive dependencies. Syft treats all
 installed packages as equal.
+
+**vs. uv audit**: `uv audit` is built into uv and reads `uv.lock` natively. It reports
+vulnerabilities and adverse package statuses (such as deprecation and quarantine) as
+terminal text, JSON, or SARIF. uv-sbom adds a human-readable Markdown report,
+direct/transitive attribution, the Upgrade Advisor, and license, abandoned-package, and
+Python-compatibility checks. For current `uv audit` status, see
+`.claude/competitive-landscape.md` → "uv (`uv audit`)".
 
 ---
 
