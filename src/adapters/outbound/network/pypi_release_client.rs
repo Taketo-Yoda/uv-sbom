@@ -34,6 +34,7 @@ struct PyPiVersionResponse {
 pub struct PyPiReleaseClient {
     client: reqwest::Client,
     base_url: String,
+    max_response_bytes: usize,
 }
 
 impl PyPiReleaseClient {
@@ -44,7 +45,11 @@ impl PyPiReleaseClient {
     /// Shared constructor logic for [`Self::new`] and [`Self::new_with_base_url`].
     fn build(base_url: String) -> Result<Self> {
         let client = pypi_version_endpoint::build_client(pypi_version_endpoint::DEFAULT_TIMEOUT)?;
-        Ok(Self { client, base_url })
+        Ok(Self {
+            client,
+            base_url,
+            max_response_bytes: Self::MAX_RESPONSE_BYTES,
+        })
     }
 
     /// Creates a new PyPI release client with default configuration
@@ -62,6 +67,14 @@ impl PyPiReleaseClient {
         Self::build(base_url.into())
     }
 
+    /// Overrides the response-size limit, so tests can exercise the boundary
+    /// without serving multi-megabyte bodies.
+    #[cfg(test)]
+    fn with_max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.max_response_bytes = max_response_bytes;
+        self
+    }
+
     /// Fetches the version-level metadata; HTTP 404 is `Ok(None)`.
     ///
     /// Returning 404 as a success (rather than an error) is what keeps
@@ -76,7 +89,7 @@ impl PyPiReleaseClient {
             &self.base_url,
             package_name,
             version,
-            Self::MAX_RESPONSE_BYTES,
+            self.max_response_bytes,
             "PyPI release metadata",
         )
         .await?
@@ -119,6 +132,10 @@ mod tests {
 
     const RELEASE_PATH: &str = "/pypi/requests/2.31.0/json";
 
+    /// Small limit for the response-size tests, so they never serve the
+    /// production-sized (10 MiB) bodies that made them flaky (#1004).
+    const TEST_LIMIT: usize = 1024;
+
     async fn status_for(body: serde_json::Value) -> ReleaseStatus {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
@@ -134,6 +151,13 @@ mod tests {
     #[test]
     fn test_pypi_release_client_creation() {
         assert!(PyPiReleaseClient::new().is_ok());
+    }
+
+    #[test]
+    fn test_production_response_limit_is_10_mib() {
+        let client = PyPiReleaseClient::new().unwrap();
+        // A literal, not `MAX_RESPONSE_BYTES`, so changing the const fails here.
+        assert_eq!(client.max_response_bytes, 10 * 1024 * 1024);
     }
 
     #[tokio::test]
@@ -237,7 +261,7 @@ mod tests {
     #[tokio::test]
     async fn test_release_status_rejects_oversized_response_without_retry() {
         let mock_server = MockServer::start().await;
-        let body = vec![b' '; PyPiReleaseClient::MAX_RESPONSE_BYTES + 1];
+        let body = vec![b' '; TEST_LIMIT + 1];
         Mock::given(method("GET"))
             .and(path(RELEASE_PATH))
             .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
@@ -245,7 +269,9 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = PyPiReleaseClient::new_with_base_url(mock_server.uri()).unwrap();
+        let client = PyPiReleaseClient::new_with_base_url(mock_server.uri())
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let err = client
             .release_status("requests", "2.31.0")
             .await

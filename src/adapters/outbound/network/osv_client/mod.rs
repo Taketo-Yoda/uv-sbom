@@ -39,6 +39,7 @@ pub struct OsvClient {
     /// (`src/adapters/outbound/filesystem/file_writer.rs`), which also holds a
     /// `Locale` and formats/prints a localized message itself.
     locale: Locale,
+    max_response_bytes: usize,
 }
 
 impl OsvClient {
@@ -64,6 +65,14 @@ impl OsvClient {
         Self::build(base_url.into(), locale)
     }
 
+    /// Overrides the response-size limit, so tests can exercise the boundary
+    /// without serving multi-megabyte bodies.
+    #[cfg(test)]
+    fn with_max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.max_response_bytes = max_response_bytes;
+        self
+    }
+
     /// Shared constructor logic for [`Self::new`] and [`Self::new_with_base_url`].
     fn build(base_url: String, locale: Locale) -> Result<Self> {
         let version = env!("CARGO_PKG_VERSION");
@@ -77,6 +86,7 @@ impl OsvClient {
             client,
             base_url,
             locale,
+            max_response_bytes: Self::MAX_RESPONSE_BYTES,
         })
     }
 
@@ -106,7 +116,7 @@ impl OsvClient {
 
         let bytes = response_size_guard::read_bounded_bytes(
             response,
-            Self::MAX_RESPONSE_BYTES,
+            self.max_response_bytes,
             Some("OSV batch query"),
         )
         .await?;
@@ -153,7 +163,7 @@ impl OsvClient {
 
         let bytes = response_size_guard::read_bounded_bytes(
             response,
-            Self::MAX_RESPONSE_BYTES,
+            self.max_response_bytes,
             Some(&format!("OSV vulnerability {}", vuln_id)),
         )
         .await?;
@@ -416,10 +426,21 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    /// Small limit for the response-size tests, so they never serve the
+    /// production-sized (10 MiB) bodies that made them flaky (#1004).
+    const TEST_LIMIT: usize = 1024;
+
     #[test]
     fn test_osv_client_creation() {
         let client = OsvClient::new(Locale::En);
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_production_response_limit_is_10_mib() {
+        let client = OsvClient::new(Locale::En).unwrap();
+        // A literal, not `MAX_RESPONSE_BYTES`, so changing the const fails here.
+        assert_eq!(client.max_response_bytes, 10 * 1024 * 1024);
     }
 
     // Integration test - requires network access
@@ -568,14 +589,16 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/v1/querybatch"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                batch_json_of_len(OsvClient::MAX_RESPONSE_BYTES + 1),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(batch_json_of_len(TEST_LIMIT + 1), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
-        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En)
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let err = client.fetch_batch(&[test_package()]).await.unwrap_err();
         let msg = err.to_string();
         // "too large" is the Content-Length pre-check branch specifically.
@@ -591,14 +614,16 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/v1/querybatch"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                batch_json_of_len(OsvClient::MAX_RESPONSE_BYTES),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(batch_json_of_len(TEST_LIMIT), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
-        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En)
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let results = client.fetch_batch(&[test_package()]).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].vulns.len(), 1);
@@ -609,14 +634,16 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/v1/vulns/CVE-2024-0001"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                vuln_json_of_len(OsvClient::MAX_RESPONSE_BYTES + 1),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(vuln_json_of_len(TEST_LIMIT + 1), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
-        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En)
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let err = client
             .fetch_vulnerability_details("CVE-2024-0001")
             .await
@@ -636,14 +663,16 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/v1/vulns/CVE-2024-0001"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                vuln_json_of_len(OsvClient::MAX_RESPONSE_BYTES),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(vuln_json_of_len(TEST_LIMIT), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
-        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En).unwrap();
+        let client = OsvClient::new_with_base_url(mock_server.uri(), Locale::En)
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let vuln = client
             .fetch_vulnerability_details("CVE-2024-0001")
             .await
