@@ -754,3 +754,72 @@ ignore_cves:
         assert!(stderr.contains("must not be empty"));
     }
 }
+
+// ============================================================================
+// Default Format Deprecation Warning Tests (#1070)
+// ============================================================================
+
+mod format_default_warning_tests {
+    use super::*;
+
+    const WARNING_MARKER: &str = "will change to Markdown in v5.0.0";
+
+    /// Runs uv-sbom against a fresh test project and returns (stdout, stderr).
+    fn run_with(config: Option<&str>, extra_args: &[&str]) -> (String, String) {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+        if let Some(content) = config {
+            write_config(&dir.path().join("uv-sbom.config.yml"), content);
+        }
+
+        let mut args = vec!["-p", dir.path().to_str().unwrap(), "--no-check-cve"];
+        args.extend_from_slice(extra_args);
+        let output = cargo_bin_cmd!("uv-sbom").args(&args).output().unwrap();
+
+        assert!(output.status.success());
+        (
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+        )
+    }
+
+    #[test]
+    fn test_warning_printed_when_format_defaulted() {
+        let (stdout, stderr) = run_with(None, &[]);
+        assert!(stderr.contains(WARNING_MARKER));
+        assert!(stderr.contains("--format json"));
+        // stdout is unchanged: still the JSON SBOM, no warning text
+        assert!(stdout.contains("\"bomFormat\": \"CycloneDX\""));
+        assert!(!stdout.contains(WARNING_MARKER));
+    }
+
+    #[test]
+    fn test_warning_localized_to_japanese() {
+        let (_, stderr) = run_with(None, &["--lang", "ja"]);
+        assert!(stderr.contains("v5.0.0 でデフォルトの出力形式は Markdown に変更されます"));
+    }
+
+    #[test]
+    fn test_warning_suppressed_by_cli_format_json() {
+        let (_, stderr) = run_with(None, &["--format", "json"]);
+        assert!(!stderr.contains(WARNING_MARKER));
+    }
+
+    #[test]
+    fn test_warning_suppressed_by_cli_format_markdown() {
+        let (_, stderr) = run_with(None, &["--format", "markdown"]);
+        assert!(!stderr.contains(WARNING_MARKER));
+    }
+
+    #[test]
+    fn test_warning_suppressed_by_config_format_json() {
+        let (_, stderr) = run_with(Some("format: json\n"), &[]);
+        assert!(!stderr.contains(WARNING_MARKER));
+    }
+
+    #[test]
+    fn test_warning_suppressed_by_config_format_markdown() {
+        let (_, stderr) = run_with(Some("format: markdown\n"), &[]);
+        assert!(!stderr.contains(WARNING_MARKER));
+    }
+}

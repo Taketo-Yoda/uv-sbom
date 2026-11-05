@@ -30,7 +30,9 @@ use cli::config_resolver::{load_config, merge_config, MergedConfig};
 use cli::error_display::{render_config_error, render_error_chain};
 use cli::exclude_groups::resolve_exclude_groups;
 use cli::incident::{incident_exit_code, parse_incident_target, resolve_incident_format};
-use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
+use cli::runner::{
+    display_banner, resolve_suggest_fix, validate_project_path, warn_if_format_defaulted,
+};
 use cli::workspace_summary::{
     render_uncovered_root_groups_warning, render_workspace_aggregate, EnabledChecks, MemberFindings,
 };
@@ -564,6 +566,12 @@ async fn run(args: Args) -> Result<bool> {
     // Merge CLI and config values
     let merged = merge_config(&args, &config)?;
 
+    warn_if_format_defaulted(
+        args.format,
+        config.as_ref().and_then(|c| c.format.as_deref()),
+        msgs,
+    );
+
     // Print startup warnings using the resolved format and check_license, so a
     // `format: markdown` (#822) or `check_license: true` (#828) set only via config
     // file (no corresponding CLI flag) is still correctly reflected.
@@ -696,6 +704,11 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
 
     let config = load_config(&args, &workspace_root, locale)?;
     let merged = merge_config(&args, &config)?;
+    warn_if_format_defaulted(
+        args.format,
+        config.as_ref().and_then(|c| c.format.as_deref()),
+        msgs,
+    );
 
     // --production-only expands to the union of every member's group names.
     let workspace_exclude_groups = resolve_exclude_groups(
@@ -897,12 +910,18 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     display_banner();
 
     let locale = args.lang;
+    let msgs = Messages::for_locale(locale);
     let project_dir = args.path.as_deref().unwrap_or(".");
     let project_path = PathBuf::from(project_dir);
     validate_project_path(&project_path)?;
 
     let config = load_config(&args, &project_path, locale)?;
     let merged = merge_config(&args, &config)?;
+    warn_if_format_defaulted(
+        args.format,
+        config.as_ref().and_then(|c| c.format.as_deref()),
+        msgs,
+    );
 
     let check_cve = merged.check_cve;
     let request = DiffRequest {
