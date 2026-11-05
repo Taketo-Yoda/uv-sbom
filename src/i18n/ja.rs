@@ -68,6 +68,7 @@ pub(super) static JA_MESSAGES: Messages = Messages {
     error_config_parse_failed: "設定ファイルの解析に失敗しました: {}\n\n💡 ヒント: ファイルが有効な YAML 構文であることを確認してください。",
     error_config_empty_ignore_cve_id: "設定が不正です: ignore_cves[{}].id は空にできません。\n\n💡 ヒント: ignore_cves の各エントリには空でない 'id' フィールドが必要です（例: \"CVE-2024-1234\"）。",
     error_config_invalid_unknown_license_handling: "設定が不正です: license_policy.unknown は warn, deny, allow のいずれかである必要があります。指定値: \"{}\"",
+    error_config_invalid_format: "設定が不正です: format は json, markdown のいずれかである必要があります。指定値: \"{}\"",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -528,6 +529,10 @@ mod tests {
         assert_eq!(
             Messages::format(msgs.error_config_invalid_unknown_license_handling, &["maybe"]),
             "設定が不正です: license_policy.unknown は warn, deny, allow のいずれかである必要があります。指定値: \"maybe\""
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_invalid_format, &["xml"]),
+            "設定が不正です: format は json, markdown のいずれかである必要があります。指定値: \"xml\""
         );
     }
 

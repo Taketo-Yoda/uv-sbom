@@ -65,8 +65,8 @@ const FORMAT_DEFAULT_CHANGE_VERSION: &str = "5.0.0";
 /// Returns `true` when neither `--format` nor the config file's `format` key is
 /// set, i.e. `resolve_format` falls through to the JSON default.
 ///
-/// Presence-based on purpose: a config `format` value that does not parse still
-/// counts as set, so it suppresses the warning (validating that value is #1072).
+/// Presence-based on purpose: `validate_config` rejects any config `format`
+/// that does not parse (#1072), so presence means a valid value is set.
 fn format_was_defaulted(cli: Option<OutputFormat>, config_format: Option<&str>) -> bool {
     cli.is_none() && config_format.is_none()
 }
@@ -202,8 +202,8 @@ mod tests {
     }
 
     #[test]
-    fn test_format_was_defaulted_false_with_unparseable_config_format() {
-        // Presence-based: an invalid value still suppresses the warning (#1072).
+    fn test_format_was_defaulted_presence_based_ignores_value() {
+        // The value is not inspected; invalid values are rejected at config load (#1072).
         assert!(!format_was_defaulted(None, Some("xml")));
     }
 
