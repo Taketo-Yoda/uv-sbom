@@ -690,6 +690,66 @@ ignore_cves:
     }
 
     #[test]
+    fn test_invalid_format_validation_error() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+        write_config(&dir.path().join("uv-sbom.config.yml"), "format: xml\n");
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args(["-p", dir.path().to_str().unwrap(), "--no-check-cve"])
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(3)); // ApplicationError
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("Invalid config: format must be one of: json, markdown. Got: \"xml\"")
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(!stdout.contains("bomFormat"));
+    }
+
+    #[test]
+    fn test_invalid_format_validation_error_localized_to_japanese() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+        write_config(&dir.path().join("uv-sbom.config.yml"), "format: xml\n");
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(3));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(
+            "設定が不正です: format は json, markdown のいずれかである必要があります。指定値: \"xml\""
+        ));
+    }
+
+    #[test]
+    fn test_config_format_is_case_insensitive() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+        write_config(&dir.path().join("uv-sbom.config.yml"), "format: MD\n");
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args(["-p", dir.path().to_str().unwrap(), "--no-check-cve"])
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("# Software Bill of Materials (SBOM)"));
+    }
+
+    #[test]
     fn test_explicit_config_not_found_error() {
         let dir = TempDir::new().unwrap();
         create_test_project(dir.path());

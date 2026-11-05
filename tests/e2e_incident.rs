@@ -217,6 +217,27 @@ mod incident_tests {
             .stdout(predicate::str::starts_with("## Incident Report:"));
     }
 
+    /// An invalid config `format` is rejected in incident mode too, before any
+    /// network request, even though incident mode never uses the value (#1072)
+    #[test]
+    fn test_incident_rejects_invalid_config_format() {
+        let temp = copy_project(SAMPLE_PROJECT);
+        fs::write(temp.path().join("uv-sbom.config.yml"), "format: xml\n").unwrap();
+
+        cargo_bin_cmd!("uv-sbom")
+            .args([
+                "--incident",
+                "requests>=2.26,<2.31.0",
+                "--path",
+                temp.path().to_str().unwrap(),
+            ])
+            .assert()
+            .code(3)
+            .stderr(predicate::str::contains(
+                "Invalid config: format must be one of: json, markdown. Got: \"xml\"",
+            ));
+    }
+
     /// --format json produces JSON
     #[test]
     #[ignore = "requires network access to OSV and PyPI"]

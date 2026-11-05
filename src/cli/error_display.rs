@@ -37,6 +37,9 @@ pub fn render_config_error(err: &ConfigError, msgs: &Messages) -> String {
         ConfigError::InvalidUnknownLicenseHandling { value } => {
             Messages::format(msgs.error_config_invalid_unknown_license_handling, &[value])
         }
+        ConfigError::InvalidFormat { value } => {
+            Messages::format(msgs.error_config_invalid_format, &[value])
+        }
     }
 }
 
@@ -152,6 +155,9 @@ mod tests {
             ConfigError::InvalidUnknownLicenseHandling {
                 value: "maybe".to_string(),
             },
+            ConfigError::InvalidFormat {
+                value: "xml".to_string(),
+            },
         ]
     }
 
@@ -227,6 +233,15 @@ mod tests {
                 msgs
             ),
             "設定が不正です: license_policy.unknown は warn, deny, allow のいずれかである必要があります。指定値: \"maybe\""
+        );
+        assert_eq!(
+            render_config_error(
+                &ConfigError::InvalidFormat {
+                    value: "xml".to_string(),
+                },
+                msgs
+            ),
+            "設定が不正です: format は json, markdown のいずれかである必要があります。指定値: \"xml\""
         );
     }
 

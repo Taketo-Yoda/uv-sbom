@@ -16,6 +16,8 @@ impl std::str::FromStr for OutputFormat {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Mirrored by `config::ACCEPTED_FORMAT_VALUES` (#1072); parity is pinned by
+        // `config::tests::test_is_accepted_format_matches_output_format_from_str`.
         match s.to_lowercase().as_str() {
             "json" => Ok(OutputFormat::Json),
             "markdown" | "md" => Ok(OutputFormat::Markdown),
