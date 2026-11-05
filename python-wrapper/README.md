@@ -11,10 +11,11 @@ Generate SBOMs (Software Bill of Materials) for Python projects managed by [uv](
 
 ## Features
 
-- **Incident response** - `uv-sbom --incident <ADVISORY_ID>` tells you in one command whether you are affected, whether the fix is released, and what to run next (a dry-run-verified `uv lock --upgrade-package` command, or guidance)
+- **Human-readable SBOMs** - Markdown and CycloneDX 1.6 JSON output from your `uv.lock`, focused on production runtime dependencies
+- **Vulnerability scanning** - CVE checking via OSV API is **enabled by default**; use `--no-check-cve` to opt out
 - **Fast and standalone** - Written in Rust, no Python dependencies required at runtime
 - **Multiple output formats** - CycloneDX 1.6 JSON (standard) and Markdown (human-readable)
-- **Vulnerability scanning** - CVE checking via OSV API is **enabled by default**; use `--no-check-cve` to opt out
+- **Incident response** - `uv-sbom --incident <ADVISORY_ID>` tells you in one command whether you are affected, whether the fix is released, and what to run next
 - **Configurable thresholds** - Filter vulnerabilities by severity or CVSS score
 - **Package exclusion** - Exclude internal packages with `--exclude` patterns
 - **Configuration file support** - Define defaults in `uv-sbom.config.yml`
@@ -36,7 +37,7 @@ Unlike other SBOM tools that scan the entire virtual environment, `uv-sbom` focu
 
 This focused approach reduces noise in security scanning by excluding build-time dependencies that don't ship with your application.
 
-When a new advisory drops, `--incident` answers "am I affected, is the patch out, what do I run?" for your `uv.lock`, and its exit codes let a scheduled job wait for the patch for you. See [Incident Response](https://github.com/Taketo-Yoda/uv-sbom#-incident-response-am-i-affected-is-the-patch-out-what-do-i-run).
+When a new advisory drops, `--incident` answers "am I affected, is the patch out, what do I run?" for your `uv.lock`, and its exit codes let a scheduled job wait for the patch for you. See [Incident Response](https://github.com/Taketo-Yoda/uv-sbom/blob/main/docs/incident-response.md).
 
 ## Installation
 
@@ -81,7 +82,7 @@ uv-sbom --incident "urllib3<2.0.6"
 - `1`: affected, fix released (run the suggested command)
 - `4`: affected, no released fix (check again later; a scheduled job can wait on this)
 
-Other codes (`2` invalid arguments, `3` errors) are listed in [Exit Codes](https://github.com/Taketo-Yoda/uv-sbom#exit-codes).
+Other codes (`2` invalid arguments, `3` errors) are listed in [Exit Codes](https://github.com/Taketo-Yoda/uv-sbom/blob/main/docs/ci-integration.md#exit-codes).
 
 ### Vulnerability Checking
 
