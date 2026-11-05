@@ -8,1982 +8,229 @@
 
 ----
 
-[uv](https://github.com/astral-sh/uv)で管理されているPythonプロジェクトのSBOM（Software Bill of Materials）を生成します。
+**[uv](https://github.com/astral-sh/uv) で管理された Python プロジェクト向けの、人間が読める SBOM と実用的なサプライチェーンインサイト。**
 
-## 🚨 インシデント対応: 影響は？ パッチは出た？ 何を実行すればいい？
+uv-sbom は `uv.lock` を読み取り、本番ランタイム依存関係に特化した Markdown または CycloneDX 1.6 JSON 形式の SBOM を生成します。さらに、脆弱性スキャン、ライセンスコンプライアンス、インシデント対応、各種サプライチェーンヘルスチェックをコマンド1つで実行します。
 
-新しい脆弱性アドバイザリが出た。そんなとき、プロジェクトが影響を受けているか、修正版がもう PyPI に出ているか、そして何を実行すればよいかまで、コマンド1つでわかります。提示されるアップグレードコマンドは、`uv.lock` を書き換えずに試行解決で検証済みです（解決できない場合はガイダンスが表示されます）。
-
-```bash
-uv-sbom --incident GHSA-v845-jxx5-vc9f
-```
-
-[`examples/suggest-fix-project`](examples/suggest-fix-project) に `--lang ja` を付けて実行した実際の出力（終了コード `1`）:
-
-````markdown
-## インシデントレポート: GHSA-v845-jxx5-vc9f
-
-- **別名**: CVE-2023-43804, PYSEC-2023-192
-- **深刻度**: MEDIUM
-- **概要**: `Cookie` HTTP header isn't stripped on cross-origin redirects
-- **総合判定**: 影響あり — 修正版リリース済み
-
-### 1. 影響
-
-- **urllib3** 2.0.4 — 影響あり — 修正版リリース済み (間接依存)
-  - 依存経路:
-    - `requests → urllib3`
-
-### 2. パッチ状況
-
-- **urllib3**: 2.0.6 で修正 — リリース済み
-
-### 3. 次のアクション
-
-**urllib3** — 試行解決で検証済み（uv.lock は変更されていません）:
-```sh
-uv lock --upgrade-package urllib3==2.0.6
-uv sync
-```
-````
-
-次に何をすべきかは、終了コードでわかります。スクリプトからも判定できます:
-
-| 終了コード | 判定 | 次にやること |
-|-----------|------|-------------|
-| `0` | 影響なし | 対応不要です |
-| `1` | 影響あり・修正版リリース済み | **次のアクション** のコマンドを実行します |
-| `4` | 影響あり・修正版は未リリース | 修正版のリリースを待ち、あとで再確認します（下記で自動化できます） |
-
-ワークスペース（`--workspace`）、OSV 未登録のアドバイザリ（`"urllib3<2.0.6"` のように範囲を指定）、JSON 出力、終了コードの一覧は [インシデント対応（`--incident`）](#インシデント対応--incident) を参照してください。
-
-### アドバイザリを手作業で見張るのはもうやめよう
-
-`--incident` の終了コード `4` は、プロジェクトが影響を受けているものの、脆弱性を修正したバージョンがまだリリースされていないことを表します。リリースを待つのはスクリプトやスケジューラーに任せましょう。たとえば [`wait-for-patch.sh`](examples/incident-response/wait-for-patch.sh) をプロジェクトのルートにコピーして実行権限を付け、1時間ごとにチェックするには、次のように実行します:
+## 機能概要
 
 ```bash
-POLL_INTERVAL=3600 ./wait-for-patch.sh GHSA-v845-jxx5-vc9f
+uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 ```
 
-[`examples/incident-response/`](examples/incident-response/) には、このスクリプトを含めて、すぐ使える2つの方法を用意しています:
+1回の実行でコンポーネント一覧、脆弱性レポート（修正ガイダンス付き）、アップグレード推奨を出力します：
 
-- [`wait-for-patch.sh`](examples/incident-response/wait-for-patch.sh): 修正版が出るまでチェックを繰り返し、出たらレポートを表示します。任意で `ON_FIX_COMMAND`（通知やアップグレード PR の作成など）も実行できます。
-- [`incident-watch.yml`](examples/incident-response/incident-watch.yml): 定期実行する GitHub Actions ワークフローです。待っている間は「Still waiting」として成功し、修正版がリリースされるとジョブサマリーにレポートを載せて失敗します。
+```markdown
+## サマリー
 
-uv-sbom 自体は何も監視しません。cron や CI のスケジュールが uv-sbom を再実行し、uv-sbom は実行されるたびに答えるだけです。`uv.lock` を書き換えることもありません。なお、公開されたばかりのアドバイザリは OSV への登録まで時間がかかることがあります。登録されるまでは、影響範囲を自分で指定してください（[#963](https://github.com/Taketo-Yoda/uv-sbom/issues/963)）。
+| 項目 | 件数 | ステータス |
+|------|------|-----------|
+| 直接依存 | 2 | ✅ |
+| 間接依存 | 9 | ✅ |
+| 脆弱性（閾値以上） | 32 | ❌ |
 
-## 機能
+## 脆弱性レポート
 
-- 🚨 **インシデント対応**（`--incident`） - 1つのアドバイザリについて、影響を受けているか、修正版はリリース済みか、どの `uv lock --upgrade-package` コマンドを実行すればよいか（試行解決で検証済み）をコマンド1つで答えます。終了コードで判定できるので、パッチ待ちのスクリプト化も簡単です（[上記参照](#-インシデント対応-影響は-パッチは出た-何を実行すればいい)）
-- 📦 `uv.lock`ファイルを解析して依存関係情報を抽出
-- 🔍 PyPIからライセンス情報を自動取得（リトライロジック付き）
-- 🛡️ OSV APIを使用した既知の脆弱性チェック（Markdownフォーマットのみ）
-- 📋 許可/拒否リストとワイルドカード対応のライセンスコンプライアンスポリシーチェック
-- 🔎 **脆弱性解決ガイド** - 脆弱な推移的パッケージを導入している直接依存関係を特定し、マルチホップの推移的脆弱性に対しては**完全な依存チェーン**を表示
-- 📊 複数のフォーマットに対応:
-  - **CycloneDX 1.6** JSON形式（標準SBOM形式）
-  - **Markdown**形式（直接依存と推移的依存を明確に分離）
-- 🔍 **廃止パッケージ検出** - 設定可能な日数（デフォルト: 730日）以内にPyPI上で新しいリリースがないパッケージを特定し、セキュリティパッチが行われていないメンテナンス停止の依存関係を把握できます
-- 🚀 高速でスタンドアロン - Rustで実装
-- 💾 標準出力またはファイルへ出力
-- 🛡️ 堅牢なエラーハンドリングと親切なエラーメッセージ・提案
-- 📈 ライセンス情報取得時の進捗表示
-- 🎯 **悪用可能性の優先順位付け** - CVE結果にEPSSスコア（FIRST.org）とCISA KEVカタログステータスを付加し、実際の悪用可能性に基づいて脆弱性の優先順位付けを支援
+| パッケージ | 現バージョン | 修正バージョン | CVSS | 深刻度 | 脆弱性 ID |
+|-----------|-------------|--------------|------|--------|----------|
+| urllib3 | 2.0.4 | 2.6.3 | 7.5 | 🟠 HIGH | GHSA-38jv-5279-wg99 |
+| h11 | 0.14.0 | 0.16.0 | 9.1 | 🔴 CRITICAL | GHSA-vqfr-h8mv-ghfj |
+| ...
 
-## スコープとCycloneDXとの主な違い
+## 脆弱性解決ガイド
 
-### SBOMのスコープ
+| 脆弱パッケージ | 現バージョン | 修正バージョン | 深刻度 | 導入元（直接依存） | 推奨アクション |
+|---------------|------------|--------------|--------|-----------------|--------------|
+| urllib3 | 2.0.4 | 2.0.6 | 🟡 MEDIUM | requests (2.31.0) | ⬆️ requests → 2.32.3 へアップグレード |
+| h11 | 0.14.0 | 0.16.0 | 🔴 CRITICAL | httpx (0.24.1) | ⬆️ httpx → 0.28.1 へアップグレード |
+```
 
-このツールは**uv.lock**ファイルの内容に基づいてSBOMを生成します。これには以下が含まれます:
-- 直接的なランタイム依存関係
-- 推移的なランタイム依存関係
-- 開発依存関係（uv.lockにロックされている場合）
+## なぜ uv-sbom？
 
-**含まれないもの:**
-- ビルドシステム依存関係（例: hatchling, setuptools）
-- 公開ツール（例: twine, build）
-- 仮想環境にのみ存在し、uv.lockにロックされていない依存関係
+- **uv.lock ネイティブ** — `uv.lock` を直接読み取り、本番ランタイム依存関係のみを対象とします。仮想環境やビルド時依存は不要です。
+- **Markdown ファースト、アクション可能な出力** — コピーして PR に貼り付けたりレポートに使える表形式。脆弱性ごとに、どの直接依存が原因か、完全な依存チェーンを表示します。
+- **オールインワンのサプライチェーンカバレッジ** — CVE スキャン、ライセンスコンプライアンス、放棄パッケージ検出、非 PyPI ソース検出、Python バージョン互換性、悪用可能性の優先度付け（EPSS + CISA KEV）、インシデント対応、依存差分 — すべて1つのツールで。
 
-### CycloneDX公式ツールとの比較
+## クイックスタート
 
-CycloneDX公式ツール (v7.2.1時点) は、まだ uv を直接サポートしていません。PythonプロジェクトのSBOMを生成する場合:
-
-| 側面 | uv-sbom（このツール） | CycloneDX公式ツール |
-|--------|---------------------|--------------------------|
-| **データソース** | `uv.lock`ファイル | `.venv`仮想環境 |
-| **スコープ** | 本番ランタイム依存のみ | ビルド/開発ツールを含むサプライチェーン全体 |
-| **パッケージ数** | 通常少なめ（例: 16パッケージ） | 通常多め（例: 38+パッケージ） |
-| **ユースケース** | 本番環境のセキュリティスキャン | 包括的なサプライチェーン監査 |
-| **精度** | ロックされた依存関係を反映 | インストールされたパッケージを反映 |
-
-### どちらのツールを使うべきか?
-
-- **本番環境のセキュリティスキャン**: `uv-sbom`を使用して本番環境にデプロイされる依存関係に焦点を当てる
-- **包括的なサプライチェーン監査**: CycloneDX公式ツールを使用してすべての開発・ビルド時依存関係を含める
-- **規制コンプライアンス**: 特定の要件を確認 - 一部の規制では包括的なアプローチが必要な場合があります
-
-`uv-sbom`の焦点を絞ったアプローチは、最終的なアプリケーションに含まれないビルド時依存関係を除外することで、セキュリティ脆弱性スキャンにおけるノイズを削減します。
-
-## インストール
-
-### Cargo（Rustユーザー向け推奨）
-
-![Crates.io Total Downloads](https://img.shields.io/crates/d/uv-sbom)
-
-[crates.io](https://crates.io/crates/uv-sbom)からインストール:
+### インストール
 
 ```bash
+# Cargo（Rust ユーザー）
 cargo install uv-sbom
-```
 
-### uv tool（Pythonユーザー向け）
-
-![PyPI - Downloads](https://img.shields.io/pypi/dm/uv-sbom-bin?logo=PyPI&logoColor=white)
-
-Pythonラッパーパッケージをインストール:
-
-```bash
+# uv tool（Python ユーザー）
 uv tool install uv-sbom-bin
-```
 
-またはpip経由:
-
-```bash
+# pip
 pip install uv-sbom-bin
 ```
 
-インストール後は `uv-sbom` コマンドで実行:
+ビルド済みバイナリは [GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases) ページで macOS (Apple Silicon, Intel)、Linux (x86_64)、Windows 向けに提供しています。
+
+### 基本コマンド
 
 ```bash
-uv-sbom --version
-```
+# 脆弱性スキャン付き Markdown SBOM を生成（CVE チェックはデフォルトで有効）
+uv-sbom --format markdown --output SBOM.md
 
-**注意**: パッケージ名は `uv-sbom-bin` ですが、インストールされるコマンド名は `uv-sbom` です。
+# CycloneDX JSON SBOM を生成（デフォルト形式）
+uv-sbom --format json --output sbom.json
 
-### プリビルドバイナリ
-
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Taketo-Yoda/uv-sbom/total?logo=GitHub)
-
-[GitHub Releases](https://github.com/Taketo-Yoda/uv-sbom/releases)からプリビルドバイナリをダウンロード:
-
-**macOS (Apple Silicon)**:
-```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-aarch64-apple-darwin.tar.gz
-tar xzf uv-sbom-aarch64-apple-darwin.tar.gz
-sudo mv uv-sbom /usr/local/bin/
-```
-
-**macOS (Intel)**:
-```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-x86_64-apple-darwin.tar.gz
-tar xzf uv-sbom-x86_64-apple-darwin.tar.gz
-sudo mv uv-sbom /usr/local/bin/
-```
-
-**Linux (x86_64)**:
-```bash
-curl -LO https://github.com/Taketo-Yoda/uv-sbom/releases/latest/download/uv-sbom-x86_64-unknown-linux-gnu.tar.gz
-tar xzf uv-sbom-x86_64-unknown-linux-gnu.tar.gz
-sudo mv uv-sbom /usr/local/bin/
-```
-
-**Windows**:
-[リリースページ](https://github.com/Taketo-Yoda/uv-sbom/releases)から`uv-sbom-x86_64-pc-windows-msvc.zip`をダウンロードし、任意の場所に展開してください。
-
-### ソースから
-
-```bash
-# リポジトリをクローン
-git clone https://github.com/Taketo-Yoda/uv-sbom.git
-cd uv-sbom
-
-# ビルドとインストール
-cargo build --release
-cargo install --path .
-```
-
-### インストールの確認
-
-```bash
-uv-sbom --version
-```
-
-## 使用方法
-
-### 基本的な使用方法
-
-カレントディレクトリのCycloneDX JSON SBOMを生成:
-
-```bash
-uv-sbom
-```
-
-### 出力フォーマット
-
-直接依存と推移的依存を含むMarkdownテーブルを生成:
-
-```bash
-uv-sbom --format markdown
-```
-
-CycloneDX JSONを生成（デフォルト）:
-
-```bash
-uv-sbom --format json
+# 特定のアドバイザリを確認：影響は？パッチは出た？何を実行？
+uv-sbom --incident GHSA-v845-jxx5-vc9f
 ```
 
 ### 出力言語
 
-`--lang` オプションを使用して、人間が読みやすいフォーマット（Markdown）の出力言語を切り替えます。デフォルトは英語（`en`）です。
-
 ```bash
-# 日本語でMarkdown SBOMレポートを生成
+# 日本語 Markdown 出力
 uv-sbom --format markdown --lang ja
-
-# 英語でMarkdown SBOMレポートを生成（デフォルト）
-uv-sbom --format markdown --lang en
-```
-
-**対応値:** `en`（英語、デフォルト）、`ja`（日本語）
-
-**注意:** `--lang` オプションは、Markdown出力のセクションヘッダー、テーブルの列名、ステータスラベルに影響します。パッケージ名・CVE ID・SPDXライセンス識別子は、`--lang` の設定によらず常に元の形式で出力されます。
-
-### プロジェクトパスの指定
-
-別のディレクトリのプロジェクトを解析:
-
-```bash
-uv-sbom --path /path/to/project
-```
-
-### ファイルへの保存
-
-標準出力の代わりにファイルへ出力:
-
-```bash
-uv-sbom --format json --output sbom.json
-uv-sbom --format markdown --output SBOM.md
-```
-
-### オプションの組み合わせ
-
-```bash
-uv-sbom --path /path/to/project --format markdown --output SBOM.md
-```
-
-### パッケージの除外
-
-`--exclude`または`-e`オプションを使用して、特定のパッケージをSBOMから除外できます：
-
-```bash
-# 単一のパッケージを除外
-uv-sbom -e "pytest"
-
-# 複数のパッケージを除外
-uv-sbom -e "pytest" -e "mypy" -e "black"
-
-# ワイルドカードパターンを使用して除外
-uv-sbom -e "debug-*"        # "debug-"で始まるすべてのパッケージを除外
-uv-sbom -e "*-dev"          # "-dev"で終わるすべてのパッケージを除外
-uv-sbom -e "*-test-*"       # "-test-"を含むすべてのパッケージを除外
-
-# 他のオプションと組み合わせて使用
-uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
-```
-
-**パターン構文:**
-- `*`をワイルドカードとして使用し、0文字以上の文字列にマッチさせます
-- パターンは大文字小文字を区別します
-- 1回の実行につき最大64個のパターンを指定できます
-
-**情報の外部送信を防止する:**
-独自の社内ライブラリなど、PyPI等の外部レジストリに名前を送信したくないパッケージがある場合は、`--exclude` オプションを使用してください。これにより、メタデータ取得時の通信から特定のライブラリ名を除外し、秘匿性を保つことができます。
-
-### 依存関係グループによるパッケージの除外
-
-`--exclude-groups` を使用すると、指定した[依存関係グループ](https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups)（例: `dev`, `test`, `lint`）からのみ到達可能なパッケージを除外できます。本番の依存関係と共有されているパッケージは常に保持されます。グループ名は大文字・小文字および区切り文字（`-`、`_`、`.`）を区別せずに照合されるため（[PEP 735](https://peps.python.org/pep-0735/)）、`--exclude-groups Lint` や `--exclude-groups type_check` でもグループ `lint` や `type-check` が除外されます。設定ファイルの `exclude_groups` も同様です。
-
-```bash
-# "dev"グループからのみ到達可能なパッケージを除外
-uv-sbom --exclude-groups dev --format markdown
-
-# 複数グループを除外（カンマ区切り）
-uv-sbom --exclude-groups dev,test,lint --format markdown
-
-# プロダクションのみモード: すべての非デフォルト依存関係グループを自動的に除外
-uv-sbom --production-only --format markdown
-```
-
-`--production-only` は実行時に `uv.lock` ファイルの `[manifest.dependency-groups]` セクションを読み込み、検出されたすべてのグループに `--exclude-groups` を設定します。グループを明示的にすべて列挙するのと同等ですが、より簡潔で、グループの追加・削除に自動で対応します。
-
-> **注意:** `--exclude-groups` と `--production-only` は相互排他的です。
-
-設定ファイルでも指定できます:
-
-```yaml
-# これらの依存関係グループからのみ到達可能なパッケージを除外
-exclude_groups:
-  - dev
-  - test
-  - lint
-```
-
-### 設定ファイル
-
-設定ファイル（`uv-sbom.config.yml`）を使用して、毎回コマンドラインでオプションを渡す代わりにデフォルトオプションを設定できます。
-
-#### 設定テンプレートの生成
-
-`--init`オプションを使用して、すべての設定項目をコメント付きで含むテンプレートファイルを生成できます：
-
-```bash
-# カレントディレクトリにテンプレートを生成
-uv-sbom --init
-
-# 指定したディレクトリにテンプレートを生成
-uv-sbom --init --path ./my-project
-```
-
-これにより、すべてのオプションのインラインドキュメントを含む`uv-sbom.config.yml`ファイルが作成されます。ファイルが既に存在する場合、誤って上書きしないようにエラーで終了します。
-
-**自動検出**: プロジェクトディレクトリ（`uv.lock`がある場所）に`uv-sbom.config.yml`ファイルを配置します。ツールが自動的に検出して読み込みます。
-
-**明示的なパス指定**: `--config` / `-c`で任意の場所の設定ファイルを指定できます。
-
-```bash
-# 自動検出される設定ファイル（プロジェクトディレクトリに配置）
-uv-sbom
-
-# 明示的な設定ファイルパス
-uv-sbom --config ./custom-config.yml
-```
-
-**設定ファイルの例**（`uv-sbom.config.yml`）:
-
-```yaml
-# 出力形式: json または markdown
-format: markdown
-
-# SBOMから除外するパッケージ（ワイルドカード対応）
-exclude_packages:
-  - "pytest"
-  - "mypy"
-  - "*-dev"
-
-# CVE脆弱性チェックを無効化（デフォルトは有効）
-# check_cve: false
-
-# 脆弱性チェックの深刻度しきい値（low/medium/high/critical）
-severity_threshold: high
-
-# 脆弱性チェックのCVSSしきい値（0.0-10.0）
-# cvss_threshold: 7.0
-
-# 無視するCVE（オプションで理由を記載可能）
-ignore_cves:
-  - id: CVE-2024-1234
-    reason: "このユースケースでは誤検出"
-  - id: CVE-2024-5678
-    reason: "ネットワーク設定で緩和済み"
-
-# ライセンスコンプライアンスポリシー
-license_policy:
-  allow: ["MIT", "Apache-2.0", "BSD-*", "ISC", "PSF-2.0"]
-  deny: ["GPL-3.0-only", "GPL-3.0-or-later", "AGPL-*"]
-  unknown: "warn"  # "warn" | "deny" | "allow"
-
-# CVE結果にEPSSスコアとCISA KEVステータスを付加
-# check_exploitability: false
-
-# 既知のCVE検出結果を抑制するための脆弱性ベースラインファイルのパス
-# baseline_file: .uv-sbom-baseline.json
-```
-
-#### 設定ファイルスキーマリファレンス
-
-| フィールド | 型 | 必須 | 説明 |
-|-------|------|----------|-------------|
-| `format` | string | No | 出力形式（`json` / `markdown`） |
-| `exclude_packages` | string[] | No | パッケージ除外パターン（ワイルドカード対応） |
-| `check_cve` | bool | No | CVEチェックを無効化（デフォルト: `true`。`false`に設定すると`--no-check-cve`と同等） |
-| `severity_threshold` | string | No | 深刻度しきい値（`low` / `medium` / `high` / `critical`） |
-| `cvss_threshold` | number | No | CVSSしきい値（0.0 - 10.0） |
-| `ignore_cves` | object[] | No | 無視するCVEのリスト |
-| `ignore_cves[].id` | string | Yes | CVE ID（例: `CVE-2024-1234`） |
-| `ignore_cves[].reason` | string | No | 無視する理由 |
-| `license_policy` | object | No | ライセンスコンプライアンスポリシー設定 |
-| `license_policy.allow` | string[] | No | 許可するライセンスパターン（ワイルドカード対応） |
-| `license_policy.deny` | string[] | No | 拒否するライセンスパターン（ワイルドカード対応） |
-| `license_policy.unknown` | string | No | 不明ライセンスの処理（`warn` / `deny` / `allow`） |
-| `check_abandoned` | bool | No | 廃止パッケージ検出を有効化（オプトイン、デフォルト: false） |
-| `abandoned_threshold_days` | integer | No | 廃止パッケージ検出の非アクティブ期間しきい値（日数、デフォルト: 730） |
-| `check_non_pypi` | bool | No | 非PyPIソース検出を有効化（オプトイン、デフォルト: false） |
-| `exclude_groups` | string[] | No | SBOMから除外する依存関係グループ（そのグループからのみ到達可能なパッケージを除外） |
-| `check_exploitability` | bool | No | CVE結果にEPSSスコアとCISA KEVステータスを付加（オプトイン、デフォルト: false） |
-| `target_python` | string | No | 互換性チェック対象のPythonバージョン（PEP 440形式、例: `"3.8"`）。未設定の場合はチェックを行わない |
-| `baseline_file` | string | No | 既知の脆弱性検出結果を抑制するためのベースラインJSONファイルのパス |
-
-#### 優先度とマージルール
-
-- **CLIの引数が設定ファイルの値を上書き**します（スカラーフィールド: `format`, `severity_threshold`, `cvss_threshold`）。明示的に指定した `--format json` も、設定ファイルの `format: markdown` を上書きします
-- **`check_cve`** はデフォルトで有効。`--no-check-cve`フラグまたは設定ファイルで`check_cve: false`を指定した場合に無効化（論理AND）
-- **`exclude_packages`** はCLIと設定ファイルの両方から**マージ**され、重複が除去されます
-- **`ignore_cves`** はCLI（`--ignore-cve`）と設定ファイルの両方から**マージ**され、IDで重複が除去されます（重複時はCLIの指定が優先）
-- **`check_license`** はCLIフラグまたは設定ファイルのいずれかで設定されていれば有効化（論理OR、`check_cve`と同様）
-- **`--license-allow`** と **`--license-deny`** CLIオプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を**完全に上書き**します（マージされません）
-- **`check_abandoned`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-abandoned` または設定ファイルの `check_abandoned: true` で有効化できます。`abandoned_threshold_days` の値はCLI > 設定ファイル > デフォルト（730）の順に解決されます。
-- **`check_non_pypi`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-non-pypi` または設定ファイルの `check_non_pypi: true` で有効化できます。
-- **`check_exploitability`** はオプトイン（デフォルト: false）です。CLIフラグ `--check-exploitability` または設定ファイルの `check_exploitability: true` で有効化できます。CVEチェックが有効である必要があります（`--no-check-cve` と競合）。
-- **`exclude_groups`**: CLIの `--exclude-groups` は設定ファイルの値を**完全に上書き**します（マージされません）。`--production-only` は実行時にlockfileからすべてのグループ名を解決し、CLIと設定ファイルの両方より優先されます。
-- **`target_python`** はオプトイン（デフォルト: 未設定、チェックを行わない）です。CLIフラグ `--target-python 3.8` または設定ファイルの `target_python: "3.8"` で有効化できます。CLIの値が設定ファイルより優先されます。
-
-### 特定のCVEを無視する
-
-コマンドラインから`--ignore-cve` / `-i`を使用して特定のCVEを無視できます：
-
-```bash
-# CLIから特定のCVEを無視
-uv-sbom --ignore-cve CVE-2024-1234 --ignore-cve CVE-2024-5678
-
-# 短縮形
-uv-sbom -i CVE-2024-1234 -i CVE-2024-5678
-
-# 設定ファイルとCLIの無視設定を組み合わせ（両方がマージされます）
-uv-sbom --config ./config.yml -i CVE-2024-9999
-```
-
-### 脆弱性のチェック
-
-CVE脆弱性チェックはデフォルトで**有効**になっています。[OSV (Open Source Vulnerability) データベース](https://osv.dev)を使用してパッケージの既知のセキュリティ脆弱性を自動的にチェックします。
-
-```bash
-# Markdown出力で脆弱性をチェック（デフォルトで有効）
-uv-sbom --format markdown
-
-# 脆弱性レポートをファイルに保存
-uv-sbom --format markdown --output SBOM.md
-
-# 除外パターンと組み合わせて使用
-uv-sbom --format markdown -e "pytest" -e "*-dev"
-```
-
-#### CVEチェックを無効にする
-
-CVEチェックを無効にするには `--no-check-cve` フラグを使用します：
-
-```bash
-# CVEチェックなしでSBOMを生成
-uv-sbom --format markdown --no-check-cve
-
-# CVEチェックなしでCycloneDX JSONを生成
-uv-sbom --no-check-cve
-```
-
-### ライセンスコンプライアンスチェック
-
-`--check-license`オプションを使用して、設定可能なライセンスポリシーに対してパッケージをチェックできます：
-
-```bash
-# ライセンスコンプライアンスチェックを有効化（設定ファイルのポリシーを使用）
-uv-sbom --check-license --format markdown
-
-# インラインポリシーを指定（設定ファイルを上書き）
-uv-sbom --check-license --license-allow "MIT,Apache-2.0,BSD-*" --license-deny "GPL-3.0,AGPL-*"
-
-# 脆弱性チェックと組み合わせ
-uv-sbom --check-license --severity-threshold high
-```
-
-**動作の仕組み:**
-- **拒否リストが許可リストより優先**: ライセンスが両方のリストにマッチする場合、拒否されます
-- **ワイルドカードパターン**: `BSD-*`、`AGPL-*`等のパターンマッチングに対応（大文字小文字を区別しない）
-- **不明ライセンスの処理**: どちらのリストにもないライセンスの処理方法を設定:
-  - `warn`（デフォルト）: 警告として報告するが失敗しない
-  - `deny`: 不明ライセンスをポリシー違反として扱う
-  - `allow`: 不明ライセンスを黙って許可
-- **終了コード**: ポリシー違反が検出された場合、終了コード1を返す
-
-### 廃止パッケージ検出
-
-`--check-abandoned` オプションを使用して、設定可能な日数以内にPyPI上で新しいリリースがないパッケージを特定できます。これにより、CVEが報告されていなくても長期的なリスクをもたらす可能性のあるメンテナンス停止の依存関係を把握できます。
-
-```bash
-# 廃止パッケージ検出を有効化（デフォルトしきい値: 730日 / 約2年）
-uv-sbom --check-abandoned --format markdown
-
-# カスタム非アクティブしきい値を使用（例: 365日 / 1年）
-uv-sbom --check-abandoned --abandoned-threshold-days 365
-
-# 脆弱性チェックとライセンスチェックと組み合わせ
-uv-sbom --check-abandoned --check-license --severity-threshold high
-```
-
-**動作の仕組み:**
-- パッケージごとにPyPIパッケージレベルエンドポイント（`https://pypi.org/pypi/{name}/json`）を照会します
-- 最新リリース日を設定されたしきい値を引いた今日の日付と比較します
-- しきい値を超えたパッケージはMarkdown出力の**Abandoned Packages**セクションに表示されます
-- パッケージのPyPIメタデータが取得できない場合、実行を中断せずにスキップします
-- ネットワークアクセスが必要で、パッケージごとに1回のAPIコールが追加されます
-
-**出力:**
-- **サマリーテーブル行**: カウント > 0 の場合 `| Abandoned packages | N | ⚠️ |`、0の場合 `✅`
-- **Abandoned Packagesセクション**: パッケージ名、バージョン、最終リリース日、非アクティブ日数、種別（Direct / Transitive）のテーブル
-- `--check-abandoned` を指定しない場合、セクションは完全に省略され、サマリー行には `_Abandoned package check skipped._` と表示されます
-
-**設定ファイル相当:**
-```yaml
-check_abandoned: true
-abandoned_threshold_days: 365  # オプション、デフォルト: 730
-```
-
-**CI統合例:**
-```yaml
-# GitHub Actions - 廃止パッケージ検出
-- name: Abandoned Package Detection
-  run: uv-sbom --check-abandoned --abandoned-threshold-days 730 --format markdown
-```
-
-> **注:** 廃止パッケージデータは現在Markdownのみで利用可能です。CycloneDX JSON出力は影響を受けません。
-
-確実に出力が得られるデモを実行するには：
-
-```bash
-uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
-```
-
-詳細は [`examples/abandoned-packages-project/README-JP.md`](examples/abandoned-packages-project/README-JP.md) を参照してください。
-
-### 非PyPIソース検出
-
-`--check-non-pypi` オプションを使用して、公式PyPIレジストリ以外のソース（gitリポジトリ、直接URL、プライベートレジストリ）からインストールされたパッケージを特定できます。uv.lockはすべてのパッケージのソース種別を明示的に記録しているため、サプライチェーンリスクの検出に役立ちます。
-
-```bash
-# 非PyPIソース検出を有効化
-uv-sbom --check-non-pypi --format markdown
-```
-
-**動作の仕組み:**
-- `uv.lock` からソース分類を直接読み取ります（ネットワークアクセスやPyPI APIの呼び出しは不要）
-- **プライベートレジストリ**、**Git**リポジトリ、**直接URL**から取得されたパッケージを検出対象とします
-- ローカルファイルシステムパス（`path = "..."`）やワークスペースメンバーは検出対象外です — これらはuvワークスペース構成では通常のパターンであり、サプライチェーン上の外部リスクとはみなされません
-
-**出力:**
-- **非PyPIパッケージソースセクション**: Markdown出力に、件数（直接依存 / 間接依存）とパッケージ・バージョン・ソース種別・取得元の列を持つテーブルが表示されます
-- `--check-non-pypi` を指定しない場合、または該当パッケージがない場合は、セクション自体が省略されます
-
-**出力例（`--lang ja` 指定時）:**
-```markdown
-## ⚠️ PyPI以外のパッケージソース
-
-3個のパッケージが公式PyPIレジストリ以外から取得されています（直接依存 1件、間接依存 2件）。
-
-| パッケージ | バージョン | ソース種別 | 取得元 |
-|-------|-------|-------|-----|
-| acme-analytics-sdk | 1.4.0 | Private Registry | https://pypi.acme-corp.example/simple |
-| edge-config | 2.1.0 | Direct URL | https://downloads.acme-corp.example/edge-config-2.1.0-py3-none-any.whl |
-| telemetry-agent | 0.9.2 | Git | https://github.com/acme-corp/telemetry-agent?rev=9f2c1ab |
-
-> PyPI以外のソースから取得されたパッケージは、PyPIのセキュリティポリシーの対象外である可能性があります。本番環境へのデプロイ前に、各パッケージの取得元を確認してください。
-```
-
-**設定ファイルの場合:**
-```yaml
-check_non_pypi: true
-```
-
-> **注:** 非PyPIソース検出はネットワークアクセスを必要としません — すべてのデータは `uv.lock` から直接読み取られます。
-
-確実に出力が得られるデモを実行するには：
-
-```bash
-uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f markdown
-```
-
-詳細は [`examples/non-pypi-sources-project/README-JP.md`](examples/non-pypi-sources-project/README-JP.md) を参照してください。
-
-### Pythonバージョン互換性チェック
-
-`--target-python` オプションを使用すると、依存パッケージがPyPIメタデータで宣言している `Requires-Python` 制約が、指定したターゲットPythonバージョンと互換性があるかをチェックできます。プロジェクトのPythonバージョンをアップグレード（またはダウングレード）した際に壊れる可能性のある依存関係を検出するのに役立ちます。
-
-```bash
-# Python 3.8との互換性をチェック
-uv-sbom --target-python 3.8 --format markdown
-
-# 他のチェックと組み合わせる
-uv-sbom --target-python 3.8 --check-license --severity-threshold high
-```
-
-**仕組み:**
-- ロックされた各パッケージバージョンについて、PyPIのバージョン単位エンドポイント（`https://pypi.org/pypi/{name}/{version}/json`）に問い合わせます
-- パッケージが宣言する `Requires-Python` 制約（PEP 440）をターゲットバージョンと比較します
-- 制約が宣言されていない、または解析できない場合は互換性ありとして扱います
-- パッケージのPyPIメタデータが取得できない場合、実行全体を中断せずにそのパッケージをスキップします
-- ネットワークアクセスが必要です。パッケージごとに1回のAPI呼び出しが発生します
-
-**出力:**
-- **Python互換性の問題セクション**: 非互換なパッケージが1件でも見つかった場合にMarkdown出力に表示され、合計件数（直接依存・間接依存の内訳）に続いてPackage、Version、Requires-Python、Typeの表が表示されます
-- **Python互換性セクション（問題なし）**: 全パッケージが互換性を持つ場合はこちらが代わりに表示されます
-- `--target-python` を指定しない場合、互換性セクションは出力されません
-
-**出力例:**
-```markdown
-## ⚠️ Python 3.8 互換性の問題
-
-11個のパッケージがターゲットPythonバージョンと非互換です（直接依存 0件、間接依存 11件）。
-
-| パッケージ | バージョン | Requires-Python | 種別 |
-|---------|---------|-----------------|------|
-| coverage | 7.14.3 | >=3.10 | 間接依存パッケージ |
-| iniconfig | 2.3.0 | >=3.10 | 間接依存パッケージ |
-| librt | 0.11.0 | >=3.9 | 間接依存パッケージ |
-| markupsafe | 3.0.3 | >=3.9 | 間接依存パッケージ |
-| mypy | 2.1.0 | >=3.10 | 間接依存パッケージ |
-| pathspec | 1.1.1 | >=3.9 | 間接依存パッケージ |
-| pluggy | 1.6.0 | >=3.9 | 間接依存パッケージ |
-| pygments | 2.20.0 | >=3.9 | 間接依存パッケージ |
-| pytest | 9.1.1 | >=3.10 | 間接依存パッケージ |
-| pytest-cov | 7.1.0 | >=3.9 | 間接依存パッケージ |
-| typing-extensions | 4.15.0 | >=3.9 | 間接依存パッケージ |
-```
-
-[`examples/sample-project`](examples/sample-project) に対して実行した例:
-
-```bash
-uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdown
-```
-
-**設定ファイルでの指定:**
-```yaml
-target_python: "3.8"
-```
-
-### 悪用可能性の優先順位付け（`--check-exploitability`）
-
-`--check-exploitability` オプションを使用して、CVE結果に2つの信頼性の高いソースからの実世界の悪用データを付加できます：
-
-- **EPSS**（Exploit Prediction Scoring System）[FIRST.org](https://www.first.org/epss/) 提供 — 今後30日以内にCVEが実際に悪用される可能性を示すパーセンタイルランキング
-- **CISA KEV**（Known Exploited Vulnerabilities）カタログ [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) 提供 — 実際に悪用が確認されたCVEのキュレーションリスト
-
-```bash
-# 脆弱性結果にEPSSとKEVデータを付加
-uv-sbom --check-exploitability --format markdown
-
-# 他のチェックと組み合わせる
-uv-sbom --check-exploitability --severity-threshold high --check-license
-```
-
-**動作の仕組み:**
-- FIRST.org EPSS API（`https://api.first.org/data/v1/epss`）からEPSSスコアとパーセンタイルを取得
-- CISA KEV JSONフィードをダウンロードして、各CVEに実際の悪用が確認されているかを確認
-- 脆弱性テーブルと解決ガイドに2つの追加列として結果を表示
-- いずれのCVEにも悪用可能性データがない場合、列は完全に省略されます
-
-**出力:**
-- **悪用確認済み (KEV) 列**: CISA KEVカタログに含まれるCVEには「Yes」、それ以外は「No」を表示
-- **EPSS 列**: EPSSパーセンタイルを序数文字列で表示（例: "97th percentile"）
-- 少なくとも1つのCVEに悪用可能性データがある場合のみ、これらの列が表示されます
-
-**出力例:**
-
-[`examples/suggest-fix-project`](examples/suggest-fix-project) に対して実行した結果：
-
-```bash
-uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
-```
-
-```markdown
-## Vulnerability Report
-
-| Package | Current Version | Fixed Version | CVSS | Severity | Vulnerability ID | Exploited (KEV) | EPSS |
-|---------|-----------------|---------------|------|----------|------------------|-----------------|------|
-| urllib3 | 2.0.4 | 2.6.3 | 7.5 | 🟠 HIGH | GHSA-38jv-5279-wg99 | No | 87th percentile |
-| certifi | 2023.7.22 | 2024.7.4 | N/A | 🟢 LOW | GHSA-248v-346w-9cwc | No | 63rd percentile |
-| h11 | 0.14.0 | 0.16.0 | 9.1 | 🔴 CRITICAL | GHSA-vqfr-h8mv-ghfj | No | 46th percentile |
-| urllib3 | 2.0.4 | 2.0.7 | 4.2 | 🟡 MEDIUM | GHSA-g4mx-q9vg-27p4 | No | 43rd percentile |
-| anyio | 4.0.0 | 4.14.2 | N/A | 🔴 CRITICAL | GHSA-82r6-8w77-94w6 | No | 19th percentile |
-```
-
-_（全32件中、EPSSパーセンタイル順の抜粋。EPSS値はライブデータのため変動する可能性があります。）_
-
-**設定ファイルでの指定:**
-```yaml
-check_exploitability: true
-```
-
-> **注:** `--check-exploitability` はCVEチェックが有効である必要があり、`--no-check-cve` と競合します。SBOM生成ごとに2つのネットワークリクエスト（FIRST.org EPSS APIとCISA KEVカタログフィード）が追加されます。
-
-### 依存関係の説明（`--explain`）
-
-`--explain <PACKAGE_NAME>` オプションを使用すると、指定したパッケージがどの経路で依存ツリーに含まれているかを追跡できます。直接依存パッケージから対象パッケージまでのすべての経路を出力し、「なぜこのパッケージが含まれているのか」を明らかにします。
-
-```bash
-# idna が含まれている理由を追跡
-uv-sbom --explain idna --format markdown
-
-# 他のオプションと組み合わせる
-uv-sbom --explain idna --no-check-cve --format markdown
-```
-
-**仕組み:**
-- Markdownレポート生成時にすでに構築済みの依存関係グラフを再利用します（ネットワークアクセスも追加の探索も不要）
-- 対象パッケージが `[project.dependencies]` に含まれる場合は**直接依存**として報告し、それ以外の場合はすべての間接経路を一覧表示します（両方に該当する場合もあります）
-- 経路は直接依存パッケージから対象パッケージへ向かって左から右に読みます。表記は「依存チェーン」サブセクションと同じバッククォートと矢印の形式です
-- 存在しないパッケージ名や不正なパッケージ名は「見つかりませんでした」と報告され、SBOM生成が中断されることはありません
-- グラフは `[project.dependencies]` からのみ構築されます。`[dependency-groups]`（dev、test、lint など）経由でしか到達できないパッケージは、コンポーネント一覧やライセンス表には表示されても `--explain` では「見つかりませんでした」となります
-
-**出力:**
-- **依存関係の説明セクション**: Markdown出力にセクションが1つ表示され、「間接経路」「直接依存」「見つかりません」の3つの状態のいずれかで描画されます
-- `--explain` を指定しない場合、セクション自体が省略されます
-
-**出力例（複数経路を持つ間接依存パッケージ、`--lang ja` 指定時）:**
-```markdown
-## 依存関係の説明
-
-**idna** は 3 個の経路で含まれています:
-
-- `httpx` → `idna`
-- `requests` → `idna`
-- `httpx` → `httpcore` → `anyio` → `idna`
-```
-
-[`examples/suggest-fix-project`](examples/suggest-fix-project) に対して実行した例:
-
-```bash
-uv-sbom -p examples/suggest-fix-project --explain idna --no-check-cve -f markdown --lang ja
-```
-
-**出力例（直接依存パッケージ）:**
-```markdown
-## 依存関係の説明
-
-**requests** はこのプロジェクトの直接依存パッケージです。
-```
-
-```bash
-uv-sbom -p examples/suggest-fix-project --explain requests --no-check-cve -f markdown --lang ja
-```
-
-**出力例（パッケージが見つからない場合）:**
-```markdown
-## 依存関係の説明
-
-パッケージ **definitely-not-a-real-package** はこのプロジェクトの依存関係に見つかりませんでした。
-```
-
-```bash
-uv-sbom -p examples/suggest-fix-project --explain definitely-not-a-real-package --no-check-cve -f markdown --lang ja
-```
-
-> **注:** これらの例では、本READMEの他の箇所で使用している `examples/sample-project` ではなく `examples/suggest-fix-project` を使用しています。同梱のサンプルの中で、実際にダイヤモンド依存（`idna` が `httpx` と `requests` の両方から要求される）を持つのがこのプロジェクトだからです。
-
-**設定ファイルでの指定:**
-
-ありません。`--explain` は意図的にCLI専用としています。これは `check_non_pypi` や `target_python` のような永続的なポリシー設定ではなく、単一パッケージに対する一回限りの診断クエリだからです。`uv-sbom.config.yml` のキーは存在せず、設定ファイルスキーマリファレンスの表にも記載されません。
-
-**オプションの組み合わせ:**
-- **`--workspace` との同時使用は不可。** 引数解析の時点でエラーになります:
-  ```
-  error: the argument '--explain <PACKAGE_NAME>' cannot be used with '--workspace'
-  ```
-- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係の説明データは含まれず、`--check-license`・`--verify-links` とは異なり「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--explain` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
-
-### 依存関係ツリーの可視化（`--show-dependency-tree`）
-
-`--show-dependency-tree` を使用すると、プロジェクトの依存関係グラフをMarkdown出力内にASCIIツリーとして描画できます。`--dependency-tree-depth <DEPTH>`（デフォルト: 3）で、各直接依存パッケージから何階層下まで展開するかを制御できます。
-
-```bash
-# 依存関係ツリー全体を表示
-uv-sbom --show-dependency-tree --format markdown
-
-# 各ルートから2階層までに制限
-uv-sbom --show-dependency-tree --dependency-tree-depth 2 --format markdown
-```
-
-**仕組み:**
-- Markdownレポート生成時にすでに構築済みの依存関係グラフを再利用します（ネットワークアクセスも追加の探索も不要）
-- 「直接依存パッケージ」一覧と同じ順序で、直接依存パッケージごとに1つのルートが作られます。子ノードはロックファイル自体の依存関係の順序に従います
-- ダイヤモンド依存（複数の経路から到達可能なパッケージ）は、親ごとに個別に表示され、重複排除されません — このツリーはグラフの形状をそのまま反映するものであり、平坦化されたパッケージ一覧ではありません
-- `--dependency-tree-depth` は各ルートより**下**の階層数を数えます。`0` はルートのみ、`1` はルートとその直接の子まで、というように展開されます
-- 深さ制限に達して展開されなかった子を持つ分岐には、その位置に `... (省略)` というマーカーが表示され、適用された深さを明記した注記が続きます
-
-**出力:**
-- **依存関係ツリーセクション**: Markdown出力に `## 依存関係ツリー` セクションが1つ表示され、パッケージ名とバージョンのみを含みます — ライセンス・説明文・ハッシュ値はコンポーネント一覧に既に表示されているため、ここでは重複させません
-- `--show-dependency-tree` を指定しない場合、セクション自体が省略されます
-
-**出力例（完全なツリー、省略なし、`--lang ja` 指定時）:**
-
-[`examples/suggest-fix-project`](examples/suggest-fix-project) に対して実行した例:
-
-```bash
-uv-sbom -p examples/suggest-fix-project --show-dependency-tree --no-check-cve -f markdown --lang ja
-```
-
-````markdown
-## 依存関係ツリー
-
-```text
-├── httpx (0.24.1)
-│   ├── certifi (2023.7.22)
-│   ├── httpcore (0.17.3)
-│   │   ├── anyio (4.0.0)
-│   │   │   ├── idna (3.4)
-│   │   │   └── sniffio (1.3.0)
-│   │   ├── certifi (2023.7.22)
-│   │   ├── h11 (0.14.0)
-│   │   └── sniffio (1.3.0)
-│   ├── idna (3.4)
-│   └── sniffio (1.3.0)
-└── requests (2.31.0)
-    ├── certifi (2023.7.22)
-    ├── charset-normalizer (3.2.0)
-    ├── idna (3.4)
-    └── urllib3 (2.0.4)
-```
-````
-
-**出力例（深さ2で省略される場合）:**
-
-```bash
-uv-sbom -p examples/suggest-fix-project --show-dependency-tree --dependency-tree-depth 2 --no-check-cve -f markdown --lang ja
-```
-
-````markdown
-## 依存関係ツリー
-
-```text
-├── httpx (0.24.1)
-│   ├── certifi (2023.7.22)
-│   ├── httpcore (0.17.3)
-│   │   ├── anyio (4.0.0)
-│   │   │   └── ... (省略)
-│   │   ├── certifi (2023.7.22)
-│   │   ├── h11 (0.14.0)
-│   │   └── sniffio (1.3.0)
-│   ├── idna (3.4)
-│   └── sniffio (1.3.0)
-└── requests (2.31.0)
-    ├── certifi (2023.7.22)
-    ├── charset-normalizer (3.2.0)
-    ├── idna (3.4)
-    └── urllib3 (2.0.4)
-```
-
-_深さ 2 で省略されています。さらに深い階層を表示するには `--dependency-tree-depth <DEPTH>` を使用してください。_
-````
-
-> **注:** これらの例では、本READMEの他の箇所で使用している `examples/sample-project` ではなく `examples/suggest-fix-project` を使用しています。同梱のサンプルの中で、縮小した深さで省略表示を実際に再現できるだけの深い依存チェーン（`httpx` → `httpcore` → `anyio` → `idna`/`sniffio`）を持つのがこのプロジェクトだからです。
-
-**設定ファイルでの指定:**
-
-ありません。`--show-dependency-tree` は意図的にCLI専用としています。これは `check_non_pypi` や `target_python` のような永続的なポリシー設定ではなく、一回限りの可視化リクエストだからです。`uv-sbom.config.yml` のキーは存在せず、設定ファイルスキーマリファレンスの表にも記載されません。
-
-**オプションの組み合わせ:**
-- **`--format json` では何も出力されません。** CycloneDX JSON出力に依存関係ツリーは含まれず、「効果がありません」という警告も表示されません。JSONがデフォルトフォーマットのため、`--show-dependency-tree` を使う際は必ず `--format markdown`（または `-f markdown`）を指定してください。
-
-### 脆弱性しきい値オプション
-
-しきい値オプションを使用して、どの脆弱性が終了コード1をトリガーするかを制御できます：
-
-```bash
-# すべての脆弱性をチェック（見つかった場合は終了コード1）
-uv-sbom --format markdown
-
-# High または Critical の深刻度のみをチェック
-uv-sbom --format markdown --severity-threshold high
-
-# Critical の深刻度のみをチェック
-uv-sbom --format markdown --severity-threshold critical
-
-# CVSS >= 7.0 のみをチェック
-uv-sbom --format markdown --cvss-threshold 7.0
-
-# CVSS >= 9.0（Critical）のみをチェック
-uv-sbom --format markdown --cvss-threshold 9.0
-```
-
-**しきい値オプション:**
-- `--severity-threshold <LEVEL>`: 深刻度レベルでフィルタ（low, medium, high, critical）
-- `--cvss-threshold <SCORE>`: CVSSスコアでフィルタ（0.0-10.0）
-
-**注意事項:**
-- しきい値オプションは一度に1つのみ使用可能
-- `--no-check-cve`との同時使用は不可（CVEチェックが無効の場合、しきい値は意味がないため）
-- しきい値以下の脆弱性はレポートに表示されますが、終了コード1はトリガーしません
-- `--cvss-threshold`使用時、CVSSスコアのない脆弱性（N/A）はしきい値評価から除外されます
-
-**悪意のあるパッケージ:** OSV の悪意のあるパッケージのアドバイザリ（プライマリIDまたはエイリアスが `MAL-` で始まるもの）は、`--severity-threshold` や `--cvss-threshold` の値にかかわらず、常に終了コード1で実行を失敗させます。マルウェアにはCVSSスコアがないため、通常の評価ではどのしきい値も下回ってしまうからです。これらのアドバイザリは[脆弱性ベースライン](#脆弱性ベースライン)に書き込まれず、既存のベースラインに該当エントリがあっても抑制されません。意図的に許容する場合は、`--ignore-cve` または `ignore_cves` で正確なプライマリIDを指定して除外してください。Markdown レポートでは、脆弱性セクションの先頭にある専用ブロックに、各アドバイザリの概要とパッケージ削除の指示とともに一覧表示され、通常の脆弱性テーブルには重複して表示されません。
-
-### PyPIリンク検証
-
-`--verify-links`オプションを使用して、ハイパーリンクを生成する前にパッケージがPyPIに存在するかを検証できます。PyPIに存在しないパッケージはプレーンテキストとして表示されます：
-
-```bash
-# 検証済みPyPIリンク付きのMarkdownを生成
-uv-sbom --format markdown --verify-links
-
-# 他のオプションと組み合わせて使用
-uv-sbom --format markdown --verify-links --output SBOM.md
-```
-
-**動作:**
-- `--verify-links`なし: すべてのパッケージ名にPyPIハイパーリンクを付与（デフォルト、高速）
-- `--verify-links`あり: 検証済みのパッケージのみハイパーリンクを付与。未検証のパッケージはプレーンテキスト
-- ネットワークエラー時はプレーンテキストにフォールバック（クラッシュなし）
-- リクエストは並列実行（最大10同時接続）でパフォーマンスを確保
-
-### 依存関係Diff
-
-`--diff` オプションを使用して、現在の `uv.lock` を過去のバージョンと比較します。ブランチ、タグ、任意のロックファイルスナップショットとの差分をマージ前に確認するのに便利です。
-
-```bash
-# Gitブランチやタグと比較
-uv-sbom --diff main
-uv-sbom --diff v1.2.0
-uv-sbom --diff abc1234    # 短縮コミットSHA
-
-# ファイルパスとの比較（CWDからの絶対または相対パス）
-uv-sbom --diff /path/to/old/uv.lock
-
-# Markdownレポートとして出力
-uv-sbom --diff main --format markdown --output diff.md
-
-# JSONとして出力
-uv-sbom --diff main --format json
 ```
 
-**自動判別:** 引数がディスク上の既存ファイルとして解決される場合はファイルパスとして扱い、そうでない場合はgit refとして扱います。相対パスはプロセスのワーキングディレクトリ（`--path` ではなく）から解決されます。
+対応言語：`en`（デフォルト）、`ja`。`--lang` オプションはセクション見出し、表の列名、ステータスラベルに影響します。パッケージ名、CVE ID、SPDX 識別子は常に元の形式のままです。
 
-**git ref検証:** git refに使用できる文字は `[a-zA-Z0-9._/-]` のみです。`-` で始まるrefも拒否されます。これによりコマンドインジェクションを防止します。
+## 機能ハイライト
 
-**排他制約:** `--diff` は `--workspace` または `--init` と同時に使用できません。
+### SBOM 生成
 
-#### CVEデルタ
+`uv.lock` から Markdown または CycloneDX 1.6 JSON 形式の完全な SBOM（Software Bill of Materials）を生成します。Markdown 出力は直接依存と間接依存を明確に分離し、全パッケージのライセンス、説明、SHA-256 データを含みます。[出力例（英語）→](docs/cli-reference.md#output-examples)
 
-デフォルトでは、`--diff` はベースおよび現在のロックファイル両方に対して脆弱性チェックも実行し、導入または解消された脆弱性を示す **CVEデルタ** セクションをレポートに追加します：
+### セキュリティスキャン
 
-- **新規脆弱性** — 現在のロックファイルのパッケージに影響するが、ベースには存在しなかったCVE。
-- **解消済み脆弱性** — ベースのロックファイルのパッケージに影響していたが、現在は適用されなくなったCVE。
+[OSV データベース](https://osv.dev) 経由の CVE 脆弱性チェックが**デフォルトで有効**です。深刻度や CVSS スコアでフィルタリング、脆弱性ベースラインで既知の検出結果を抑制、どの直接依存をアップグレードすべきかの解決ガイドを提供します。[セキュリティチェック（英語）→](docs/security-checks.md)
 
-```bash
-# CVEデルタ付きのDiff（デフォルト — CVEチェックは有効）
-uv-sbom --diff main
+### インシデント対応 (`--incident`)
 
-# diffモードでCVEチェックを無効化
-uv-sbom --diff main --no-check-cve
-```
-
-JSON出力にはトップレベルの `cve_delta` キーが `new` と `resolved` 配列とともに追加されます。`--no-check-cve` を指定した場合、このキーは出力から省略されます。
-
-**重大度およびCVSSフィルタリング:** `--severity-threshold` と `--cvss-threshold` はCVEデルタにも適用されます。しきい値以上のエントリのみがテーブルに表示されます。設定したしきい値を超える新規CVEが導入された場合、プロセスはコード `1` で終了します。
-
-```bash
-# HIGH以上のCVEデルタエントリのみ表示
-uv-sbom --diff main --severity-threshold high
-
-# CVSS ≥ 7.0 のCVEデルタエントリのみ表示
-uv-sbom --diff main --cvss-threshold 7.0
-```
-
-**CI例:**
-```bash
-# このPRで新規追加された依存関係にHIGH以上の既知のCVEがある場合にビルドを失敗させる
-uv-sbom --diff origin/main --format markdown --output diff.md --severity-threshold high
-```
-
-### インシデント対応（`--incident`）
-
-新しいアドバイザリが公開されたとき、`--incident <ADVISORY_ID>`（OSV にまだ登録されていないアドバイザリなら、引用符で囲んだバージョン範囲）を使うと、プロジェクトについて次の3つの問いに1コマンドで答えられます。**影響を受けているか、パッチは出ているか、何を実行すればよいか**。
-
-```bash
-# GHSA / PYSEC / CVE / OSV / MAL の ID を指定
-uv-sbom --incident GHSA-v845-jxx5-vc9f
-
-# CVE ID は対応する GHSA / PYSEC レコードへ自動で解決される
-uv-sbom --incident CVE-2023-43804 -p path/to/project
-
-# 自動化向けの JSON 出力、またはファイルへの書き出し
-uv-sbom --incident GHSA-v845-jxx5-vc9f --format json
-uv-sbom --incident GHSA-v845-jxx5-vc9f --output incident.md
-
-# OSV に未登録のアドバイザリ: 影響範囲を自分で指定（引用符が必要）
-uv-sbom --incident "urllib3<2.0.6"
-```
-
-**受け付ける ID:** `GHSA-`、`PYSEC-`、`CVE-`、`OSV-`、`MAL-` で始まる ID です。プレフィックスの大文字・小文字は区別しません。それ以外の値は手動指定の範囲（後述）として解釈し、どちらにも当てはまらない値は終了コード `2` で拒否されます。指定したレコードに PyPI パッケージが載っていない場合（`CVE-` ID でよくあります）、uv-sbom はそのレコードの `GHSA-`、次に `PYSEC-` のエイリアスをたどります。どの ID から解決したかはレポートに記載されます。
-
-**出力:** レポートは**デフォルトで Markdown** です（デフォルトが JSON の SBOM 生成とは異なります）。次の3セクションで構成されます。
-
-1. **影響** — アドバイザリが挙げる各パッケージについて、ロック中のバージョン、判定、直接依存か間接依存か（依存経路つき）を示します。
-2. **パッチ状況** — 修正バージョンと、それが PyPI でリリース済みかどうかを示します。
-3. **次のアクション** — コピー＆ペーストで使える `uv lock --upgrade-package <name>==<fixed>` + `uv sync` コマンドを示します。このコマンドは事前に試行解決で検証済みで、`uv.lock` は変更されません。アップグレードを解決できない場合や、修正版が未リリースの場合は、コマンドの代わりにガイダンスを表示します。更新できないパッケージ自体が直接依存の場合は、修正版を許容するよう `pyproject.toml` のバージョン指定を緩める手順を案内します。
-
-`examples/suggest-fix-project` に対する実行例（終了コード `1`）:
-
-````markdown
-## インシデントレポート: GHSA-v845-jxx5-vc9f
-
-- **別名**: CVE-2023-43804, PYSEC-2023-192
-- **深刻度**: MEDIUM
-- **概要**: `Cookie` HTTP header isn't stripped on cross-origin redirects
-- **総合判定**: 影響あり — 修正版リリース済み
-
-### 1. 影響
-
-- **urllib3** 2.0.4 — 影響あり — 修正版リリース済み (間接依存)
-  - 依存経路:
-    - `requests → urllib3`
-
-### 2. パッチ状況
-
-- **urllib3**: 2.0.6 で修正 — リリース済み
-
-### 3. 次のアクション
-
-**urllib3** — 試行解決で検証済み（uv.lock は変更されていません）:
-```sh
-uv lock --upgrade-package urllib3==2.0.6
-uv sync
-```
-````
-
-**ワークスペース（`--workspace`）:** uv ワークスペースのルートで `--incident <ID> --workspace` を実行すると、1回の実行で全メンバーを確認し、**1つにまとめたレポート**を出力します。構成は、アドバイザリの見出し、メンバーごとの判定と依存経路を示す `1. 影響` のサブセクション、全メンバー共通の `2. パッチ状況` と `3. 次のアクション`（ワークスペースは1つの `uv.lock` を共有するため、更新コマンドは全メンバーで同じです）、最後の「N / M メンバーが影響あり」の行です。アドバイザリと PyPI のリリース状況はメンバーごとではなく1回の実行につき1回だけ取得し、試行解決はワークスペースのルートで実行します。終了コードはメンバーの判定のうち最も対応が必要なものに従います（下表と同じ）。メンバーごとの `sbom.*` ファイルは書き出さず、レポートは常に標準出力に出ます（`--workspace` は `--output` と同時に使用できません）。
-
-```bash
-uv-sbom --incident GHSA-82w8-qh3p-5jfq --workspace -p examples/workspace --lang ja
-```
-
-`starlette` に（`fastapi` 経由で）到達するのが `api` メンバーだけの `examples/workspace` に対する実行例（終了コード `1`）:
-
-````markdown
-## インシデントレポート: GHSA-82w8-qh3p-5jfq
-
-- **別名**: CVE-2026-54283, PYSEC-2026-249
-- **深刻度**: HIGH
-- **概要**: Starlette: request.form() limits silently ignored for application/x-www-form-urlencoded enable DoS
-- **総合判定**: 影響あり — 修正版リリース済み
-
-### 1. 影響
-
-#### メンバー: api
-
-- **判定**: 影響あり — 修正版リリース済み
-- **starlette** 1.0.0 — 影響あり — 修正版リリース済み (間接依存)
-  - 依存経路:
-    - `fastapi → starlette`
-
-#### メンバー: worker
-
-- **判定**: 影響なし
-
-影響対象パッケージ（starlette）はこのメンバーから到達しません。
-
-### 2. パッチ状況
-
-- **starlette**: 1.3.1 で修正 — リリース済み
-
-### 3. 次のアクション
-
-**starlette** — 試行解決で検証済み（uv.lock は変更されていません）:
-```sh
-uv lock --upgrade-package starlette==1.3.1
-uv sync
-```
-
-**1 / 2 メンバーが影響あり**: api
-````
-
-**インシデントモードでのワークスペースルートの依存グループ:** `--workspace` と同様に（[uv ワークスペースサポート](#uv-ワークスペースサポート) の **ワークスペースルートの依存グループ** を参照）、`--incident --workspace` は除外されていない仮想ルートの `[dependency-groups]` のグループ名を挙げる警告を stderr に出力します。これらのグループはどのメンバーの範囲からもたどられないため、そこからのみ到達するパッケージはアドバイザリと照合されないからです。警告は進捗行の後、レポートの前に、実行が成功した場合にだけ出力されます。stdout のレポート（Markdown または JSON）と終了コードは変わらないため、`--format json | jq` もそのまま使えます。警告を抑止するには、ルートのグループを `--exclude-groups` に追加してください（`--production-only` でも抑止されます）。上のコマンドの stderr は、最後が次のようになります。
-
-```
-⚠️  警告: どのメンバーの SBOM にも含まれないワークスペースルートの依存グループ: lint
-   これらのグループからのみ到達するパッケージは、どの SBOM にも含まれません。この警告を抑止するには、これらのグループを --exclude-groups に追加してください。
-```
-
-**手動指定の範囲（OSV に未登録のアドバイザリ）:** 脆弱性の公表直後の数時間は、アドバイザリがまだ OSV に登録されておらず、ID を指定しても照会できないことがあります。セキュリティ告知には通常、影響範囲が文章で書かれている（「2.0.6 より前のバージョンが影響を受けます」など）ので、ID の代わりにその範囲を指定できます。書式は、パッケージ名の直後に、カンマ区切りで1つ以上のバージョン指定子を続けたものです。
-
-```bash
-uv-sbom --incident "foo<2.3.2"          # 2.3.2 未満が影響あり。2.3.2 が修正版
-uv-sbom --incident "foo>=2.0,<2.3.2"    # 2.0 以上 2.3.2 未満が影響あり
-uv-sbom --incident "foo<=2.3.1"         # 2.3.1 以下が影響あり。修正版は未判明
-```
-
-| 指定子 | 意味 |
-|--------|------|
-| `>=X` | 影響を受ける最初のバージョン（省略可。省略すると上限より下のすべてのバージョンが影響あり） |
-| `<X` | 修正バージョン。パッチ状況と検証済みの更新コマンドは、アドバイザリ ID を指定した場合とまったく同じように動作します |
-| `<=X` | 影響を受ける最後のバージョン。修正版が分からないため、判定は「修正版なし」（終了コード `4`）になります |
-
-- **引数は引用符で囲んでください。** シェルでは `<` が入力リダイレクトになるため、`uv-sbom --incident foo<2.3.2` は `2.3.2` という名前のファイルを読み込もうとします。
-- 使える演算子は `>=`、`<`、`<=` のみで、下限と上限はそれぞれ1つまでです（`<` と `<=` の併用は不可）。それ以外の演算子（`==`、`!=`、`~=`、`>`、`===`）、パッケージ名だけの指定、どのバージョンも含まない範囲（例: `"foo>=2.3,<2.0"`）は、推測で解釈せず終了コード `2` で拒否します。
-- `>=` だけを指定した場合も、判定は「修正版なし」（終了コード `4`）になります。
-- 1回の実行で指定できる範囲は1つです。複数のリリース系列で修正されている場合は、範囲ごとにコマンドを実行してください。
-- OSV への問い合わせは行いません。レポートの見出しには指定した範囲が表示され、ユーザーが指定したもので脆弱性データベースで検証されていないことが明記されます。JSON 出力では `source` が `"manual"`（アドバイザリ ID の場合は `"osv"`）になり、`advisory_id` に範囲が入ります。
-- `--workspace`、`--format json`、`--lang ja` とも、アドバイザリ ID の場合と同じように併用でき、終了コードも同じです。
-
-`examples/suggest-fix-project` に対する実行例（`--lang ja`、終了コード `1`）:
-
-````markdown
-## インシデントレポート（手動指定の範囲）: `urllib3<2.0.6`
-
-⚠️ この影響範囲はユーザーが指定したものです。脆弱性データベースの記録ではなく、検証もされていません。
-
-- **総合判定**: 影響あり — 修正版リリース済み
-
-### 1. 影響
-
-- **urllib3** 2.0.4 — 影響あり — 修正版リリース済み (間接依存)
-  - 依存経路:
-    - `requests → urllib3`
-
-### 2. パッチ状況
-
-- **urllib3**: 2.0.6 で修正 — リリース済み
-
-### 3. 次のアクション
-
-**urllib3** — 試行解決で検証済み（uv.lock は変更されていません）:
-```sh
-uv lock --upgrade-package urllib3==2.0.6
-uv sync
-```
-````
-
-**終了コード:**
-
-| 判定 | 終了コード |
-|------|-----------|
-| 影響なし（PyPI パッケージを含まないアドバイザリを含む） | 0 |
-| 影響あり、修正版リリース済み | 1 |
-| 影響あり、修正版が未リリース、または修正版なし | 4 |
-| 不明なアドバイザリ ID、ネットワークエラー、その他のアプリケーションエラー | 3 |
-| 不正な形式のアドバイザリ ID または範囲、または同時に使えないフラグの指定 | 2 |
-
-**有効なスコープ系オプション:** `--path`、`--exclude`、`--exclude-groups`、`--production-only`、`--output`（`--workspace` 併用時は不可）、`--format`、`--lang`、`--config`。設定ファイルの `exclude_packages` と `exclude_groups` も適用されます。
-
-**無視される設定キー:** インシデントモードでは設定ファイルの `format` は使われず、出力形式は `--format` でのみ変わります。脆弱性・ライセンス・メンテナンス・互換性チェック系のキー（`check_cve`、`severity_threshold`、`cvss_threshold`、`ignore_cves`、`check_license`、`license_policy`、`check_abandoned`、`check_non_pypi`、`check_exploitability`、`target_python`、`suggest_fix`、`baseline_file`）も無視されます。
-
-**同時使用の制限:** `--incident` は `--diff`、`--init`、`--dry-run`、`--explain`、`--show-dependency-tree`、`--no-check-cve`、`--baseline`、`--update-baseline`、`--suggest-fix`、`--check-license`、`--check-abandoned`、`--check-non-pypi`、`--check-exploitability`、`--target-python`、`--severity-threshold`、`--cvss-threshold`、`--ignore-cve`、`--verify-links` と同時に使用できません。`--workspace` とは併用できます（上記参照）。
-
-**設定ファイルキー:** ありません。`--incident` は単一アドバイザリ（または範囲）についての一度きりの問い合わせであり、永続的なポリシー設定ではないため、意図的に CLI 専用としています。
-
-### 脆弱性ベースライン
-
-`--baseline` を使用して、既に受け入れ済みの脆弱性検出結果を抑制します。ベースラインファイルは `(パッケージ名, バージョン, 脆弱性ID)` のタプルを記録します。完全一致のみ抑制されます — パッケージバージョンを変更すると、以前のベースライン登録は新規の検出として扱われます。
-
-```bash
-# 初回: 現在の検出結果からベースラインファイルを生成
-uv-sbom --baseline .uv-sbom-baseline.json --update-baseline
-
-# 以降の実行: 既知の検出結果を抑制し、新規の検出結果のみ終了コード1を返す
-uv-sbom --baseline .uv-sbom-baseline.json
-```
-
-ベースラインファイルは `version` キーと `entries` 配列を持つJSONドキュメントです：
-
-```json
-{
-  "version": 1,
-  "entries": [
-    {
-      "package": "requests",
-      "version": "2.25.0",
-      "id": "GHSA-9wx4-h78v-vm56"
-    }
-  ]
-}
-```
-
-**`--update-baseline`** は現在の（フィルタリング前の）全検出結果でベースラインファイルを上書きします。新たに受け入れるCVEがある場合に使用します。`--baseline` が必要です。悪意のあるパッケージのアドバイザリ（`MAL-`）は記録も抑制もされません。[脆弱性しきい値オプション](#脆弱性しきい値オプション)を参照してください。
-
-検出結果が抑制された場合、Markdownの脆弱性セクションに脚注が表示されます：
-
-> _注: ベースラインにより 3 件の既知の検出結果が抑制されています。_
-
-**設定ファイル:** `--baseline` を毎回指定する代わりに、`uv-sbom.config.yml` で `baseline_file` を設定できます：
-
-```yaml
-baseline_file: .uv-sbom-baseline.json
-```
-
-**排他制約:** `--baseline` は `--no-check-cve` と同時に使用できません（ベースラインには脆弱性チェックが必要）。
-
-**CIワークフロー:**
-```bash
-# 受け入れ済みの検出結果を抑制しつつ、新規脆弱性をチェック
-uv-sbom --baseline .uv-sbom-baseline.json --severity-threshold high -f markdown -o report.md
-
-# レビュー後、現在の全検出結果をベースラインに追加
-uv-sbom --baseline .uv-sbom-baseline.json --update-baseline
-```
-
-### CI統合
-
-CI/CDパイプライン統合には脆弱性しきい値を使用します：
-
-```yaml
-# GitHub Actionsの例
-- name: Generate SBOM
-  run: uv-sbom --format markdown --output sbom.md
-
-- name: Security Check (High and Critical only)
-  run: uv-sbom --format markdown --severity-threshold high
-
-- name: Security Check (CVSS >= 7.0)
-  run: uv-sbom --format markdown --cvss-threshold 7.0
-```
-
-```yaml
-# GitHub Actions - ライセンスコンプライアンスチェック
-- name: License Compliance Check
-  run: uv-sbom --check-license --format markdown
-
-- name: Combined Security and License Check
-  run: uv-sbom --check-license --severity-threshold high
-```
-
-```yaml
-# GitHub Actions - 廃止パッケージ検出
-- name: Abandoned Package Detection
-  run: uv-sbom --check-abandoned --format markdown
-```
-
-```yaml
-# GitLab CIの例
-security_scan:
-  script:
-    - uv-sbom --format markdown --severity-threshold high
-  allow_failure: false
-```
-
-**重要な注意事項:**
-- 脆弱性チェックは**Markdownフォーマットでのみ利用可能**です
-- OSV APIへのクエリにはインターネット接続が必要です
-- `--dry-run`モードでは利用できません（ネットワーク操作をスキップします）
-- 内部パッケージがOSV APIに送信されないようにするには`--exclude`を使用してください
-
-**出力例:**
-
-脆弱性が見つかった場合、Markdown出力に次のようなセクションが追加されます：
-
-```markdown
-## Vulnerability Report
-
-**⚠️ Security Issues Detected**
-
-The following packages have known security vulnerabilities:
-
-| Package | Current Version | Fixed Version | CVSS | Severity | CVE ID |
-|---------|----------------|---------------|------|----------|--------|
-| urllib3 | 2.0.0 | 2.0.7 | 9.8 | 🔴 CRITICAL | CVE-2023-45803 |
-| requests | 2.28.0 | 2.31.0 | 7.5 | 🟠 HIGH | CVE-2023-32681 |
-
----
-
-*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
-```
-
-> **注:** 脆弱性レポート内の脆弱性ID（CVE, GHSA, PYSEC, RUSTSECなど）は、`--verify-links`の設定に関係なく常にハイパーリンクとして表示されます。これらのIDはOSVデータベースから取得され、権威ある脆弱性データベース（NVD、GitHub Advisories、OSV.dev）にリンクするため、リンク検証は不要です。
-
-### 脆弱性解決ガイド
-
-CVEチェック（デフォルトで有効）が推移的依存関係で脆弱性を検出すると、uv-sbomは自動的に**脆弱性解決ガイド**を生成します。このセクションは、各脆弱な推移的パッケージがどの直接依存関係から導入されているかを示し、アップグレードすべきパッケージを正確に把握できます。
-
-#### Markdown出力例
+新しいアドバイザリが公開されたとき、コマンド1つでプロジェクトへの影響有無、修正版が PyPI にあるか、そして試行解決で検証済みの `uv lock --upgrade-package` コマンド（解決できない場合はガイダンス）を提示します。終了コードによりパッチ待ちの自動化も容易です。[インシデント対応（英語）→](docs/incident-response.md)
 
-```markdown
-## Vulnerability Resolution Guide
+### サプライチェーンチェック
 
-The following transitive dependencies have known vulnerabilities. The table shows which direct dependency introduces each vulnerable package.
+- **ライセンスコンプライアンス** (`--check-license`) — ワイルドカード対応の許可/拒否リスト。[詳細（英語）→](docs/security-checks.md#license-compliance-check)
+- **放棄パッケージ検出** (`--check-abandoned`) — 設定可能な期間内に PyPI リリースがないパッケージを検出。[詳細（英語）→](docs/security-checks.md#abandoned-package-detection)
+- **非 PyPI ソース検出** (`--check-non-pypi`) — git、URL、プライベートレジストリからのソースを識別。[詳細（英語）→](docs/security-checks.md#non-pypi-source-detection)
+- **Python バージョン互換性** (`--target-python`) — ターゲットバージョンに対する `Requires-Python` 制約をチェック。[詳細（英語）→](docs/security-checks.md#python-version-compatibility-check)
+- **悪用可能性の優先度付け** (`--check-exploitability`) — EPSS スコアと CISA KEV ステータスで CVE を拡充。[詳細（英語）→](docs/security-checks.md#exploitability-prioritization---check-exploitability)
 
-| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Vulnerability ID |
-|--------------------|---------|---------------|----------|---------------------------|-----------------|
-| urllib3 | 1.26.15 | >= 2.0.7 | 🟠 HIGH | requests (2.31.0) | [CVE-2024-XXXXX](https://nvd.nist.gov/vuln/detail/CVE-2024-XXXXX) |
-| h11 | 0.14.0 | >= 0.14.4 | 🟠 HIGH | httpx (0.24.0) | [CVE-2024-ZZZZZ](https://nvd.nist.gov/vuln/detail/CVE-2024-ZZZZZ) |
+### 依存関係インサイト
 
-### 依存チェーン
+- **Explain** (`--explain <PACKAGE>`) — 直接依存からの全パスをトレース。[詳細（英語）→](docs/dependency-insight.md#dependency-explanation---explain)
+- **ツリー** (`--show-dependency-tree`) — 依存グラフの ASCII ツリー表示。[詳細（英語）→](docs/dependency-insight.md#dependency-tree-visualization---show-dependency-tree)
+- **差分** (`--diff <REF>`) — ロックファイルのバージョン比較（CVE デルタ付き）。[詳細（英語）→](docs/dependency-insight.md#dependency-diff---diff)
 
-**`h11 0.14.0`** — CVE-2024-ZZZZZ (HIGH)
-- `httpcore` → `httpx` → **`h11 0.14.0`** ⚠️
-```
-
-> **注:** `### 依存チェーン`サブセクションは、脆弱なパッケージがマルチホップチェーン（チェーン長 > 2）を経由して到達可能な場合にのみ表示されます。全ての脆弱なパッケージが直接依存関係から導入されている場合は省略されます。
-
-#### CycloneDX JSON出力
-
-CycloneDX形式では、導入元の依存関係が`properties`エントリとして含まれます:
-
-```json
-{
-  "vulnerabilities": [
-    {
-      "id": "CVE-2024-XXXXX",
-      "properties": [
-        {
-          "name": "uv-sbom:introduced-by",
-          "value": "requests@2.31.0"
-        }
-      ]
-    }
-  ]
-}
-```
-
-> **注:** 解決ガイドは**推移的**依存関係の脆弱性についてのみ表示されます。直接依存関係の脆弱性は標準の脆弱性テーブルに表示されます（ユーザーが直接アップグレードできるため）。
-
-### アップグレードアドバイザー（`--suggest-fix`）
-
-`--suggest-fix`を使用すると、各推移的脆弱性を解決するためにどの直接依存関係をどのバージョンにアップグレードすべきかを自動的に提案します（CVEチェックはデフォルトで有効です）。
-
-**必要な条件**:
-- CVEチェックが有効（デフォルト。`--no-check-cve`を指定しないこと）
-- `uv` CLIのインストール
-- プロジェクトディレクトリ内に`pyproject.toml`が存在すること
-
-**使用例**:
-```bash
-uv-sbom generate --suggest-fix
-```
-
-**出力**: 脆弱性解決ガイドに「Recommended Action（推奨アクション）」列が追加されます:
-- `⬆️ Upgrade requests → 2.32.3 (resolves urllib3 to 2.2.1)` — アップグレードで脆弱性が解決される場合
-- `⚠️ Cannot resolve: latest httpx still pins idna < 3.7` — アップグレードでは解決できない場合
-- `❓ Could not analyze: <error>` — シミュレーションに失敗した場合
-
-**付属サンプルで試す**:
-
-```bash
-# Upgradable と Unresolvable の両方のケースを示す推移的CVEを含むサンプルプロジェクト
-uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
-```
-
-詳しい手順は [`examples/suggest-fix-project/README-JP.md`](examples/suggest-fix-project/README-JP.md) を参照してください。
-
-**ライセンスコンプライアンスチェックの出力例:**
-
-```markdown
-## License Compliance Check
-
-Policy: 3 allowed patterns, 1 denied pattern | Unknown: warn
-
-### Violations (2 found)
-
-| Package | Version | License | Reason |
-|---------|---------|---------|--------|
-| some-gpl-lib | 1.0.0 | GPL-3.0 | Denied by policy |
-| mystery-pkg | 2.1.0 | Unknown | Not in allow list |
-```
-
-脆弱性が見つからなかった場合:
-
-```markdown
-## Vulnerability Report
-
-**✅ No Known Vulnerabilities**
-
-No security vulnerabilities were found in the scanned packages.
-
----
-
-*Vulnerability data provided by [OSV](https://osv.dev) under CC-BY 4.0*
-```
-
-### uv ワークスペースサポート
-
-[uv ワークスペース](https://docs.astral.sh/uv/concepts/projects/workspaces/)を使うと、共通の `uv.lock` ファイルを持つ複数の Python パッケージをひとつのリポジトリで管理できます。`uv-sbom --workspace` は各メンバーパッケージごとに個別の SBOM を生成し、そのメンバーから到達可能な依存関係のみを反映します。
-
-**ユースケース:**
-- リポジトリに複数の Python パッケージ（例: `api/`、`worker/`）が含まれている
-- セキュリティスキャンやコンプライアンス対応のためにメンバーごとの SBOM が必要
-
-**使用例:**
-
-```bash
-# ワークスペースの各メンバーに対して SBOM を生成（デフォルト: CycloneDX JSON）
-uv-sbom --workspace --path /path/to/workspace
-```
-
-**実行結果の例:**
-
-```
-Workspace mode: 2 members found
-
-  Processing: api
-  ...
-  Processing: worker
-  ...
-
-📦 Workspace SBOM Summary
-────────────────────────────────────────────────────────────
-Member               Output File
-────────────────────────────────────────────────────────────
-api                  /path/to/workspace/packages/api/sbom.json
-worker               /path/to/workspace/packages/worker/sbom.json
-────────────────────────────────────────────────────────────
-
-📊 Workspace Aggregate Summary
-────────────────────────────────────────────────────────────
-Total actionable CVEs: 28
-────────────────────────────────────────────────────────────
-
-⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: lint
-   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.
-```
-
-各メンバーは、そのメンバーから到達可能なパッケージのみを含む独自の `sbom.json` を取得します。推移的依存関係は含まれますが、他のメンバーに属するパッケージは除外されます。
-
-**メンバー横断の集計サマリー:** メンバーごとのテーブルの後に、`--workspace` は各メンバーの SBOM ファイルを開かなくてもモノレポ全体の健全性が分かる集計サマリーも出力します — CVE の合計件数、ライセンスポリシー違反があるメンバー、メンテナンス停止／非PyPI／Python非互換パッケージが検出されたメンバーです。この行は、その実行で実際に有効化されたチェック（例: `--check-license`）についてのみ表示されます。実行されなかったチェックの行は、空であっても一切表示されません。
-
-**ワークスペースルートの依存グループ:** 仮想ワークスペースルート（`[project]` を持たないルートの `pyproject.toml`）は、リポジトリ全体で使うツール用の `lint` グループのように、独自の `[dependency-groups]` を宣言できます。これらのグループはどのメンバーの SBOM からもたどられないため、`--workspace` は除外されていないルートのグループ名を挙げる警告を stderr に出力します（上の出力例の最後の行。`examples/workspace` はルートで `lint = ["ruff"]` を宣言しています）。メンバーが自身の依存関係を通じて到達するパッケージは、引き続きそのメンバーの SBOM に含まれます。警告を抑止するには、ルートのグループを `--exclude-groups` に追加してください（`--production-only` でも抑止されます）。stdout とメンバーの SBOM ファイルは変わりません。`[project]` を持つルートはそれ自体がメンバーであり、そのグループは自身の SBOM でカバーされます。
-
-`--lang ja` を指定すると、警告も日本語で出力されます:
-
-```bash
-uv-sbom --workspace --path examples/workspace --lang ja
-```
-
-```
-📊 ワークスペース集計サマリー
-────────────────────────────────────────────────────────────
-対応が必要なCVE合計: 28
-────────────────────────────────────────────────────────────
-
-⚠️  警告: どのメンバーの SBOM にも含まれないワークスペースルートの依存グループ: lint
-   これらのグループからのみ到達するパッケージは、どの SBOM にも含まれません。この警告を抑止するには、これらのグループを --exclude-groups に追加してください。
-```
-
-**他のオプションとの組み合わせ:**
-
-```bash
-# 全メンバーを Markdown 形式で出力
-uv-sbom --workspace --path examples/workspace --format markdown
-
-# ライセンスコンプライアンスチェックを追加
-uv-sbom --workspace --path examples/workspace --check-license
-```
+### ワークスペースサポート
 
-```
-📊 Workspace Aggregate Summary
-────────────────────────────────────────────────────────────
-Total actionable CVEs: 28
-Members with license policy violations: none
-────────────────────────────────────────────────────────────
-
-⚠️  Warning: Workspace root dependency group(s) not covered by any member SBOM: lint
-   Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.
-```
-
-> **注意:** `--workspace` と `--output` は同時に使用できません。ワークスペースモードでは、各メンバーの SBOM は自動的にメンバー自身のディレクトリ内の `sbom.json`（Markdown の場合は `sbom.md`）に書き込まれます。
-
-2 つのメンバーパッケージ（`api` と `worker`）を含む実行可能なデモは [`examples/workspace/`](examples/workspace/) を参照してください。
-
-### dry-runモードで設定を検証する
-
-`--dry-run`オプションを使用して、ツールが外部レジストリと通信する前に設定を検証できます：
-
-```bash
-# 除外パターンが正しく動作するか確認
-uv-sbom --dry-run -e "internal-*" -e "proprietary-pkg"
-
-# すべてのオプションを含めた設定をテスト
-uv-sbom --dry-run --path /path/to/project --format json -e "*-dev"
-```
-
-**--dry-runを使用する理由:**
-- **除外パターンの検証**: `--exclude`パターンが意図したパッケージを正しく除外しているか確認できます
-- **情報漏洩の防止**: ツールがPyPIレジストリと通信する**前に**、機密性の高い内部パッケージが除外されていることを確認できます
-- **高速な検証**: ネットワーク通信なしで入力検証が行われます
-- **早期エラー検出**: 設定の問題（uv.lockの欠損、無効なパターンなど）を即座に検出できます
-
-**dry-runモードでの動作:**
-- ✅ `uv.lock`ファイルを読み込んで解析
-- ✅ すべてのコマンドライン引数を検証
-- ✅ 除外パターンをチェックし、マッチしないパターンを警告
-- ✅ 問題がなければ成功メッセージを出力
-- ❌ PyPIからのライセンス取得をスキップ（ネットワーク通信なし）
-- ❌ SBOM出力生成をスキップ
-
-## セキュリティ
-
-### 除外パターンの入力検証
-
-`-e`/`--exclude`オプションは、悪意のある入力から保護するために以下のセキュリティ対策を実装しています：
-
-#### 文字制限
-
-パターンには以下の文字のみが許可されています：
-- **英数字**: a-z, A-Z, 0-9, Unicode文字/数字
-- **ハイフン** (`-`)、**アンダースコア** (`_`)、**ドット** (`.`): パッケージ名で一般的
-- **角括弧** (`[`, `]`): パッケージのエクストラ用（例: `requests[security]`）
-- **アスタリスク** (`*`): ワイルドカードマッチング用
-
-制御文字、シェルメタキャラクタ、パス区切り文字は以下を防ぐためにブロックされています：
-- ターミナルエスケープシーケンスインジェクション
-- ログインジェクション攻撃
-- コマンドインジェクション（多層防御）
-
-#### パターンの制限
-
-- **最大パターン数**: 1回の実行につき最大64個のパターンを指定可能
-- **最大長**: パターンあたり255文字
-- **最小内容**: パターンには少なくとも1つの非ワイルドカード文字が必要
-
-これらの制限は、以下によるサービス拒否攻撃を防ぎます：
-- 過剰なメモリ消費
-- 複雑なパターンマッチングによるCPU枯渇
-
-#### 例
-
-**有効なパターン**:
-```bash
-uv-sbom -e 'pytest'           # 完全一致
-uv-sbom -e 'test-*'           # プレフィックスワイルドカード
-uv-sbom -e '*-dev'            # サフィックスワイルドカード
-uv-sbom -e 'package[extra]'   # エクストラ付きパッケージ
-```
-
-**無効なパターン**（エラーで拒否）:
-```bash
-uv-sbom -e ''                 # 空のパターン
-uv-sbom -e '***'              # ワイルドカードのみ
-uv-sbom -e 'pkg;rm -rf /'     # シェルメタキャラクタを含む
-uv-sbom -e "$(cat /etc/passwd)" # シェルコマンド置換がブロックされる
-```
-
-脅威モデルや攻撃ベクトルを含む詳細なセキュリティ情報については、[SECURITY.md](SECURITY.md)を参照してください。
-
-## コマンドラインオプション
-
-```
-Options:
-  -f, --format <FORMAT>              出力形式: json または markdown [デフォルト: json、--incident モードでは markdown]
-  -p, --path <PATH>                  プロジェクトディレクトリへのパス [デフォルト: カレントディレクトリ]
-  -o, --output <OUTPUT>              出力ファイルパス（指定しない場合は標準出力）
-  -e, --exclude <PATTERN>            パッケージ除外パターン（ワイルドカード対応: *）
-  -c, --config <PATH>               設定ファイルのパス（指定しない場合はuv-sbom.config.ymlを自動検出）
-  -i, --ignore-cve <CVE_ID>         無視するCVE ID（複数回指定可能）
-      --lang <LANG>                  人間が読みやすいフォーマットの出力言語: en または ja [デフォルト: en]
-      --init                         uv-sbom.config.ymlテンプレートファイルを生成
-      --dry-run                      ネットワーク通信や出力生成を行わずに設定を検証
-      --verify-links                 ハイパーリンク生成前にPyPIリンクの存在を検証（Markdownフォーマットのみ）
-      --no-check-cve                 OSV APIによる既知の脆弱性チェックを無効化（デフォルトは有効）
-      --severity-threshold <LEVEL>   脆弱性チェックの深刻度しきい値（low/medium/high/critical）
-                                     --no-check-cveとの同時使用は不可
-      --cvss-threshold <SCORE>       脆弱性チェックのCVSSしきい値（0.0-10.0）
-                                     --no-check-cveとの同時使用は不可
-      --suggest-fix                  推移的脆弱性を解決するための直接依存関係アップグレードバージョンを提案
-                                     --no-check-cveとの同時使用は不可、uvのインストール、プロジェクトディレクトリのpyproject.tomlが必要
-      --workspace                    ワークスペースの各メンバーに対して SBOM を生成
-                                     --outputとの同時使用は不可
-      --diff <REF_OR_PATH>           現在のuv.lockをベース（gitのref、タグ、コミットSHA、またはuv.lockファイルへのパス）と比較
-      --check-license                ライセンスコンプライアンスをポリシーに対してチェック
-      --check-abandoned              廃止/メンテナンス停止パッケージをチェック（しきい値日数以内に新しいリリースがない）
-      --abandoned-threshold-days <DAYS>  廃止パッケージ検出の非活動しきい値（日数、デフォルト: 730）
-      --check-non-pypi               非PyPIソース（git、直接URL、プライベートレジストリ）からのパッケージをチェック
-      --check-exploitability         CVE結果にEPSSスコアとCISA KEVステータスを付加
-                                     --no-check-cveとの同時使用は不可
-      --license-allow <LIST>         許可するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
-      --license-deny <LIST>          拒否するライセンスパターンのカンマ区切りリスト（設定ファイルを上書き）
-      --exclude-groups <GROUPS>      指定した依存関係グループからのみ到達可能なパッケージを除外（カンマ区切り）
-                                     例: --exclude-groups dev,test,lint。--production-onlyとの同時使用は不可
-      --production-only              すべての非デフォルト依存関係グループを除外（プロダクションのみモード）
-                                     --exclude-groupsとの同時使用は不可
-      --target-python <VERSION>      互換性チェック対象のPythonバージョン（PEP 440形式、例: 3.8）
-      --baseline <PATH>              既知の脆弱性検出結果を抑制するためのベースラインファイルのパス
-                                     --no-check-cveとの同時使用は不可
-      --update-baseline              SBOM生成後に現在の全脆弱性検出結果でベースラインファイルを更新
-                                     --baselineが必要
-      --explain <PACKAGE_NAME>       指定したパッケージへの依存経路を出力（Markdownフォーマットのみ）
-                                     --workspaceとの同時使用は不可
-      --show-dependency-tree        依存関係グラフをASCIIツリーとして描画（Markdownフォーマットのみ）
-      --dependency-tree-depth <DEPTH>  依存関係ツリー可視化の最大深度（デフォルト: 3）
-                                     --show-dependency-treeが必要
-      --incident <ID_OR_RANGE>       単一のアドバイザリ（GHSA-/PYSEC-/CVE-/OSV-/MAL- ID）がプロジェクトに影響するか、
-                                     修正版がリリース済みか、実行すべきコマンドを出力（デフォルトは Markdown）
-                                     OSV 未登録のアドバイザリには "foo>=2.0,<2.3.2" のような範囲を引用符付きで指定
-                                     （演算子は >=、<、<= のみ）
-                                     --workspace と併用すると全メンバーを1つのレポートにまとめて出力
-                                     --diff、各チェック系フラグとの同時使用は不可（インシデント対応を参照）
-  -h, --help                         ヘルプを表示
-  -V, --version                      バージョンを表示
-```
-
-## 終了コード
-
-uv-sbomは以下の終了コードを返します：
-
-| 終了コード | 説明 | 例 |
-|-----------|-------------|----------|
-| 0 | 成功 | SBOMの生成成功、しきい値を超える脆弱性なし、`--help`や`--version`の表示 |
-| 1 | 脆弱性またはライセンス違反検出 | しきい値を超える脆弱性検出、ライセンスポリシー違反検出 |
-| 2 | 無効なコマンドライン引数 | 不明なオプション、無効な引数の型、`--incident` の不正なアドバイザリ ID または範囲 |
-| 3 | アプリケーションエラー | uv.lockファイルの欠損、無効なプロジェクトパス、無効な除外パターン、ネットワークエラー、ファイル書き込みエラー、`--incident` の不明なアドバイザリ ID |
-| 4 | 影響あり・修正版なし（`--incident` のみ） | アドバイザリの影響を受けているが、修正版が PyPI 未リリース、または修正版が存在しない |
-
-### 脆弱性・ライセンスチェック時の終了コード
-
-CVEチェック（デフォルトで有効）または`--check-license`使用時、終了コードの動作はしきい値設定によって変わります：
-
-| シナリオ | 終了コード |
-|----------|-----------|
-| 脆弱性が見つからない | 0 |
-| 脆弱性が見つかった（しきい値指定なし） | 1 |
-| 脆弱性が見つかった、すべてがしきい値以下 | 0 |
-| 脆弱性が見つかった、一部がしきい値を超過 | 1 |
-| ライセンスポリシー違反が検出された | 1 |
-| 併用時: いずれかのチェックが失敗 | 1 |
-| 併用時: 両方のチェックが成功 | 0 |
-
-**例：**
-```bash
-# Low/Mediumの脆弱性があってもHigh/Criticalがなければ終了コード0を返す
-uv-sbom --format markdown --severity-threshold high
-
-# CVSS >= 7.0の脆弱性がなければ終了コード0を返す
-uv-sbom --format markdown --cvss-threshold 7.0
-```
-
-### よくあるエラーシナリオ
-
-**終了コード 3 - アプリケーションエラー:**
-```bash
-# uv.lockファイルが見つからない
-$ uv-sbom --path /path/without/uv-lock
-❌ An error occurred:
-uv.lock file not found: /path/without/uv-lock/uv.lock
-# 終了コード: 3
-
-# 無効な除外パターン（空）
-$ uv-sbom -e ""
-❌ An error occurred:
-Exclusion pattern cannot be empty
-# 終了コード: 3
-
-# 無効な除外パターン（無効な文字）
-$ uv-sbom -e "pkg;name"
-❌ An error occurred:
-Exclusion pattern contains invalid character ';' in pattern 'pkg;name'
-# 終了コード: 3
+`--workspace` でワークスペースメンバーごとの SBOM を生成し、全メンバーの集計サマリーを表示します。[ワークスペース（英語）→](docs/workspace.md)
 
-# 存在しないプロジェクトパス
-$ uv-sbom --path /nonexistent
-❌ An error occurred:
-Invalid project path: /nonexistent
-# 終了コード: 3
-```
-
-**終了コード 2 - CLI引数エラー:**
-```bash
-# 不明なオプション
-$ uv-sbom --unknown-option
-error: unexpected argument '--unknown-option' found
-# 終了コード: 2
-
-# 無効なフォーマット値
-$ uv-sbom --format invalid
-error: invalid value 'invalid' for '--format <FORMAT>'
-# 終了コード: 2
-```
-
-### スクリプトでの使用例
-
-```bash
-#!/bin/bash
-
-uv-sbom --format json --output sbom.json
+### CI 統合
 
-case $? in
-  0)
-    echo "SBOMの生成に成功しました"
-    ;;
-  1)
-    echo "しきい値を超える脆弱性が検出されました"
-    exit 1
-    ;;
-  2)
-    echo "無効なコマンドライン引数です"
-    exit 2
-    ;;
-  3)
-    echo "アプリケーションエラーが発生しました"
-    exit 3
-    ;;
-esac
-```
-
-## 出力例
-
-### Markdown形式
-
-> **注**: Markdown形式のサンプルは[ja-complete v0.1.0](https://github.com/Taketo-Yoda/ja-complete/tree/v0.1.0)のSBOM形式に基づいています。
+構造化された終了コード、深刻度/CVSS 閾値、GitHub Actions と GitLab CI のすぐに使えるサンプル。[CI 統合（英語）→](docs/ci-integration.md)
 
-```markdown
-## Summary
+### 設定
 
-| Item | Count | Status |
-|------|-------|--------|
-| Direct dependencies | 2 | ✅ |
-| Transitive dependencies | 3 | ✅ |
-| ...vulnerability rows... | | |
-| License violations | 0 | ✅ |
+`uv-sbom.config.yml` ファイルですべてのオプションのデフォルト値を設定できます。`--init` でテンプレートを生成。CLI 引数は常に設定ファイルより優先されます。[設定（英語）→](docs/configuration.md)
 
-**Overall: No issues found** ✅
+## スコープと CycloneDX との主な違い
 
-# Software Bill of Materials (SBOM)
+### SBOM スコープ
 
-## Component Inventory
+本ツールは **uv.lock** ファイルの内容に基づいて SBOM を生成します。対象：
+- 直接ランタイム依存
+- 間接ランタイム依存
+- 開発依存（uv.lock にロックされている場合）
 
-A comprehensive list of all software components and libraries included in this project.
+**対象外：**
+- ビルドシステム依存（例：hatchling、setuptools）
+- 公開ツール（例：twine、build）
+- uv.lock にロックされていない仮想環境内のみの依存
 
-| Package | Version | License | Description |
-|---------|---------|---------|-------------|
-| janome | 0.5.0 | AL2 | Japanese morphological analysis engine. |
-| pydantic | 2.12.5 | MIT | Data validation using Python type hints |
-| ...additional packages... |
+### CycloneDX 公式ツールとの比較
 
-## Direct Dependencies
+v7.2.1 時点で、公式 cyclonedx-python ライブラリは uv の直接サポートをまだ提供していません。Python プロジェクトの SBOM 生成における比較：
 
-Primary packages explicitly defined in the project configuration(e.g., pyproject.toml).
+| 観点 | uv-sbom（本ツール） | CycloneDX 公式ツール |
+|------|---------------------|---------------------|
+| **データソース** | `uv.lock` ファイル | `.venv` 仮想環境 |
+| **スコープ** | 本番ランタイム依存のみ | ビルド/開発ツール含む全サプライチェーン |
+| **パッケージ数** | 少ない（例：16 パッケージ） | 多い（例：38+ パッケージ） |
+| **ユースケース** | 本番セキュリティスキャン | 包括的サプライチェーン監査 |
+| **精度** | ロックされた依存を反映 | インストール済みパッケージを反映 |
 
-| Package | Version | License | Description |
-|---------|---------|---------|-------------|
-| janome | 0.5.0 | AL2 | Japanese morphological analysis engine. |
-| pydantic | 2.12.5 | MIT | Data validation using Python type hints |
+### どちらのツールを使うべきか？
 
-## Transitive Dependencies
+- **本番セキュリティスキャン向け**: `uv-sbom` で本番にデプロイされる依存のみに注目
+- **包括的サプライチェーン監査向け**: CycloneDX 公式ツールで開発・ビルド時依存をすべて含める
+- **規制コンプライアンス向け**: 要件を確認 — 包括的アプローチが必要な場合もあります
 
-Secondary dependencies introduced by the primary packages.
+`uv-sbom` は本番アプリケーションに同梱されないビルド時依存を除外することで、セキュリティスキャンのノイズを低減します。
 
-### Dependencies for pydantic
+## ドキュメント
 
-| Package | Version | License | Description |
-|---------|---------|---------|-------------|
-| annotated-types | 0.7.0 | MIT License | Reusable constraint types to use with typing.Annotated |
-| pydantic-core | 2.41.5 | MIT | Core functionality for Pydantic validation and serialization |
-```
-
-### CycloneDX JSON形式
-
-```json
-{
-  "bomFormat": "CycloneDX",
-  "specVersion": "1.6",
-  "version": 1,
-  "serialNumber": "urn:uuid:...",
-  "metadata": {
-    "timestamp": "2024-01-01T00:00:00Z",
-    "tools": [
-      {
-        "name": "uv-sbom",
-        "version": "0.1.0"
-      }
-    ]
-  },
-  "components": [
-    {
-      "type": "library",
-      "name": "requests",
-      "version": "2.31.0",
-      "description": "HTTP library for Python",
-      "licenses": [
-        {
-          "license": {
-            "name": "Apache 2.0"
-          }
-        }
-      ],
-      "purl": "pkg:pypi/requests@2.31.0"
-    }
-  ]
-}
-```
+| ドキュメント | 説明 |
+|-------------|------|
+| [セキュリティチェック（英語）](docs/security-checks.md) | CVE スキャン、閾値、ベースライン、ライセンス、放棄、非 PyPI、Python 互換性、悪用可能性 |
+| [インシデント対応（英語）](docs/incident-response.md) | `--incident` モード：アドバイザリ検索、ワークスペース、手動範囲、終了コード、パッチ待ち |
+| [依存関係インサイト（英語）](docs/dependency-insight.md) | `--explain`、`--show-dependency-tree`、`--diff`、解決ガイド、アップグレードアドバイザー |
+| [設定（英語）](docs/configuration.md) | 設定ファイル、スキーマリファレンス、マージルール、除外パターン、依存グループ |
+| [CI 統合（英語）](docs/ci-integration.md) | GitHub Actions、GitLab CI、終了コード、スクリプティング、エラーハンドリング |
+| [ワークスペース（英語）](docs/workspace.md) | `--workspace` モード、集計サマリー、ルート依存グループ |
+| [ネットワーク（英語）](docs/network.md) | 外部ドメイン、ファイアウォール、プロキシ、オフラインモード |
+| [CLI リファレンス（英語）](docs/cli-reference.md) | コマンドラインオプション一覧、出力形式の例 |
 
 ## 要件
 
-- `uv`で管理されており、`uv.lock`ファイルを持つPythonプロジェクト
-- PyPIからライセンス情報を取得するためのインターネット接続
-
-## ネットワーク要件
-
-### アクセスする外部ドメイン
-
-`uv-sbom`は、SBOM生成時に以下の外部サービスにHTTPリクエストを送信します：
-
-#### すべての操作で必須:
-
-1. **PyPI (Python Package Index)**
-   - ドメイン: `https://pypi.org`
-   - 目的: Pythonパッケージのライセンス情報を取得
-   - タイミング: すべてのSBOM生成時（`--dry-run`を除く）
-   - レート制限: 公式制限なし、ツールはリトライロジックを実装
-   - エンドポイント: `/pypi/{package_name}/json`
-
-#### オプション（`--verify-links`使用時）または必須（CVEチェック有効時）:
-
-2. **PyPIリンク検証**
-   - ドメイン: `https://pypi.org`
-   - 目的: HTTP HEADリクエストでPyPI上のパッケージ存在を検証
-   - タイミング: `--verify-links`フラグ使用時のみ
-   - レート制限: 最大10同時リクエスト
-   - エンドポイント: `/project/{package_name}/`
-
-3. **OSV (Open Source Vulnerability Database)**
-   - ドメイン: `https://api.osv.dev`
-   - 目的: セキュリティスキャンのための脆弱性情報を取得
-   - タイミング: CVEチェック有効時（デフォルト）。`--no-check-cve`で無効化可能
-   - レート制限: ツールは10リクエスト/秒の制限を実装
-   - エンドポイント:
-     - `/v1/querybatch` - 脆弱性IDのバッチクエリ
-     - `/v1/vulns/{vuln_id}` - 詳細な脆弱性情報
-
-4. **FIRST.org EPSS API**
-   - ドメイン: `https://api.first.org`
-   - 目的: CVEのEPSS（Exploit Prediction Scoring System）スコアとパーセンタイルを取得
-   - タイミング: `--check-exploitability`フラグ使用時のみ
-   - エンドポイント: `/data/v1/epss?cve=CVE-A,CVE-B,...`（バッチ処理）
-
-5. **CISA KEV（Known Exploited Vulnerabilities）カタログ**
-   - ドメイン: `https://www.cisa.gov`
-   - 目的: CVEに実際の悪用が確認されているかを確認
-   - タイミング: `--check-exploitability`フラグ使用時のみ
-   - エンドポイント: `/sites/default/files/feeds/known_exploited_vulnerabilities.json`
-
-### ファイアウォール設定
-
-企業のファイアウォールやプロキシの内側にいる場合は、以下のドメインを許可リストに追加してください：
-
-```
-# 必須
-pypi.org
-
-# CVEチェック用（デフォルトで必須）
-api.osv.dev    # --no-check-cveで無効化可能
-
-# オプション（--verify-links使用時）
-pypi.org       # --verify-linksでも使用
-
-# オプション（--check-exploitability使用時のみ）
-api.first.org  # EPSSスコア
-www.cisa.gov   # CISA KEVカタログ
-```
-
-### プロキシ設定
-
-ツールは標準のHTTP/HTTPSプロキシ環境変数を尊重します：
-
-```bash
-export HTTP_PROXY=http://proxy.company.com:8080
-export HTTPS_PROXY=http://proxy.company.com:8080
-export NO_PROXY=localhost,127.0.0.1
-
-uv-sbom --format json
-```
-
-### オフラインモード
-
-ネットワークリクエストなしで設定を検証するには、`--dry-run`を使用します：
-
-```bash
-uv-sbom --dry-run
-```
-
-このモードでは：
-- `uv.lock`ファイルを検証
-- コマンドライン引数を検証
-- 除外パターンをチェック
-- ライセンス取得をスキップ（PyPIアクセスなし）
-- 脆弱性チェックをスキップ（OSVアクセスなし）
-- SBOM出力生成をスキップ
-
-## エラーハンドリング
-
-uv-sbomは親切な提案を含む詳細なエラーメッセージを提供します:
-
-- **uv.lockファイルが見つからない**: 修正方法の提案を含む明確なメッセージ
-- **無効なプロジェクトパス**: 処理前にディレクトリの存在を検証
-- **ライセンス取得の失敗**: 失敗したリクエストを再試行（最大3回）し、処理を継続
-- **ファイル書き込みエラー**: ディレクトリの存在と権限を確認
-- **進捗追跡**: ライセンス情報取得中のリアルタイム進捗表示
-
-エラーメッセージの例:
-```
-❌ An error occurred:
-
-uv.lock file not found: /path/to/project/uv.lock
-
-💡 Hint: uv.lock file does not exist in project directory "/path/to/project".
-   Please run in the root directory of a uv project, or specify the correct path with the --path option.
-```
-
-## トラブルシューティング
-
-### uv.lockファイルが見つからない
-`uv.lock`ファイルが含まれるディレクトリでコマンドを実行していることを確認するか、`--path`オプションで正しいプロジェクトディレクトリを指定してください。
-
-### ライセンス情報取得の失敗
-一部のパッケージはPyPIからライセンス情報を取得できない場合があります。ツールは以下を行います:
-1. 最大3回まで自動的に再試行
-2. 他のパッケージの処理を継続
-3. 失敗したパッケージの警告を表示
-4. 取得に失敗した場合でも、ライセンス情報なしでパッケージを出力に含める
-
-### ネットワークの問題
-プロキシやファイアウォールの内側にいる場合は、`https://pypi.org`にアクセスできることを確認してください。ツールはAPIリクエストに10秒のタイムアウトを使用します。
+- `uv` で管理された Python プロジェクト（`uv.lock` ファイルが必要）
+- PyPI からのライセンス情報取得にインターネット接続が必要
 
 ## 開発者向け
 
 ### アーキテクチャ
 
-uv-sbomは保守性とテスタビリティのために**ヘキサゴナルアーキテクチャ**（ポート＆アダプター）+ **ドメイン駆動設計（DDD）**で実装されています。
+uv-sbom は保守性とテスト容易性のために **ヘキサゴナルアーキテクチャ**（ポートとアダプター）+ **ドメイン駆動設計（DDD）** で構築されています。
 
-レイヤー、ポート、アダプター、アーキテクチャ決定記録（ADR）の詳細は[ARCHITECTURE-JP.md](ARCHITECTURE-JP.md)を参照してください。
+詳細は [ARCHITECTURE.md](ARCHITECTURE.md) を参照してください。
 
-### テストカバレッジ
+### 開発環境セットアップ
 
-テストスイートはユニット、統合、エンドツーエンドの各シナリオをカバーしています。
-
-テストの実行方法やコントリビュート方法については[DEVELOPMENT.md](DEVELOPMENT.md)を参照してください。
-
-### 開発環境のセットアップ
-
-リポジトリをクローンした後、gitフックを有効化してください：
+リポジトリをクローンした後、git フックを有効化します：
 
 ```bash
 make setup
 ```
 
-これにより `.githooks/` の `pre-commit`（自動フォーマット）と `pre-push`（フォーマット確認・clippy・テスト）フックが有効になり、すべてのコントリビュータに対してコード品質チェックが自動的に実行されます。
+`.githooks/` の `pre-commit`（自動フォーマット）と `pre-push`（fmt チェック、clippy、テスト）フックが有効になり、すべてのコントリビューターに対してコード品質チェックが自動実行されます。
 
 ### リファレンス
 
 - [DEVELOPMENT.md](DEVELOPMENT.md) — 開発ガイド
-- [ARCHITECTURE-JP.md](ARCHITECTURE-JP.md) — ヘキサゴナルアーキテクチャ + DDD実装の詳細
+- [ARCHITECTURE.md](ARCHITECTURE.md) — ヘキサゴナルアーキテクチャ + DDD 実装詳細
 - [CHANGELOG.md](CHANGELOG.md) — 変更履歴
-- [.claude/project-context.md](.claude/project-context.md) — Claude Code用の完全なプロジェクトコンテキスト
-- [.claude/instructions.md](.claude/instructions.md) — Claude Code用のコーディングガイドラインと指示
+- [.claude/project-context.md](.claude/project-context.md) — Claude Code 向けプロジェクトコンテキスト
+- [.claude/instructions.md](.claude/instructions.md) — Claude Code 向けコーディングガイドライン
 
 ## 帰属表示
 
 ### 脆弱性データ
 
-CVEチェックが有効な場合（デフォルト）、このツールは[OSV (Open Source Vulnerability)](https://osv.dev)から脆弱性データを取得します。これは[Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/)の下で提供されています。
+本ツールはデフォルトで [OSV (Open Source Vulnerability)](https://osv.dev) から脆弱性データを取得します。このデータは [Creative Commons Attribution 4.0 International License (CC-BY 4.0)](https://creativecommons.org/licenses/by/4.0/) の下で提供されています。脆弱性チェックを無効にするには `--no-check-cve` を使用してください。
 
-**必要な帰属表示:**
-- OSVが提供する脆弱性データ
-- 利用可能: https://osv.dev
+**必須帰属表示：**
+- 脆弱性データは OSV より提供
+- URL: https://osv.dev
 - ライセンス: CC-BY 4.0
 
-OSVデータベースは、オープンソースソフトウェアの包括的で正確かつアクセスしやすい脆弱性情報を提供するためのオープンな共同プロジェクトです。
+OSV データベースは、オープンソースソフトウェアの包括的で正確かつアクセスしやすい脆弱性情報を提供する共同の取り組みです。
 
 ### 悪用可能性データ
 
-`--check-exploitability` 使用時、このツールは以下のソースからデータを取得します：
+`--check-exploitability` 使用時、本ツールは以下からデータを取得します：
 
-- **EPSS（Exploit Prediction Scoring System）** [FIRST.org](https://www.first.org/epss/) 提供 — CVE悪用可能性の確率スコアリング。EPSSについて: https://www.first.org/epss
-- **CISA KEV（Known Exploited Vulnerabilities）** カタログ [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) 提供 — 実際に悪用が確認されたCVEの信頼できるリスト（パブリックドメイン、CC0）
+- **EPSS (Exploit Prediction Scoring System)** by [FIRST.org](https://www.first.org/epss/) — CVE の悪用可能性の確率スコアリング。詳細: https://www.first.org/epss
+- **CISA KEV (Known Exploited Vulnerabilities)** catalog by [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — 確認済みの活発な悪用がある CVE の権威あるリスト（パブリックドメイン、CC0）
 
 ## ライセンス
 
-MITライセンス - 詳細は[LICENSE](LICENSE)ファイルを参照してください。
+MIT License - 詳細は [LICENSE](LICENSE) ファイルを参照してください。
 
 [shield_license]: https://img.shields.io/badge/license-MIT-blue.svg
 [license_file]: LICENSE
