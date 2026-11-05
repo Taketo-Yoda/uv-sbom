@@ -103,6 +103,7 @@ pub(super) static EN_MESSAGES: Messages = Messages {
     warn_verify_links_no_effect: "⚠️  Warning: --verify-links has no effect with JSON format.",
     warn_verify_links_json_detail: "   PyPI link verification only applies to Markdown output.",
     warn_verify_links_json_hint: "   Use --format markdown to use link verification.",
+    warn_format_default_changing: "⚠️  Warning: No output format specified; using JSON. The default output format will change to Markdown in v{}.\n   To keep JSON output, pass --format json. To switch to Markdown now, pass --format markdown.\n   Alternatively, set `format` in your config file (e.g. uv-sbom.config.yml) to silence this warning.",
     warn_abandoned_fetch_failed: "⚠️  Warning: Failed to fetch maintenance info for {}: {}",
     warn_vuln_detail_fetch_failed: "⚠️  Warning: Failed to fetch details for {}: {}",
     warn_epss_fetch_failed: "Warning: EPSS fetch failed for batch {}: {}",
@@ -432,6 +433,18 @@ mod tests {
             msgs.warn_verify_links_json_hint,
             "   Use --format markdown to use link verification."
         );
+    }
+
+    #[test]
+    fn test_messages_format_default_changing_en() {
+        let msgs = Messages::for_locale(Locale::En);
+        let text = Messages::format(msgs.warn_format_default_changing, &["5.0.0"]);
+        assert!(text.starts_with("⚠️  Warning:"));
+        assert!(text.contains("v5.0.0"));
+        assert!(text.contains("--format json"));
+        assert!(text.contains("--format markdown"));
+        assert!(text.contains("`format`"));
+        assert!(!text.contains("{}"));
     }
 
     #[test]

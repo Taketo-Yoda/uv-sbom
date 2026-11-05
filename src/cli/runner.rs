@@ -1,5 +1,6 @@
 use owo_colors::OwoColorize;
 
+use crate::application::dto::OutputFormat;
 use crate::i18n::Messages;
 use crate::shared::Result;
 
@@ -56,6 +57,40 @@ pub fn resolve_suggest_fix(
 /// - Path canonicalization for traversal prevention
 pub fn validate_project_path(path: &std::path::Path) -> Result<()> {
     crate::shared::security::validate_directory_path(path)
+}
+
+/// Version in which the SBOM default output format changes to Markdown (#1071).
+const FORMAT_DEFAULT_CHANGE_VERSION: &str = "5.0.0";
+
+/// Returns `true` when neither `--format` nor the config file's `format` key is
+/// set, i.e. `resolve_format` falls through to the JSON default.
+///
+/// Presence-based on purpose: a config `format` value that does not parse still
+/// counts as set, so it suppresses the warning (validating that value is #1072).
+fn format_was_defaulted(cli: Option<OutputFormat>, config_format: Option<&str>) -> bool {
+    cli.is_none() && config_format.is_none()
+}
+
+/// Prints the localized warning that the default output format changes from
+/// JSON to Markdown in v5.0.0, when the format was defaulted (#1070).
+///
+/// Called only from the non-incident paths (`run`, `run_workspace`, `run_diff`);
+/// `--incident` already defaults to Markdown.
+pub fn warn_if_format_defaulted(
+    cli: Option<OutputFormat>,
+    config_format: Option<&str>,
+    msgs: &Messages,
+) {
+    if format_was_defaulted(cli, config_format) {
+        eprintln!(
+            "{}",
+            Messages::format(
+                msgs.warn_format_default_changing,
+                &[FORMAT_DEFAULT_CHANGE_VERSION]
+            )
+        );
+        eprintln!();
+    }
 }
 
 #[cfg(test)]
@@ -147,5 +182,36 @@ mod tests {
             resolve_suggest_fix(true, temp_dir.path(), msgs),
             uv_available
         );
+    }
+
+    #[test]
+    fn test_format_was_defaulted_when_cli_and_config_unset() {
+        assert!(format_was_defaulted(None, None));
+    }
+
+    #[test]
+    fn test_format_was_defaulted_false_with_cli_format() {
+        assert!(!format_was_defaulted(Some(OutputFormat::Json), None));
+        assert!(!format_was_defaulted(Some(OutputFormat::Markdown), None));
+    }
+
+    #[test]
+    fn test_format_was_defaulted_false_with_config_format() {
+        assert!(!format_was_defaulted(None, Some("json")));
+        assert!(!format_was_defaulted(None, Some("markdown")));
+    }
+
+    #[test]
+    fn test_format_was_defaulted_false_with_unparseable_config_format() {
+        // Presence-based: an invalid value still suppresses the warning (#1072).
+        assert!(!format_was_defaulted(None, Some("xml")));
+    }
+
+    #[test]
+    fn test_format_was_defaulted_false_with_cli_and_config() {
+        assert!(!format_was_defaulted(
+            Some(OutputFormat::Json),
+            Some("markdown")
+        ));
     }
 }

@@ -180,6 +180,7 @@ mod tests {
 
     #[test]
     fn test_resolve_format_no_cli_no_config_defaults_to_json() {
+        // Default stays Json until v5.0.0 (#1071); #1070 only warns.
         assert_eq!(resolve_format(None, None), OutputFormat::Json);
     }
 

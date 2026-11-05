@@ -103,6 +103,7 @@ pub(super) static JA_MESSAGES: Messages = Messages {
     warn_verify_links_no_effect: "⚠️  警告: JSON形式では --verify-links は効果がありません。",
     warn_verify_links_json_detail: "   PyPIリンク検証はMarkdown出力にのみ適用されます。",
     warn_verify_links_json_hint: "   リンク検証を使用するには --format markdown を使用してください。",
+    warn_format_default_changing: "⚠️  警告: 出力形式が指定されていないため、JSON形式で出力します。v{} でデフォルトの出力形式は Markdown に変更されます。\n   JSON出力を維持するには --format json を、Markdown に今すぐ切り替えるには --format markdown を指定してください。\n   設定ファイル（例: uv-sbom.config.yml）で `format` を指定しても、この警告は表示されなくなります。",
     warn_abandoned_fetch_failed: "⚠️  警告: {}のメンテナンス情報の取得に失敗: {}",
     warn_vuln_detail_fetch_failed: "⚠️  警告: {}の詳細情報の取得に失敗: {}",
     warn_epss_fetch_failed: "警告: バッチ{}のEPSSデータ取得に失敗: {}",
@@ -441,6 +442,18 @@ mod tests {
             msgs.warn_verify_links_json_hint,
             "   リンク検証を使用するには --format markdown を使用してください。"
         );
+    }
+
+    #[test]
+    fn test_messages_format_default_changing_ja() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let text = Messages::format(msgs.warn_format_default_changing, &["5.0.0"]);
+        assert!(text.starts_with("⚠️  警告:"));
+        assert!(text.contains("v5.0.0 でデフォルトの出力形式は Markdown に変更されます"));
+        assert!(text.contains("--format json"));
+        assert!(text.contains("--format markdown"));
+        assert!(text.contains("`format`"));
+        assert!(!text.contains("{}"));
     }
 
     #[test]

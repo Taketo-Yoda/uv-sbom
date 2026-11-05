@@ -298,7 +298,9 @@ mod incident_tests {
             .stdout(predicate::str::contains(
                 "not taken from a vulnerability database",
             ))
-            .stdout(predicate::str::contains("Not affected"));
+            .stdout(predicate::str::contains("Not affected"))
+            // No --format, but incident mode already defaults to Markdown (#1070)
+            .stderr(predicate::str::contains("will change to Markdown in v5.0.0").not());
     }
 
     /// `<=` names no fix: affected, no command, exit 4 (offline)
