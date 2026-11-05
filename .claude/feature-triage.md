@@ -21,10 +21,10 @@ Answer each question. A "STOP" answer means the feature is likely out of scope.
 | 1 | Does the feature depend on uv.lock as its primary data source? | No → STOP: uv-sbom is uv-native by design |
 | 2 | Does the feature produce or improve output that a developer reads directly? | No → STOP: we are not building a pipeline integration tool |
 | 3 | Is the feature absent from the Anti-roadmap in product-vision.md? | No → STOP: feature is explicitly excluded |
-| 4 | Does the feature avoid replicating functionality of OSV, Dependency-Track, or pip-audit? | No → STOP: integrate, do not duplicate |
+| 4 | Does the feature avoid replicating the core purpose of a service listed in `.claude/competitive-landscape.md` → "Tracked tools" → "Integrate, don't duplicate"? | No → STOP: integrate, do not duplicate |
 
 If any STOP condition is met, write a comment explaining which condition was triggered
-and what the user should do instead (e.g., use pip-audit for X).
+and what the user should do instead (e.g., name the listed service that already covers it).
 
 ## Step 2: Value Check (must pass at least one)
 
@@ -41,7 +41,7 @@ in uv-sbom's philosophy. Do not implement.
 
 | # | Question | Priority impact |
 |---|----------|----------------|
-| D | Would this require competitors (cyclonedx-python, pip-audit, Syft) to redesign their core data model to replicate? | Yes → High priority |
+| D | Would this require the competitor tools listed in `.claude/competitive-landscape.md` → "Tracked tools" to redesign their core data model to replicate? | Yes → High priority |
 | E | Is this feature only possible because uv-sbom reads uv.lock (not installed environment)? | Yes → High priority |
 | F | Does this strengthen the Upgrade Advisor or Resolution Guide capabilities? | Yes → High priority |
 
