@@ -41,7 +41,9 @@ pub(super) fn resolve_flag(cli_flag: bool, config_value: Option<bool>) -> bool {
 ///
 /// `--format` has no clap default (#968), so `cli` is `None` exactly when the
 /// user passed no `--format` flag, and an explicit `--format json` wins over a
-/// config value. An unparseable config value falls through to the default.
+/// config value. Config values are validated at load time (`validate_config`,
+/// #1072), so an unparseable value cannot reach this from the CLI; the
+/// fallback to the default is kept as a safety net.
 /// Incident mode does not use this resolver: it never reads the config `format`.
 pub(super) fn resolve_format(cli: Option<OutputFormat>, config: Option<&str>) -> OutputFormat {
     cli.or_else(|| config.and_then(|c| c.parse::<OutputFormat>().ok()))
@@ -218,6 +220,7 @@ mod tests {
 
     #[test]
     fn test_resolve_format_unparseable_config_falls_back_to_default() {
+        // Pins the safety net; `validate_config` makes this unreachable from the CLI (#1072).
         assert_eq!(
             resolve_format(None, Some("not-a-format")),
             OutputFormat::Json

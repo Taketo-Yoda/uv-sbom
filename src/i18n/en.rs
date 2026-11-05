@@ -68,6 +68,7 @@ pub(super) static EN_MESSAGES: Messages = Messages {
     error_config_parse_failed: "Failed to parse config file: {}\n\n💡 Hint: Ensure the file contains valid YAML syntax.",
     error_config_empty_ignore_cve_id: "Invalid config: ignore_cves[{}].id must not be empty.\n\n💡 Hint: Each ignore_cves entry must have a non-empty 'id' field (e.g., \"CVE-2024-1234\").",
     error_config_invalid_unknown_license_handling: "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"{}\"",
+    error_config_invalid_format: "Invalid config: format must be one of: json, markdown. Got: \"{}\"",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
@@ -519,6 +520,10 @@ mod tests {
         assert_eq!(
             Messages::format(msgs.error_config_invalid_unknown_license_handling, &["maybe"]),
             "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"maybe\""
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_invalid_format, &["xml"]),
+            "Invalid config: format must be one of: json, markdown. Got: \"xml\""
         );
     }
 
