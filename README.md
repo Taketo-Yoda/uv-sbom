@@ -233,8 +233,6 @@ Generate a CycloneDX JSON (default):
 uv-sbom --format json
 ```
 
-> **Note:** JSON is still the default in this release, but the default output format will change to Markdown in v5.0.0. When neither `--format` nor the config file's `format` key is set, uv-sbom prints a warning on stderr (stdout is unchanged). To keep JSON output, pass `--format json` or set `format: json` in your config file.
-
 ### Output language
 
 Use the `--lang` option to switch the output language for human-readable formats (Markdown). The default is English (`en`).
