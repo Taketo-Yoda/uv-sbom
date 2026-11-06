@@ -1,6 +1,6 @@
 # Competitive Landscape
 
-Last full review: 2026-11-05
+Last full review: 2026-11-06
 Review cadence: Update whenever a new version of a competing tool is released,
 or when uv-sbom adds a feature that may change the competitive picture.
 
@@ -34,6 +34,8 @@ for differentiation (triage D).
 | Syft / Grype | [Syft / Grype (Anchore)](#syft--grype-anchore) | ✅ (Syft cataloger; Grype unverified) |
 | osv-scanner | [osv-scanner](#osv-scanner) | ✅ |
 | Trivy | [Trivy](#trivy) | ✅ |
+| Dependabot | [Dependabot](#dependabot) | ✅ (security + version updates) |
+| Renovate | [Renovate](#renovate) | ✅ (security + lock maintenance) |
 
 ### Integrate, don't duplicate
 
@@ -46,16 +48,14 @@ consumes or points to them instead.
 | Dependency-Track | SBOM portfolio and continuous-monitoring platform; uv-sbom's CycloneDX output feeds it |
 | pip-audit | Vulnerability auditing for pip / requirements.txt workflows; out of uv-sbom's uv.lock scope |
 
-### Unverified
+### Confirmed unsupported
 
-These tools may overlap with uv-sbom, but their uv behavior has not been verified from
-an authoritative source. **Do not cite them in triage** until verified (tracked in #1062).
+These tools were evaluated for uv.lock support and found not to support it.
+They are excluded from triage comparisons.
 
-| Tool | Known (2026-11-05) | Still to verify |
-|------|--------------------|-----------------|
-| Dependabot | `uv` is a supported ecosystem ([source](https://docs.github.com/en/code-security/dependabot/ecosystems-supported-by-dependabot/supported-ecosystems-and-repositories)) | Security updates for transitive dependencies in uv.lock |
-| Renovate | pep621 manager supports `uv.lock`; `lockFileMaintenance` uses the uv CLI ([source](https://docs.renovatebot.com/modules/manager/pep621/)) | Security updates for transitive dependencies in uv.lock |
-| Safety CLI | Latest 3.8.1 (2026-05-29) ([source](https://pypi.org/project/safety/)) | Whether it scans uv.lock |
+| Tool | Version checked | Finding | Verified | Source |
+|------|----------------|---------|----------|--------|
+| Safety CLI | 3.8.1 (2026-05-29) | Does not scan `uv.lock`. Scans `requirements.txt`, `Pipfile.lock`, `pyproject.toml`, and Python virtual environments. The "uv" mention in Safety docs refers to the Safety Firewall (install proxy wrapping `uv pip install`), not lockfile scanning. | 2026-11-06 | [scanning docs](https://docs.safetycli.com/safety-docs/safety-cli/scanning-for-vulnerable-and-malicious-packages), [PyPI](https://pypi.org/project/safety/) |
 
 ---
 
@@ -241,6 +241,74 @@ vulnerabilities from uv.lock but offers no remediation and no license data for u
 
 ---
 
+## Dependabot
+
+| Attribute | Value | Last Verified | Source |
+|-----------|-------|--------------|--------|
+| uv ecosystem support | Yes (security updates since Dec 2025; version updates supported) | 2026-11-06 | [GitHub changelog](https://github.blog/changelog/2025-12-16-dependabot-security-updates-now-support-uv/), [supported ecosystems](https://docs.github.com/en/code-security/dependabot/ecosystems-supported-by-dependabot/supported-ecosystems-and-repositories) |
+| uv.lock support | Yes: updates `uv.lock` for both security and version updates | 2026-11-06 | [uv Dependabot guide](https://docs.astral.sh/uv/guides/integration/dependabot/) |
+| Security updates for direct deps | Yes | 2026-11-06 | [GitHub changelog](https://github.blog/changelog/2025-12-16-dependabot-security-updates-now-support-uv/) |
+| Security updates for transitive deps | Partial: lockfile-only transitive updates work (fixed in dependabot-core#16686, merged 2026-10-27). Cannot bump a parent dependency to fix a capped vulnerable transitive — Python `full_unlock` is a stub (`NotImplementedError`); shared across pip, Poetry, Pipenv, and uv | 2026-11-06 | [dependabot-core#16686](https://github.com/dependabot/dependabot-core/pull/16686), [dependabot-core#16337](https://github.com/dependabot/dependabot-core/issues/16337) (open) |
+| Versioning strategy | `lockfile-only` supported for transitive security updates (lowest fixed version) | 2026-11-06 | [dependabot-core#16686](https://github.com/dependabot/dependabot-core/pull/16686) |
+| Output | Pull requests (no Markdown report, no SBOM) | 2026-11-06 | [uv Dependabot guide](https://docs.astral.sh/uv/guides/integration/dependabot/) |
+| Known caveats | "Some use cases are not yet working" (uv docs); `exclude-newer` may conflict without a matching `cooldown` | 2026-11-06 | [uv Dependabot guide](https://docs.astral.sh/uv/guides/integration/dependabot/), [uv#2512](https://github.com/astral-sh/uv/issues/2512) |
+
+**Verification command:**
+```bash
+# Check Dependabot config and open issues
+gh api repos/{owner}/{repo}/vulnerability-alerts
+gh issue view 16337 -R dependabot/dependabot-core
+gh pr view 16686 -R dependabot/dependabot-core
+```
+
+**Key differentiator vs. uv-sbom:**
+Dependabot is a CI/CD bot that opens PRs to bump vulnerable packages automatically.
+It cannot explain *why* a transitive dependency is vulnerable (no dependency-path
+attribution), cannot verify whether a proposed upgrade actually resolves in the
+lockfile, and cannot bump a capping parent to fix a transitive. uv-sbom's Upgrade
+Advisor and `--incident` mode provide single-advisory triage with verified upgrade
+paths and dependency-path attribution — a developer-facing workflow that Dependabot's
+automated PRs do not cover.
+
+**Watch for:**
+- Python `full_unlock` implementation (dependabot-core#16337) — would close the transitive-parent gap
+- `uv` in uv's tracking issue (uv#2512) for remaining Dependabot integration gaps
+
+---
+
+## Renovate
+
+| Attribute | Value | Last Verified | Source |
+|-----------|-------|--------------|--------|
+| uv.lock support | Yes: pep621 manager supports `uv.lock`; lock file maintenance delegates to the `uv` CLI | 2026-11-06 | [pep621 manager docs](https://docs.renovatebot.com/modules/manager/pep621/) |
+| Security updates for direct deps | Yes: vulnerability alerts trigger PRs for direct dependencies | 2026-11-06 | [pep621 manager docs](https://docs.renovatebot.com/modules/manager/pep621/) |
+| Security updates for transitive deps | Yes (since 44.221.0, 2026-11-05): lockfile-only transitive deps extracted when vulnerability alerts are enabled; remediated via `uv lock --upgrade-package name==version` | 2026-11-06 | [renovate#47482](https://github.com/renovatebot/renovate/pull/47482) (merged 2026-11-05) |
+| Lock file maintenance | `lockFileMaintenance` runs `uv lock --upgrade` for routine lock refreshes | 2026-11-06 | [pep621 manager docs](https://docs.renovatebot.com/modules/manager/pep621/) |
+| Workspace handling | uv workspaces supported; transitive deps reported once at lockfile level (not per member) | 2026-11-06 | [renovate#47482](https://github.com/renovatebot/renovate/pull/47482) |
+| Output | Pull requests (no Markdown report, no SBOM) | 2026-11-06 | [pep621 manager docs](https://docs.renovatebot.com/modules/manager/pep621/) |
+
+**Verification command:**
+```bash
+# Check Renovate release and PR
+gh pr view 47482 -R renovatebot/renovate
+gh issue view 46377 -R renovatebot/renovate
+```
+
+**Key differentiator vs. uv-sbom:**
+Renovate is a CI/CD bot that opens PRs for dependency updates. Its transitive
+security support (since 44.221.0) is the most complete among bots — it pins the
+fixed version via `uv lock --upgrade-package`. However, it provides no dependency-path
+attribution, no single-advisory triage workflow, and no human-readable report. uv-sbom's
+`--incident` mode answers "is my project affected and what should I do?" with verified
+paths and upgrade guidance, which a Renovate PR does not convey.
+
+**Watch for:**
+- Maturity of transitive security support (44.221.0 is brand new — 2026-11-05)
+- Workspace transitive deduplication improvements
+- `osvVulnerabilityAlerts` becoming default-on for uv projects
+
+---
+
 ## Summary: Differentiation Status
 
 | Feature | uv-sbom | uv audit | pip-audit | cyclonedx-python | Syft / Grype | osv-scanner | Trivy |
@@ -255,9 +323,17 @@ vulnerabilities from uv.lock but offers no remediation and no license data for u
 | Yanked flagging | ❌ (planned, #957) | ❌ (planned) | ❌ | ❌ | — | — | — |
 
 `—` means not verified. ❌ for Direct/transitive distinction outside uv-sbom means no
-documented option, as of 2026-11-05.
+documented option, as of 2026-11-06.
 
-*Last updated: 2026-11-05*
+**Dependency-update bots** (not in the matrix above — different output model):
+Dependabot and Renovate open PRs rather than producing reports. Both read `uv.lock`
+and open security PRs for direct dependencies. Renovate (since 44.221.0) also
+remediates transitive vulnerabilities via lockfile-only updates. Dependabot can update
+transitive deps directly in `uv.lock` (since dependabot-core#16686) but cannot bump a
+capping parent (dependabot-core#16337 open). Neither provides dependency-path
+attribution, human-readable reports, or single-advisory triage.
+
+*Last updated: 2026-11-06*
 
 ---
 
@@ -267,3 +343,4 @@ documented option, as of 2026-11-05.
 |------|------|--------|-----------|
 | 2026-03-28 | All | Initial document created | Claude Code |
 | 2026-11-05 | All | Full refresh (research 2026-10-21, re-verified 2026-11-05); added uv audit, osv-scanner, Trivy; tracked-tools list | Claude Code |
+| 2026-11-06 | Dependabot, Renovate, Safety CLI | Verified uv behavior per #1062; added Dependabot and Renovate as competitor tools; recorded Safety CLI as confirmed unsupported | Claude Code |
