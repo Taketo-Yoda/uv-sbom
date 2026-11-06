@@ -249,9 +249,12 @@ If the diff is **non-empty**, verify ALL of the following before proceeding to S
 - [ ] The Config File Schema Reference table includes the corresponding config key(s)
 - [ ] The Priority and Merge Rules section is updated if the resolution order changed
 
-#### B. README-JP.md
+#### B. README-JP.md and docs/ja/
 
-- [ ] All changes from A are translated into Japanese and applied
+- [ ] All changes from A are translated into Japanese and applied to README-JP.md
+- [ ] The corresponding `docs/ja/<target>.md` file is updated with the Japanese
+  translation of the new/updated section from Step 4.3.A (per
+  `.claude/conventions/docs-structure.md` → "Update Checklist")
 
 #### C. Example project config file
 
