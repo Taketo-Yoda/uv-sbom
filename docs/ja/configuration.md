@@ -49,7 +49,7 @@ uv-sbom --config ./custom-config.yml
 **設定ファイルの例**（`uv-sbom.config.yml`）：
 
 ```yaml
-# 出力形式：json または markdown
+# 出力形式：json、markdown、または md
 format: markdown
 
 # SBOM から除外するパッケージ（ワイルドカード対応）
@@ -91,7 +91,7 @@ license_policy:
 
 | フィールド | 型 | 必須 | 説明 |
 |-------|------|----------|-------------|
-| `format` | string | いいえ | 出力形式（`json` / `markdown`） |
+| `format` | string | いいえ | 出力形式（`json` / `markdown` / `md`）。その他の値は設定エラー（終了コード `3`） |
 | `exclude_packages` | string[] | いいえ | パッケージ除外パターン（ワイルドカード対応） |
 | `check_cve` | bool | いいえ | CVE チェック動作を上書き。未設定時のデフォルトは true |
 | `severity_threshold` | string | いいえ | 重大度しきい値（`low` / `medium` / `high` / `critical`） |
@@ -113,6 +113,7 @@ license_policy:
 
 ## 優先順位とマージルール
 
+- **`format` の検証**: 受け入れられる値は `json`、`markdown`、`md`（大文字小文字を区別しない）です。その他の値は設定エラーとなり、終了コード `3` で終了します。エラーメッセージ: `設定が不正です: format は json, markdown のいずれかである必要があります。指定値: "<値>"`
 - **CLI 引数が設定ファイルの値を上書きします**（スカラーフィールド：`format`、`severity_threshold`、`cvss_threshold`）。明示的な `--format json` は設定の `format: markdown` も上書きします
 - **`check_cve`** は未設定時のデフォルトが true。設定で false にして無効化。CLI フラグ `--no-check-cve` でオプトアウト
 - **`exclude_packages`** は CLI と設定ファイルの両方から**マージ**され、重複排除されます

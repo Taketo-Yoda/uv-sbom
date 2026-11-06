@@ -74,12 +74,14 @@ Pre-built binaries are available on the [GitHub Releases](https://github.com/Tak
 # Generate a Markdown SBOM with vulnerability scanning (CVE check is on by default)
 uv-sbom --format markdown --output SBOM.md
 
-# Generate a CycloneDX JSON SBOM (default format)
+# Generate a CycloneDX JSON SBOM (current default; changes to Markdown in v5.0.0)
 uv-sbom --format json --output sbom.json
 
 # Check a specific advisory: am I affected, is the fix out, what do I run?
 uv-sbom --incident GHSA-v845-jxx5-vc9f
 ```
+
+> **Note (v5.0.0):** JSON is still the default output format in this release, but it will change to Markdown in v5.0.0. When neither `--format` nor the config file's `format` key is set, uv-sbom prints a deprecation warning on stderr (stdout is unchanged). To keep JSON output, pass `--format json` or set `format: json` in your config file. [Configuration →](docs/configuration.md)
 
 ### Output Language
 

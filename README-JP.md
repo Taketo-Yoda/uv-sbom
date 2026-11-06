@@ -74,12 +74,14 @@ pip install uv-sbom-bin
 # 脆弱性スキャン付き Markdown SBOM を生成（CVE チェックはデフォルトで有効）
 uv-sbom --format markdown --output SBOM.md
 
-# CycloneDX JSON SBOM を生成（デフォルト形式）
+# CycloneDX JSON SBOM を生成（現在のデフォルト、v5.0.0 で Markdown に変更予定）
 uv-sbom --format json --output sbom.json
 
 # 特定のアドバイザリを確認：影響は？パッチは出た？何を実行？
 uv-sbom --incident GHSA-v845-jxx5-vc9f
 ```
+
+> **注意 (v5.0.0):** 現在のリリースではデフォルトの出力形式は JSON ですが、v5.0.0 で Markdown に変更されます。`--format` も設定ファイルの `format` キーも指定されていない場合、uv-sbom は stderr に非推奨警告を出力します（stdout は変更なし）。JSON 出力を維持するには `--format json` を指定するか、設定ファイルで `format: json` を設定してください。[設定 →](docs/ja/configuration.md)
 
 ### 出力言語
 

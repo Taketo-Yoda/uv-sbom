@@ -49,7 +49,7 @@ uv-sbom --config ./custom-config.yml
 **Example configuration file** (`uv-sbom.config.yml`):
 
 ```yaml
-# Output format: json or markdown
+# Output format: json, markdown, or md
 format: markdown
 
 # Packages to exclude from SBOM (supports wildcards)
@@ -91,7 +91,7 @@ license_policy:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `format` | string | No | Output format (`json` / `markdown`) |
+| `format` | string | No | Output format (`json` / `markdown` / `md`). Any other value is a config error (exit code `3`) |
 | `exclude_packages` | string[] | No | Package exclusion patterns (supports wildcards) |
 | `check_cve` | bool | No | Override CVE checking behavior. Defaults to true when unset |
 | `severity_threshold` | string | No | Severity threshold (`low` / `medium` / `high` / `critical`) |
@@ -113,6 +113,7 @@ license_policy:
 
 ## Priority and Merge Rules
 
+- **`format` validation**: Accepted values are `json`, `markdown`, and `md` (case-insensitive). Any other value causes a config error and the tool exits with code `3`. The error message is: `Invalid config: format must be one of: json, markdown. Got: "<value>"`
 - **CLI arguments override config file values** for scalar fields (`format`, `severity_threshold`, `cvss_threshold`). An explicit `--format json` also overrides a config `format: markdown`
 - **`check_cve`** defaults to true when unset. Set to false in config to disable. Use --no-check-cve CLI flag to opt out
 - **`exclude_packages`** are **merged** from both CLI and config file, then deduplicated
