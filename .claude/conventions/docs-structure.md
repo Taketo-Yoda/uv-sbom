@@ -1,7 +1,8 @@
 # Documentation Structure (canonical)
 
 Single source of truth for where user-facing documentation lives and how new
-content is routed after the README restructuring in #1064.
+content is routed after the README restructuring in #1064. Japanese translation
+directory (`docs/ja/`) added in #1088.
 
 ## Structure
 
@@ -9,6 +10,29 @@ README.md and README-JP.md are **landing pages** (~250 lines). They contain
 badges, a hero section, a quick-start block, and 2–3 line feature summaries
 with links to the appropriate `docs/` file. Detailed documentation — examples,
 tables, option lists, configuration schemas — lives exclusively in `docs/`.
+
+Each English `docs/` file has a corresponding Japanese translation in `docs/ja/`:
+
+```
+docs/
+├── security-checks.md
+├── incident-response.md
+├── dependency-insight.md
+├── configuration.md
+├── ci-integration.md
+├── workspace.md
+├── network.md
+├── cli-reference.md
+└── ja/
+    ├── security-checks.md
+    ├── incident-response.md
+    ├── dependency-insight.md
+    ├── configuration.md
+    ├── ci-integration.md
+    ├── workspace.md
+    ├── network.md
+    └── cli-reference.md
+```
 
 ## Routing Table
 
@@ -26,13 +50,29 @@ or feature, route the **detailed content** to the correct `docs/` file:
 | Network requirements, firewall, proxy, offline mode | `docs/network.md` |
 | CLI options listing, output format examples | `docs/cli-reference.md` |
 
+## Japanese Translation Routing
+
+Each English source file maps to its Japanese counterpart:
+
+| English source | Japanese translation |
+|----------------|---------------------|
+| `docs/security-checks.md` | `docs/ja/security-checks.md` |
+| `docs/incident-response.md` | `docs/ja/incident-response.md` |
+| `docs/dependency-insight.md` | `docs/ja/dependency-insight.md` |
+| `docs/configuration.md` | `docs/ja/configuration.md` |
+| `docs/ci-integration.md` | `docs/ja/ci-integration.md` |
+| `docs/workspace.md` | `docs/ja/workspace.md` |
+| `docs/network.md` | `docs/ja/network.md` |
+| `docs/cli-reference.md` | `docs/ja/cli-reference.md` |
+
 ## README Landing Page Rules
 
 - **README.md**: Add at most a 1-line summary + `docs/` link in the Feature
   Highlights section, only if the feature is significant enough. Never add a
   full subsection, config table, or multi-line example.
 - **README-JP.md**: Mirror only the landing-page summary line (translated to
-  Japanese). Link to the English `docs/` file with a `（英語）` notation.
+  Japanese). Link to `docs/ja/` files (Japanese); anchor fragments use Japanese
+  heading text; no `（英語）` labels.
 - **python-wrapper/README.md**: Update only when changes affect installation,
   basic usage examples, or version/badge updates.
 
@@ -49,10 +89,17 @@ When triggered, check:
 | File | Action Required | Notes |
 |---|---|---|
 | `docs/<target>.md` | Add detailed content per routing table | Primary documentation home |
+| `docs/ja/<target>.md` | Update with Japanese translation of new/changed content | Japanese translation |
 | `docs/cli-reference.md` | Update CLI options listing if a flag was added/changed | Always |
 | README.md | Add/update 1-line summary + link (if significant) | Landing page only |
-| README-JP.md | Translate the README.md summary line | Landing page only |
+| README-JP.md | Translate the README.md summary line; link to `docs/ja/` | Landing page only |
 | python-wrapper/README.md | Reflect if applicable | PyPI-focused, keep concise |
+
+When a new `docs/<file>.md` is created:
+
+- [ ] A corresponding `docs/ja/<file>.md` is created
+- [ ] A row is added to the Japanese Translation Routing table above
+- [ ] Both README.md and README-JP.md documentation tables are updated
 
 ## Consumers
 

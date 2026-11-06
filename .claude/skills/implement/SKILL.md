@@ -252,12 +252,14 @@ Route the detailed documentation to the correct `docs/` file per
 - [ ] `docs/configuration.md` includes the corresponding config key(s) in the schema reference table (if applicable)
 - [ ] `docs/cli-reference.md` CLI options listing is updated with the new flag
 
-#### B. README.md and README-JP.md (landing pages only)
+#### B. README.md, README-JP.md, and docs/ja/
 
-Per `.claude/conventions/docs-structure.md` → "README Landing Page Rules":
+Per `.claude/conventions/docs-structure.md` → "README Landing Page Rules" and "Update Checklist":
 
 - [ ] README.md has at most a 1-line summary + `docs/` link in the Feature Highlights section (only if significant; never a full subsection or config table)
-- [ ] README-JP.md mirrors the summary line translated to Japanese, linking to the English `docs/` file with `（英語）` notation
+- [ ] README-JP.md mirrors the summary line translated to Japanese, linking to `docs/ja/` files
+- [ ] The corresponding `docs/ja/<target>.md` file is updated with the Japanese
+  translation of the new/updated section from Step 4.3.A
 
 #### C. Example project config file
 
