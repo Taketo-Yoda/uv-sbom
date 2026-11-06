@@ -204,26 +204,12 @@ Agents complement skills: the Release Manager agent judges readiness; the `/rele
 
 ## README Update Checklist
 
-Trigger this checklist when **any** of the following is true:
-- README.md content is being changed directly
-- A new CLI flag or config key was added (see also: /implement Step 4.3)
-- A new user-facing feature was implemented
+README.md and README-JP.md are **landing pages** (~250 lines). Detailed
+documentation lives in `docs/`. New CLI flags and features add their detailed
+content to the appropriate `docs/` file — never to README.md directly.
 
-When triggered, check if the following files also need updates:
-
-| File | Action Required | Notes |
-|------|-----------------|-------|
-| README-JP.md | Translate changes | Full translation of README.md |
-| python-wrapper/README.md | Reflect if applicable | PyPI-focused, keep concise |
-
-### When to update each file
-
-- **README-JP.md**: Always update when README.md content changes
-- **python-wrapper/README.md**: Update when changes affect:
-  - Installation instructions
-  - Basic usage examples
-  - New user-facing features (brief mention)
-  - Version/badge updates
+Full routing table, landing-page rules, and the update checklist are owned by
+`.claude/conventions/docs-structure.md` → "Routing Table" and "Update Checklist".
 
 ## Architecture Overview
 

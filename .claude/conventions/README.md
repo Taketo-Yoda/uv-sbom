@@ -29,7 +29,7 @@ change-history rows describe past events, so they do not count as consumers.
 | What needs a CHANGELOG entry, per-feature entry ownership, reference numbers, non-owner PR line | `changelog.md` |
 | Label list and label choice for `.claude/`-only Issues | `labels.md` |
 | How a subtask names its parent epic and sibling dependencies | `subtask-links.md` |
-| docs/ and docs/ja/ layout, routing table, update obligation | `docs-structure.md` |
+| Documentation structure, docs/ and docs/ja/ routing, README landing-page rules | `docs-structure.md` |
 | Tracked competitor tools and integrate-don't-duplicate services | `../competitive-landscape.md` → "Tracked tools" |
 
 A new convention gets its own `.claude/conventions/<topic>.md` and a row in this
