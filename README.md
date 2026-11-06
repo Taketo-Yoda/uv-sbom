@@ -146,7 +146,7 @@ This tool generates SBOMs based on **uv.lock** file contents, which includes:
 
 ### Comparison with CycloneDX Official Tools
 
-As of v7.2.1, the official cyclonedx-python library does not yet provide direct support for uv. When generating SBOMs for Python projects:
+The official cyclonedx-python library reads from `.venv` and does not support `uv.lock`. uv itself can export CycloneDX SBOMs via `uv export --format cyclonedx1.5`. When generating SBOMs for Python projects:
 
 | Aspect | uv-sbom (this tool) | CycloneDX Official Tools |
 |--------|---------------------|--------------------------|
@@ -158,8 +158,9 @@ As of v7.2.1, the official cyclonedx-python library does not yet provide direct 
 
 ### Which Tool Should You Use?
 
-- **For production security scanning**: Use `uv-sbom` to focus on dependencies that will be deployed to production
-- **For comprehensive supply chain audit**: Use CycloneDX official tools to include all development and build-time dependencies
+- **For production security scanning**: Use `uv-sbom` to focus on dependencies that will be deployed to production, with Markdown reports, CVE checking, and upgrade paths
+- **For CycloneDX SBOM from uv.lock**: Use `uv export --format cyclonedx1.5` for a CycloneDX-format SBOM generated directly from your lockfile
+- **For comprehensive supply chain audit**: Use CycloneDX official tools to include all development and build-time dependencies from the installed environment
 - **For regulatory compliance**: Check your specific requirements - some regulations may require the comprehensive approach
 
 The focused approach of `uv-sbom` reduces noise in security vulnerability scanning by excluding build-time dependencies that don't ship with the final application.
