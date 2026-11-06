@@ -248,7 +248,7 @@ uv sync
 
 **Scope options honored:** `--path`, `--exclude`, `--exclude-groups`, `--production-only`, `--output` (not with `--workspace`), `--format`, `--lang`, and `--config`. The config file's `exclude_packages` and `exclude_groups` also apply.
 
-**Ignored config keys:** the config file's `format` is never used in incident mode; only `--format` changes the output. The vulnerability, license, maintenance, and compatibility check keys (`check_cve`, `severity_threshold`, `cvss_threshold`, `ignore_cves`, `check_license`, `license_policy`, `check_abandoned`, `check_non_pypi`, `check_exploitability`, `target_python`, `suggest_fix`, `baseline_file`) are ignored too.
+**Ignored config keys:** the config file's `format` is never used in incident mode; only `--format` changes the output. However, an invalid `format` value in the config file is still rejected (exit code `3`), because config validation runs before mode dispatch. The vulnerability, license, maintenance, and compatibility check keys (`check_cve`, `severity_threshold`, `cvss_threshold`, `ignore_cves`, `check_license`, `license_policy`, `check_abandoned`, `check_non_pypi`, `check_exploitability`, `target_python`, `suggest_fix`, `baseline_file`) are ignored too.
 
 **Mutual exclusion:** `--incident` cannot be combined with `--diff`, `--init`, `--dry-run`, `--explain`, `--show-dependency-tree`, `--no-check-cve`, `--baseline`, `--update-baseline`, `--suggest-fix`, `--check-license`, `--check-abandoned`, `--check-non-pypi`, `--check-exploitability`, `--target-python`, `--severity-threshold`, `--cvss-threshold`, `--ignore-cve`, or `--verify-links`. It can be combined with `--workspace` (see above).
 

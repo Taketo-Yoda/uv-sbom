@@ -248,7 +248,7 @@ uv sync
 
 **使用可能なスコープオプション:** `--path`、`--exclude`、`--exclude-groups`、`--production-only`、`--output`（`--workspace` とは不可）、`--format`、`--lang`、`--config`。設定ファイルの `exclude_packages` と `exclude_groups` も適用されます。
 
-**無視される設定キー:** 設定ファイルの `format` はインシデントモードでは使用されません。`--format` のみが出力を変更します。脆弱性、ライセンス、メンテナンス、互換性チェックキー（`check_cve`、`severity_threshold`、`cvss_threshold`、`ignore_cves`、`check_license`、`license_policy`、`check_abandoned`、`check_non_pypi`、`check_exploitability`、`target_python`、`suggest_fix`、`baseline_file`）も無視されます。
+**無視される設定キー:** 設定ファイルの `format` はインシデントモードでは使用されません。`--format` のみが出力を変更します。ただし、設定ファイルの `format` 値が不正な場合は、モード分岐の前に設定検証が実行されるため、引き続き拒否されます（終了コード `3`）。脆弱性、ライセンス、メンテナンス、互換性チェックキー（`check_cve`、`severity_threshold`、`cvss_threshold`、`ignore_cves`、`check_license`、`license_policy`、`check_abandoned`、`check_non_pypi`、`check_exploitability`、`target_python`、`suggest_fix`、`baseline_file`）も無視されます。
 
 **相互排他:** `--incident` は `--diff`、`--init`、`--dry-run`、`--explain`、`--show-dependency-tree`、`--no-check-cve`、`--baseline`、`--update-baseline`、`--suggest-fix`、`--check-license`、`--check-abandoned`、`--check-non-pypi`、`--check-exploitability`、`--target-python`、`--severity-threshold`、`--cvss-threshold`、`--ignore-cve`、`--verify-links` と併用できません。`--workspace` とは併用可能です（上記参照）。
 
