@@ -94,41 +94,41 @@ uv-sbom --format markdown --lang ja
 
 ### SBOM 生成
 
-`uv.lock` から Markdown または CycloneDX 1.6 JSON 形式の完全な SBOM（Software Bill of Materials）を生成します。Markdown 出力は直接依存と間接依存を明確に分離し、全パッケージのライセンス、説明、SHA-256 データを含みます。[出力例（英語）→](docs/cli-reference.md#output-examples)
+`uv.lock` から Markdown または CycloneDX 1.6 JSON 形式の完全な SBOM（Software Bill of Materials）を生成します。Markdown 出力は直接依存と間接依存を明確に分離し、全パッケージのライセンス、説明、SHA-256 データを含みます。[出力例 →](docs/ja/cli-reference.md#出力例)
 
 ### セキュリティスキャン
 
-[OSV データベース](https://osv.dev) 経由の CVE 脆弱性チェックが**デフォルトで有効**です。深刻度や CVSS スコアでフィルタリング、脆弱性ベースラインで既知の検出結果を抑制、どの直接依存をアップグレードすべきかの解決ガイドを提供します。[セキュリティチェック（英語）→](docs/security-checks.md)
+[OSV データベース](https://osv.dev) 経由の CVE 脆弱性チェックが**デフォルトで有効**です。深刻度や CVSS スコアでフィルタリング、脆弱性ベースラインで既知の検出結果を抑制、どの直接依存をアップグレードすべきかの解決ガイドを提供します。[セキュリティチェック →](docs/ja/security-checks.md)
 
 ### インシデント対応 (`--incident`)
 
-新しいアドバイザリが公開されたとき、コマンド1つでプロジェクトへの影響有無、修正版が PyPI にあるか、そして試行解決で検証済みの `uv lock --upgrade-package` コマンド（解決できない場合はガイダンス）を提示します。終了コードによりパッチ待ちの自動化も容易です。[インシデント対応（英語）→](docs/incident-response.md)
+新しいアドバイザリが公開されたとき、コマンド1つでプロジェクトへの影響有無、修正版が PyPI にあるか、そして試行解決で検証済みの `uv lock --upgrade-package` コマンド（解決できない場合はガイダンス）を提示します。終了コードによりパッチ待ちの自動化も容易です。[インシデント対応 →](docs/ja/incident-response.md)
 
 ### サプライチェーンチェック
 
-- **ライセンスコンプライアンス** (`--check-license`) — ワイルドカード対応の許可/拒否リスト。[詳細（英語）→](docs/security-checks.md#license-compliance-check)
-- **放棄パッケージ検出** (`--check-abandoned`) — 設定可能な期間内に PyPI リリースがないパッケージを検出。[詳細（英語）→](docs/security-checks.md#abandoned-package-detection)
-- **非 PyPI ソース検出** (`--check-non-pypi`) — git、URL、プライベートレジストリからのソースを識別。[詳細（英語）→](docs/security-checks.md#non-pypi-source-detection)
-- **Python バージョン互換性** (`--target-python`) — ターゲットバージョンに対する `Requires-Python` 制約をチェック。[詳細（英語）→](docs/security-checks.md#python-version-compatibility-check)
-- **悪用可能性の優先度付け** (`--check-exploitability`) — EPSS スコアと CISA KEV ステータスで CVE を拡充。[詳細（英語）→](docs/security-checks.md#exploitability-prioritization---check-exploitability)
+- **ライセンスコンプライアンス** (`--check-license`) — ワイルドカード対応の許可/拒否リスト。[詳細 →](docs/ja/security-checks.md#ライセンスコンプライアンスチェック)
+- **放棄パッケージ検出** (`--check-abandoned`) — 設定可能な期間内に PyPI リリースがないパッケージを検出。[詳細 →](docs/ja/security-checks.md#放置パッケージ検出)
+- **非 PyPI ソース検出** (`--check-non-pypi`) — git、URL、プライベートレジストリからのソースを識別。[詳細 →](docs/ja/security-checks.md#非-pypi-ソース検出)
+- **Python バージョン互換性** (`--target-python`) — ターゲットバージョンに対する `Requires-Python` 制約をチェック。[詳細 →](docs/ja/security-checks.md#python-バージョン互換性チェック)
+- **悪用可能性の優先度付け** (`--check-exploitability`) — EPSS スコアと CISA KEV ステータスで CVE を拡充。[詳細 →](docs/ja/security-checks.md#悪用可能性の優先順位付け---check-exploitability)
 
 ### 依存関係インサイト
 
-- **Explain** (`--explain <PACKAGE>`) — 直接依存からの全パスをトレース。[詳細（英語）→](docs/dependency-insight.md#dependency-explanation---explain)
-- **ツリー** (`--show-dependency-tree`) — 依存グラフの ASCII ツリー表示。[詳細（英語）→](docs/dependency-insight.md#dependency-tree-visualization---show-dependency-tree)
-- **差分** (`--diff <REF>`) — ロックファイルのバージョン比較（CVE デルタ付き）。[詳細（英語）→](docs/dependency-insight.md#dependency-diff---diff)
+- **Explain** (`--explain <PACKAGE>`) — 直接依存からの全パスをトレース。[詳細 →](docs/ja/dependency-insight.md#依存関係の説明---explain)
+- **ツリー** (`--show-dependency-tree`) — 依存グラフの ASCII ツリー表示。[詳細 →](docs/ja/dependency-insight.md#依存関係ツリーの可視化---show-dependency-tree)
+- **差分** (`--diff <REF>`) — ロックファイルのバージョン比較（CVE デルタ付き）。[詳細 →](docs/ja/dependency-insight.md#依存関係の差分---diff)
 
 ### ワークスペースサポート
 
-`--workspace` でワークスペースメンバーごとの SBOM を生成し、全メンバーの集計サマリーを表示します。[ワークスペース（英語）→](docs/workspace.md)
+`--workspace` でワークスペースメンバーごとの SBOM を生成し、全メンバーの集計サマリーを表示します。[ワークスペース →](docs/ja/workspace.md)
 
 ### CI 統合
 
-構造化された終了コード、深刻度/CVSS 閾値、GitHub Actions と GitLab CI のすぐに使えるサンプル。[CI 統合（英語）→](docs/ci-integration.md)
+構造化された終了コード、深刻度/CVSS 閾値、GitHub Actions と GitLab CI のすぐに使えるサンプル。[CI 統合 →](docs/ja/ci-integration.md)
 
 ### 設定
 
-`uv-sbom.config.yml` ファイルですべてのオプションのデフォルト値を設定できます。`--init` でテンプレートを生成。CLI 引数は常に設定ファイルより優先されます。[設定（英語）→](docs/configuration.md)
+`uv-sbom.config.yml` ファイルですべてのオプションのデフォルト値を設定できます。`--init` でテンプレートを生成。CLI 引数は常に設定ファイルより優先されます。[設定 →](docs/ja/configuration.md)
 
 ## スコープと CycloneDX との主な違い
 
@@ -168,14 +168,14 @@ v7.2.1 時点で、公式 cyclonedx-python ライブラリは uv の直接サポ
 
 | ドキュメント | 説明 |
 |-------------|------|
-| [セキュリティチェック（英語）](docs/security-checks.md) | CVE スキャン、閾値、ベースライン、ライセンス、放棄、非 PyPI、Python 互換性、悪用可能性 |
-| [インシデント対応（英語）](docs/incident-response.md) | `--incident` モード：アドバイザリ検索、ワークスペース、手動範囲、終了コード、パッチ待ち |
-| [依存関係インサイト（英語）](docs/dependency-insight.md) | `--explain`、`--show-dependency-tree`、`--diff`、解決ガイド、アップグレードアドバイザー |
-| [設定（英語）](docs/configuration.md) | 設定ファイル、スキーマリファレンス、マージルール、除外パターン、依存グループ |
-| [CI 統合（英語）](docs/ci-integration.md) | GitHub Actions、GitLab CI、終了コード、スクリプティング、エラーハンドリング |
-| [ワークスペース（英語）](docs/workspace.md) | `--workspace` モード、集計サマリー、ルート依存グループ |
-| [ネットワーク（英語）](docs/network.md) | 外部ドメイン、ファイアウォール、プロキシ、オフラインモード |
-| [CLI リファレンス（英語）](docs/cli-reference.md) | コマンドラインオプション一覧、出力形式の例 |
+| [セキュリティチェック](docs/ja/security-checks.md) | CVE スキャン、閾値、ベースライン、ライセンス、放棄、非 PyPI、Python 互換性、悪用可能性 |
+| [インシデント対応](docs/ja/incident-response.md) | `--incident` モード：アドバイザリ検索、ワークスペース、手動範囲、終了コード、パッチ待ち |
+| [依存関係インサイト](docs/ja/dependency-insight.md) | `--explain`、`--show-dependency-tree`、`--diff`、解決ガイド、アップグレードアドバイザー |
+| [設定](docs/ja/configuration.md) | 設定ファイル、スキーマリファレンス、マージルール、除外パターン、依存グループ |
+| [CI 統合](docs/ja/ci-integration.md) | GitHub Actions、GitLab CI、終了コード、スクリプティング、エラーハンドリング |
+| [ワークスペース](docs/ja/workspace.md) | `--workspace` モード、集計サマリー、ルート依存グループ |
+| [ネットワーク](docs/ja/network.md) | 外部ドメイン、ファイアウォール、プロキシ、オフラインモード |
+| [CLI リファレンス](docs/ja/cli-reference.md) | コマンドラインオプション一覧、出力形式の例 |
 
 ## 要件
 
