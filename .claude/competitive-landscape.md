@@ -88,6 +88,12 @@ JSON, or SARIF. It does not produce a human-readable Markdown report, attribute 
 finding to the direct dependency that pulls it in, suggest verified upgrade paths, or
 check licenses, abandoned packages, or Python compatibility.
 
+**Overlap policy:** uv-sbom intentionally does not duplicate `uv audit`'s core
+vulnerability-listing function. uv-sbom's value is the analysis layer on top:
+Markdown output, direct/transitive attribution, the Upgrade Advisor, and multi-check
+coverage (license, abandoned-package, Python-compatibility). Features that would merely
+restate what `uv audit` already reports should be declined at triage.
+
 **Watch for:**
 - `uv audit --fix` (would overlap the Upgrade Advisor and `--incident` next action)
 - Yanked-distribution flagging

@@ -16,7 +16,9 @@ that a developer or security engineer can read, understand, and act on immediate
 needing a separate viewer or parser.
 
 The name reflects this focus: it is built specifically for **uv-managed Python projects**,
-with deep understanding of the `uv.lock` format and uv's dependency resolution model.
+with deep understanding of the `uv.lock` format and uv's dependency resolution model —
+and it produces developer-facing analysis (dependency attribution, upgrade paths, license
+and maintenance checks) that goes beyond what any single vulnerability scanner offers.
 
 ---
 
@@ -103,7 +105,7 @@ Python-compatibility checks. For current `uv audit` status, see
 These are not just features we have that others lack — they are architectural constraints
 that prevent competitors from replicating our advantages incrementally.
 
-### Why competitors cannot easily replicate uv-native support
+### Why installed-env tools cannot replicate lock-file analysis
 
 **cyclonedx-python** and **pip-audit** operate on the *installed environment* (`.venv`),
 not on the lock file. Switching to lock-file-based analysis would require a fundamental
@@ -120,6 +122,17 @@ uv-sbom's lock-file-first approach is foundational, not a feature. This means:
 - Reports what the project *declares*, not what happens to be installed
 - Immune to environment contamination (extra packages installed manually, virtual env state)
 - Consistent output regardless of whether `uv sync` has been run
+
+### Why reading uv.lock is not the same as deep uv.lock analysis
+
+uv itself (`uv audit`), osv-scanner, Trivy, and Syft's cataloger all read `uv.lock`
+for vulnerability scanning. Reading the file is the entry condition, not the
+differentiator.
+
+None of them produce a human-readable Markdown report, attribute findings to the root
+direct dependency, or combine vulnerability, license, abandoned-package, and
+Python-compatibility checks in a single pass. For current tool capabilities, see
+`.claude/competitive-landscape.md`.
 
 ### Why human-readable output is structurally different
 
@@ -259,4 +272,4 @@ When evaluating a proposed feature, answer these questions in order. Stop at the
 
 ---
 
-Last Updated: 2026-03-28 (Issue #367)
+Last Updated: 2026-11-07 (Issue #1060)

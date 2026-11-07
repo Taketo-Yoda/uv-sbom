@@ -42,7 +42,7 @@ in uv-sbom's philosophy. Do not implement.
 | # | Question | Priority impact |
 |---|----------|----------------|
 | D | Would this require the competitor tools listed in `.claude/competitive-landscape.md` → "Tracked tools" to redesign their core data model to replicate? | Yes → High priority |
-| E | Is this feature only possible because uv-sbom reads uv.lock (not installed environment)? | Yes → High priority |
+| E | Does this feature require deep use of uv.lock's dependency-graph metadata (not just the package list that other lock-file scanners also read)? | Yes → High priority |
 | F | Does this strengthen the Upgrade Advisor or Resolution Guide capabilities? | Yes → High priority |
 
 Features that pass D, E, or F should be prioritized in the Issue backlog.
