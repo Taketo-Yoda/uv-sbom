@@ -50,7 +50,7 @@ jobs:
       # uv is needed for the dry-run that verifies the upgrade command.
       # Pin uv-sbom-bin and bump it deliberately.
       - name: Install uv and uv-sbom
-        run: pip install uv "uv-sbom-bin==3.3.0"
+        run: pip install uv "uv-sbom-bin==4.0.0"
 
       - name: Run uv-sbom --incident
         env:
