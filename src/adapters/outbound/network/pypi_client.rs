@@ -49,6 +49,7 @@ struct PyPiInfo {
 pub struct PyPiLicenseRepository {
     client: reqwest::Client,
     base_url: String,
+    max_response_bytes: usize,
 }
 
 impl PyPiLicenseRepository {
@@ -68,6 +69,7 @@ impl PyPiLicenseRepository {
         Ok(Self {
             client,
             base_url: "https://pypi.org".to_string(),
+            max_response_bytes: Self::MAX_RESPONSE_BYTES,
         })
     }
 
@@ -85,7 +87,16 @@ impl PyPiLicenseRepository {
         Ok(Self {
             client,
             base_url: base_url.into(),
+            max_response_bytes: Self::MAX_RESPONSE_BYTES,
         })
+    }
+
+    /// Overrides the response-size limit, so tests can exercise the boundary
+    /// without serving multi-megabyte bodies.
+    #[cfg(test)]
+    fn with_max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.max_response_bytes = max_response_bytes;
+        self
     }
 
     /// Fetches package information from PyPI with retry logic (async)
@@ -121,7 +132,7 @@ impl PyPiLicenseRepository {
 
         let bytes = response_size_guard::read_bounded_bytes(
             response,
-            Self::MAX_RESPONSE_BYTES,
+            self.max_response_bytes,
             Some("PyPI license metadata"),
         )
         .await?;
@@ -204,10 +215,21 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    /// Small limit for the response-size tests, so they never serve the
+    /// production-sized (10 MiB) bodies that made them flaky (#1004).
+    const TEST_LIMIT: usize = 1024;
+
     #[test]
     fn test_pypi_client_creation() {
         let client = PyPiLicenseRepository::new();
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_production_response_limit_is_10_mib() {
+        let client = PyPiLicenseRepository::new().unwrap();
+        // A literal, not `MAX_RESPONSE_BYTES`, so changing the const fails here.
+        assert_eq!(client.max_response_bytes, 10 * 1024 * 1024);
     }
 
     #[tokio::test]
@@ -334,14 +356,16 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/pypi/requests/2.31.0/json"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                package_json_of_len(PyPiLicenseRepository::MAX_RESPONSE_BYTES + 1),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(package_json_of_len(TEST_LIMIT + 1), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
-        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri())
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let err = client
             .fetch_from_pypi("requests", "2.31.0")
             .await
@@ -362,15 +386,17 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/pypi/requests/2.31.0/json"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                package_json_of_len(PyPiLicenseRepository::MAX_RESPONSE_BYTES + 1),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(package_json_of_len(TEST_LIMIT + 1), "application/json"),
+            )
             .expect(1)
             .mount(&mock_server)
             .await;
 
-        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri())
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let err = client
             .fetch_with_retry("requests", "2.31.0")
             .await
@@ -387,14 +413,16 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/pypi/requests/2.31.0/json"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                package_json_of_len(PyPiLicenseRepository::MAX_RESPONSE_BYTES),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(package_json_of_len(TEST_LIMIT), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
-        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let client = PyPiLicenseRepository::new_with_base_url(mock_server.uri())
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let info = client.fetch_from_pypi("requests", "2.31.0").await.unwrap();
         assert_eq!(info.info.license, Some("MIT".to_string()));
     }

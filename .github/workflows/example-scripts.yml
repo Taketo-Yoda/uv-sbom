@@ -1,0 +1,81 @@
+name: Example Scripts
+
+# Lints the copy-paste material shipped under examples/: ShellCheck for the
+# shell scripts and actionlint for the GitHub Actions workflows (e.g. the
+# --incident patch-wait loop and incident-watch.yml from #970; actionlint #1020).
+# Kept separate from ci.yml on purpose: ci.yml lists 'examples/**' in
+# paths-ignore so Rust CI skips example-only PRs, which means a step added there
+# would never run on the PRs this check guards. Same pattern as
+# claude-conventions.yml (#901 / #911).
+#
+# Runs on pull requests only (#1028): these files rarely change, and a push
+# trigger only duplicated the PR run. Unlike ci.yml and claude-conventions.yml,
+# there is deliberately no on.push block -- do not "sync" one back in.
+
+concurrency:
+  group: example-scripts-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  # PR-only (#1028). A stacked PR based on a sibling branch gets no run until
+  # it is retargeted to main/develop.
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'examples/**/*.sh'
+      - 'examples/**/*.yml'
+      - 'examples/**/*.yaml'
+      - '!examples/**/uv-sbom.config.yml'
+      - '.github/workflows/example-scripts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck example scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: ShellCheck examples/incident-response
+        run: shellcheck examples/incident-response/*.sh
+
+  actionlint:
+    name: actionlint example workflows
+    runs-on: ubuntu-latest
+    env:
+      ACTIONLINT_VERSION: 1.7.12
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # actionlint is not preinstalled on ubuntu-latest. Download the pinned
+      # release tarball and verify its checksum (no third-party action).
+      # Dependabot does not bump this pin: update both env values together.
+      - name: Install actionlint
+        run: |
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$tarball" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${tarball}"
+          echo "${ACTIONLINT_SHA256}  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" actionlint
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      # Paths are passed explicitly: with no arguments actionlint would lint
+      # .github/workflows/ instead. uv-sbom.config.yml is the tool's config
+      # file, not a workflow; exclude any other non-workflow YAML here (and in
+      # the paths: filters above). actionlint also runs the preinstalled
+      # shellcheck on run: blocks.
+      - name: actionlint examples/
+        run: |
+          mapfile -t files < <(git ls-files -- 'examples/*.yml' 'examples/*.yaml' \
+            ':(exclude,glob)examples/**/uv-sbom.config.yml')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No example workflow files found under examples/."
+            exit 1
+          fi
+          printf 'Linting: %s\n' "${files[@]}"
+          actionlint "${files[@]}"

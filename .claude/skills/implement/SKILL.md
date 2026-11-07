@@ -224,8 +224,8 @@ If no matches are found, continue to Step 4 without interruption.
 - Add tests for new functionality
 - Update documentation as needed
 - **i18n**: Every new user-visible string output via `eprintln!` or `println!`
-  MUST be added as a named key in both `EN_MESSAGES` and `JA_MESSAGES` in
-  `src/i18n/mod.rs`. Never hardcode English text in output paths.
+  MUST be added as a named key per `.claude/conventions/i18n.md` → "Rule".
+  Never hardcode English text in output paths.
 
 ### Step 4.3: CLI Flag Documentation Gate (conditional)
 
@@ -242,16 +242,24 @@ git diff "$BASE_BRANCH"...HEAD -G'#\[arg\(|#\[clap\(' -- 'src/cli/'
 
 If the diff is **non-empty**, verify ALL of the following before proceeding to Step 4.4:
 
-#### A. README.md usage section
+#### A. `docs/` detailed documentation
 
-- [ ] A new `###` subsection exists for the feature (or an existing section is updated)
-- [ ] At least one ` ```bash ` command example demonstrates the new flag
-- [ ] The Config File Schema Reference table includes the corresponding config key(s)
-- [ ] The Priority and Merge Rules section is updated if the resolution order changed
+Route the detailed documentation to the correct `docs/` file per
+`.claude/conventions/docs-structure.md` → "Routing Table".
 
-#### B. README-JP.md
+- [ ] The appropriate `docs/<target>.md` file has a new or updated subsection for the feature
+- [ ] At least one ` ```bash ` command example demonstrates the new flag in that `docs/` file
+- [ ] `docs/configuration.md` includes the corresponding config key(s) in the schema reference table (if applicable)
+- [ ] `docs/cli-reference.md` CLI options listing is updated with the new flag
 
-- [ ] All changes from A are translated into Japanese and applied
+#### B. README.md, README-JP.md, and docs/ja/
+
+Per `.claude/conventions/docs-structure.md` → "README Landing Page Rules" and "Update Checklist":
+
+- [ ] README.md has at most a 1-line summary + `docs/` link in the Feature Highlights section (only if significant; never a full subsection or config table)
+- [ ] README-JP.md mirrors the summary line translated to Japanese, linking to `docs/ja/` files
+- [ ] The corresponding `docs/ja/<target>.md` file is updated with the Japanese
+  translation of the new/updated section from Step 4.3.A
 
 #### C. Example project config file
 

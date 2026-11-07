@@ -26,6 +26,7 @@ struct PyPiUploadEntry {
 pub struct PyPiMaintenanceRepository {
     client: reqwest::Client,
     base_url: String,
+    max_response_bytes: usize,
 }
 
 impl PyPiMaintenanceRepository {
@@ -42,7 +43,11 @@ impl PyPiMaintenanceRepository {
             .user_agent(user_agent)
             .build()?;
 
-        Ok(Self { client, base_url })
+        Ok(Self {
+            client,
+            base_url,
+            max_response_bytes: Self::MAX_RESPONSE_BYTES,
+        })
     }
 
     /// Creates a new PyPI maintenance repository with default configuration
@@ -57,6 +62,14 @@ impl PyPiMaintenanceRepository {
         Self::build(base_url.into())
     }
 
+    /// Overrides the response-size limit, so tests can exercise the boundary
+    /// without serving multi-megabyte bodies.
+    #[cfg(test)]
+    fn with_max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.max_response_bytes = max_response_bytes;
+        self
+    }
+
     async fn fetch_from_pypi(&self, package_name: &str) -> Result<PyPiPackageResponse> {
         crate::shared::security::validate_url_component(package_name, "Package name")
             .map_err(crate::shared::http_retry::permanent)?;
@@ -69,7 +82,7 @@ impl PyPiMaintenanceRepository {
         }
         let bytes = response_size_guard::read_bounded_bytes(
             response,
-            Self::MAX_RESPONSE_BYTES,
+            self.max_response_bytes,
             Some("PyPI maintenance metadata"),
         )
         .await?;
@@ -115,9 +128,20 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    /// Small limit for the response-size tests, so they never serve the
+    /// production-sized (10 MiB) bodies that made them flaky (#1004).
+    const TEST_LIMIT: usize = 1024;
+
     #[test]
     fn test_pypi_maintenance_client_creation() {
         assert!(PyPiMaintenanceRepository::new().is_ok());
+    }
+
+    #[test]
+    fn test_production_response_limit_is_10_mib() {
+        let client = PyPiMaintenanceRepository::new().unwrap();
+        // A literal, not `MAX_RESPONSE_BYTES`, so changing the const fails here.
+        assert_eq!(client.max_response_bytes, 10 * 1024 * 1024);
     }
 
     #[test]
@@ -278,14 +302,16 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/pypi/requests/json"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                maintenance_json_of_len(PyPiMaintenanceRepository::MAX_RESPONSE_BYTES + 1),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(maintenance_json_of_len(TEST_LIMIT + 1), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
-        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri())
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let err = client.fetch_from_pypi("requests").await.unwrap_err();
         // "too large" is the Content-Length pre-check branch specifically.
         assert!(
@@ -299,15 +325,17 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/pypi/requests/json"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                maintenance_json_of_len(PyPiMaintenanceRepository::MAX_RESPONSE_BYTES + 1),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(maintenance_json_of_len(TEST_LIMIT + 1), "application/json"),
+            )
             .expect(1)
             .mount(&mock_server)
             .await;
 
-        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri())
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let err = client.fetch_with_retry("requests").await.unwrap_err();
         assert!(
             err.to_string().contains("too large"),
@@ -321,14 +349,16 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/pypi/requests/json"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                maintenance_json_of_len(PyPiMaintenanceRepository::MAX_RESPONSE_BYTES),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(maintenance_json_of_len(TEST_LIMIT), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
-        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri()).unwrap();
+        let client = PyPiMaintenanceRepository::new_with_base_url(mock_server.uri())
+            .unwrap()
+            .with_max_response_bytes(TEST_LIMIT);
         let resp = client.fetch_from_pypi("requests").await.unwrap();
         assert_eq!(
             PyPiMaintenanceRepository::parse_last_release_date(&resp),

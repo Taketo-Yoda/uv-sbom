@@ -62,17 +62,38 @@ pub(super) struct DatabaseSpecific {
 pub(super) struct OsvAffected {
     #[serde(default)]
     pub(super) ranges: Option<Vec<OsvRange>>,
+    /// Absent on CVE-sourced records (generated from cvelistV5).
+    #[serde(default)]
+    pub(super) package: Option<OsvAffectedPackage>,
+    #[serde(default)]
+    pub(super) versions: Vec<String>,
+}
+
+/// Response-side package identity. Kept separate from the request-side
+/// [`OsvPackage`] so the two wire shapes can evolve independently.
+#[derive(Debug, Deserialize)]
+pub(super) struct OsvAffectedPackage {
+    #[serde(default)]
+    pub(super) name: String,
+    #[serde(default)]
+    pub(super) ecosystem: String, // "PyPI"
 }
 
 #[derive(Debug, Deserialize)]
 pub(super) struct OsvRange {
+    #[serde(default, rename = "type")]
+    pub(super) range_type: String, // "ECOSYSTEM", "SEMVER", "GIT"
     pub(super) events: Vec<OsvEvent>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(super) struct OsvEvent {
     #[serde(default)]
+    pub(super) introduced: Option<String>,
+    #[serde(default)]
     pub(super) fixed: Option<String>,
+    #[serde(default)]
+    pub(super) last_affected: Option<String>,
 }
 
 #[cfg(test)]

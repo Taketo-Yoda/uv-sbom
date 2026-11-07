@@ -1,3 +1,4 @@
+pub mod advisory_range_matcher;
 pub mod baseline_filter;
 pub mod cve_filter;
 pub mod dependency_diff_analyzer;

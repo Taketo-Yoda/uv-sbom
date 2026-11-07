@@ -3,3 +3,6 @@ members = [
     "packages/api",
     "packages/worker",
 ]
+
+[dependency-groups]
+lint = ["ruff"]

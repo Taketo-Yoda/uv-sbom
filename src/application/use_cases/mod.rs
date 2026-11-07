@@ -6,6 +6,8 @@ mod fetch_licenses;
 mod generate_diff;
 mod generate_sbom;
 mod progress_bar;
+pub(crate) mod project_scope;
+mod respond_to_incident;
 mod simulate_upgrades;
 
 #[cfg(test)]
@@ -17,4 +19,5 @@ pub use check_vulnerabilities::CheckVulnerabilitiesUseCase;
 pub use fetch_licenses::FetchLicensesUseCase;
 pub use generate_diff::GenerateDiffUseCase;
 pub use generate_sbom::GenerateSbomUseCase;
+pub use respond_to_incident::{IncidentError, RespondToIncidentUseCase};
 pub use simulate_upgrades::SimulateUpgradesUseCase;

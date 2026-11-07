@@ -10,50 +10,65 @@ use adapters::outbound::console::StderrProgressReporter;
 use adapters::outbound::filesystem::{
     determine_diff_source, BaselineFileRepository, FileSystemReader, GitLockfileReader,
 };
-use adapters::outbound::formatters::{DiffJsonFormatter, DiffMarkdownFormatter};
+use adapters::outbound::formatters::{
+    DiffJsonFormatter, DiffMarkdownFormatter, IncidentJsonFormatter, IncidentMarkdownFormatter,
+};
 use adapters::outbound::network::{
     CachingPyPiLicenseRepository, EpssKevClient, OsvClient, PyPiCompatibilityClient,
-    PyPiLicenseRepository, PyPiMaintenanceRepository,
+    PyPiLicenseRepository, PyPiMaintenanceRepository, PyPiReleaseClient,
 };
 use adapters::outbound::uv::{UvLockAdapter, UvWorkspaceReader};
-use application::dto::{DiffRequest, OutputFormat, SbomRequest, SbomResponse};
+use application::dto::{
+    DiffRequest, IncidentRequest, OutputFormat, SbomRequest, SbomResponse, WorkspaceIncidentRequest,
+};
 use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
+use application::read_models::incident_report::IncidentVerdictView;
 use application::read_models::SbomReadModelBuilder;
-use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase};
+use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase, RespondToIncidentUseCase};
 use clap::Parser;
 use cli::config_resolver::{load_config, merge_config, MergedConfig};
 use cli::error_display::{render_config_error, render_error_chain};
-use cli::runner::{display_banner, resolve_suggest_fix, validate_project_path};
-use cli::workspace_summary::{render_workspace_aggregate, EnabledChecks, MemberFindings};
+use cli::exclude_groups::resolve_exclude_groups;
+use cli::incident::{incident_exit_code, parse_incident_target, resolve_incident_format};
+use cli::runner::{
+    display_banner, resolve_suggest_fix, validate_project_path, warn_if_format_defaulted,
+};
+use cli::workspace_summary::{
+    render_uncovered_root_groups_warning, render_workspace_aggregate, EnabledChecks, MemberFindings,
+};
 use cli::{Args, DEFAULT_DEPENDENCY_TREE_DEPTH};
 use i18n::{Locale, Messages};
 use ports::outbound::{
     BaselineRepository, DiffSource, GroupRoots, LockfileParseResult, LockfileReader,
-    PackageSourceMap, ProjectConfigReader, WorkspaceReader,
+    PackageSourceMap, ProjectConfigReader, WorkspaceMember, WorkspaceReader,
 };
+use sbom_generation::domain::incident_target::IncidentTarget;
 use shared::error::ExitCode;
 use shared::Result;
 use std::path::{Path, PathBuf};
 use std::process;
 use uv_sbom::config;
 
-/// A LockfileReader adapter that reads the workspace-root uv.lock but returns
-/// only packages reachable from the specified workspace member.
+/// A LockfileReader adapter that redirects every read to the workspace-root
+/// uv.lock, for workspace mode.
 ///
-/// This adapter is used in workspace mode to scope the SBOM generation to a
-/// single workspace member, delegating to `read_and_parse_lockfile_for_member`.
+/// It only redirects the path: each method delegates to the same method of the
+/// inner reader with `workspace_root`. Member scope comes only from explicit
+/// `read_and_parse_lockfile_for_member` and `read_and_parse_group_roots_for_member`
+/// calls, which `GenerateSbomUseCase` selects from `SbomRequest.workspace_member`
+/// (#1001, #1006, #1011). `run_workspace` must therefore pass the member name in
+/// the request; without it, a member SBOM would cover the whole workspace. This
+/// also keeps a revision-3 lockfile from applying another member's groups (#992).
 struct MemberScopedLockfileReader {
     inner: FileSystemReader,
     workspace_root: PathBuf,
-    member_name: String,
 }
 
 impl MemberScopedLockfileReader {
-    fn new(workspace_root: PathBuf, member_name: String) -> Self {
+    fn new(workspace_root: PathBuf) -> Self {
         Self {
             inner: FileSystemReader::new(),
             workspace_root,
-            member_name,
         }
     }
 }
@@ -64,8 +79,7 @@ impl LockfileReader for MemberScopedLockfileReader {
     }
 
     fn read_and_parse_lockfile(&self, _project_path: &Path) -> Result<LockfileParseResult> {
-        self.inner
-            .read_and_parse_lockfile_for_member(&self.workspace_root, &self.member_name)
+        self.inner.read_and_parse_lockfile(&self.workspace_root)
     }
 
     fn read_and_parse_lockfile_for_member(
@@ -79,6 +93,20 @@ impl LockfileReader for MemberScopedLockfileReader {
 
     fn read_and_parse_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
         self.inner.read_and_parse_group_roots(&self.workspace_root)
+    }
+
+    fn read_and_parse_group_roots_for_member(
+        &self,
+        _project_path: &Path,
+        member_name: &str,
+    ) -> Result<GroupRoots> {
+        self.inner
+            .read_and_parse_group_roots_for_member(&self.workspace_root, member_name)
+    }
+
+    fn read_and_parse_virtual_root_group_roots(&self, _project_path: &Path) -> Result<GroupRoots> {
+        self.inner
+            .read_and_parse_virtual_root_group_roots(&self.workspace_root)
     }
 
     fn read_and_parse_package_sources(&self, _project_path: &Path) -> Result<PackageSourceMap> {
@@ -173,8 +201,7 @@ fn build_use_case<LR: LockfileReader>(
 /// Gates on the resolved `format` (`MergedConfig.format`) rather than the raw CLI
 /// `args.format`, so a `format: markdown` set only via config file (no `--format`
 /// flag) correctly suppresses these warnings (fixed in #822; previously gated on
-/// `args.format`, which stays at its `Json` default when no `--format` flag is
-/// passed, regardless of the config file).
+/// `args.format`, which ignored the config file).
 ///
 /// `check_license` must be the resolved `MergedConfig.check_license`, not the raw
 /// CLI `args.check_license` (fixed in #828; previously gated on `args.check_license`,
@@ -247,6 +274,7 @@ fn build_sbom_request(
     project_path: PathBuf,
     merged: &MergedConfig,
     exclude_groups: Vec<String>,
+    workspace_member: Option<String>,
     suggest_fix: bool,
     dry_run: bool,
     cli_only: CliOnlyRequestOptions,
@@ -274,6 +302,7 @@ fn build_sbom_request(
         .check_non_pypi(merged.check_non_pypi)
         .check_exploitability(merged.check_exploitability)
         .exclude_groups(exclude_groups)
+        .workspace_member(workspace_member)
         .target_python(merged.target_python.clone())
         .explain_package(cli_only.explain_package)
         .show_dependency_tree(cli_only.show_dependency_tree)
@@ -281,6 +310,14 @@ fn build_sbom_request(
         .baseline(baseline)
         .locale(locale)
         .build()
+}
+
+/// Builds the `PresenterType` for `--output`: a file when given, else stdout.
+fn presenter_type_for(output: Option<String>) -> PresenterType {
+    match output {
+        Some(path) => PresenterType::File(PathBuf::from(path)),
+        None => PresenterType::Stdout,
+    }
 }
 
 /// Resolves the project's own name/version from the lockfile response, for use
@@ -405,9 +442,30 @@ async fn main() {
     // the error and --init messages can still be localized.
     let msgs = Messages::for_locale(args.lang);
 
+    // Classify and validate --incident here rather than in a clap value parser,
+    // so a malformed value is reported in the --lang locale (#963). Runs before
+    // any file or network access; a rejected value is an argument error.
+    let incident_target = match args.incident.as_deref().map(parse_incident_target) {
+        None => None,
+        Some(Ok(target)) => Some(target),
+        Some(Err(e)) => {
+            print_error_chain(&anyhow::Error::from(e), msgs);
+            process::exit(ExitCode::InvalidArguments.as_i32());
+        }
+    };
+
     // Handle --workspace mode before normal flow
     if args.workspace {
         let workspace_root = PathBuf::from(args.path.as_deref().unwrap_or("."));
+        if let Some(target) = incident_target {
+            match run_workspace_incident(args, workspace_root, target).await {
+                Ok(verdict) => process::exit(incident_exit_code(verdict).as_i32()),
+                Err(e) => {
+                    print_error_chain(&e, msgs);
+                    process::exit(ExitCode::ApplicationError.as_i32());
+                }
+            }
+        }
         match run_workspace(args, workspace_root).await {
             Ok(()) => process::exit(ExitCode::Success.as_i32()),
             Err(e) => {
@@ -458,6 +516,17 @@ async fn main() {
         }
     }
 
+    // Handle --incident before normal flow
+    if let Some(target) = incident_target {
+        match run_incident(args, target).await {
+            Ok(verdict) => process::exit(incident_exit_code(verdict).as_i32()),
+            Err(e) => {
+                print_error_chain(&e, msgs);
+                process::exit(ExitCode::ApplicationError.as_i32());
+            }
+        }
+    }
+
     // Run the main application logic
     match run(args).await {
         Ok(has_vulnerabilities) => {
@@ -497,6 +566,12 @@ async fn run(args: Args) -> Result<bool> {
     // Merge CLI and config values
     let merged = merge_config(&args, &config)?;
 
+    warn_if_format_defaulted(
+        args.format,
+        config.as_ref().and_then(|c| c.format.as_deref()),
+        msgs,
+    );
+
     // Print startup warnings using the resolved format and check_license, so a
     // `format: markdown` (#822) or `check_license: true` (#828) set only via config
     // file (no corresponding CLI flag) is still correctly reflected.
@@ -509,15 +584,13 @@ async fn run(args: Args) -> Result<bool> {
     let suggest_fix = resolve_suggest_fix(merged.suggest_fix, &project_path, msgs);
 
     // Resolve exclude_groups: --production-only expands to all group names in the lockfile.
-    // This requires lockfile I/O so it lives here rather than in config_resolver.
-    let exclude_groups = if args.production_only {
-        FileSystemReader::new()
-            .read_and_parse_group_roots(&project_path)?
-            .into_keys()
-            .collect::<Vec<_>>()
-    } else {
-        merged.exclude_groups.clone()
-    };
+    let exclude_groups = resolve_exclude_groups(
+        &FileSystemReader::new(),
+        args.production_only,
+        &merged.exclude_groups,
+        &project_path,
+        None,
+    )?;
 
     // Load vulnerability baseline if --baseline is set
     let baseline_repo = BaselineFileRepository;
@@ -549,6 +622,7 @@ async fn run(args: Args) -> Result<bool> {
         project_path.clone(),
         &merged,
         exclude_groups,
+        None,
         suggest_fix,
         args.dry_run,
         CliOnlyRequestOptions {
@@ -598,11 +672,7 @@ async fn run(args: Args) -> Result<bool> {
     // Determine project component for CycloneDX metadata before response is moved
     let project_component_info = resolve_project_component(&response, &project_path);
 
-    let presenter_type = if let Some(output_path) = args.output {
-        PresenterType::File(PathBuf::from(output_path))
-    } else {
-        PresenterType::Stdout
-    };
+    let presenter_type = presenter_type_for(args.output);
 
     let verify_links = args.verify_links && merged.format == OutputFormat::Markdown;
 
@@ -621,43 +691,36 @@ async fn run(args: Args) -> Result<bool> {
 ///
 /// Reads `[manifest].members` from `workspace_root/uv.lock`, then for each
 /// member runs `GenerateSbomUseCase` scoped to that member and writes the
-/// output to `{member_path}/sbom.{ext}`. Prints a summary table when done.
+/// output to `{member_path}/sbom.{ext}`. Prints a summary table when done,
+/// then a warning naming the virtual root's dependency groups that no member
+/// SBOM covers, if any (#1009).
 async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
     display_banner();
-
-    validate_project_path(&workspace_root)?;
 
     let locale = args.lang;
     let msgs = Messages::for_locale(locale);
 
-    let workspace_reader = UvWorkspaceReader::new();
-    let members = workspace_reader.read_workspace_members(&workspace_root)?;
-
-    if members.is_empty() {
-        anyhow::bail!("{}", msgs.error_no_workspace_members);
-    }
-
-    eprintln!(
-        "{}\n",
-        Messages::format(
-            msgs.workspace_mode_members_found,
-            &[&members.len().to_string()]
-        )
-    );
+    let members = load_workspace_members(&workspace_root, msgs)?;
 
     let config = load_config(&args, &workspace_root, locale)?;
     let merged = merge_config(&args, &config)?;
+    warn_if_format_defaulted(
+        args.format,
+        config.as_ref().and_then(|c| c.format.as_deref()),
+        msgs,
+    );
 
-    // Resolve exclude_groups for workspace mode: --production-only reads group roots from
-    // the workspace-root lockfile. --exclude-groups / config value is used otherwise.
-    let workspace_exclude_groups = if args.production_only {
-        FileSystemReader::new()
-            .read_and_parse_group_roots(&workspace_root)?
-            .into_keys()
-            .collect::<Vec<_>>()
-    } else {
-        merged.exclude_groups.clone()
-    };
+    // --production-only expands to the union of every member's group names.
+    let workspace_exclude_groups = resolve_exclude_groups(
+        &FileSystemReader::new(),
+        args.production_only,
+        &merged.exclude_groups,
+        &workspace_root,
+        Some(&members),
+    )?;
+    // Read before any member output is written, so a failure leaves no partial run.
+    let root_groups =
+        FileSystemReader::new().read_and_parse_virtual_root_group_roots(&workspace_root)?;
 
     let format_ext = match merged.format {
         OutputFormat::Json => "json",
@@ -673,14 +736,14 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
             Messages::format(msgs.workspace_processing_member, &[&member.name])
         );
 
-        let lockfile_reader =
-            MemberScopedLockfileReader::new(workspace_root.clone(), member.name.clone());
+        let lockfile_reader = MemberScopedLockfileReader::new(workspace_root.clone());
         let use_case = build_use_case(lockfile_reader, locale, &merged)?;
 
         let request = build_sbom_request(
             member.absolute_path.clone(),
             &merged,
             workspace_exclude_groups.clone(),
+            Some(member.name.clone()),
             false,
             false,
             CliOnlyRequestOptions {
@@ -730,7 +793,113 @@ async fn run_workspace(args: Args, workspace_root: PathBuf) -> Result<()> {
         }
     }
 
+    // No member SBOM follows the virtual root's own groups (#1009).
+    if let Some(warning) =
+        render_uncovered_root_groups_warning(&root_groups, &workspace_exclude_groups, msgs)
+    {
+        eprintln!("\n{}", warning);
+    }
+
     Ok(())
+}
+
+/// Validates the workspace root, reads `[manifest].members` from its uv.lock,
+/// and prints how many members were found.
+///
+/// # Errors
+/// Returns an error when the path is invalid, the lockfile cannot be read,
+/// or the workspace has no members.
+fn load_workspace_members(workspace_root: &Path, msgs: &Messages) -> Result<Vec<WorkspaceMember>> {
+    validate_project_path(workspace_root)?;
+
+    let members = UvWorkspaceReader::new().read_workspace_members(workspace_root)?;
+    if members.is_empty() {
+        anyhow::bail!("{}", msgs.error_no_workspace_members);
+    }
+
+    eprintln!(
+        "{}\n",
+        Messages::format(
+            msgs.workspace_mode_members_found,
+            &[&members.len().to_string()]
+        )
+    );
+    Ok(members)
+}
+
+/// Runs --incident together with --workspace (#969): evaluates one advisory
+/// (or manual range spec, #963) against every workspace member and prints one combined report to stdout.
+///
+/// Returns the workspace's overall verdict (the most actionable member
+/// verdict), which `main` maps to the exit code. No per-member `sbom.*` file
+/// is written. `--output` cannot reach here: `--workspace` conflicts with it.
+/// Config handling is the same as `run_incident`, rooted at the workspace.
+/// Prints the uncovered virtual-root `[dependency-groups]` warning (#1009) on
+/// stderr before the report, only when the run succeeds (#1010).
+///
+/// # Errors
+/// The same as `run_incident`, plus an error when the workspace has no
+/// members or a member is missing from the lockfile.
+async fn run_workspace_incident(
+    args: Args,
+    workspace_root: PathBuf,
+    target: IncidentTarget,
+) -> Result<IncidentVerdictView> {
+    display_banner();
+
+    let locale = args.lang;
+    let msgs = Messages::for_locale(locale);
+    let members = load_workspace_members(&workspace_root, msgs)?;
+
+    let config = load_config(&args, &workspace_root, locale)?;
+    let merged = merge_config(&args, &config)?;
+    let exclude_groups = resolve_exclude_groups(
+        &FileSystemReader::new(),
+        args.production_only,
+        &merged.exclude_groups,
+        &workspace_root,
+        Some(&members),
+    )?;
+    // Read before any network request, so a failure leaves no partial run (#1009).
+    let root_groups =
+        FileSystemReader::new().read_and_parse_virtual_root_group_roots(&workspace_root)?;
+    // Rendered now because `exclude_groups` moves into the request below.
+    let root_groups_warning =
+        render_uncovered_root_groups_warning(&root_groups, &exclude_groups, msgs);
+
+    let request = WorkspaceIncidentRequest {
+        target,
+        workspace_root,
+        member_names: members.into_iter().map(|member| member.name).collect(),
+        exclude_patterns: merged.exclude_patterns.clone(),
+        exclude_groups,
+    };
+
+    let use_case = RespondToIncidentUseCase::new(
+        FileSystemReader::new(),
+        FileSystemReader::new(),
+        OsvClient::new(locale)?,
+        PyPiReleaseClient::new()?,
+        UvLockAdapter::new(),
+        locale,
+    );
+    let report = use_case.execute_workspace(request).await?;
+
+    let formatted = match resolve_incident_format(args.format) {
+        OutputFormat::Markdown => IncidentMarkdownFormatter::new(locale).format_workspace(&report),
+        OutputFormat::Json => IncidentJsonFormatter::new().format_workspace(&report)?,
+    };
+
+    // No member scope follows the virtual root's own groups (#1009); stderr
+    // only, so a piped report stays clean (#1010).
+    if let Some(warning) = root_groups_warning {
+        eprintln!("\n{}", warning);
+    }
+
+    let presenter = PresenterFactory::create(PresenterType::Stdout, locale);
+    presenter.present(&formatted)?;
+
+    Ok(report.overall)
 }
 
 /// Runs --diff mode: compares the current uv.lock against a base source.
@@ -741,12 +910,18 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
     display_banner();
 
     let locale = args.lang;
+    let msgs = Messages::for_locale(locale);
     let project_dir = args.path.as_deref().unwrap_or(".");
     let project_path = PathBuf::from(project_dir);
     validate_project_path(&project_path)?;
 
     let config = load_config(&args, &project_path, locale)?;
     let merged = merge_config(&args, &config)?;
+    warn_if_format_defaulted(
+        args.format,
+        config.as_ref().and_then(|c| c.format.as_deref()),
+        msgs,
+    );
 
     let check_cve = merged.check_cve;
     let request = DiffRequest {
@@ -777,13 +952,69 @@ async fn run_diff(args: Args, source: DiffSource) -> Result<bool> {
         OutputFormat::Json => DiffJsonFormatter::new().format(diff, cve_delta)?,
     };
 
-    let presenter_type = if let Some(output_path) = args.output {
-        PresenterType::File(PathBuf::from(output_path))
-    } else {
-        PresenterType::Stdout
-    };
-    let presenter = PresenterFactory::create(presenter_type, locale);
+    let presenter = PresenterFactory::create(presenter_type_for(args.output), locale);
     presenter.present(&formatted)?;
 
     Ok(check_cve && cve_delta.is_some_and(|d| !d.new.is_empty()))
+}
+
+/// Runs --incident mode: evaluates one advisory against the project, or a
+/// manual range spec without querying OSV (#963).
+///
+/// Returns the report's overall verdict, which `main` maps to the exit code.
+///
+/// The config file is still loaded and merged, so an invalid config fails
+/// here as in every mode, and its `exclude_packages` / `exclude_groups` scope
+/// the report. Its `format` and check-related keys are never read: the format
+/// is the CLI value or Markdown.
+///
+/// # Errors
+/// Returns `IncidentError::AdvisoryNotFound` (localized by `render_error_chain`)
+/// when the advisory ID is unknown to OSV, and an error when the project path
+/// or config file is invalid, the lockfile cannot be read, a network request
+/// fails, or the report cannot be written.
+async fn run_incident(args: Args, target: IncidentTarget) -> Result<IncidentVerdictView> {
+    display_banner();
+
+    let locale = args.lang;
+    let project_dir = args.path.as_deref().unwrap_or(".");
+    let project_path = PathBuf::from(project_dir);
+    validate_project_path(&project_path)?;
+
+    let config = load_config(&args, &project_path, locale)?;
+    let merged = merge_config(&args, &config)?;
+    let exclude_groups = resolve_exclude_groups(
+        &FileSystemReader::new(),
+        args.production_only,
+        &merged.exclude_groups,
+        &project_path,
+        None,
+    )?;
+
+    let request = IncidentRequest {
+        target,
+        project_path,
+        exclude_patterns: merged.exclude_patterns.clone(),
+        exclude_groups,
+    };
+
+    let use_case = RespondToIncidentUseCase::new(
+        FileSystemReader::new(),
+        FileSystemReader::new(),
+        OsvClient::new(locale)?,
+        PyPiReleaseClient::new()?,
+        UvLockAdapter::new(),
+        locale,
+    );
+    let report = use_case.execute(request).await?;
+
+    let formatted = match resolve_incident_format(args.format) {
+        OutputFormat::Markdown => IncidentMarkdownFormatter::new(locale).format(&report),
+        OutputFormat::Json => IncidentJsonFormatter::new().format(&report)?,
+    };
+
+    let presenter = PresenterFactory::create(presenter_type_for(args.output), locale);
+    presenter.present(&formatted)?;
+
+    Ok(report.overall)
 }

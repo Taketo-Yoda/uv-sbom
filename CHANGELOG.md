@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-11-08
+
+### Added
+- **Incident response for a single advisory (`--incident <ID_OR_RANGE>`)**
+  - Answer "am I affected, is the patch out, and what do I run?" in one command
+  - Pass a GHSA, PYSEC, CVE, OSV, or MAL ID; a CVE ID is resolved to its GHSA/PYSEC record automatically
+  - The report lists each affected package with its locked version, dependency paths, whether the fix is released on PyPI, and a copy-paste `uv lock --upgrade-package <name>==<fixed>` + `uv sync` command verified by a dry-run resolution (`uv.lock` is never modified)
+  - When a direct dependency's pin blocks the upgrade, the report says to relax its version requirement in `pyproject.toml` (JSON guidance `kind`: `direct_pin_blocks_upgrade`)
+  - Exit codes: `0` not affected, `1` fix released, `4` no released fix, `3` unknown advisory ID
+  - `--exclude`, `--exclude-groups`, and `--production-only` scope the check
+  - With `--workspace`, every member is checked in one run with a combined report (per-member verdicts and paths, shared patch status and command, "N of M members affected" line); the advisory and release status are fetched once and the dry-run runs against the workspace root
+  - For an advisory not yet in OSV, pass a quoted affected range instead of an ID, e.g. `--incident "foo>=2.0,<2.3.2"` (`>=` introduced, `<` fixed, `<=` last affected); no OSV request is made and the report states the range was not verified. A malformed range exits `2`
+  - Progress lines for the advisory fetch, release-status check, and dry-run are printed to stderr; stdout stays safe to pipe
+  - Output format: Markdown by default, JSON with `--format json`
+  - Fully localized for EN and JA (#962, #963, #964, #965, #966, #967, #968, #969, #982, #984)
+- **`--workspace` and `--incident --workspace` warn about a virtual root's uncovered `[dependency-groups]`**
+  - When a virtual workspace root declares dependency groups, packages reachable only through them appear in no member SBOM
+  - A localized warning is printed to stderr naming each uncovered root group; stdout and member SBOM files are unchanged (#1002, #1009, #1010)
+
+### Changed
+- **An explicit `--format json` now overrides the config file's `format`**
+  - Previously `--format json` was indistinguishable from passing no `--format` flag, so a config `format: markdown` silently won over it
+  - Passing no `--format` flag still uses the config value, then the `json` default (#968)
+- **`--exclude-groups` and `exclude_groups` match group names case- and separator-insensitively**
+  - Names are normalized per PEP 735, so `--exclude-groups Lint` or `--exclude-groups type_check` now excludes `lint` / `type-check` instead of silently excluding nothing
+  - Applies to single-project, `--workspace`, `--incident`, and `--incident --workspace` runs. Exact names behave as before (#1015)
+- **CycloneDX vulnerabilities now include the OSV advisory summary as `description`**
+  - Each entry in `vulnerabilities` gains the standard CycloneDX 1.6 `description` field when its OSV record has a summary; the text is not truncated (#1049)
+
+### Deprecated
+- **The default output format will change from JSON to Markdown in v5.0.0**
+  - JSON is still the default in this release
+  - When neither `--format` nor the config file's `format` key is set, a localized warning is printed to stderr; stdout is unchanged
+  - Pass `--format json` (or set `format: json` in the config file) to keep JSON, or `--format markdown` to switch now
+  - `--incident` mode, which already defaults to Markdown, prints no warning (#1070)
+
+### Fixed
+- **An invalid config-file `format` value was silently ignored**
+  - A value like `format: markdwon` previously produced JSON output and suppressed the v5.0.0 default-format warning
+  - It now fails with a localized config error naming the value (exit code `3`)
+  - Applies to every mode that loads the config file. A config that relied on the old behavior must set `format: json` or remove the key (#1072)
+- **Markdown table rows broke on text with carriage returns**
+  - A PyPI description, license text, or advisory summary with CRLF endings left a raw `\r` in table cells
+  - `\r\n` and lone `\r` are now replaced with a single space in every Markdown report table (#1051)
+- **OSV malicious-package advisories (`MAL-`) are now always treated as critical**
+  - Always fail the run regardless of `--severity-threshold` / `--cvss-threshold`
+  - Never written to or suppressed by a vulnerability baseline
+  - Counted in a dedicated "Malicious" summary row and shown in a dedicated block at the top of the vulnerability report (#1042, #1043, #1044, #1049, #953)
+- **`--workspace` member SBOMs reported 0 direct dependencies**
+  - Each member's SBOM now lists the member's declared dependencies as direct and reachable packages as transitive, with dependency paths in vulnerability details, `--suggest-fix`, and `--show-dependency-tree`
+  - `--exclude-groups` no longer drops a member's runtime dependency that is also listed in an excluded group (#986)
+- **`--workspace --exclude-groups` used one member's dependency groups for every member**
+  - In revision-3 lockfiles, every member's groups were read from the alphabetically first member
+  - Each member's groups are now read from its own `[package.dev-dependencies]` (#992)
+- **`--workspace --production-only` missed dependency groups declared only by later members**
+  - In revision-3 lockfiles, group names to exclude were taken from the first member only
+  - The names are now the union over all members (#995)
+- **`--workspace` member SBOMs left out dependency groups other than `dev` and listed sibling members' `dev` dependencies**
+  - A member's SBOM now includes every one of its own dependency groups (not just `dev`), and only the runtime dependencies of sibling members it reaches (#997, #993)
+- **`--workspace --exclude-groups` / `--production-only` ignored a member's own dependency groups when the workspace root declares `[dependency-groups]`**
+  - Only workspace-wide groups could be excluded; a member's own groups (e.g. its own `lint` or `dev`) stayed in its SBOM
+  - A member's groups are now the workspace-wide groups plus its own, merged per group name. Single-project mode is unchanged (#999)
+- **`--workspace --exclude-groups` dropped a member's package that a non-excluded group also lists**
+  - When a workspace-wide group and a member's own group list the same package, excluding only one of them removed it
+  - A package is now dropped only when neither runtime dependencies nor any non-excluded group reaches it (#1001)
+- **`--exclude-groups` dropped a package that a non-excluded group also lists (single project)**
+  - When two dependency groups list the same package (e.g. `dev` and `lint` both list `ruff`), excluding only one removed it
+  - A package is now dropped only when neither runtime dependencies nor any non-excluded group reaches it (#1005)
+- **`uv_sbom_bin.__version__` always reported `1.0.0`**
+  - The PyPI package hardcoded its module version since v1.0.0
+  - It is now read from installed package metadata; an uninstalled source checkout reports `0.0.0+unknown` (#1033)
+
+### Security
+- **Updated `rustls` to 0.23.46**
+  - TLS 1.3 traffic key update before exhaustion, secret removal from `Debug` output, HPKE sequence advancement fix (#1019)
+
 ## [3.3.0] - 2026-10-23
 
 ### Added

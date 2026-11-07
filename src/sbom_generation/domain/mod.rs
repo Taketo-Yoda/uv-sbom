@@ -1,8 +1,10 @@
+pub mod advisory;
 pub mod baseline;
 pub mod dependency_diff;
 pub mod dependency_graph;
 pub mod enriched_package;
 pub mod exploitability;
+pub mod incident_target;
 pub mod license_info;
 pub mod license_policy;
 pub mod package;
@@ -48,7 +50,7 @@ pub use services::{ThresholdConfig, VulnerabilityCheckResult, VulnerabilityCheck
 // Note: These will be used in subsequent subtasks (Subtask 2-8)
 #[allow(unused_imports)]
 pub use upgrade_recommendation::UpgradeRecommendation;
-pub use uv_lock_simulator::{SimulationResult, UvLockSimulator};
+pub use uv_lock_simulator::{SimulationResult, TargetedSimulationOutcome, UvLockSimulator};
 // Note: These will be used in subsequent subtasks (Subtask 2-8)
 #[allow(unused_imports)]
 pub use vulnerability::{CvssScore, PackageVulnerabilities, Severity, Vulnerability};

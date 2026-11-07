@@ -1,5 +1,7 @@
 pub mod config_resolver;
 pub mod error_display;
+pub mod exclude_groups;
+pub mod incident;
 pub mod runner;
 pub mod workspace_summary;
 
@@ -15,9 +17,13 @@ use crate::sbom_generation::domain::vulnerability::Severity;
 #[command(version)]
 #[command(about = "Generate SBOMs for Python projects managed by uv", long_about = None)]
 pub struct Args {
-    /// Output format: json or markdown
-    #[arg(short, long, default_value = "json")]
-    pub format: OutputFormat,
+    /// Output format: json or markdown (default: json; markdown in --incident mode)
+    // No clap default, so an explicit `--format json` is distinguishable from no
+    // flag: normal mode resolves CLI > config > json, and incident mode uses the
+    // CLI value or markdown without reading the config file's `format` (#968).
+    // A plain comment, not `///`, so clap does not print it in `--help`.
+    #[arg(short, long)]
+    pub format: Option<OutputFormat>,
 
     /// Path to the project directory (defaults to current directory)
     #[arg(short, long)]
@@ -153,7 +159,56 @@ pub struct Args {
     /// Maximum depth for the dependency tree visualization (default: 3)
     #[arg(long, value_name = "DEPTH", requires = "show_dependency_tree")]
     pub dependency_tree_depth: Option<u32>,
+
+    /// Incident response: check whether one advisory (GHSA-, PYSEC-, CVE-, OSV- or
+    /// MAL- ID) affects this project, whether the fix is released, and which
+    /// command to run. For an advisory not yet in OSV, pass a quoted package
+    /// range instead, e.g. "foo<2.3.2" or "foo>=2.0,<2.3.2" (operators >=, <,
+    /// <= only; the quotes are needed because < is a shell redirection).
+    /// Outputs Markdown unless --format is given. With --workspace, evaluates
+    /// every workspace member and prints one combined report. The config
+    /// file's `format` and vulnerability/license/maintenance check keys are
+    /// ignored in this mode.
+    //
+    // Developer notes (plain comments, so clap does not print them in `--help`):
+    // - The value is parsed after `--lang` is known (by
+    //   `cli::incident::parse_incident_target` in `main`), not by a clap value
+    //   parser, so that a malformed value is reported in the user's language
+    //   (#963, #832).
+    // - Intentionally has no config-file key: this is a one-off incident query,
+    //   not a persistent policy setting (same rationale as `--explain`, see
+    //   Issue #767).
+    #[arg(
+        long,
+        value_name = "ID_OR_RANGE",
+        conflicts_with_all = INCIDENT_CONFLICTS,
+    )]
+    pub incident: Option<String>,
 }
+
+/// Flags rejected together with `--incident`: other modes, and checks or
+/// filters that do not apply to a single-advisory report. `--workspace` is
+/// allowed (#969); it still rejects `--output` on its own.
+const INCIDENT_CONFLICTS: [&str; 18] = [
+    "diff",
+    "init",
+    "dry_run",
+    "explain",
+    "show_dependency_tree",
+    "no_check_cve",
+    "baseline",
+    "update_baseline",
+    "suggest_fix",
+    "check_license",
+    "check_abandoned",
+    "check_non_pypi",
+    "check_exploitability",
+    "target_python",
+    "severity_threshold",
+    "cvss_threshold",
+    "ignore_cve",
+    "verify_links",
+];
 
 /// Default depth limit for `--show-dependency-tree` when `--dependency-tree-depth`
 /// is not explicitly provided.
@@ -352,5 +407,120 @@ mod tests {
             result.unwrap_err().kind(),
             ErrorKind::MissingRequiredArgument
         );
+    }
+
+    #[test]
+    fn test_format_absent_by_default() {
+        let args = Args::parse_from(["uv-sbom"]);
+        assert!(args.format.is_none());
+    }
+
+    #[test]
+    fn test_format_explicit_json_is_some() {
+        let args = Args::parse_from(["uv-sbom", "--format", "json"]);
+        assert_eq!(args.format, Some(OutputFormat::Json));
+    }
+
+    #[test]
+    fn test_incident_flag_keeps_raw_value() {
+        // Classification and validation happen in `cli::incident`, after the
+        // locale is known.
+        let args = Args::parse_from(["uv-sbom", "--incident", "requests>=2.0,<2.31.0"]);
+        assert_eq!(args.incident.as_deref(), Some("requests>=2.0,<2.31.0"));
+    }
+
+    #[test]
+    fn test_incident_conflicts_with_each_listed_flag() {
+        use clap::error::ErrorKind;
+
+        let cases: [&[&str]; 18] = [
+            &["--diff", "HEAD"],
+            &["--init"],
+            &["--dry-run"],
+            &["--explain", "requests"],
+            &["--show-dependency-tree"],
+            &["--no-check-cve"],
+            &["--baseline", "baseline.json"],
+            &["--baseline", "baseline.json", "--update-baseline"],
+            &["--suggest-fix"],
+            &["--check-license"],
+            &["--check-abandoned"],
+            &["--check-non-pypi"],
+            &["--check-exploitability"],
+            &["--target-python", "3.13"],
+            &["--severity-threshold", "high"],
+            &["--cvss-threshold", "7.0"],
+            &["--ignore-cve", "CVE-2024-1"],
+            &["--verify-links"],
+        ];
+        assert_eq!(cases.len(), INCIDENT_CONFLICTS.len());
+        for extra in cases {
+            let mut argv = vec!["uv-sbom", "--incident", "CVE-2023-32681"];
+            argv.extend_from_slice(extra);
+            let result = Args::try_parse_from(&argv);
+            assert_eq!(
+                result.unwrap_err().kind(),
+                ErrorKind::ArgumentConflict,
+                "expected a conflict for {extra:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_incident_accepts_scope_and_output_flags() {
+        let result = Args::try_parse_from([
+            "uv-sbom",
+            "--incident",
+            "CVE-2023-32681",
+            "-p",
+            "examples/sample-project",
+            "-o",
+            "report.md",
+            "-e",
+            "internal-*",
+            "--exclude-groups",
+            "dev",
+            "--lang",
+            "ja",
+            "--format",
+            "json",
+            "-c",
+            "uv-sbom.config.yml",
+        ]);
+        assert!(result.is_ok(), "{:?}", result.err());
+
+        let result = Args::try_parse_from([
+            "uv-sbom",
+            "--incident",
+            "CVE-2023-32681",
+            "--production-only",
+        ]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_incident_accepts_workspace_but_not_with_output() {
+        use clap::error::ErrorKind;
+
+        let args = Args::try_parse_from([
+            "uv-sbom",
+            "--incident",
+            "CVE-2023-32681",
+            "--workspace",
+            "--production-only",
+        ])
+        .unwrap();
+        assert!(args.workspace);
+        assert_eq!(args.incident.as_deref(), Some("CVE-2023-32681"));
+
+        let result = Args::try_parse_from([
+            "uv-sbom",
+            "--incident",
+            "CVE-2023-32681",
+            "--workspace",
+            "-o",
+            "report.md",
+        ]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
     }
 }

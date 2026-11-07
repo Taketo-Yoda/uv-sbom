@@ -1,8 +1,9 @@
+use super::pypi_version_endpoint;
 use crate::ports::outbound::{PythonCompatibilityInfo, PythonCompatibilityRepository};
-use crate::shared::response_size_guard;
 use crate::shared::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
+#[cfg(test)]
 use std::time::Duration;
 
 #[derive(Debug, Default, Deserialize)]
@@ -26,6 +27,7 @@ struct PyPiVersionResponse {
 pub struct PyPiCompatibilityClient {
     client: reqwest::Client,
     base_url: String,
+    max_response_bytes: usize,
 }
 
 impl PyPiCompatibilityClient {
@@ -38,16 +40,11 @@ impl PyPiCompatibilityClient {
     /// # Errors
     /// Returns an error if the underlying HTTP client fails to build.
     pub fn new() -> Result<Self> {
-        let version = env!("CARGO_PKG_VERSION");
-        let user_agent = format!("uv-sbom/{}", version);
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .user_agent(user_agent)
-            .build()?;
-
+        let client = pypi_version_endpoint::build_client(pypi_version_endpoint::DEFAULT_TIMEOUT)?;
         Ok(Self {
             client,
             base_url: "https://pypi.org".to_string(),
+            max_response_bytes: Self::MAX_RESPONSE_BYTES,
         })
     }
 
@@ -56,16 +53,20 @@ impl PyPiCompatibilityClient {
         base_url: impl Into<String>,
         timeout: Duration,
     ) -> Result<Self> {
-        let user_agent = format!("uv-sbom/{}", env!("CARGO_PKG_VERSION"));
-        let client = reqwest::Client::builder()
-            .timeout(timeout)
-            .user_agent(user_agent)
-            .build()?;
-
+        let client = pypi_version_endpoint::build_client(timeout)?;
         Ok(Self {
             client,
             base_url: base_url.into(),
+            max_response_bytes: Self::MAX_RESPONSE_BYTES,
         })
+    }
+
+    /// Overrides the response-size limit, so tests can exercise the boundary
+    /// without serving multi-megabyte bodies.
+    #[cfg(test)]
+    fn with_max_response_bytes(mut self, max_response_bytes: usize) -> Self {
+        self.max_response_bytes = max_response_bytes;
+        self
     }
 
     async fn fetch_from_pypi(
@@ -73,27 +74,22 @@ impl PyPiCompatibilityClient {
         package_name: &str,
         package_version: &str,
     ) -> Result<PyPiVersionResponse> {
-        crate::shared::security::validate_url_component(package_name, "Package name")
-            .map_err(crate::shared::http_retry::permanent)?;
-        crate::shared::security::validate_url_component(package_version, "Package version")
-            .map_err(crate::shared::http_retry::permanent)?;
-        let encoded_name = urlencoding::encode(package_name);
-        let encoded_version = urlencoding::encode(package_version);
-        let url = format!(
-            "{}/pypi/{}/{}/json",
-            self.base_url, encoded_name, encoded_version
-        );
-
-        let response = self.client.get(&url).send().await?;
-        if !response.status().is_success() {
-            anyhow::bail!("PyPI API returned status code {}", response.status());
-        }
-        let bytes = response_size_guard::read_bounded_bytes(
-            response,
-            Self::MAX_RESPONSE_BYTES,
-            Some("PyPI compatibility metadata"),
+        let Some(bytes) = pypi_version_endpoint::fetch_version_json(
+            &self.client,
+            &self.base_url,
+            package_name,
+            package_version,
+            self.max_response_bytes,
+            "PyPI compatibility metadata",
         )
-        .await?;
+        .await?
+        else {
+            // Preserve pre-#978 behavior: a 404 is an ordinary (retryable)
+            // error here, not "not found". Do not wrap it with `permanent`.
+            return Err(pypi_version_endpoint::status_error(
+                reqwest::StatusCode::NOT_FOUND,
+            ));
+        };
         Ok(serde_json::from_slice::<PyPiVersionResponse>(&bytes)?)
     }
 
@@ -129,9 +125,20 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
+    /// Small limit for the response-size tests, so they never serve the
+    /// production-sized (10 MiB) bodies that made them flaky (#1004).
+    const TEST_LIMIT: usize = 1024;
+
     #[test]
     fn test_pypi_compatibility_client_creation() {
         assert!(PyPiCompatibilityClient::new().is_ok());
+    }
+
+    #[test]
+    fn test_production_response_limit_is_10_mib() {
+        let client = PyPiCompatibilityClient::new().unwrap();
+        // A literal, not `MAX_RESPONSE_BYTES`, so changing the const fails here.
+        assert_eq!(client.max_response_bytes, 10 * 1024 * 1024);
     }
 
     #[test]
@@ -318,10 +325,10 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/pypi/requests/2.31.0/json"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                version_json_of_len(PyPiCompatibilityClient::MAX_RESPONSE_BYTES + 1),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(version_json_of_len(TEST_LIMIT + 1), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
@@ -329,7 +336,8 @@ mod tests {
             mock_server.uri(),
             Duration::from_secs(5),
         )
-        .unwrap();
+        .unwrap()
+        .with_max_response_bytes(TEST_LIMIT);
         let err = client
             .fetch_from_pypi("requests", "2.31.0")
             .await
@@ -350,10 +358,10 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/pypi/requests/2.31.0/json"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                version_json_of_len(PyPiCompatibilityClient::MAX_RESPONSE_BYTES + 1),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(version_json_of_len(TEST_LIMIT + 1), "application/json"),
+            )
             .expect(1)
             .mount(&mock_server)
             .await;
@@ -362,7 +370,8 @@ mod tests {
             mock_server.uri(),
             Duration::from_secs(5),
         )
-        .unwrap();
+        .unwrap()
+        .with_max_response_bytes(TEST_LIMIT);
         let err = client
             .fetch_with_retry("requests", "2.31.0")
             .await
@@ -379,10 +388,10 @@ mod tests {
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/pypi/requests/2.31.0/json"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(
-                version_json_of_len(PyPiCompatibilityClient::MAX_RESPONSE_BYTES),
-                "application/json",
-            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_raw(version_json_of_len(TEST_LIMIT), "application/json"),
+            )
             .mount(&mock_server)
             .await;
 
@@ -390,7 +399,8 @@ mod tests {
             mock_server.uri(),
             Duration::from_secs(5),
         )
-        .unwrap();
+        .unwrap()
+        .with_max_response_bytes(TEST_LIMIT);
         let resp = client.fetch_from_pypi("requests", "2.31.0").await.unwrap();
         assert_eq!(resp.info.requires_python, Some(">=3.8".to_string()));
     }
