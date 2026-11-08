@@ -40,6 +40,9 @@ pub fn render_config_error(err: &ConfigError, msgs: &Messages) -> String {
         ConfigError::InvalidFormat { value } => {
             Messages::format(msgs.error_config_invalid_format, &[value])
         }
+        ConfigError::InvalidSeverityThreshold { value } => {
+            Messages::format(msgs.error_config_invalid_severity_threshold, &[value])
+        }
     }
 }
 
@@ -158,6 +161,9 @@ mod tests {
             ConfigError::InvalidFormat {
                 value: "xml".to_string(),
             },
+            ConfigError::InvalidSeverityThreshold {
+                value: "HIHG".to_string(),
+            },
         ]
     }
 
@@ -242,6 +248,15 @@ mod tests {
                 msgs
             ),
             "設定が不正です: format は json, markdown のいずれかである必要があります。指定値: \"xml\""
+        );
+        assert_eq!(
+            render_config_error(
+                &ConfigError::InvalidSeverityThreshold {
+                    value: "HIHG".to_string(),
+                },
+                msgs
+            ),
+            "設定が不正です: severity_threshold は low, medium, high, critical のいずれかである必要があります。指定値: \"HIHG\""
         );
     }
 

@@ -750,6 +750,73 @@ ignore_cves:
     }
 
     #[test]
+    fn test_invalid_severity_threshold_validation_error() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            "severity_threshold: HIHG\n",
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args(["-p", dir.path().to_str().unwrap(), "--no-check-cve"])
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(3));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(
+            "Invalid config: severity_threshold must be one of: low, medium, high, critical. Got: \"HIHG\""
+        ));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(!stdout.contains("bomFormat"));
+    }
+
+    #[test]
+    fn test_invalid_severity_threshold_validation_error_localized_to_japanese() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            "severity_threshold: HIHG\n",
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args([
+                "-p",
+                dir.path().to_str().unwrap(),
+                "--no-check-cve",
+                "--lang",
+                "ja",
+            ])
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(3));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(
+            "設定が不正です: severity_threshold は low, medium, high, critical のいずれかである必要があります。指定値: \"HIHG\""
+        ));
+    }
+
+    #[test]
+    fn test_config_severity_threshold_is_case_insensitive() {
+        let dir = TempDir::new().unwrap();
+        create_test_project(dir.path());
+        write_config(
+            &dir.path().join("uv-sbom.config.yml"),
+            "severity_threshold: HIGH\n",
+        );
+
+        let output = cargo_bin_cmd!("uv-sbom")
+            .args(["-p", dir.path().to_str().unwrap(), "--no-check-cve"])
+            .output()
+            .unwrap();
+
+        assert!(output.status.success());
+    }
+
+    #[test]
     fn test_explicit_config_not_found_error() {
         let dir = TempDir::new().unwrap();
         create_test_project(dir.path());

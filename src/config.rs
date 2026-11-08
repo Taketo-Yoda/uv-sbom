@@ -80,6 +80,11 @@ pub enum ConfigError {
     /// `FromStr` would reject (accepted: `json`, `markdown`, `md`, case-insensitive).
     #[error("Invalid config: format must be one of: json, markdown. Got: \"{value}\"")]
     InvalidFormat { value: String },
+
+    /// `validate_config` found a `severity_threshold` value that does not match
+    /// any `Severity` variant used for threshold filtering.
+    #[error("Invalid config: severity_threshold must be one of: low, medium, high, critical. Got: \"{value}\"")]
+    InvalidSeverityThreshold { value: String },
 }
 
 /// Template content for `uv-sbom.config.yml`.
@@ -276,6 +281,20 @@ fn is_accepted_format(value: &str) -> bool {
     ACCEPTED_FORMAT_VALUES.contains(&value.to_lowercase().as_str())
 }
 
+/// Config `severity_threshold` values accepted by `resolve_severity_threshold`
+/// (`src/cli/config_resolver/field_resolvers.rs`), compared lowercase.
+///
+/// Mirrored rather than imported: `config` sits below `application` and `domain`
+/// (the application and domain layers import `crate::config`). Parity is pinned
+/// by `test_is_accepted_severity_threshold_matches_severity_variants`.
+const ACCEPTED_SEVERITY_THRESHOLD_VALUES: &[&str] = &["low", "medium", "high", "critical"];
+
+/// Returns `true` when `value` is a config `severity_threshold` that
+/// `resolve_severity_threshold` accepts.
+fn is_accepted_severity_threshold(value: &str) -> bool {
+    ACCEPTED_SEVERITY_THRESHOLD_VALUES.contains(&value.to_lowercase().as_str())
+}
+
 /// Validate the loaded configuration.
 fn validate_config(config: &ConfigFile) -> Result<(), ConfigError> {
     if let Some(ref ignore_cves) = config.ignore_cves {
@@ -297,12 +316,20 @@ fn validate_config(config: &ConfigFile) -> Result<(), ConfigError> {
         }
     }
 
-    // Checked last so configs with several problems keep reporting the same
-    // first error as before #1072.
+    // Checked after license_policy so configs with several problems keep
+    // reporting the same first error as before #1072.
     if let Some(ref format) = config.format {
         if !is_accepted_format(format) {
             return Err(ConfigError::InvalidFormat {
                 value: format.clone(),
+            });
+        }
+    }
+
+    if let Some(ref severity_threshold) = config.severity_threshold {
+        if !is_accepted_severity_threshold(severity_threshold) {
+            return Err(ConfigError::InvalidSeverityThreshold {
+                value: severity_threshold.clone(),
             });
         }
     }
@@ -656,6 +683,95 @@ exclude_groups:
         }
         for value in ACCEPTED_FORMAT_VALUES {
             assert!(value.parse::<OutputFormat>().is_ok());
+        }
+    }
+
+    // --- severity_threshold validation ---
+
+    #[test]
+    fn test_validate_config_rejects_invalid_severity_threshold() {
+        for value in ["HIHG", "extreme", "none", "\"\"", "1"] {
+            let config = parse_config(&format!("severity_threshold: {}", value));
+            assert!(
+                matches!(
+                    validate_config(&config),
+                    Err(ConfigError::InvalidSeverityThreshold { .. })
+                ),
+                "expected InvalidSeverityThreshold for {}",
+                value
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_config_accepts_valid_severity_threshold_any_case() {
+        for value in [
+            "low", "LOW", "Low", "medium", "MEDIUM", "Medium", "high", "HIGH", "High", "critical",
+            "CRITICAL", "Critical",
+        ] {
+            let config = parse_config(&format!("severity_threshold: {}", value));
+            assert!(validate_config(&config).is_ok(), "rejected {}", value);
+        }
+    }
+
+    #[test]
+    fn test_validate_config_accepts_missing_or_null_severity_threshold() {
+        assert!(validate_config(&parse_config("check_cve: true")).is_ok());
+        assert!(validate_config(&parse_config("severity_threshold: ~")).is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_rejects_non_string_scalar_severity_threshold() {
+        assert!(matches!(
+            validate_config(&parse_config("severity_threshold: 1")),
+            Err(ConfigError::InvalidSeverityThreshold { value }) if value == "1"
+        ));
+    }
+
+    #[test]
+    fn test_invalid_severity_threshold_display_matches_en_template() {
+        let err = ConfigError::InvalidSeverityThreshold {
+            value: "HIHG".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "Invalid config: severity_threshold must be one of: low, medium, high, critical. Got: \"HIHG\""
+        );
+    }
+
+    #[test]
+    fn test_validate_config_reports_earlier_error_before_invalid_severity_threshold() {
+        let config =
+            parse_config("severity_threshold: HIHG\nlicense_policy:\n  unknown: maybe");
+        assert!(matches!(
+            validate_config(&config),
+            Err(ConfigError::InvalidUnknownLicenseHandling { .. })
+        ));
+    }
+
+    #[test]
+    fn test_is_accepted_severity_threshold_matches_severity_variants() {
+        use crate::sbom_generation::domain::vulnerability::Severity;
+
+        let threshold_eligible = [
+            Severity::Low,
+            Severity::Medium,
+            Severity::High,
+            Severity::Critical,
+        ];
+        assert_eq!(
+            ACCEPTED_SEVERITY_THRESHOLD_VALUES.len(),
+            threshold_eligible.len(),
+            "constant length must match threshold-eligible Severity variant count"
+        );
+        for value in ACCEPTED_SEVERITY_THRESHOLD_VALUES {
+            assert!(
+                threshold_eligible.iter().any(|s| {
+                    format!("{:?}", s).to_lowercase() == *value
+                }),
+                "accepted value {:?} has no matching Severity variant",
+                value
+            );
         }
     }
 }

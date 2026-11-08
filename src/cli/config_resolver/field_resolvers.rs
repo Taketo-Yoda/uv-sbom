@@ -61,6 +61,10 @@ pub(super) fn resolve_check_cve(cli_opt_out: bool, config: Option<bool>) -> bool
 }
 
 /// Resolve `severity_threshold`: CLI > config > `None`.
+///
+/// Config values are validated at load time (`validate_config`, #1079),
+/// so an unrecognized value cannot reach this from the config path; the
+/// `_ => None` fallback is kept as a safety net for future callers.
 pub(super) fn resolve_severity_threshold(
     cli: Option<Severity>,
     config: Option<&str>,
@@ -264,6 +268,8 @@ mod tests {
 
     #[test]
     fn test_resolve_severity_threshold_unknown_string_is_none() {
+        // Unreachable from the config path after #1079 (validate_config rejects
+        // unknown values). Kept as a safety-net pin for the `_ => None` arm.
         assert_eq!(
             resolve_severity_threshold(None, Some("not-a-severity")),
             None
