@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Config `severity_threshold` typos are now rejected instead of silently disabling threshold filtering** — an unrecognized value (e.g. `HIHG`) produces a config error naming the bad value and the accepted values (`low`, `medium`, `high`, `critical`), localized for `--lang ja` (#1079)
+
 ## [4.0.0] - 2026-11-08
 
 ### Added
