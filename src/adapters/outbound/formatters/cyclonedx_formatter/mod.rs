@@ -169,6 +169,7 @@ mod tests {
                 source_url: Some("https://nvd.nist.gov/vuln/detail/CVE-2024-1234".to_string()),
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -186,6 +187,11 @@ mod tests {
         assert!(json.contains("CVE-2024-1234"));
         assert!(json.contains("\"severity\": \"HIGH\""));
         assert!(json.contains("\"score\": 7.5"));
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            parsed["vulnerabilities"][0]["description"],
+            "Test vulnerability"
+        );
     }
 
     #[test]
@@ -270,6 +276,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -324,6 +331,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -444,6 +452,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -457,6 +466,13 @@ mod tests {
 
         // No properties field when no resolution guide
         assert!(!json.contains("\"uv-sbom:introduced-by\""));
+        // No description key when OSV supplied no summary
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(parsed["vulnerabilities"][0]
+            .as_object()
+            .unwrap()
+            .get("description")
+            .is_none());
     }
 
     // ============================================================
@@ -483,6 +499,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -529,6 +546,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -569,6 +587,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {

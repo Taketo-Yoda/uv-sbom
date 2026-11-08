@@ -53,7 +53,7 @@ A single human-facing line — `**Priority**: HIGH / MEDIUM / LOW` — goes at t
 ### Step 3: Competitive Analysis (MANDATORY for HIGH/MEDIUM priority)
 
 For features that pass triage at HIGH or MEDIUM priority, briefly check:
-1. Does cyclonedx-python, pip-audit, or Syft already offer this? (check `.claude/competitive-landscape.md` if it exists)
+1. Does any competitor tool listed in `.claude/competitive-landscape.md` → "Tracked tools" already offer this? (check that tool's entry in the same file)
 2. If yes: is our version differentiated enough? How?
 3. If no: note this as a potential differentiator.
 

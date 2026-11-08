@@ -8,7 +8,9 @@ use crate::ports::outbound::{LockfileParseResult, PackageSourceMap};
 use crate::sbom_generation::domain::Package;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
-pub use group_roots::parse_group_roots;
+pub use group_roots::{
+    parse_group_roots, parse_group_roots_for_member, parse_virtual_root_group_roots,
+};
 pub use member_scope::parse_lockfile_content_for_member;
 use std::collections::HashMap;
 use std::path::Path;
@@ -37,7 +39,7 @@ pub fn parse_lockfile_content(content: &str, project_path: &Path) -> Result<Lock
     for pkg in packages {
         result_packages.push(Package::new(pkg.name.clone(), pkg.version.clone())?);
 
-        let deps: Vec<String> = pkg.dependencies.iter().map(|d| d.name.clone()).collect();
+        let deps = pkg.runtime_dep_names();
         dependency_map.insert(pkg.name, deps);
     }
 

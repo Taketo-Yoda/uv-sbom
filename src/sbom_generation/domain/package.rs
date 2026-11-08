@@ -119,6 +119,25 @@ impl Package {
     }
 }
 
+/// PEP 503 name normalization: lowercase, and runs of `-`, `_`, `.` collapse
+/// to a single `-`. Surrounding whitespace is ignored.
+pub(crate) fn normalize_name(name: &str) -> String {
+    let mut normalized = String::with_capacity(name.len());
+    let mut previous_was_separator = false;
+    for c in name.trim().chars() {
+        if matches!(c, '-' | '_' | '.') {
+            if !previous_was_separator {
+                normalized.push('-');
+            }
+            previous_was_separator = true;
+        } else {
+            normalized.push(c.to_ascii_lowercase());
+            previous_was_separator = false;
+        }
+    }
+    normalized
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,5 +202,33 @@ mod tests {
     fn test_version_display() {
         let version = Version::new("1.0.0".to_string()).unwrap();
         assert_eq!(format!("{}", version), "1.0.0");
+    }
+
+    #[test]
+    fn test_normalize_name_collapses_each_separator() {
+        assert_eq!(normalize_name("a-b"), "a-b");
+        assert_eq!(normalize_name("a_b"), "a-b");
+        assert_eq!(normalize_name("a.b"), "a-b");
+    }
+
+    #[test]
+    fn test_normalize_name_collapses_mixed_separator_runs() {
+        assert_eq!(normalize_name("a--_.b"), "a-b");
+        assert_eq!(normalize_name("Foo_Bar.baz"), "foo-bar-baz");
+    }
+
+    #[test]
+    fn test_normalize_name_folds_case() {
+        assert_eq!(normalize_name("Requests"), "requests");
+    }
+
+    #[test]
+    fn test_normalize_name_trims_surrounding_whitespace() {
+        assert_eq!(normalize_name(" Flask__Login.Ext "), "flask-login-ext");
+    }
+
+    #[test]
+    fn test_normalize_name_keeps_normalized_input() {
+        assert_eq!(normalize_name("requests"), "requests");
     }
 }

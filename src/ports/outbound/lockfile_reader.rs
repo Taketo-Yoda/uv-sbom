@@ -11,8 +11,10 @@ pub type LockfileParseResult = (Vec<Package>, DependencyMap);
 
 /// Group name -> list of root package names declared for that dependency group.
 ///
-/// Extracted from `[manifest.dependency-groups]` in `uv.lock`.
-/// Empty map when no `[manifest.dependency-groups]` section is present.
+/// Extracted from `[manifest.dependency-groups]` in `uv.lock` (a single project's
+/// groups in revision ≤ 2, a virtual workspace root's groups in every revision), or
+/// from a local package's `[package.dev-dependencies]` (revision 3).
+/// Empty map when neither is present.
 pub type GroupRoots = HashMap<String, Vec<String>>;
 
 /// Classification of a package's `source` field in `uv.lock`.
@@ -113,16 +115,22 @@ pub trait LockfileReader {
     ///
     /// Performs a BFS traversal starting from the `[[package]]` entry whose
     /// `name == member_name` and `source.editable` (uv < 0.5) or `source.virtual`
-    /// (uv >= 0.5) is set, collecting all transitively reachable packages. The member
-    /// package itself is excluded from the result.
+    /// (uv >= 0.5) is set, collecting all packages transitively reachable from its
+    /// runtime dependencies and from every group of its own
+    /// `[package.dev-dependencies]`. Other packages contribute runtime edges only.
+    /// The member package itself is excluded from the result.
     ///
     /// # Arguments
     /// * `project_path` - Path to the project directory containing uv.lock
     /// * `member_name` - The workspace member name to scope the result to
     ///
     /// # Returns
-    /// A tuple of (packages, dependency_map) containing only packages reachable
-    /// from the specified member (excluding the member itself).
+    /// A tuple of (packages, dependency_map). `packages` contains only packages
+    /// reachable from the specified member (excluding the member itself).
+    /// `dependency_map` contains each of those packages' entries plus the
+    /// member's own root entry, so the member name can be passed to
+    /// `DependencyAnalyzer::analyze` as the project root. Every entry, the root
+    /// included, lists runtime dependencies only, as in `read_and_parse_lockfile`.
     ///
     /// # Errors
     /// Returns an error if:
@@ -135,11 +143,55 @@ pub trait LockfileReader {
         member_name: &str,
     ) -> Result<LockfileParseResult>;
 
-    /// Extract dependency-group roots from `[manifest.dependency-groups]` in `uv.lock`.
+    /// Extract dependency-group roots from `uv.lock`.
     ///
-    /// Returns an empty map when no `[manifest.dependency-groups]` section is present,
-    /// preserving backward compatibility with lock files that have no groups.
+    /// Reads `[manifest.dependency-groups]` (revision ≤ 2), falling back to the
+    /// `[package.dev-dependencies]` of the first local package (revision 3).
+    /// Returns an empty map when no group information is present, preserving
+    /// backward compatibility with lock files that have no groups.
+    ///
+    /// In a workspace the revision-3 fallback picks an arbitrary member; use
+    /// `read_and_parse_group_roots_for_member` to scope to one member.
     fn read_and_parse_group_roots(&self, project_path: &Path) -> Result<GroupRoots>;
+
+    /// Extract dependency-group roots for the workspace member `member_name`.
+    ///
+    /// Returns the union of the workspace-wide `[manifest.dependency-groups]` and
+    /// the `[package.dev-dependencies]` of the local package whose
+    /// `name == member_name` (the same match as `read_and_parse_lockfile_for_member`),
+    /// merged per group name (manifest roots first, then the member's own roots not
+    /// already listed), so every group the member's traversal follows can be
+    /// excluded. A member that is not a local package gets the manifest groups
+    /// only — never another member's groups.
+    ///
+    /// The manifest groups apply to every member. Member-scoped exclusion
+    /// (`project_scope::filter_by_groups_for_member`) keeps whatever one of the
+    /// member's non-excluded groups reaches, so excluding a group drops a package
+    /// only when no runtime dependency and no non-excluded group of the member
+    /// reaches it (#1001).
+    ///
+    /// # Errors
+    /// Returns an error if the uv.lock file cannot be read or parsed.
+    fn read_and_parse_group_roots_for_member(
+        &self,
+        project_path: &Path,
+        member_name: &str,
+    ) -> Result<GroupRoots>;
+
+    /// Extract the virtual workspace root's own dependency-group roots.
+    ///
+    /// Reads `[manifest.dependency-groups]` only, in any lockfile revision, and
+    /// never falls back to a local package's `[package.dev-dependencies]` (which
+    /// in a workspace belongs to a member). Returns an empty map when the root
+    /// declares no groups, or when the root has a `[project]`: it is then a
+    /// member, and uv records its groups on its own `[[package]]`.
+    ///
+    /// Member traversal never follows these groups, so `--workspace` warns
+    /// about the ones not excluded (#1009).
+    ///
+    /// # Errors
+    /// Returns an error if the uv.lock file cannot be read or parsed.
+    fn read_and_parse_virtual_root_group_roots(&self, project_path: &Path) -> Result<GroupRoots>;
 
     /// Read `uv.lock` and classify each package's `source` field.
     ///

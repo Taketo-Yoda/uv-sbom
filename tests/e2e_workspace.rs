@@ -279,4 +279,369 @@ source = { virtual = "." }
         );
         assert!(!stderr.contains("license policy violations"));
     }
+
+    /// Writes a revision-3 workspace where member `b` declares a non-`dev`
+    /// group (`lint = [black]`, `black -> click`) besides `dev = [mypy]` (#997).
+    fn rev3_workspace_with_non_dev_group() -> TempDir {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let root = temp.path();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.uv.workspace]\nmembers = [\"packages/a\", \"packages/b\"]\n",
+        )
+        .unwrap();
+        for name in ["a", "b"] {
+            let dir = root.join("packages").join(name);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join("pyproject.toml"),
+                format!(
+                    "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\n"
+                ),
+            )
+            .unwrap();
+        }
+        fs::write(
+            root.join("uv.lock"),
+            r#"version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+
+[package.dev-dependencies]
+dev = [{ name = "mypy" }]
+lint = [{ name = "black" }]
+
+[[package]]
+name = "black"
+version = "24.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [{ name = "click" }]
+
+[[package]]
+name = "click"
+version = "8.1.7"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "mypy"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+"#,
+        )
+        .unwrap();
+        temp
+    }
+
+    /// Runs `--workspace` with `extra` args and returns member `b`'s sbom.json.
+    fn member_b_sbom(temp: &TempDir, extra: &[&str]) -> String {
+        let mut args = vec![
+            "--workspace",
+            "--path",
+            temp.path().to_str().unwrap(),
+            "--no-check-cve",
+            "--format",
+            "json",
+        ];
+        args.extend_from_slice(extra);
+        let (exit_code, _stdout, stderr) = run_uv_sbom(&args);
+        assert_eq!(exit_code, 0, "{stderr}");
+        fs::read_to_string(temp.path().join("packages/b/sbom.json")).unwrap()
+    }
+
+    /// A member's SBOM lists packages from its non-`dev` groups (#997)
+    #[test]
+    fn test_workspace_member_sbom_includes_non_dev_group_packages() {
+        let temp = rev3_workspace_with_non_dev_group();
+
+        let sbom = member_b_sbom(&temp, &[]);
+        assert!(sbom.contains("\"black\""), "lint group root must be listed");
+        assert!(
+            sbom.contains("\"click\""),
+            "lint group subtree must be listed"
+        );
+        assert!(sbom.contains("\"mypy\""));
+    }
+
+    /// --exclude-groups drops a member's non-`dev` group in workspace mode (#997)
+    #[test]
+    fn test_workspace_exclude_groups_drops_non_dev_group_packages() {
+        let temp = rev3_workspace_with_non_dev_group();
+
+        let sbom = member_b_sbom(&temp, &["--exclude-groups", "lint"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(!sbom.contains("\"click\""));
+        assert!(sbom.contains("\"mypy\""), "dev group is not excluded");
+    }
+
+    /// --exclude-groups matches a member's group after PEP 735 normalization (#1015)
+    #[test]
+    fn test_workspace_exclude_groups_matches_normalized_name() {
+        let temp = rev3_workspace_with_non_dev_group();
+
+        let sbom = member_b_sbom(&temp, &["--exclude-groups", "LINT"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(!sbom.contains("\"click\""));
+        assert!(sbom.contains("\"mypy\""), "dev group is not excluded");
+    }
+
+    /// --production-only drops every group of a member in workspace mode (#997)
+    #[test]
+    fn test_workspace_production_only_drops_non_dev_group_packages() {
+        let temp = rev3_workspace_with_non_dev_group();
+
+        let sbom = member_b_sbom(&temp, &["--production-only"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(!sbom.contains("\"click\""));
+        assert!(!sbom.contains("\"mypy\""));
+    }
+
+    /// Writes a workspace whose virtual root declares `[dependency-groups]`, so
+    /// `uv.lock` has `[manifest.dependency-groups] docs = [sphinx]`, and whose
+    /// member `b` declares its own `lint = [black]` group (#999).
+    fn manifest_workspace_with_member_group() -> TempDir {
+        manifest_workspace_with_member_lint_root("black")
+    }
+
+    /// [`manifest_workspace_with_member_group`] with `b`'s `lint` group rooted
+    /// at `lint_root`; `"sphinx"` makes it share the manifest `docs` root (#1001).
+    fn manifest_workspace_with_member_lint_root(lint_root: &str) -> TempDir {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let root = temp.path();
+        fs::write(
+            root.join("pyproject.toml"),
+            "[tool.uv.workspace]\nmembers = [\"packages/a\", \"packages/b\"]\n\n[dependency-groups]\ndocs = [\"sphinx\"]\n",
+        )
+        .unwrap();
+        for name in ["a", "b"] {
+            let dir = root.join("packages").join(name);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(
+                dir.join("pyproject.toml"),
+                format!(
+                    "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\n"
+                ),
+            )
+            .unwrap();
+        }
+        fs::write(
+            root.join("uv.lock"),
+            r#"version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = ["a", "b"]
+
+[manifest.dependency-groups]
+docs = [{ name = "sphinx" }]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+dependencies = [{ name = "requests" }]
+
+[package.dev-dependencies]
+lint = [{ name = "LINT_ROOT" }]
+
+[[package]]
+name = "black"
+version = "24.1.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "sphinx"
+version = "7.2.6"
+source = { registry = "https://pypi.org/simple" }
+"#
+            .replace("LINT_ROOT", lint_root),
+        )
+        .unwrap();
+        temp
+    }
+
+    /// With manifest groups present, a member's own group is still listed by
+    /// default, so the exclusion tests below are not passing vacuously (#999)
+    #[test]
+    fn test_workspace_manifest_groups_member_own_group_is_listed() {
+        let temp = manifest_workspace_with_member_group();
+
+        let sbom = member_b_sbom(&temp, &[]);
+        assert!(sbom.contains("\"black\""));
+        assert!(sbom.contains("\"requests\""));
+    }
+
+    /// --exclude-groups drops a member's own group when manifest groups exist (#999)
+    #[test]
+    fn test_workspace_manifest_groups_exclude_member_own_group() {
+        let temp = manifest_workspace_with_member_group();
+
+        let sbom = member_b_sbom(&temp, &["--exclude-groups", "lint"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(sbom.contains("\"requests\""), "runtime dep is kept");
+    }
+
+    /// --production-only drops a member's own group when manifest groups exist (#999)
+    #[test]
+    fn test_workspace_manifest_groups_production_only_drops_member_own_group() {
+        let temp = manifest_workspace_with_member_group();
+
+        let sbom = member_b_sbom(&temp, &["--production-only"]);
+        assert!(!sbom.contains("\"black\""));
+        assert!(sbom.contains("\"requests\""), "runtime dep is kept");
+    }
+
+    /// Excluding the manifest group `docs` keeps `sphinx` in `b`, whose own
+    /// non-excluded `lint` group also lists it (#1001)
+    #[test]
+    fn test_workspace_exclude_manifest_group_keeps_root_shared_with_member_group() {
+        let temp = manifest_workspace_with_member_lint_root("sphinx");
+
+        let sbom = member_b_sbom(&temp, &["--exclude-groups", "docs"]);
+        assert!(sbom.contains("\"sphinx\""), "b's lint group still lists it");
+        assert!(sbom.contains("\"requests\""));
+    }
+
+    /// The inverse: excluding `lint` keeps `sphinx`, which `docs` still lists (#1001)
+    #[test]
+    fn test_workspace_exclude_member_group_keeps_root_shared_with_manifest_group() {
+        let temp = manifest_workspace_with_member_lint_root("sphinx");
+
+        let sbom = member_b_sbom(&temp, &["--exclude-groups", "lint"]);
+        assert!(sbom.contains("\"sphinx\""));
+    }
+
+    /// Excluding every group that lists the shared root drops it (#1001)
+    #[test]
+    fn test_workspace_excluding_every_group_drops_shared_root() {
+        for flags in [
+            &["--exclude-groups", "docs,lint"][..],
+            &["--production-only"][..],
+        ] {
+            let temp = manifest_workspace_with_member_lint_root("sphinx");
+
+            let sbom = member_b_sbom(&temp, flags);
+            assert!(!sbom.contains("\"sphinx\""), "{flags:?}");
+            assert!(sbom.contains("\"requests\""), "{flags:?}");
+        }
+    }
+
+    // --- Virtual root [dependency-groups] warning (#1009) ---
+
+    const ROOT_GROUPS_WARNING_EN: &str =
+        "Workspace root dependency group(s) not covered by any member SBOM";
+    const ROOT_GROUPS_WARNING_JA: &str =
+        "どのメンバーの SBOM にも含まれないワークスペースルートの依存グループ";
+
+    /// Runs `--workspace` on `temp` with `extra` args; returns (stdout, stderr).
+    fn run_workspace(temp: &TempDir, extra: &[&str]) -> (String, String) {
+        let mut args = vec![
+            "--workspace",
+            "--path",
+            temp.path().to_str().unwrap(),
+            "--no-check-cve",
+            "--format",
+            "json",
+        ];
+        args.extend_from_slice(extra);
+        let (exit_code, stdout, stderr) = run_uv_sbom(&args);
+        assert_eq!(exit_code, 0, "{stderr}");
+        (stdout, stderr)
+    }
+
+    /// A virtual root's group is named on stderr, never on stdout or in an SBOM;
+    /// a member's own group is not named
+    #[test]
+    fn test_workspace_warns_about_uncovered_virtual_root_groups() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (stdout, stderr) = run_workspace(&temp, &[]);
+
+        let line = stderr
+            .lines()
+            .find(|l| l.contains(ROOT_GROUPS_WARNING_EN))
+            .unwrap_or_else(|| panic!("warning missing from stderr:\n{stderr}"));
+        assert!(line.ends_with(": docs"), "{line}");
+        assert!(stderr.contains("--exclude-groups"), "hint missing");
+        assert!(!stdout.contains(ROOT_GROUPS_WARNING_EN));
+        for member in ["a", "b"] {
+            let sbom = fs::read_to_string(temp.path().join(format!("packages/{member}/sbom.json")))
+                .unwrap();
+            assert!(!sbom.contains(ROOT_GROUPS_WARNING_EN), "{member}");
+        }
+    }
+
+    /// The warning is localized with --lang ja
+    #[test]
+    fn test_workspace_root_groups_warning_ja() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (_stdout, stderr) = run_workspace(&temp, &["--lang", "ja"]);
+
+        assert!(stderr.contains(ROOT_GROUPS_WARNING_JA), "{stderr}");
+        assert!(!stderr.contains(ROOT_GROUPS_WARNING_EN));
+    }
+
+    /// Excluding a member's group only does not silence the root warning
+    #[test]
+    fn test_workspace_root_groups_warning_survives_member_group_exclusion() {
+        let temp = manifest_workspace_with_member_group();
+
+        let (_stdout, stderr) = run_workspace(&temp, &["--exclude-groups", "lint"]);
+
+        assert!(stderr.contains(ROOT_GROUPS_WARNING_EN), "{stderr}");
+    }
+
+    /// Excluding every root group, directly or via --production-only, prints no warning,
+    /// whatever the spelling of the excluded name (#1015)
+    #[test]
+    fn test_workspace_no_root_groups_warning_when_all_root_groups_excluded() {
+        for flags in [
+            &["--exclude-groups", "docs"][..],
+            &["--exclude-groups", "Docs"][..],
+            &["--production-only"][..],
+        ] {
+            let temp = manifest_workspace_with_member_group();
+
+            let (_stdout, stderr) = run_workspace(&temp, flags);
+
+            assert!(
+                !stderr.contains(ROOT_GROUPS_WARNING_EN),
+                "{flags:?}: {stderr}"
+            );
+        }
+    }
+
+    /// A root without [dependency-groups] prints no warning
+    #[test]
+    fn test_workspace_no_root_groups_warning_without_root_groups() {
+        let temp = setup_workspace_temp();
+
+        let (_stdout, stderr) = run_workspace(&temp, &[]);
+
+        assert!(!stderr.contains(ROOT_GROUPS_WARNING_EN), "{stderr}");
+    }
 }

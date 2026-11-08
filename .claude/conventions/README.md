@@ -25,11 +25,15 @@ change-history rows describe past events, so they do not count as consumers.
 | Branch naming, branch base, PR base, Stacked Mode, who merges | `branching.md` |
 | Local CI-check commands | `ci-checks.md` |
 | Rust test placement | `testing.md` |
+| Message catalog location and new-key procedure | `i18n.md` |
 | What needs a CHANGELOG entry, per-feature entry ownership, reference numbers, non-owner PR line | `changelog.md` |
 | Label list and label choice for `.claude/`-only Issues | `labels.md` |
+| How a subtask names its parent epic and sibling dependencies | `subtask-links.md` |
+| Documentation structure, docs/ and docs/ja/ routing, README landing-page rules | `docs-structure.md` |
+| Tracked competitor tools and integrate-don't-duplicate services | `../competitive-landscape.md` → "Tracked tools" |
 
 A new convention gets its own `.claude/conventions/<topic>.md` and a row in this
-table, both in the same change.
+table, both in the same change. Exception 3 below covers an owner outside this directory.
 
 Rules that `.claude/CLAUDE.md`'s charter blockquote assigns to `CLAUDE.md` stay owned
 there, and the Ownership Rule below applies to them unchanged.
@@ -52,6 +56,10 @@ there, and the Ownership Rule below applies to them unchanged.
 2. **Labelled summaries**: a table that is explicitly labelled as a summary, names its
    owner, and states that the owner wins on conflict (e.g. `instructions.md` →
    "Layer Rules", `agents/architect.md` → "Design Pattern Reference").
+3. **Reference-data owner**: a convention that is a list inside a reference-data file
+   outside this directory may be owned by that file, when separating the list from its
+   data would leave a stub owner (e.g. `competitive-landscape.md` → "Tracked tools").
+   It still gets a row in the Index.
 
 ## Convention Ownership Check
 

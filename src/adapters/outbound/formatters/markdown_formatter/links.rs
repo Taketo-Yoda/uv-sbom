@@ -210,6 +210,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {
@@ -288,6 +289,7 @@ mod tests {
                 source_url: None,
                 epss_percentile: None,
                 in_kev: None,
+                is_malicious: false,
             }],
             informational: vec![],
             summary: VulnerabilitySummary {

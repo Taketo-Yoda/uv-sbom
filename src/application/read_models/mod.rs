@@ -9,6 +9,7 @@ pub mod cve_delta_view;
 pub mod dependency_tree_view;
 pub mod dependency_view;
 pub mod explain_view;
+pub mod incident_report;
 pub mod license_compliance_view;
 pub mod non_pypi_package;
 pub mod python_compatibility;

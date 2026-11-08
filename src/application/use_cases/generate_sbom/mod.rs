@@ -250,60 +250,12 @@ where
 mod tests {
     use super::*;
     use crate::application::use_cases::test_doubles::{
-        MockMaintenanceRepository, MockPythonCompatibilityRepository, MockUvLockSimulator,
-        MockVulnerabilityRepository,
+        MockLockfileReader, MockMaintenanceRepository, MockProjectConfigReader,
+        MockPythonCompatibilityRepository, MockUvLockSimulator, MockVulnerabilityRepository,
     };
     use crate::ports::outbound::{GroupRoots, LockfileParseResult, PackageSourceMap, PyPiMetadata};
     use crate::sbom_generation::domain::Package;
     use std::collections::HashMap;
-    use std::path::Path;
-
-    pub(crate) struct MockLockfileReader {
-        pub(crate) packages: Vec<Package>,
-        pub(crate) deps: HashMap<String, Vec<String>>,
-        pub(crate) group_roots: GroupRoots,
-        pub(crate) source_map: PackageSourceMap,
-    }
-
-    impl LockfileReader for MockLockfileReader {
-        fn read_lockfile(&self, _path: &Path) -> Result<String> {
-            Ok(String::new())
-        }
-
-        fn read_and_parse_lockfile(&self, _path: &Path) -> Result<LockfileParseResult> {
-            Ok((self.packages.clone(), self.deps.clone()))
-        }
-
-        fn read_and_parse_lockfile_for_member(
-            &self,
-            _path: &Path,
-            _member_name: &str,
-        ) -> Result<LockfileParseResult> {
-            Ok((self.packages.clone(), self.deps.clone()))
-        }
-
-        fn read_and_parse_group_roots(&self, _path: &Path) -> Result<GroupRoots> {
-            Ok(self.group_roots.clone())
-        }
-
-        fn read_and_parse_package_sources(&self, _path: &Path) -> Result<PackageSourceMap> {
-            Ok(self.source_map.clone())
-        }
-    }
-
-    pub(crate) struct MockProjectConfigReader {
-        pub(crate) project_name: String,
-        pub(crate) pyproject_missing: bool,
-    }
-
-    impl ProjectConfigReader for MockProjectConfigReader {
-        fn read_project_name(&self, _path: &Path) -> Result<String> {
-            if self.pyproject_missing {
-                return Err(crate::ports::outbound::ProjectConfigError::PyprojectNotFound.into());
-            }
-            Ok(self.project_name.clone())
-        }
-    }
 
     #[derive(Clone)]
     pub(crate) struct MockLicenseRepository;
@@ -354,6 +306,7 @@ mod tests {
             deps: HashMap<String, Vec<String>>,
             group_roots: GroupRoots,
             source_map: PackageSourceMap,
+            member_lockfile: Option<LockfileParseResult>,
             project_name: String,
             pyproject_missing: bool,
             locale: Locale,
@@ -370,6 +323,7 @@ mod tests {
                     deps: HashMap::new(),
                     group_roots: HashMap::new(),
                     source_map: PackageSourceMap::new(),
+                    member_lockfile: None,
                     project_name: "test-project".to_string(),
                     pyproject_missing: false,
                     locale: Locale::default(),
@@ -394,6 +348,15 @@ mod tests {
             ) -> Self {
                 self.packages = packages;
                 self.deps = deps;
+                self
+            }
+
+            pub(crate) fn with_member_lockfile(
+                mut self,
+                packages: Vec<Package>,
+                deps: HashMap<String, Vec<String>>,
+            ) -> Self {
+                self.member_lockfile = Some((packages, deps));
                 self
             }
 
@@ -452,6 +415,7 @@ mod tests {
                         deps: self.deps,
                         group_roots: self.group_roots,
                         source_map: self.source_map,
+                        member_lockfile: self.member_lockfile,
                     },
                     MockProjectConfigReader {
                         project_name: self.project_name,

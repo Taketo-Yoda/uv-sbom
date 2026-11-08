@@ -17,6 +17,9 @@ pub enum ExitCode {
     InvalidArguments = 2,
     /// Application error (API error, network error, file I/O error, etc.)
     ApplicationError = 3,
+    /// Incident mode only (`--incident`): the project is affected and no released
+    /// fix exists (the fix is not yet on PyPI, or the advisory names none)
+    AffectedNoReleasedFix = 4,
 }
 
 impl ExitCode {
@@ -33,6 +36,7 @@ impl fmt::Display for ExitCode {
             ExitCode::VulnerabilitiesDetected => write!(f, "Vulnerabilities Detected (1)"),
             ExitCode::InvalidArguments => write!(f, "Invalid Arguments (2)"),
             ExitCode::ApplicationError => write!(f, "Application Error (3)"),
+            ExitCode::AffectedNoReleasedFix => write!(f, "Affected, No Released Fix (4)"),
         }
     }
 }
@@ -82,6 +86,7 @@ mod tests {
         assert_eq!(ExitCode::VulnerabilitiesDetected.as_i32(), 1);
         assert_eq!(ExitCode::InvalidArguments.as_i32(), 2);
         assert_eq!(ExitCode::ApplicationError.as_i32(), 3);
+        assert_eq!(ExitCode::AffectedNoReleasedFix.as_i32(), 4);
     }
 
     #[test]
@@ -98,6 +103,10 @@ mod tests {
         assert_eq!(
             format!("{}", ExitCode::ApplicationError),
             "Application Error (3)"
+        );
+        assert_eq!(
+            format!("{}", ExitCode::AffectedNoReleasedFix),
+            "Affected, No Released Fix (4)"
         );
     }
 

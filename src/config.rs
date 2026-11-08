@@ -75,6 +75,11 @@ pub enum ConfigError {
         "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"{value}\""
     )]
     InvalidUnknownLicenseHandling { value: String },
+
+    /// `validate_config` found a top-level `format` value that `OutputFormat`'s
+    /// `FromStr` would reject (accepted: `json`, `markdown`, `md`, case-insensitive).
+    #[error("Invalid config: format must be one of: json, markdown. Got: \"{value}\"")]
+    InvalidFormat { value: String },
 }
 
 /// Template content for `uv-sbom.config.yml`.
@@ -257,6 +262,20 @@ pub fn discover_config(dir: &Path) -> Result<Option<ConfigFile>, ConfigError> {
     Ok(Some(config))
 }
 
+/// Config `format` values accepted by `OutputFormat::from_str`
+/// (`src/application/dto/output_format.rs`), compared lowercase.
+///
+/// Mirrored rather than imported: `config` sits below `application` (the
+/// application and domain layers import `crate::config`). Parity is pinned by
+/// `test_is_accepted_format_matches_output_format_from_str`.
+const ACCEPTED_FORMAT_VALUES: &[&str] = &["json", "markdown", "md"];
+
+/// Returns `true` when `value` is a config `format` that `OutputFormat::from_str`
+/// accepts.
+fn is_accepted_format(value: &str) -> bool {
+    ACCEPTED_FORMAT_VALUES.contains(&value.to_lowercase().as_str())
+}
+
 /// Validate the loaded configuration.
 fn validate_config(config: &ConfigFile) -> Result<(), ConfigError> {
     if let Some(ref ignore_cves) = config.ignore_cves {
@@ -275,6 +294,16 @@ fn validate_config(config: &ConfigFile) -> Result<(), ConfigError> {
                     value: unknown.clone(),
                 });
             }
+        }
+    }
+
+    // Checked last so configs with several problems keep reporting the same
+    // first error as before #1072.
+    if let Some(ref format) = config.format {
+        if !is_accepted_format(format) {
+            return Err(ConfigError::InvalidFormat {
+                value: format.clone(),
+            });
         }
     }
 
@@ -535,5 +564,98 @@ exclude_groups:
         assert!(result.is_err());
         let err = format!("{}", result.unwrap_err());
         assert!(err.contains("already exists"));
+    }
+
+    fn parse_config(yaml: &str) -> ConfigFile {
+        serde_yaml_ng::from_str(yaml).unwrap()
+    }
+
+    #[test]
+    fn test_validate_config_rejects_invalid_format() {
+        for value in ["xml", "markdwon", "\"\"", "\" json\""] {
+            let config = parse_config(&format!("format: {}", value));
+            assert!(
+                matches!(
+                    validate_config(&config),
+                    Err(ConfigError::InvalidFormat { .. })
+                ),
+                "expected InvalidFormat for {}",
+                value
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_config_accepts_valid_format_any_case() {
+        for value in ["json", "JSON", "markdown", "Markdown", "md", "MD"] {
+            let config = parse_config(&format!("format: {}", value));
+            assert!(validate_config(&config).is_ok(), "rejected {}", value);
+        }
+    }
+
+    #[test]
+    fn test_validate_config_accepts_missing_or_null_format() {
+        assert!(validate_config(&parse_config("check_cve: true")).is_ok());
+        assert!(validate_config(&parse_config("format: ~")).is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_rejects_non_string_scalar_format() {
+        // A YAML scalar such as `1` deserializes into the `String` field as "1".
+        assert!(matches!(
+            validate_config(&parse_config("format: 1")),
+            Err(ConfigError::InvalidFormat { value }) if value == "1"
+        ));
+    }
+
+    #[test]
+    fn test_invalid_format_display_matches_en_template() {
+        let err = ConfigError::InvalidFormat {
+            value: "xml".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "Invalid config: format must be one of: json, markdown. Got: \"xml\""
+        );
+    }
+
+    #[test]
+    fn test_validate_config_reports_earlier_error_before_invalid_format() {
+        let config = parse_config("format: xml\nlicense_policy:\n  unknown: maybe");
+        assert!(matches!(
+            validate_config(&config),
+            Err(ConfigError::InvalidUnknownLicenseHandling { .. })
+        ));
+    }
+
+    #[test]
+    fn test_is_accepted_format_matches_output_format_from_str() {
+        use crate::application::dto::OutputFormat;
+
+        for value in [
+            "json",
+            "JSON",
+            "Json",
+            "markdown",
+            "Markdown",
+            "md",
+            "MD",
+            "",
+            " json",
+            "xml",
+            "yaml",
+            "cyclonedx",
+            "markdwon",
+        ] {
+            assert_eq!(
+                is_accepted_format(value),
+                value.parse::<OutputFormat>().is_ok(),
+                "parity mismatch for {:?}",
+                value
+            );
+        }
+        for value in ACCEPTED_FORMAT_VALUES {
+            assert!(value.parse::<OutputFormat>().is_ok());
+        }
     }
 }

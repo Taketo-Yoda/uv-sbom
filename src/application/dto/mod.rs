@@ -4,12 +4,14 @@
 /// and adapters, keeping the domain layer isolated.
 mod diff_request;
 mod diff_result;
+mod incident_request;
 mod output_format;
 mod sbom_request;
 mod sbom_response;
 
 pub use diff_request::DiffRequest;
 pub use diff_result::DiffResult;
+pub use incident_request::{IncidentRequest, WorkspaceIncidentRequest};
 pub use output_format::OutputFormat;
 pub use sbom_request::SbomRequest;
 #[allow(unused_imports)]

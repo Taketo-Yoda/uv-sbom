@@ -14,6 +14,9 @@ impl BaselineFilter {
     /// vulnerability ID all match a baseline entry exactly. Bumping the package
     /// version makes its previously-baselined findings count as new.
     ///
+    /// Malicious-package advisories (`MAL-`) are never suppressed, even when a
+    /// matching entry exists, and are not counted as suppressed.
+    ///
     /// # Returns
     /// A tuple of:
     /// * Filtered list with baselined findings removed (packages with no
@@ -34,11 +37,13 @@ impl BaselineFilter {
             let mut kept = Vec::new();
 
             for vuln in pkg_vulns.vulnerabilities() {
-                if baseline.contains(
-                    pkg_vulns.package_name(),
-                    pkg_vulns.current_version(),
-                    vuln.id(),
-                ) {
+                if !vuln.is_malicious()
+                    && baseline.contains(
+                        pkg_vulns.package_name(),
+                        pkg_vulns.current_version(),
+                        vuln.id(),
+                    )
+                {
                     known_count += 1;
                 } else {
                     kept.push(vuln.clone());
@@ -227,5 +232,25 @@ mod tests {
 
         assert!(kept.is_empty());
         assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_malicious_never_suppressed_or_counted() {
+        let pkg = make_pkg(
+            "evil-pkg",
+            "1.0.0",
+            vec![make_vuln("MAL-2024-0001"), make_vuln("CVE-2024-001")],
+        );
+        let baseline = VulnerabilityBaseline::from_entries(vec![
+            entry("evil-pkg", "1.0.0", "MAL-2024-0001"),
+            entry("evil-pkg", "1.0.0", "CVE-2024-001"),
+        ]);
+
+        let (kept, count) = BaselineFilter::apply(vec![pkg], &baseline);
+
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].vulnerabilities().len(), 1);
+        assert_eq!(kept[0].vulnerabilities()[0].id(), "MAL-2024-0001");
+        assert_eq!(count, 1);
     }
 }

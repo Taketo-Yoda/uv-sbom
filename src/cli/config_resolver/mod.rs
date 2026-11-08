@@ -39,8 +39,9 @@ pub struct MergedConfig {
     pub check_exploitability: bool,
     /// Dependency groups whose exclusively-reachable packages should be excluded from the SBOM.
     /// Populated from `--exclude-groups` (CLI) or `exclude_groups` (config file).
-    /// When `--production-only` is set, `main.rs` overrides this with all group names from the
-    /// lockfile, since that resolution requires I/O that config_resolver must not perform.
+    /// When `--production-only` is set, `cli::exclude_groups` overrides this with all group
+    /// names from the lockfile, since that resolution requires I/O that config_resolver must
+    /// not perform.
     pub exclude_groups: Vec<String>,
     /// Target Python version for compatibility checking (PEP 440 format).
     /// Populated from `--target-python` (CLI) or `target_python` (config file).
@@ -311,21 +312,30 @@ mod tests {
         assert_eq!(result.cvss_threshold, Some(6.0));
     }
 
-    // --- format edge case: explicit CLI value vs config (characterization) ---
-    // clap always provides a value for `--format` (default "json"), so `merge_config`
-    // cannot distinguish "user explicitly passed --format json" from "user passed
-    // nothing". The current, intentionally-preserved behavior: config wins whenever
-    // `args.format == Json`, even if the user explicitly typed `--format json`.
+    // --- format edge case: explicit CLI value vs config ---
+    // `--format` has no clap default (#968), so an explicit `--format json` is
+    // distinguishable from "no flag" and wins over the config file.
 
     #[test]
-    fn test_merge_config_format_explicit_json_cli_loses_to_config() {
+    fn test_merge_config_format_explicit_json_cli_wins_over_config() {
         let args = Args::parse_from(["uv-sbom", "--format", "json"]);
         let config = Some(ConfigFile {
             format: Some("markdown".to_string()),
             ..Default::default()
         });
         let result = merge_config(&args, &config).unwrap();
-        assert_eq!(result.format, OutputFormat::Markdown);
+        assert_eq!(result.format, OutputFormat::Json);
+    }
+
+    #[test]
+    fn test_merge_config_format_no_cli_invalid_config_defaults_to_json() {
+        let args = Args::parse_from(["uv-sbom"]);
+        let config = Some(ConfigFile {
+            format: Some("not-a-format".to_string()),
+            ..Default::default()
+        });
+        let result = merge_config(&args, &config).unwrap();
+        assert_eq!(result.format, OutputFormat::Json);
     }
 
     #[test]
