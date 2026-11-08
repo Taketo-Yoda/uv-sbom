@@ -741,8 +741,7 @@ exclude_groups:
 
     #[test]
     fn test_validate_config_reports_earlier_error_before_invalid_severity_threshold() {
-        let config =
-            parse_config("severity_threshold: HIHG\nlicense_policy:\n  unknown: maybe");
+        let config = parse_config("severity_threshold: HIHG\nlicense_policy:\n  unknown: maybe");
         assert!(matches!(
             validate_config(&config),
             Err(ConfigError::InvalidUnknownLicenseHandling { .. })
@@ -766,9 +765,9 @@ exclude_groups:
         );
         for value in ACCEPTED_SEVERITY_THRESHOLD_VALUES {
             assert!(
-                threshold_eligible.iter().any(|s| {
-                    format!("{:?}", s).to_lowercase() == *value
-                }),
+                threshold_eligible
+                    .iter()
+                    .any(|s| { format!("{:?}", s).to_lowercase() == *value }),
                 "accepted value {:?} has no matching Severity variant",
                 value
             );
