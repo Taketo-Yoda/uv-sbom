@@ -192,6 +192,23 @@ impl UvLockAdapter {
             .then(|| relative.to_path_buf())
     }
 
+    /// Runs `<program> lock` (no extra arguments) in `dir` with a 60-second
+    /// timeout. Used by `simulate_with_constraints` after modifying the sandbox
+    /// `pyproject.toml` with constraint-dependencies.
+    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
+    async fn run_uv_lock(program: &OsStr, dir: &Path) -> Result<Output> {
+        timeout(
+            Duration::from_secs(60),
+            tokio::process::Command::new(program)
+                .arg("lock")
+                .current_dir(dir)
+                .output(),
+        )
+        .await
+        .map_err(|_| anyhow!("uv lock command timed out after 60 seconds"))?
+        .map_err(|e| anyhow!("Failed to run uv lock: {}", e))
+    }
+
     /// Runs `<program> lock --upgrade-package <upgrade_arg>` in `dir` with a
     /// 60-second timeout. `upgrade_arg` is passed as a single process argument;
     /// no shell is involved.
@@ -258,6 +275,112 @@ impl UvLockAdapter {
         } else {
             trimmed.to_string()
         }
+    }
+
+    /// Merges `"pkg>=ver"` constraint strings into the `[tool.uv].constraint-dependencies`
+    /// array of a parsed `pyproject.toml`. Creates intermediate tables if absent.
+    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
+    fn merge_constraint_dependencies(
+        pyproject_content: &str,
+        constraints: &[String],
+    ) -> Result<String> {
+        let mut doc: toml::Value = toml::from_str(pyproject_content)
+            .map_err(|e| anyhow!("Failed to parse pyproject.toml: {}", e))?;
+
+        let table = doc
+            .as_table_mut()
+            .ok_or_else(|| anyhow!("pyproject.toml is not a TOML table"))?;
+
+        let tool = table
+            .entry("tool")
+            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+        let tool_table = tool
+            .as_table_mut()
+            .ok_or_else(|| anyhow!("[tool] is not a table in pyproject.toml"))?;
+
+        let uv = tool_table
+            .entry("uv")
+            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+        let uv_table = uv
+            .as_table_mut()
+            .ok_or_else(|| anyhow!("[tool.uv] is not a table in pyproject.toml"))?;
+
+        let deps = uv_table
+            .entry("constraint-dependencies")
+            .or_insert_with(|| toml::Value::Array(Vec::new()));
+        let deps_array = deps
+            .as_array_mut()
+            .ok_or_else(|| anyhow!("constraint-dependencies is not an array in pyproject.toml"))?;
+
+        for constraint in constraints {
+            deps_array.push(toml::Value::String(constraint.clone()));
+        }
+
+        toml::to_string(&doc)
+            .map_err(|e| anyhow!("Failed to serialize modified pyproject.toml: {}", e))
+    }
+
+    /// Implementation of [`UvLockSimulator::simulate_with_constraints`] with the
+    /// `uv` program injectable for testing.
+    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
+    async fn simulate_with_constraints_with(
+        program: &OsStr,
+        project_path: &Path,
+        constraints: &[(&str, &str)],
+    ) -> Result<SimulationResult> {
+        for (name, version) in constraints {
+            Self::validate_upgrade_target(name, version)?;
+        }
+
+        if !Self::uv_available(program).await {
+            return Err(anyhow!(
+                "`uv` CLI not found. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+            ));
+        }
+
+        let temp_dir = Self::prepare_sandbox(project_path)?;
+
+        if !constraints.is_empty() {
+            let pyproject_path = temp_dir.path().join("pyproject.toml");
+            let pyproject_content = std::fs::read_to_string(&pyproject_path)
+                .map_err(|e| anyhow!("Failed to read sandbox pyproject.toml: {}", e))?;
+
+            let constraint_strings: Vec<String> = constraints
+                .iter()
+                .map(|(name, version)| format!("{}>={}", name, version))
+                .collect();
+            let modified =
+                Self::merge_constraint_dependencies(&pyproject_content, &constraint_strings)?;
+            std::fs::write(&pyproject_path, modified)
+                .map_err(|e| anyhow!("Failed to write modified pyproject.toml: {}", e))?;
+        }
+
+        let run_output = Self::run_uv_lock(program, temp_dir.path()).await?;
+
+        if !run_output.status.success() {
+            let stderr = String::from_utf8_lossy(&run_output.stderr);
+            return Err(anyhow!("uv lock failed: {}", stderr));
+        }
+
+        let new_content = std::fs::read_to_string(temp_dir.path().join("uv.lock"))
+            .map_err(|e| anyhow!("Failed to read resulting uv.lock: {}", e))?;
+        let resolved_versions = Self::parse_versions(&new_content)?;
+
+        let upgraded_to_version = constraints
+            .first()
+            .and_then(|(name, _)| {
+                let normalized = normalize_name(name);
+                resolved_versions
+                    .iter()
+                    .find(|(k, _)| normalize_name(k) == normalized)
+                    .map(|(_, v)| v.clone())
+            })
+            .unwrap_or_default();
+
+        Ok(SimulationResult {
+            upgraded_to_version,
+            resolved_versions,
+        })
     }
 
     /// Implementation of [`UvLockSimulator::simulate_upgrade_to`] with the
@@ -392,6 +515,15 @@ impl UvLockSimulator for UvLockAdapter {
             project_path,
         )
         .await
+    }
+
+    async fn simulate_with_constraints(
+        &self,
+        project_path: &Path,
+        constraints: &[(&str, &str)],
+    ) -> Result<SimulationResult> {
+        Self::simulate_with_constraints_with(OsStr::new(UV_PROGRAM), project_path, constraints)
+            .await
     }
 }
 
@@ -960,6 +1092,229 @@ source = { virtual = "../outside" }
             matches!(outcome, TargetedSimulationOutcome::Resolved { .. }),
             "{outcome:?}"
         );
+        assert_eq!(
+            std::fs::read(project.join("uv.lock")).unwrap(),
+            original_lock
+        );
+    }
+
+    // --- simulate_with_constraints (#1115) ---
+
+    #[test]
+    fn test_merge_constraint_dependencies_no_existing_section() {
+        let pyproject = "[project]\nname = \"my-project\"\nversion = \"0.1.0\"\n";
+        let result =
+            UvLockAdapter::merge_constraint_dependencies(pyproject, &["requests>=2.32.0".into()])
+                .unwrap();
+        let parsed: toml::Value = toml::from_str(&result).unwrap();
+        let deps = parsed["tool"]["uv"]["constraint-dependencies"]
+            .as_array()
+            .unwrap();
+        assert_eq!(deps.len(), 1);
+        assert_eq!(deps[0].as_str().unwrap(), "requests>=2.32.0");
+    }
+
+    #[test]
+    fn test_merge_constraint_dependencies_existing_entries() {
+        let pyproject = r#"[project]
+name = "my-project"
+
+[tool.uv]
+constraint-dependencies = ["urllib3>=1.26.0"]
+"#;
+        let result =
+            UvLockAdapter::merge_constraint_dependencies(pyproject, &["requests>=2.32.0".into()])
+                .unwrap();
+        let parsed: toml::Value = toml::from_str(&result).unwrap();
+        let deps = parsed["tool"]["uv"]["constraint-dependencies"]
+            .as_array()
+            .unwrap();
+        assert_eq!(deps.len(), 2);
+        assert_eq!(deps[0].as_str().unwrap(), "urllib3>=1.26.0");
+        assert_eq!(deps[1].as_str().unwrap(), "requests>=2.32.0");
+    }
+
+    #[test]
+    fn test_merge_constraint_dependencies_existing_tool_uv_no_constraints() {
+        let pyproject = "[project]\nname = \"my-project\"\n\n[tool.uv]\ndev-dependencies = []\n";
+        let result = UvLockAdapter::merge_constraint_dependencies(
+            pyproject,
+            &["requests>=2.32.0".into(), "urllib3>=2.0.0".into()],
+        )
+        .unwrap();
+        let parsed: toml::Value = toml::from_str(&result).unwrap();
+        let deps = parsed["tool"]["uv"]["constraint-dependencies"]
+            .as_array()
+            .unwrap();
+        assert_eq!(deps.len(), 2);
+    }
+
+    #[test]
+    fn test_merge_constraint_dependencies_constraint_deps_not_array_is_error() {
+        let pyproject = "[project]\nname = \"x\"\n\n[tool.uv]\nconstraint-dependencies = \"bad\"\n";
+        let result =
+            UvLockAdapter::merge_constraint_dependencies(pyproject, &["requests>=2.0".into()]);
+        assert!(result.unwrap_err().to_string().contains("not an array"));
+    }
+
+    #[tokio::test]
+    async fn test_simulate_with_constraints_rejects_invalid_name() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/nonexistent/uv");
+        let result = UvLockAdapter::simulate_with_constraints_with(
+            program.as_os_str(),
+            project.path(),
+            &[("requests; rm -rf /", "2.32.0")],
+        )
+        .await;
+        assert!(result.unwrap_err().to_string().contains("Security"));
+    }
+
+    #[tokio::test]
+    async fn test_simulate_with_constraints_rejects_invalid_version() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/nonexistent/uv");
+        let result = UvLockAdapter::simulate_with_constraints_with(
+            program.as_os_str(),
+            project.path(),
+            &[("requests", ">=2")],
+        )
+        .await;
+        assert!(result.unwrap_err().to_string().contains("Security"));
+    }
+
+    #[tokio::test]
+    async fn test_simulate_with_constraints_validates_all_before_running() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/nonexistent/uv");
+        let result = UvLockAdapter::simulate_with_constraints_with(
+            program.as_os_str(),
+            project.path(),
+            &[("requests", "2.32.0"), ("bad;name", "1.0")],
+        )
+        .await;
+        assert!(result.unwrap_err().to_string().contains("Security"));
+    }
+
+    #[tokio::test]
+    async fn test_simulate_with_constraints_missing_uv_is_error() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/nonexistent/uv");
+        let result = UvLockAdapter::simulate_with_constraints_with(
+            program.as_os_str(),
+            project.path(),
+            &[("requests", "2.32.0")],
+        )
+        .await;
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_with_constraints_success() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/constraint_success/uv");
+
+        let result = UvLockAdapter::simulate_with_constraints_with(
+            program.as_os_str(),
+            project.path(),
+            &[("requests", "2.32.0")],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.upgraded_to_version, "2.32.3");
+        assert!(result.resolved_versions.contains_key("requests"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_with_constraints_modifies_sandbox_not_original() {
+        let project = make_project();
+        let original_pyproject =
+            std::fs::read_to_string(project.path().join("pyproject.toml")).unwrap();
+        let original_lock = std::fs::read(project.path().join("uv.lock")).unwrap();
+        let program = repo_path("tests/fixtures/uv_stub/constraint_success/uv");
+
+        let _ = UvLockAdapter::simulate_with_constraints_with(
+            program.as_os_str(),
+            project.path(),
+            &[("requests", "2.32.0")],
+        )
+        .await;
+
+        assert_eq!(
+            std::fs::read_to_string(project.path().join("pyproject.toml")).unwrap(),
+            original_pyproject
+        );
+        assert_eq!(
+            std::fs::read(project.path().join("uv.lock")).unwrap(),
+            original_lock
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_with_constraints_conflict() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/conflict/uv");
+
+        let result = UvLockAdapter::simulate_with_constraints_with(
+            program.as_os_str(),
+            project.path(),
+            &[("requests", "2.32.0")],
+        )
+        .await;
+
+        assert!(result.unwrap_err().to_string().contains("uv lock failed"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_with_constraints_empty_constraints_runs_plain_lock() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/constraint_success/uv");
+
+        let result =
+            UvLockAdapter::simulate_with_constraints_with(program.as_os_str(), project.path(), &[])
+                .await
+                .unwrap();
+
+        assert!(result.upgraded_to_version.is_empty());
+        assert!(!result.resolved_versions.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_simulate_with_constraints_pep503_name_matching() {
+        let project = make_project();
+        let program = repo_path("tests/fixtures/uv_stub/constraint_success/uv");
+
+        let result = UvLockAdapter::simulate_with_constraints_with(
+            program.as_os_str(),
+            project.path(),
+            &[("Requests", "2.32.0")],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.upgraded_to_version, "2.32.3");
+    }
+
+    #[tokio::test]
+    async fn test_simulate_with_constraints_real_uv_suggest_fix_project() {
+        if !real_uv_available() {
+            return;
+        }
+        let project = repo_path("examples/suggest-fix-project");
+        let original_lock = std::fs::read(project.join("uv.lock")).unwrap();
+
+        let result = UvLockAdapter::new()
+            .simulate_with_constraints(&project, &[("requests", "2.32.0")])
+            .await
+            .unwrap();
+
+        assert!(!result.resolved_versions.is_empty());
         assert_eq!(
             std::fs::read(project.join("uv.lock")).unwrap(),
             original_lock
