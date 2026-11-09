@@ -22,11 +22,14 @@ pub enum UpgradeEntryView {
     },
     /// Upgrading the direct dependency does NOT resolve the vulnerability
     Unresolvable {
-        #[allow(dead_code)] // WIRE(#1117): remove when constraint suggestion rendering consumes these fields
+        #[allow(dead_code)]
+        // WIRE(#1117): remove when constraint suggestion rendering consumes these fields
         direct_dep_name: String,
-        #[allow(dead_code)] // WIRE(#1117): remove when constraint suggestion rendering consumes these fields
+        #[allow(dead_code)]
+        // WIRE(#1117): remove when constraint suggestion rendering consumes these fields
         transitive_dep_name: String,
-        #[allow(dead_code)] // WIRE(#1117): remove when constraint suggestion rendering consumes these fields
+        #[allow(dead_code)]
+        // WIRE(#1117): remove when constraint suggestion rendering consumes these fields
         fixed_version: String,
         reason: String,
         vulnerability_id: String,
