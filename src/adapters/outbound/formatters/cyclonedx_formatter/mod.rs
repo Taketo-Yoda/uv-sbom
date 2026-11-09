@@ -556,6 +556,9 @@ mod tests {
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
             entries: vec![UpgradeEntryView::Unresolvable {
+                direct_dep_name: "requests".to_string(),
+                transitive_dep_name: "urllib3".to_string(),
+                fixed_version: "2.0.7".to_string(),
                 reason: "no compatible version available".to_string(),
                 vulnerability_id: "CVE-2024-1234".to_string(),
             }],
