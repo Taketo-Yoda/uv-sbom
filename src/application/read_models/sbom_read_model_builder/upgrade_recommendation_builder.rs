@@ -28,6 +28,7 @@ pub(super) fn build_upgrade_recommendations(
                 fixed_version,
                 reason,
                 vulnerability_id,
+                ..
             } => UpgradeEntryView::Unresolvable {
                 direct_dep_name: direct_dep_name.clone(),
                 transitive_dep_name: transitive_dep_name.clone(),

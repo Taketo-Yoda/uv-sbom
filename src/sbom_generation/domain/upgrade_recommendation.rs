@@ -1,3 +1,36 @@
+/// Outcome of simulating resolution with a `>=fixed_version` constraint
+/// injected into `[tool.uv].constraint-dependencies`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConstraintOutcome {
+    /// The constraint resolved successfully and the vulnerable package
+    /// reached the required fixed version (or newer).
+    #[allow(dead_code)]
+    // WIRE(#1117): remove when suggest-fix orchestrator constructs this variant
+    Verified { resolved_version: String },
+    /// `uv lock` could not resolve with the constraint, or the resolved
+    /// version still did not satisfy the fixed version.
+    #[allow(dead_code)]
+    // WIRE(#1117): remove when suggest-fix orchestrator constructs this variant
+    DoesNotResolve { reason: String },
+    /// The simulation infrastructure failed (e.g. uv not available,
+    /// temp-dir I/O error, timeout).
+    #[allow(dead_code)]
+    // WIRE(#1117): remove when suggest-fix orchestrator constructs this variant
+    SimulationFailed { error: String },
+}
+
+/// A suggestion to add a `>=fixed_version` constraint-dependency to
+/// work around an unresolvable transitive vulnerability.
+#[derive(Debug, Clone)]
+pub struct ConstraintSuggestion {
+    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix read model reads this field
+    pub package_name: String,
+    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix read model reads this field
+    pub min_version: String,
+    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix read model reads this field
+    pub outcome: ConstraintOutcome,
+}
+
 /// Result of analyzing whether upgrading a direct dep fixes a transitive vulnerability
 #[derive(Debug, Clone)]
 pub enum UpgradeRecommendation {
@@ -24,6 +57,11 @@ pub enum UpgradeRecommendation {
         /// Why upgrade doesn't help (e.g., "upgrading httpx still resolves idna to 3.6 which does not satisfy >= 3.7")
         reason: String,
         vulnerability_id: String,
+        /// Populated by Subtask 4 (#1117) when constraint simulation completes.
+        /// `None` until then.
+        #[allow(dead_code)]
+        // WIRE(#1117): remove when suggest-fix orchestrator populates this field
+        constraint_suggestion: Option<ConstraintSuggestion>,
     },
     /// Simulation could not be performed (uv not available, timeout, etc.)
     SimulationFailed {

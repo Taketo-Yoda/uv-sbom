@@ -4,7 +4,9 @@ use std::str::FromStr;
 use pep440_rs::Version;
 
 use crate::sbom_generation::domain::resolution_guide::ResolutionEntry;
-use crate::sbom_generation::domain::upgrade_recommendation::UpgradeRecommendation;
+use crate::sbom_generation::domain::upgrade_recommendation::{
+    ConstraintOutcome, UpgradeRecommendation,
+};
 use crate::sbom_generation::domain::SimulationResult;
 
 /// Pre-computed simulation outcomes keyed by direct dependency name.
@@ -75,6 +77,7 @@ impl UpgradeAdvisor {
                                         fixed_version_normalized
                                     ),
                                     vulnerability_id: entry.vulnerability_id().to_string(),
+                                    constraint_suggestion: None,
                                 });
                             }
                         } else {
@@ -114,6 +117,51 @@ fn strip_operator_prefix(version: &str) -> String {
         .trim_start_matches(['>', '<', '=', '!'])
         .trim()
         .to_string()
+}
+
+/// Maps a constraint-simulation `SimulationResult` to a `ConstraintOutcome`
+/// by checking whether the vulnerable package resolved to the required
+/// fixed version (or newer).
+///
+/// # Arguments
+/// * `simulation_result` — the `SimulationResult` from `simulate_with_constraints`
+/// * `vulnerable_package` — PEP 503-normalized name of the transitive dep
+/// * `required_fixed_version` — minimum version that fixes the vulnerability
+///   (operator-stripped, bare PEP 440)
+///
+/// # Returns
+/// * `Verified` when the package appears in `resolved_versions` and satisfies
+///   `>= required_fixed_version`
+/// * `DoesNotResolve` when the package is absent or its resolved version is
+///   below `required_fixed_version`
+///
+/// `ConstraintOutcome::SimulationFailed` is never returned here — the caller
+/// constructs it from the `Err` branch of `simulate_with_constraints`.
+#[allow(dead_code)] // WIRE(#1117): remove when suggest-fix orchestrator calls this function
+pub fn map_constraint_outcome(
+    simulation_result: &SimulationResult,
+    vulnerable_package: &str,
+    required_fixed_version: &str,
+) -> ConstraintOutcome {
+    match simulation_result.resolved_versions.get(vulnerable_package) {
+        Some(resolved) if version_satisfies_min(resolved, required_fixed_version) => {
+            ConstraintOutcome::Verified {
+                resolved_version: resolved.clone(),
+            }
+        }
+        Some(resolved) => ConstraintOutcome::DoesNotResolve {
+            reason: format!(
+                "constraint resolves {} to {} which does not satisfy >= {}",
+                vulnerable_package, resolved, required_fixed_version
+            ),
+        },
+        None => ConstraintOutcome::DoesNotResolve {
+            reason: format!(
+                "{} not found in resolved versions after constraint simulation",
+                vulnerable_package
+            ),
+        },
+    }
 }
 
 /// Compare two PEP 440 version strings using `pep440_rs::Version`.
@@ -244,12 +292,14 @@ mod tests {
                 transitive_dep_name,
                 fixed_version,
                 vulnerability_id,
+                constraint_suggestion,
                 ..
             } => {
                 assert_eq!(direct_dep_name, "httpx");
                 assert_eq!(transitive_dep_name, "idna");
                 assert_eq!(fixed_version, "3.7");
                 assert_eq!(vulnerability_id, "CVE-2024-002");
+                assert!(constraint_suggestion.is_none());
             }
             other => panic!("expected Unresolvable, got {:?}", other),
         }
@@ -583,5 +633,65 @@ mod tests {
         // regardless of the release segment. Under correct PEP 440 ordering,
         // "2.1.0rc1" sorts after "2.0.0" because 2.1.0 > 2.0.0.
         assert!(version_satisfies_min("2.1.0rc1", "2.0.0"));
+    }
+
+    // ---------------------------------------------------------------------------
+    // map_constraint_outcome unit tests
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn test_map_constraint_outcome_verified() {
+        let sim = make_sim_result("1.0.0", vec![("urllib3", "2.2.1")]);
+        let outcome = map_constraint_outcome(&sim, "urllib3", "2.0.7");
+        assert_eq!(
+            outcome,
+            ConstraintOutcome::Verified {
+                resolved_version: "2.2.1".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_map_constraint_outcome_verified_equal() {
+        let sim = make_sim_result("1.0.0", vec![("urllib3", "2.0.7")]);
+        let outcome = map_constraint_outcome(&sim, "urllib3", "2.0.7");
+        assert_eq!(
+            outcome,
+            ConstraintOutcome::Verified {
+                resolved_version: "2.0.7".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_map_constraint_outcome_below_fixed() {
+        let sim = make_sim_result("1.0.0", vec![("idna", "3.6")]);
+        let outcome = map_constraint_outcome(&sim, "idna", "3.7");
+        match outcome {
+            ConstraintOutcome::DoesNotResolve { reason } => {
+                assert!(reason.contains("3.6"));
+                assert!(reason.contains("3.7"));
+            }
+            other => panic!("expected DoesNotResolve, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_map_constraint_outcome_package_absent() {
+        let sim = make_sim_result("1.0.0", vec![("certifi", "2024.1.1")]);
+        let outcome = map_constraint_outcome(&sim, "urllib3", "2.0.7");
+        match outcome {
+            ConstraintOutcome::DoesNotResolve { reason } => {
+                assert!(reason.contains("not found"));
+            }
+            other => panic!("expected DoesNotResolve, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_map_constraint_outcome_unparseable_version() {
+        let sim = make_sim_result("1.0.0", vec![("urllib3", "not-a-version")]);
+        let outcome = map_constraint_outcome(&sim, "urllib3", "2.0.7");
+        assert!(matches!(outcome, ConstraintOutcome::DoesNotResolve { .. }));
     }
 }
