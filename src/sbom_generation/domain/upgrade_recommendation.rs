@@ -17,7 +17,11 @@ pub enum UpgradeRecommendation {
     /// Upgrading the direct dep does NOT resolve the vulnerability
     Unresolvable {
         direct_dep_name: String,
-        /// Why upgrade doesn't help (e.g., "latest httpx still pins idna < 3.7")
+        /// Vulnerable transitive dep name (e.g., "idna")
+        transitive_dep_name: String,
+        /// Version that would fix the vulnerability (e.g., "3.7")
+        fixed_version: String,
+        /// Why upgrade doesn't help (e.g., "upgrading httpx still resolves idna to 3.6 which does not satisfy >= 3.7")
         reason: String,
         vulnerability_id: String,
     },

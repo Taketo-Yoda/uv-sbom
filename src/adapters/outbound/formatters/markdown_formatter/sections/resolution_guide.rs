@@ -381,6 +381,9 @@ mod tests {
         });
         model.upgrade_recommendations = Some(UpgradeRecommendationView {
             entries: vec![UpgradeEntryView::Unresolvable {
+                direct_dep_name: "httpx".to_string(),
+                transitive_dep_name: "idna".to_string(),
+                fixed_version: "3.7".to_string(),
                 reason: "latest httpx still pins idna < 3.7".to_string(),
                 vulnerability_id: "GHSA-ZZZZZ".to_string(),
             }],

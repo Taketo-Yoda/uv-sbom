@@ -65,6 +65,8 @@ impl UpgradeAdvisor {
                             } else {
                                 recommendations.push(UpgradeRecommendation::Unresolvable {
                                     direct_dep_name: direct_dep_name.clone(),
+                                    transitive_dep_name: entry.vulnerable_package().to_string(),
+                                    fixed_version: fixed_version_normalized.clone(),
                                     reason: format!(
                                         "upgrading {} still resolves {} to {} which does not satisfy >= {}",
                                         direct_dep_name,
@@ -239,10 +241,14 @@ mod tests {
         match &recommendations[0] {
             UpgradeRecommendation::Unresolvable {
                 direct_dep_name,
+                transitive_dep_name,
+                fixed_version,
                 vulnerability_id,
                 ..
             } => {
                 assert_eq!(direct_dep_name, "httpx");
+                assert_eq!(transitive_dep_name, "idna");
+                assert_eq!(fixed_version, "3.7");
                 assert_eq!(vulnerability_id, "CVE-2024-002");
             }
             other => panic!("expected Unresolvable, got {:?}", other),

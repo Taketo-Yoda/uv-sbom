@@ -23,10 +23,15 @@ pub(super) fn build_upgrade_recommendations(
                 vulnerability_id: vulnerability_id.clone(),
             },
             UpgradeRecommendation::Unresolvable {
+                direct_dep_name,
+                transitive_dep_name,
+                fixed_version,
                 reason,
                 vulnerability_id,
-                ..
             } => UpgradeEntryView::Unresolvable {
+                direct_dep_name: direct_dep_name.clone(),
+                transitive_dep_name: transitive_dep_name.clone(),
+                fixed_version: fixed_version.clone(),
                 reason: reason.clone(),
                 vulnerability_id: vulnerability_id.clone(),
             },

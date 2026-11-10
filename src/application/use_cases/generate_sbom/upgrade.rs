@@ -105,6 +105,7 @@ where
                     direct_dep_name,
                     reason,
                     vulnerability_id,
+                    ..
                 } => {
                     self.progress_reporter.report(&Messages::format(
                         msgs.progress_upgrade_unresolvable,
