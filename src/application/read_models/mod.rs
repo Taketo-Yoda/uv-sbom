@@ -46,7 +46,9 @@ pub use sbom_read_model::{MetadataComponentView, SbomMetadataView, SbomReadModel
 #[allow(unused_imports)]
 pub use sbom_read_model_builder::SbomReadModelBuilder;
 #[allow(unused_imports)]
-pub use upgrade_recommendation_view::{UpgradeEntryView, UpgradeRecommendationView};
+pub use upgrade_recommendation_view::{
+    ConstraintOutcomeView, ConstraintSuggestionView, UpgradeEntryView, UpgradeRecommendationView,
+};
 #[allow(unused_imports)]
 pub use vulnerability_view::{
     SeverityView, VulnerabilityCountsBySeverity, VulnerabilityReportView, VulnerabilitySummary,

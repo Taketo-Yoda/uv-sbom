@@ -333,7 +333,6 @@ impl MockUvLockSimulator {
 
     /// Adds a `simulate_with_constraints` response keyed by a deterministic
     /// string built from sorted constraint tuples (`"pkg1>=ver1,pkg2>=ver2"`).
-    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
     pub(crate) fn with_constraint_result(
         mut self,
         constraints: &[(&str, &str)],
@@ -346,7 +345,7 @@ impl MockUvLockSimulator {
 
     /// Returns the constraint tuples passed to `simulate_with_constraints`,
     /// in call order.
-    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
+    #[allow(dead_code)]
     pub(crate) fn constraint_call_log(&self) -> Vec<Vec<(String, String)>> {
         self.constraint_calls.lock().unwrap().clone()
     }

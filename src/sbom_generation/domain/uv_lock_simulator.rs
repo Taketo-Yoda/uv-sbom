@@ -107,7 +107,6 @@ pub trait UvLockSimulator: Send + Sync {
     /// version (message starts with `Security:`), when project files are missing,
     /// when sandbox I/O fails, when `uv` is not available, or when `uv lock`
     /// times out or fails.
-    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
     async fn simulate_with_constraints(
         &self,
         project_path: &std::path::Path,

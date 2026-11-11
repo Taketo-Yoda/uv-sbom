@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::GenerateSbomUseCase;
 use crate::application::dto::SbomRequest;
 use crate::application::use_cases::SimulateUpgradesUseCase;
@@ -6,7 +8,11 @@ use crate::ports::outbound::{
     ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
     ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
 };
+use crate::sbom_generation::domain::services::upgrade_advisor::map_constraint_outcome;
 use crate::sbom_generation::domain::services::{ResolutionAnalyzer, UpgradeAdvisor};
+use crate::sbom_generation::domain::upgrade_recommendation::{
+    ConstraintOutcome, ConstraintSuggestion,
+};
 use crate::sbom_generation::domain::{
     DependencyGraph, EnrichedPackage, PackageVulnerabilities, UpgradeRecommendation,
     UvLockSimulator,
@@ -75,7 +81,10 @@ where
                 let simulation_outcomes = SimulateUpgradesUseCase::new(simulator)
                     .run(&entries, &request.project_path)
                     .await;
-                UpgradeAdvisor::advise(&entries, &simulation_outcomes)
+                let recs = UpgradeAdvisor::advise(&entries, &simulation_outcomes);
+
+                self.run_constraint_simulations(simulator, &request.project_path, recs)
+                    .await
             }
             None => Vec::new(),
         };
@@ -125,6 +134,70 @@ where
         }
 
         Some(recommendations)
+    }
+
+    /// Runs constraint simulations for Unresolvable items and attaches the
+    /// results in-place. Each unique (transitive_dep, fixed_version) pair is
+    /// simulated at most once.
+    async fn run_constraint_simulations(
+        &self,
+        simulator: &USIM,
+        project_path: &std::path::Path,
+        mut recommendations: Vec<UpgradeRecommendation>,
+    ) -> Vec<UpgradeRecommendation> {
+        let mut cache: HashMap<(String, String), ConstraintOutcome> = HashMap::new();
+
+        // Collect unique pairs first to determine simulation work.
+        let unique_pairs: Vec<(String, String)> = recommendations
+            .iter()
+            .filter_map(|rec| match rec {
+                UpgradeRecommendation::Unresolvable {
+                    transitive_dep_name,
+                    fixed_version,
+                    ..
+                } => Some((transitive_dep_name.clone(), fixed_version.clone())),
+                _ => None,
+            })
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        // Run simulations sequentially (one `uv lock` at a time).
+        for (pkg, ver) in &unique_pairs {
+            let outcome = match simulator
+                .simulate_with_constraints(project_path, &[(pkg.as_str(), ver.as_str())])
+                .await
+            {
+                Ok(sim_result) => map_constraint_outcome(&sim_result, pkg, ver),
+                Err(e) => ConstraintOutcome::SimulationFailed {
+                    error: e.to_string(),
+                },
+            };
+            cache.insert((pkg.clone(), ver.clone()), outcome);
+        }
+
+        // Attach cached outcomes to Unresolvable items.
+        for rec in &mut recommendations {
+            if let UpgradeRecommendation::Unresolvable {
+                transitive_dep_name,
+                fixed_version,
+                constraint_suggestion,
+                ..
+            } = rec
+            {
+                if let Some(outcome) =
+                    cache.get(&(transitive_dep_name.clone(), fixed_version.clone()))
+                {
+                    *constraint_suggestion = Some(ConstraintSuggestion {
+                        package_name: transitive_dep_name.clone(),
+                        min_version: fixed_version.clone(),
+                        outcome: outcome.clone(),
+                    });
+                }
+            }
+        }
+
+        recommendations
     }
 }
 
@@ -327,6 +400,231 @@ mod tests {
                 .await;
 
             assert!(result.expect("suggest_fix enabled → Some").is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_unresolvable_gets_verified_constraint_suggestion() {
+            let simulator = MockUvLockSimulator::with_result(
+                "app-dep",
+                SimulationResult {
+                    upgraded_to_version: "3.0.0".to_string(),
+                    resolved_versions: HashMap::from([(
+                        "vuln-lib".to_string(),
+                        "1.5.0".to_string(),
+                    )]),
+                },
+            )
+            .with_constraint_result(
+                &[("vuln-lib", "2.0.0")],
+                Ok(SimulationResult {
+                    upgraded_to_version: String::new(),
+                    resolved_versions: HashMap::from([(
+                        "vuln-lib".to_string(),
+                        "2.1.0".to_string(),
+                    )]),
+                }),
+            );
+            let use_case = UseCaseBuilder::default().with_simulator(simulator).build();
+            let request = SbomRequest::builder()
+                .project_path("/test/project")
+                .suggest_fix(true)
+                .build()
+                .unwrap();
+            let fixture = make_fixture();
+
+            let result = use_case
+                .advise_upgrades_if_requested(
+                    &request,
+                    Some(&fixture.graph),
+                    Some(&fixture.vulns),
+                    &fixture.enriched,
+                )
+                .await;
+
+            let recs = result.expect("suggest_fix enabled → Some");
+            assert_eq!(recs.len(), 1);
+            match &recs[0] {
+                UpgradeRecommendation::Unresolvable {
+                    constraint_suggestion: Some(cs),
+                    ..
+                } => {
+                    assert_eq!(cs.package_name, "vuln-lib");
+                    assert_eq!(cs.min_version, "2.0.0");
+                    assert!(matches!(
+                        cs.outcome,
+                        ConstraintOutcome::Verified {
+                            resolved_version: ref v
+                        } if v == "2.1.0"
+                    ));
+                }
+                other => panic!(
+                    "expected Unresolvable with constraint_suggestion, got {:?}",
+                    other
+                ),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_unresolvable_gets_simulation_failed_constraint_suggestion() {
+            let simulator = MockUvLockSimulator::with_result(
+                "app-dep",
+                SimulationResult {
+                    upgraded_to_version: "3.0.0".to_string(),
+                    resolved_versions: HashMap::from([(
+                        "vuln-lib".to_string(),
+                        "1.5.0".to_string(),
+                    )]),
+                },
+            )
+            .with_constraint_result(
+                &[("vuln-lib", "2.0.0")],
+                Err("uv lock timed out".to_string()),
+            );
+            let use_case = UseCaseBuilder::default().with_simulator(simulator).build();
+            let request = SbomRequest::builder()
+                .project_path("/test/project")
+                .suggest_fix(true)
+                .build()
+                .unwrap();
+            let fixture = make_fixture();
+
+            let result = use_case
+                .advise_upgrades_if_requested(
+                    &request,
+                    Some(&fixture.graph),
+                    Some(&fixture.vulns),
+                    &fixture.enriched,
+                )
+                .await;
+
+            let recs = result.expect("suggest_fix enabled → Some");
+            assert_eq!(recs.len(), 1);
+            match &recs[0] {
+                UpgradeRecommendation::Unresolvable {
+                    constraint_suggestion: Some(cs),
+                    ..
+                } => {
+                    assert!(matches!(
+                        cs.outcome,
+                        ConstraintOutcome::SimulationFailed { .. }
+                    ));
+                }
+                other => panic!(
+                    "expected Unresolvable with SimulationFailed, got {:?}",
+                    other
+                ),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_constraint_simulation_deduplicates_by_package_version() {
+            use crate::sbom_generation::domain::vulnerability::{
+                CvssScore, Severity, Vulnerability,
+            };
+            use crate::sbom_generation::domain::{
+                DependencyGraph, PackageName, PackageVulnerabilities,
+            };
+
+            let direct = vec![
+                PackageName::new("dep-a".to_string()).unwrap(),
+                PackageName::new("dep-b".to_string()).unwrap(),
+            ];
+            let transitive = HashMap::from([
+                (
+                    PackageName::new("dep-a".to_string()).unwrap(),
+                    vec![PackageName::new("vuln-lib".to_string()).unwrap()],
+                ),
+                (
+                    PackageName::new("dep-b".to_string()).unwrap(),
+                    vec![PackageName::new("vuln-lib".to_string()).unwrap()],
+                ),
+            ]);
+            let graph = DependencyGraph::new(direct, transitive, HashMap::new());
+
+            let vuln = Vulnerability::new(
+                "CVE-2024-0001".to_string(),
+                Some(CvssScore::new(7.5).unwrap()),
+                Severity::High,
+                Some("2.0.0".to_string()),
+                None,
+                vec![],
+            )
+            .unwrap();
+            let vulns = vec![PackageVulnerabilities::new(
+                "vuln-lib".to_string(),
+                "1.0.0".to_string(),
+                vec![vuln],
+            )];
+            let enriched = vec![
+                EnrichedPackage::new(pkg("dep-a", "1.0.0"), Some("MIT".to_string()), None),
+                EnrichedPackage::new(pkg("dep-b", "1.0.0"), Some("MIT".to_string()), None),
+            ];
+
+            let results = HashMap::from([
+                (
+                    "dep-a".to_string(),
+                    SimulationResult {
+                        upgraded_to_version: "2.0.0".to_string(),
+                        resolved_versions: HashMap::from([(
+                            "vuln-lib".to_string(),
+                            "1.5.0".to_string(),
+                        )]),
+                    },
+                ),
+                (
+                    "dep-b".to_string(),
+                    SimulationResult {
+                        upgraded_to_version: "2.0.0".to_string(),
+                        resolved_versions: HashMap::from([(
+                            "vuln-lib".to_string(),
+                            "1.5.0".to_string(),
+                        )]),
+                    },
+                ),
+            ]);
+
+            let simulator = MockUvLockSimulator::with_results_and_errors(results, HashMap::new())
+                .with_constraint_result(
+                    &[("vuln-lib", "2.0.0")],
+                    Ok(SimulationResult {
+                        upgraded_to_version: String::new(),
+                        resolved_versions: HashMap::from([(
+                            "vuln-lib".to_string(),
+                            "2.1.0".to_string(),
+                        )]),
+                    }),
+                );
+
+            let use_case = UseCaseBuilder::default().with_simulator(simulator).build();
+            let request = SbomRequest::builder()
+                .project_path("/test/project")
+                .suggest_fix(true)
+                .build()
+                .unwrap();
+
+            let result = use_case
+                .advise_upgrades_if_requested(&request, Some(&graph), Some(&vulns), &enriched)
+                .await;
+
+            let recs = result.expect("suggest_fix enabled → Some");
+            let unresolvable_with_suggestion: Vec<_> = recs
+                .iter()
+                .filter_map(|r| match r {
+                    UpgradeRecommendation::Unresolvable {
+                        constraint_suggestion: Some(cs),
+                        ..
+                    } => Some(cs),
+                    _ => None,
+                })
+                .collect();
+            // Both Unresolvable entries share the same (vuln-lib, 2.0.0) pair,
+            // so both should get a constraint suggestion with the same outcome.
+            assert_eq!(unresolvable_with_suggestion.len(), 2);
+            for cs in &unresolvable_with_suggestion {
+                assert_eq!(cs.package_name, "vuln-lib");
+                assert_eq!(cs.min_version, "2.0.0");
+                assert!(matches!(cs.outcome, ConstraintOutcome::Verified { .. }));
+            }
         }
     }
 }

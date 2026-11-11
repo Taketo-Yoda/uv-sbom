@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Suggest `constraint-dependencies` entry for unresolvable transitive vulnerabilities under `--suggest-fix`** — when a direct dependency upgrade cannot resolve a transitive CVE, the tool now suggests adding a `[tool.uv] constraint-dependencies` entry and verifies it via `uv lock` dry-run simulation (#956, #1117)
+
 ### Fixed
 - **Config `severity_threshold` typos are now rejected instead of silently disabling threshold filtering** — an unrecognized value (e.g. `HIHG`) produces a config error naming the bad value and the accepted values (`low`, `medium`, `high`, `critical`), localized for `--lang ja` (#1079)
 
