@@ -270,6 +270,8 @@ pub(crate) struct MockUvLockSimulator {
     targeted: HashMap<String, std::result::Result<TargetedSimulationOutcome, String>>,
     targeted_calls: Mutex<Vec<(String, String)>>,
     targeted_paths: Mutex<Vec<std::path::PathBuf>>,
+    constraint_results: HashMap<String, std::result::Result<SimulationResult, String>>,
+    constraint_calls: Mutex<Vec<Vec<(String, String)>>>,
 }
 
 impl MockUvLockSimulator {
@@ -328,6 +330,36 @@ impl MockUvLockSimulator {
     pub(crate) fn targeted_path_log(&self) -> Vec<std::path::PathBuf> {
         self.targeted_paths.lock().unwrap().clone()
     }
+
+    /// Adds a `simulate_with_constraints` response keyed by a deterministic
+    /// string built from sorted constraint tuples (`"pkg1>=ver1,pkg2>=ver2"`).
+    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
+    pub(crate) fn with_constraint_result(
+        mut self,
+        constraints: &[(&str, &str)],
+        result: std::result::Result<SimulationResult, String>,
+    ) -> Self {
+        self.constraint_results
+            .insert(Self::constraint_key(constraints), result);
+        self
+    }
+
+    /// Returns the constraint tuples passed to `simulate_with_constraints`,
+    /// in call order.
+    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
+    pub(crate) fn constraint_call_log(&self) -> Vec<Vec<(String, String)>> {
+        self.constraint_calls.lock().unwrap().clone()
+    }
+
+    fn constraint_key(constraints: &[(&str, &str)]) -> String {
+        let mut sorted: Vec<_> = constraints.to_vec();
+        sorted.sort();
+        sorted
+            .iter()
+            .map(|(n, v)| format!("{}>={}", n, v))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
 }
 
 #[async_trait]
@@ -370,6 +402,28 @@ impl UvLockSimulator for MockUvLockSimulator {
             None => anyhow::bail!(
                 "MockUvLockSimulator: simulate_upgrade_to not configured for {}",
                 package_name
+            ),
+        }
+    }
+
+    async fn simulate_with_constraints(
+        &self,
+        _project_path: &std::path::Path,
+        constraints: &[(&str, &str)],
+    ) -> anyhow::Result<SimulationResult> {
+        let pairs: Vec<(String, String)> = constraints
+            .iter()
+            .map(|(n, v)| (n.to_string(), v.to_string()))
+            .collect();
+        self.constraint_calls.lock().unwrap().push(pairs);
+
+        let key = Self::constraint_key(constraints);
+        match self.constraint_results.get(&key) {
+            Some(Ok(result)) => Ok(result.clone()),
+            Some(Err(msg)) => Err(anyhow::anyhow!("{}", msg)),
+            None => anyhow::bail!(
+                "MockUvLockSimulator: simulate_with_constraints not configured for [{}]",
+                key
             ),
         }
     }

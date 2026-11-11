@@ -89,6 +89,30 @@ pub trait UvLockSimulator: Send + Sync {
         target_version: &str,
         project_path: &std::path::Path,
     ) -> Result<TargetedSimulationOutcome>;
+
+    /// Simulate resolution with additional constraint-dependencies injected
+    /// into the project's `pyproject.toml`.
+    ///
+    /// Copies the project into a sandbox, merges `"pkg>=ver"` entries from
+    /// `constraints` into `[tool.uv].constraint-dependencies` of the temp
+    /// `pyproject.toml`, and runs `uv lock` to verify resolution.
+    ///
+    /// # Arguments
+    /// * `project_path` - Path to the project directory containing pyproject.toml
+    /// * `constraints` - Slice of `(package_name, min_version)` tuples; each
+    ///   becomes a `"pkg>=ver"` entry in `constraint-dependencies`
+    ///
+    /// # Errors
+    /// Returns `Err` when any constraint has an invalid PEP 508 name or PEP 440
+    /// version (message starts with `Security:`), when project files are missing,
+    /// when sandbox I/O fails, when `uv` is not available, or when `uv lock`
+    /// times out or fails.
+    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
+    async fn simulate_with_constraints(
+        &self,
+        project_path: &std::path::Path,
+        constraints: &[(&str, &str)],
+    ) -> Result<SimulationResult>;
 }
 
 /// Null-object impl so `GenerateSbomUseCase`'s `USIM = ()` default satisfies the
@@ -113,6 +137,14 @@ impl UvLockSimulator for () {
         _target_version: &str,
         _project_path: &std::path::Path,
     ) -> Result<TargetedSimulationOutcome> {
+        unreachable!("UvLockSimulator not configured")
+    }
+
+    async fn simulate_with_constraints(
+        &self,
+        _project_path: &std::path::Path,
+        _constraints: &[(&str, &str)],
+    ) -> Result<SimulationResult> {
         unreachable!("UvLockSimulator not configured")
     }
 }
