@@ -11,6 +11,7 @@ uv-sbom は依存関係グラフを理解するためのいくつかの機能を
 - [依存関係の差分 (`--diff`)](#依存関係の差分---diff)
 - [脆弱性解決ガイド](#脆弱性解決ガイド)
 - [アップグレードアドバイザー (`--suggest-fix`)](#アップグレードアドバイザー---suggest-fix)
+  - [制約依存関係によるワークアラウンド](#制約依存関係によるワークアラウンド)
 
 ---
 
@@ -302,7 +303,7 @@ uv-sbom generate --suggest-fix
 
 **出力**: 脆弱性解決ガイドに「Recommended Action」列が追加されます：
 - `⬆️ Upgrade requests → 2.32.3 (resolves urllib3 to 2.2.1)` — アップグレードで脆弱性が修正される場合
-- `⚠️ Cannot resolve: latest httpx still pins idna < 3.7` — アップグレードでは解決できない場合
+- `⚠️ Cannot resolve: latest httpx still pins idna < 3.7` — アップグレードでは解決できない場合（次の「[制約依存関係によるワークアラウンド](#制約依存関係によるワークアラウンド)」で追加のサジェスションが表示されます）
 - `❓ Could not analyze: <error>` — シミュレーションが失敗した場合
 
 **同梱サンプルで試す:**
@@ -313,3 +314,64 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 ```
 
 詳細なウォークスルーは [`examples/suggest-fix-project/README.md`](../../examples/suggest-fix-project/README.md) を参照してください。
+
+### 制約依存関係によるワークアラウンド
+
+直接依存関係のアップグレードだけでは推移的脆弱性を解決できない場合、`--suggest-fix` はさらに一歩進んで、[`[tool.uv].constraint-dependencies`](https://docs.astral.sh/uv/concepts/dependencies/#constraint-dependencies) エントリの追加を提案し、推移的パッケージを安全なバージョンに強制します。
+
+**仕組み:**
+
+1. 各「解決不可」の結果に対して、uv-sbom は `"<パッケージ名>>=<修正バージョン>"` という制約を構築します。
+2. `--override` を使用してその制約を適用した `uv lock` をシミュレーションし、解決が成功するかを確認します。
+3. 結果は脆弱性解決ガイドの「Recommended Action」列に追記されます。
+
+**3 種類の結果:**
+
+| 結果 | 表示 | 意味 |
+|------|------|------|
+| 検証済み | `💡 回避策: [tool.uv].constraint-dependenciesに"pkg>=X.Y" を追加（✅ 検証済み: Z.Wに解決）` | 制約が有効 — `pyproject.toml` に追加すれば安全なバージョンに強制される |
+| 解決不可 | `💡 制約"pkg>=X.Y" を試行 — 解決不可: <理由>` | 制約を試みたが脆弱性は修正されない（例: 他の制約によりバージョンが選択されない） |
+| シミュレーション失敗 | `⚠️ 制約"pkg>=X.Y" を検証できません: <エラー>` | シミュレーションを実行できなかった（例: 修正バージョン文字列が有効な PEP 440 バージョンではない） |
+
+**出力例:**
+
+[`examples/suggest-fix-project`](../../examples/suggest-fix-project) に対して実行した結果です：
+
+```bash
+uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
+```
+
+```markdown
+## Vulnerability Resolution Guide
+
+| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Recommended Action | Vulnerability ID |
+|--------------------|---------|---------------|----------|----------------------------|--------------------|------------------|
+| h11 | 0.14.0 | 0.16.0 | 🔴 CRITICAL | httpx (0.24.1) | ⬆️ Upgrade httpx → 0.28.1 (resolves h11 to 0.16.0) | GHSA-vqfr-h8mv-ghfj |
+| urllib3 | 2.0.4 | 2.6.0 | 🟠 HIGH | requests (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 which does not satisfy >= 2.6.0 💡 Workaround: add `"urllib3>=2.6.0"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to 2.8.0) | GHSA-2xpw-w6gg-jr37 |
+| idna | 3.4 | 3.7 | 🟡 MEDIUM | httpx (0.24.1), requests (2.31.0) | ⚠️ Cannot resolve: upgrading httpx still resolves idna to 3.4 which does not satisfy >= 3.7 💡 Workaround: add `"idna>=3.7"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to 3.20) | GHSA-jjg7-2v4v-x38h |
+```
+
+_（抜粋 — 脆弱性の件数や解決されるバージョンは新しい CVE の公開に伴い変動する場合があります。）_
+
+**ワークアラウンドの適用方法:**
+
+検証済みの制約サジェスションが表示された場合、`pyproject.toml` に追加します：
+
+```toml
+[tool.uv]
+constraint-dependencies = [
+    "urllib3>=2.6.0",
+    "idna>=3.7",
+]
+```
+
+その後、再ロックと同期を実行します：
+
+```bash
+uv lock
+uv sync
+```
+
+> **注意:** `constraint-dependencies` は、どのパッケージを選択するかを変更せずに下限を適用するだけです — バージョンリゾルバーに制約を与えるのみです。パッケージを直接依存関係として追加するのとは異なります。詳細は [uv のドキュメント](https://docs.astral.sh/uv/concepts/dependencies/#constraint-dependencies)を参照してください。
+
+> **ワークスペースの制限:** 制約シミュレーションはルートの `pyproject.toml` のみを一時環境にコピーします。メンバー固有の `pyproject.toml` ファイルを持つワークスペースでは、シミュレーションがメンバー固有の制約を反映しない場合があります。

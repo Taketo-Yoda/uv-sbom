@@ -80,7 +80,13 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 | Vulnerable Package | Introduced By | Recommended Action |
 |--------------------|--------------|-------------------|
 | `h11` 0.14.0 | `httpx` (0.24.1) | ⬆️ Upgrade httpx → 0.28.1 (resolves h11 to 0.16.0) |
-| `urllib3` 2.0.4 | `requests` (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 |
+| `urllib3` 2.0.4 | `requests` (2.31.0) | ⚠️ Cannot resolve: ... 💡 Workaround: add `"urllib3>=2.6.0"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to 2.8.0) |
+| `idna` 3.4 | `httpx` (0.24.1), `requests` (2.31.0) | ⚠️ Cannot resolve: ... 💡 Workaround: add `"idna>=3.7"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to 3.20) |
+
+For "Unresolvable" cases, `--suggest-fix` now additionally suggests adding the package to
+[`[tool.uv].constraint-dependencies`](https://docs.astral.sh/uv/concepts/dependencies/#constraint-dependencies)
+and verifies whether the constraint resolves the vulnerability. See
+[docs/dependency-insight.md](../../docs/dependency-insight.md#constraint-dependencies-workaround) for details.
 
 ### Step 3: CycloneDX output with upgrade properties
 
@@ -176,8 +182,10 @@ uv-sbom -p examples/suggest-fix-project --incident "urllib3<2.0.6"
 | Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Recommended Action | Vulnerability ID |
 |--------------------|---------|--------------|---------|----------------------------|-------------------|-----------------|
 | h11 | 0.14.0 | 0.16.0 | 🔴 CRITICAL | httpx (0.24.1) | ⬆️ Upgrade httpx → 0.28.1 (resolves h11 to 0.16.0) | GHSA-vqfr-h8mv-ghfj |
-| urllib3 | 2.0.4 | 2.6.0 | 🟠 HIGH | requests (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 which does not satisfy >= 2.6.0 | GHSA-2xpw-w6gg-jr37 |
+| urllib3 | 2.0.4 | 2.6.0 | 🟠 HIGH | requests (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 which does not satisfy >= 2.6.0 💡 Workaround: add `"urllib3>=2.6.0"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to 2.8.0) | GHSA-2xpw-w6gg-jr37 |
 ```
+
+_(Resolved versions may change as new package versions are published.)_
 
 ## Contrast with other examples
 

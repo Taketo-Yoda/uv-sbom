@@ -119,6 +119,7 @@ uv-sbom --format markdown --lang ja
 - **Explain** (`--explain <PACKAGE>`) — 直接依存からの全パスをトレース。[詳細 →](docs/ja/dependency-insight.md#依存関係の説明---explain)
 - **ツリー** (`--show-dependency-tree`) — 依存グラフの ASCII ツリー表示。[詳細 →](docs/ja/dependency-insight.md#依存関係ツリーの可視化---show-dependency-tree)
 - **差分** (`--diff <REF>`) — ロックファイルのバージョン比較（CVE デルタ付き）。[詳細 →](docs/ja/dependency-insight.md#依存関係の差分---diff)
+- **アップグレードアドバイザー** (`--suggest-fix`) — アップグレードをシミュレーションし、解決不可な推移的脆弱性に `constraint-dependencies` ワークアラウンドを提案。[詳細 →](docs/ja/dependency-insight.md#アップグレードアドバイザー---suggest-fix)
 
 ### ワークスペースサポート
 
