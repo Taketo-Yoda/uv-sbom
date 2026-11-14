@@ -180,6 +180,11 @@ pub(super) static EN_MESSAGES: Messages = Messages {
     action_cannot_resolve: "⚠️ Cannot resolve: {}",
     action_could_not_analyze: "❓ Could not analyze: {}",
 
+    // Constraint suggestion action strings
+    action_constraint_verified: "💡 Workaround: add `\"{}>={}\"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to {})",
+    action_constraint_does_not_resolve: "💡 Tried constraint `\"{}>={}\"` — does not resolve: {}",
+    action_constraint_simulation_failed: "⚠️ Could not verify constraint `\"{}>={}\"`: {}",
+
     // Transitive dependency sub-header
     deps_for_header: "### Dependencies for {}",
 

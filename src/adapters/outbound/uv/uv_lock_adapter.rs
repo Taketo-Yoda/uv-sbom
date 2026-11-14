@@ -195,7 +195,6 @@ impl UvLockAdapter {
     /// Runs `<program> lock` (no extra arguments) in `dir` with a 60-second
     /// timeout. Used by `simulate_with_constraints` after modifying the sandbox
     /// `pyproject.toml` with constraint-dependencies.
-    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
     async fn run_uv_lock(program: &OsStr, dir: &Path) -> Result<Output> {
         timeout(
             Duration::from_secs(60),
@@ -279,7 +278,6 @@ impl UvLockAdapter {
 
     /// Merges `"pkg>=ver"` constraint strings into the `[tool.uv].constraint-dependencies`
     /// array of a parsed `pyproject.toml`. Creates intermediate tables if absent.
-    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
     fn merge_constraint_dependencies(
         pyproject_content: &str,
         constraints: &[String],
@@ -322,7 +320,6 @@ impl UvLockAdapter {
 
     /// Implementation of [`UvLockSimulator::simulate_with_constraints`] with the
     /// `uv` program injectable for testing.
-    #[allow(dead_code)] // WIRE(#1117): remove when suggest-fix wires constraint simulation
     async fn simulate_with_constraints_with(
         program: &OsStr,
         project_path: &Path,

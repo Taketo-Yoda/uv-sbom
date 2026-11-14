@@ -561,6 +561,7 @@ mod tests {
                 fixed_version: "2.0.7".to_string(),
                 reason: "no compatible version available".to_string(),
                 vulnerability_id: "CVE-2024-1234".to_string(),
+                constraint_suggestion: None,
             }],
         });
 

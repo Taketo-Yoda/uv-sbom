@@ -386,6 +386,7 @@ mod tests {
                 fixed_version: "3.7".to_string(),
                 reason: "latest httpx still pins idna < 3.7".to_string(),
                 vulnerability_id: "GHSA-ZZZZZ".to_string(),
+                constraint_suggestion: None,
             }],
         });
 
@@ -659,6 +660,193 @@ mod tests {
 
         assert!(markdown.contains("## Vulnerability Resolution Guide"));
         assert!(!markdown.contains("### Dependency Chains"));
+    }
+
+    #[test]
+    fn test_render_unresolvable_with_verified_constraint_suggestion() {
+        use crate::application::read_models::{ConstraintOutcomeView, ConstraintSuggestionView};
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "idna".to_string(),
+                current_version: "3.6".to_string(),
+                fixed_version: Some(">= 3.7".to_string()),
+                severity: SeverityView::Medium,
+                vulnerability_id: "GHSA-ZZZZZ".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "httpx".to_string(),
+                    version: "0.25.0".to_string(),
+                }],
+                dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
+            }],
+        });
+        model.upgrade_recommendations = Some(UpgradeRecommendationView {
+            entries: vec![UpgradeEntryView::Unresolvable {
+                direct_dep_name: "httpx".to_string(),
+                transitive_dep_name: "idna".to_string(),
+                fixed_version: "3.7".to_string(),
+                reason: "latest httpx still pins idna < 3.7".to_string(),
+                vulnerability_id: "GHSA-ZZZZZ".to_string(),
+                constraint_suggestion: Some(ConstraintSuggestionView {
+                    package_name: "idna".to_string(),
+                    min_version: "3.7".to_string(),
+                    outcome: ConstraintOutcomeView::Verified {
+                        resolved_version: "3.10".to_string(),
+                    },
+                }),
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("⚠️ Cannot resolve:"));
+        assert!(markdown.contains("💡 Workaround:"));
+        assert!(markdown.contains("idna>=3.7"));
+        assert!(markdown.contains("constraint-dependencies"));
+        assert!(markdown.contains("verified: resolves to 3.10"));
+    }
+
+    #[test]
+    fn test_render_unresolvable_with_verified_constraint_suggestion_ja() {
+        use crate::application::read_models::{ConstraintOutcomeView, ConstraintSuggestionView};
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "idna".to_string(),
+                current_version: "3.6".to_string(),
+                fixed_version: Some(">= 3.7".to_string()),
+                severity: SeverityView::Medium,
+                vulnerability_id: "GHSA-ZZZZZ".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "httpx".to_string(),
+                    version: "0.25.0".to_string(),
+                }],
+                dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
+            }],
+        });
+        model.upgrade_recommendations = Some(UpgradeRecommendationView {
+            entries: vec![UpgradeEntryView::Unresolvable {
+                direct_dep_name: "httpx".to_string(),
+                transitive_dep_name: "idna".to_string(),
+                fixed_version: "3.7".to_string(),
+                reason: "latest httpx still pins idna < 3.7".to_string(),
+                vulnerability_id: "GHSA-ZZZZZ".to_string(),
+                constraint_suggestion: Some(ConstraintSuggestionView {
+                    package_name: "idna".to_string(),
+                    min_version: "3.7".to_string(),
+                    outcome: ConstraintOutcomeView::Verified {
+                        resolved_version: "3.10".to_string(),
+                    },
+                }),
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::Ja);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("⚠️ 解決不可:"));
+        assert!(markdown.contains("💡 回避策:"));
+        assert!(markdown.contains("idna>=3.7"));
+        assert!(markdown.contains("検証済み: 3.10に解決"));
+    }
+
+    #[test]
+    fn test_render_unresolvable_with_does_not_resolve_constraint() {
+        use crate::application::read_models::{ConstraintOutcomeView, ConstraintSuggestionView};
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "idna".to_string(),
+                current_version: "3.6".to_string(),
+                fixed_version: Some(">= 3.7".to_string()),
+                severity: SeverityView::Medium,
+                vulnerability_id: "GHSA-ZZZZZ".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "httpx".to_string(),
+                    version: "0.25.0".to_string(),
+                }],
+                dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
+            }],
+        });
+        model.upgrade_recommendations = Some(UpgradeRecommendationView {
+            entries: vec![UpgradeEntryView::Unresolvable {
+                direct_dep_name: "httpx".to_string(),
+                transitive_dep_name: "idna".to_string(),
+                fixed_version: "3.7".to_string(),
+                reason: "latest httpx still pins idna < 3.7".to_string(),
+                vulnerability_id: "GHSA-ZZZZZ".to_string(),
+                constraint_suggestion: Some(ConstraintSuggestionView {
+                    package_name: "idna".to_string(),
+                    min_version: "3.7".to_string(),
+                    outcome: ConstraintOutcomeView::DoesNotResolve {
+                        reason: "constraint resolves idna to 3.6".to_string(),
+                    },
+                }),
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("⚠️ Cannot resolve:"));
+        assert!(markdown.contains("💡 Tried constraint"));
+        assert!(markdown.contains("does not resolve: constraint resolves idna to 3.6"));
+    }
+
+    #[test]
+    fn test_render_unresolvable_with_simulation_failed_constraint() {
+        use crate::application::read_models::{ConstraintOutcomeView, ConstraintSuggestionView};
+
+        let mut model = create_test_read_model();
+        model.resolution_guide = Some(ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "idna".to_string(),
+                current_version: "3.6".to_string(),
+                fixed_version: Some(">= 3.7".to_string()),
+                severity: SeverityView::Medium,
+                vulnerability_id: "GHSA-ZZZZZ".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "httpx".to_string(),
+                    version: "0.25.0".to_string(),
+                }],
+                dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
+            }],
+        });
+        model.upgrade_recommendations = Some(UpgradeRecommendationView {
+            entries: vec![UpgradeEntryView::Unresolvable {
+                direct_dep_name: "httpx".to_string(),
+                transitive_dep_name: "idna".to_string(),
+                fixed_version: "3.7".to_string(),
+                reason: "latest httpx still pins idna < 3.7".to_string(),
+                vulnerability_id: "GHSA-ZZZZZ".to_string(),
+                constraint_suggestion: Some(ConstraintSuggestionView {
+                    package_name: "idna".to_string(),
+                    min_version: "3.7".to_string(),
+                    outcome: ConstraintOutcomeView::SimulationFailed {
+                        error: "uv lock timed out".to_string(),
+                    },
+                }),
+            }],
+        });
+
+        let formatter = super::super::super::MarkdownFormatter::new(Locale::En);
+        let markdown = formatter.format(&model).unwrap();
+
+        assert!(markdown.contains("⚠️ Cannot resolve:"));
+        assert!(markdown.contains("⚠️ Could not verify constraint"));
+        assert!(markdown.contains("uv lock timed out"));
     }
 
     #[test]

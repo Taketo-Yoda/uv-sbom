@@ -137,7 +137,6 @@ fn strip_operator_prefix(version: &str) -> String {
 ///
 /// `ConstraintOutcome::SimulationFailed` is never returned here — the caller
 /// constructs it from the `Err` branch of `simulate_with_constraints`.
-#[allow(dead_code)] // WIRE(#1117): remove when suggest-fix orchestrator calls this function
 pub fn map_constraint_outcome(
     simulation_result: &SimulationResult,
     vulnerable_package: &str,

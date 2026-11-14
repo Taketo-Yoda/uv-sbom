@@ -183,6 +183,11 @@ pub(super) static JA_MESSAGES: Messages = Messages {
     action_cannot_resolve: "⚠️ 解決不可: {}",
     action_could_not_analyze: "❓ 分析不可: {}",
 
+    // Constraint suggestion action strings
+    action_constraint_verified: "💡 回避策: `[tool.uv].constraint-dependencies`に`\"{}>={}\"` を追加（✅ 検証済み: {}に解決）",
+    action_constraint_does_not_resolve: "💡 制約`\"{}>={}\"` を試行 — 解決不可: {}",
+    action_constraint_simulation_failed: "⚠️ 制約`\"{}>={}\"` を検証できません: {}",
+
     // Transitive dependency sub-header
     deps_for_header: "### {}の依存パッケージ",
 

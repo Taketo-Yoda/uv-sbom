@@ -221,6 +221,11 @@ pub struct Messages {
     pub action_cannot_resolve: &'static str,
     pub action_could_not_analyze: &'static str,
 
+    // Constraint suggestion action strings (3 placeholders each: package, version, detail)
+    pub action_constraint_verified: &'static str,
+    pub action_constraint_does_not_resolve: &'static str,
+    pub action_constraint_simulation_failed: &'static str,
+
     // Transitive dependency sub-header (1 placeholder: package name)
     pub deps_for_header: &'static str,
 
@@ -688,6 +693,9 @@ mod tests {
             action_upgrade,
             action_cannot_resolve,
             action_could_not_analyze,
+            action_constraint_verified,
+            action_constraint_does_not_resolve,
+            action_constraint_simulation_failed,
             deps_for_header,
             summary_vuln_found,
             output_complete,

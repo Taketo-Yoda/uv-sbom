@@ -1,7 +1,32 @@
 use crate::application::read_models::{
-    IntroducedByView, UpgradeEntryView, UpgradeRecommendationView, VulnerabilityView,
+    ConstraintOutcomeView, ConstraintSuggestionView, IntroducedByView, UpgradeEntryView,
+    UpgradeRecommendationView, VulnerabilityView,
 };
 use crate::i18n::Messages;
+
+fn format_constraint_suggestion(
+    messages: &'static Messages,
+    suggestion: &ConstraintSuggestionView,
+) -> String {
+    match &suggestion.outcome {
+        ConstraintOutcomeView::Verified { resolved_version } => Messages::format(
+            messages.action_constraint_verified,
+            &[
+                &suggestion.package_name,
+                &suggestion.min_version,
+                resolved_version,
+            ],
+        ),
+        ConstraintOutcomeView::DoesNotResolve { reason } => Messages::format(
+            messages.action_constraint_does_not_resolve,
+            &[&suggestion.package_name, &suggestion.min_version, reason],
+        ),
+        ConstraintOutcomeView::SimulationFailed { error } => Messages::format(
+            messages.action_constraint_simulation_failed,
+            &[&suggestion.package_name, &suggestion.min_version, error],
+        ),
+    }
+}
 
 /// Counts unique affected packages from a list of vulnerability views
 pub(super) fn count_unique_packages(vulns: &[VulnerabilityView]) -> usize {
@@ -38,11 +63,20 @@ pub(super) fn find_upgrade_action(
                 );
             }
             UpgradeEntryView::Unresolvable {
+                direct_dep_name,
+                transitive_dep_name,
+                fixed_version,
                 reason,
                 vulnerability_id: vid,
-                ..
+                constraint_suggestion,
             } if vid == vulnerability_id => {
-                return Messages::format(messages.action_cannot_resolve, &[reason]);
+                let _ = (direct_dep_name, transitive_dep_name, fixed_version);
+                let mut text = Messages::format(messages.action_cannot_resolve, &[reason]);
+                if let Some(suggestion) = constraint_suggestion {
+                    text.push(' ');
+                    text.push_str(&format_constraint_suggestion(messages, suggestion));
+                }
+                return text;
             }
             _ => {}
         }
