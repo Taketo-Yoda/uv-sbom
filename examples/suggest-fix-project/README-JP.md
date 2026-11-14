@@ -72,7 +72,13 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 | Vulnerable Package | Introduced By | Recommended Action |
 |--------------------|--------------|-------------------|
 | `h11` 0.14.0 | `httpx` (0.24.1) | ⬆️ Upgrade httpx → 0.28.1 (resolves h11 to 0.16.0) |
-| `urllib3` 2.0.4 | `requests` (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 |
+| `urllib3` 2.0.4 | `requests` (2.31.0) | ⚠️ Cannot resolve: ... 💡 回避策: `[tool.uv].constraint-dependencies`に`"urllib3>=2.6.0"` を追加（✅ 検証済み: 2.8.0に解決） |
+| `idna` 3.4 | `httpx` (0.24.1), `requests` (2.31.0) | ⚠️ Cannot resolve: ... 💡 回避策: `[tool.uv].constraint-dependencies`に`"idna>=3.7"` を追加（✅ 検証済み: 3.20に解決） |
+
+「解決不可」のケースでは、`--suggest-fix` はパッケージを
+[`[tool.uv].constraint-dependencies`](https://docs.astral.sh/uv/concepts/dependencies/#constraint-dependencies)
+に追加することを追加提案し、制約が脆弱性を解決するかを検証します。
+詳細は [docs/ja/dependency-insight.md](../../docs/ja/dependency-insight.md#制約依存関係によるワークアラウンド) を参照してください。
 
 ### ステップ 3: CycloneDX 形式でアップグレード情報を出力
 
@@ -167,8 +173,10 @@ uv-sbom -p examples/suggest-fix-project --incident "urllib3<2.0.6" --lang ja
 | Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Recommended Action | Vulnerability ID |
 |--------------------|---------|--------------|---------|----------------------------|-------------------|-----------------|
 | h11 | 0.14.0 | 0.16.0 | 🔴 CRITICAL | httpx (0.24.1) | ⬆️ Upgrade httpx → 0.28.1 (resolves h11 to 0.16.0) | GHSA-vqfr-h8mv-ghfj |
-| urllib3 | 2.0.4 | 2.6.0 | 🟠 HIGH | requests (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 which does not satisfy >= 2.6.0 | GHSA-2xpw-w6gg-jr37 |
+| urllib3 | 2.0.4 | 2.6.0 | 🟠 HIGH | requests (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 which does not satisfy >= 2.6.0 💡 Workaround: add `"urllib3>=2.6.0"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to 2.8.0) | GHSA-2xpw-w6gg-jr37 |
 ```
+
+_（解決されるバージョンは新しいパッケージバージョンの公開に伴い変動する場合があります。）_
 
 ## 他のサンプルとの比較
 
