@@ -11,6 +11,7 @@ uv-sbom provides several features for understanding your dependency graph: traci
 - [Dependency Diff (`--diff`)](#dependency-diff---diff)
 - [Vulnerability Resolution Guide](#vulnerability-resolution-guide)
 - [Upgrade Advisor (`--suggest-fix`)](#upgrade-advisor---suggest-fix)
+  - [Constraint-Dependencies Workaround](#constraint-dependencies-workaround)
 
 ---
 
@@ -302,7 +303,7 @@ uv-sbom generate --suggest-fix
 
 **Output**: Adds a "Recommended Action" column to the Vulnerability Resolution Guide showing:
 - `⬆️ Upgrade requests → 2.32.3 (resolves urllib3 to 2.2.1)` — when an upgrade fixes the vulnerability
-- `⚠️ Cannot resolve: latest httpx still pins idna < 3.7` — when no upgrade helps
+- `⚠️ Cannot resolve: latest httpx still pins idna < 3.7` — when no upgrade helps (see [Constraint-Dependencies Workaround](#constraint-dependencies-workaround) below for what happens next)
 - `❓ Could not analyze: <error>` — when simulation failed
 
 **Try it with the included example**:
@@ -313,3 +314,64 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 ```
 
 See [`examples/suggest-fix-project/README.md`](../examples/suggest-fix-project/README.md) for a full walkthrough.
+
+### Constraint-Dependencies Workaround
+
+When upgrading the direct dependency alone cannot resolve a transitive vulnerability, `--suggest-fix` goes one step further: it suggests adding a [`[tool.uv].constraint-dependencies`](https://docs.astral.sh/uv/concepts/dependencies/#constraint-dependencies) entry to force the transitive package to a safe version.
+
+**How it works:**
+
+1. For each "Unresolvable" result, uv-sbom constructs a constraint `"<package>>=<fixed_version>"`.
+2. It simulates `uv lock` with that constraint applied via `--override` to check whether the resolution succeeds.
+3. The result is appended to the "Recommended Action" column in the Vulnerability Resolution Guide.
+
+**Three possible outcomes:**
+
+| Outcome | Indicator | Meaning |
+|---------|-----------|---------|
+| Verified | `💡 Workaround: add "pkg>=X.Y" to [tool.uv].constraint-dependencies (✅ verified: resolves to Z.W)` | The constraint works — adding it to `pyproject.toml` will force the safe version |
+| Does not resolve | `💡 Tried constraint "pkg>=X.Y" — does not resolve: <reason>` | The constraint was tried but does not fix the vulnerability (e.g., other constraints prevent the version from being selected) |
+| Simulation failed | `⚠️ Could not verify constraint "pkg>=X.Y": <error>` | The simulation could not run (e.g., the fixed version string is not a valid PEP 440 version) |
+
+**Example output:**
+
+Produced by running against [`examples/suggest-fix-project`](../examples/suggest-fix-project):
+
+```bash
+uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
+```
+
+```markdown
+## Vulnerability Resolution Guide
+
+| Vulnerable Package | Current | Fixed Version | Severity | Introduced By (Direct Dep) | Recommended Action | Vulnerability ID |
+|--------------------|---------|---------------|----------|----------------------------|--------------------|------------------|
+| h11 | 0.14.0 | 0.16.0 | 🔴 CRITICAL | httpx (0.24.1) | ⬆️ Upgrade httpx → 0.28.1 (resolves h11 to 0.16.0) | GHSA-vqfr-h8mv-ghfj |
+| urllib3 | 2.0.4 | 2.6.0 | 🟠 HIGH | requests (2.31.0) | ⚠️ Cannot resolve: upgrading requests still resolves urllib3 to 2.0.4 which does not satisfy >= 2.6.0 💡 Workaround: add `"urllib3>=2.6.0"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to 2.8.0) | GHSA-2xpw-w6gg-jr37 |
+| idna | 3.4 | 3.7 | 🟡 MEDIUM | httpx (0.24.1), requests (2.31.0) | ⚠️ Cannot resolve: upgrading httpx still resolves idna to 3.4 which does not satisfy >= 3.7 💡 Workaround: add `"idna>=3.7"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to 3.20) | GHSA-jjg7-2v4v-x38h |
+```
+
+_(Excerpt — vulnerability counts and resolved versions may change as new CVEs are published.)_
+
+**Applying the workaround:**
+
+When you see a verified constraint suggestion, add it to your `pyproject.toml`:
+
+```toml
+[tool.uv]
+constraint-dependencies = [
+    "urllib3>=2.6.0",
+    "idna>=3.7",
+]
+```
+
+Then re-lock and sync:
+
+```bash
+uv lock
+uv sync
+```
+
+> **Note:** `constraint-dependencies` applies a lower bound without changing which packages are selected — it only constrains the version resolver. This is different from adding the package as a direct dependency. See the [uv documentation](https://docs.astral.sh/uv/concepts/dependencies/#constraint-dependencies) for details.
+
+> **Workspace limitation:** The constraint simulation copies only the root `pyproject.toml` into its temporary environment. In a workspace with member-level `pyproject.toml` files, the simulation may not reflect member-specific constraints.
