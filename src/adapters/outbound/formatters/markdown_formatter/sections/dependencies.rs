@@ -141,6 +141,8 @@ mod tests {
 
         assert!(output.contains("## 直接依存パッケージ"));
         assert!(output.contains("## 間接依存パッケージ"));
+        assert!(!output.contains("## Direct Dependencies"));
+        assert!(!output.contains("## Transitive Dependencies"));
     }
 
     // --- empty-dependency edge cases ---
@@ -168,6 +170,8 @@ mod tests {
 
         assert!(output.contains("*直接依存パッケージなし*"));
         assert!(output.contains("*間接依存パッケージなし*"));
+        assert!(!output.contains("*No direct dependencies*"));
+        assert!(!output.contains("*No transitive dependencies*"));
     }
 
     // --- direct dependency row rendering ---
@@ -254,6 +258,7 @@ mod tests {
         let output = call_render(Locale::Ja, &deps, &[direct, transitive]);
 
         assert!(output.contains("### requestsの依存パッケージ"));
+        assert!(!output.contains("### Dependencies for requests"));
     }
 
     #[test]
