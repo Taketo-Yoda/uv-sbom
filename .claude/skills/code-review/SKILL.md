@@ -214,7 +214,7 @@ Flag only if the refactoring clearly applies to the changed code.
 - **Nesting depth**: Flag any block nested more than 4 levels deep.
 
 Known large files (monitor for growth):
-- src/adapters/outbound/formatters/markdown_formatter/mod.rs (~882 lines)
+- src/adapters/outbound/formatters/markdown_formatter/mod.rs (~619 lines)
 - src/application/read_models/sbom_read_model_builder/mod.rs (~845 lines)
 - src/application/use_cases/generate_sbom/mod.rs (~652 lines)
 
