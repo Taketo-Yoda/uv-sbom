@@ -460,6 +460,12 @@ mod tests {
     }
 
     #[test]
+    fn test_overall_no_issues_when_all_checks_skipped() {
+        let output = render_summary(Locale::En, &[], None, None);
+        assert!(output.contains("**Overall: No issues found** ✅"));
+    }
+
+    #[test]
     fn test_overall_no_issues_ja() {
         let report = VulnerabilityReportView::default();
         let license = make_license_compliance(0);

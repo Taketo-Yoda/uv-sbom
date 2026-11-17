@@ -155,7 +155,7 @@ mod tests {
         ComponentView, IntroducedByView, LicenseView, ResolutionEntryView, ResolutionGuideView,
         SbomMetadataView, SbomReadModel, SeverityView, UpgradeEntryView, UpgradeRecommendationView,
     };
-    use crate::i18n::Locale;
+    use crate::i18n::{Locale, Messages};
     use crate::ports::outbound::SbomFormatter;
 
     fn create_test_read_model() -> SbomReadModel {
@@ -875,5 +875,48 @@ mod tests {
 
         assert!(!markdown.contains("Recommended Action"));
         assert!(markdown.contains("## Vulnerability Resolution Guide"));
+    }
+
+    /// Direct `render` test (unlike the formatter-based tests above), so it does
+    /// not depend on `SbomReadModel`.
+    #[test]
+    fn test_render_upgradable_recommendation_ja() {
+        let guide = ResolutionGuideView {
+            entries: vec![ResolutionEntryView {
+                vulnerable_package: "urllib3".to_string(),
+                current_version: "1.26.15".to_string(),
+                fixed_version: Some(">= 2.0.7".to_string()),
+                severity: SeverityView::High,
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+                introduced_by: vec![IntroducedByView {
+                    package_name: "requests".to_string(),
+                    version: "2.31.0".to_string(),
+                }],
+                dependency_chains: vec![],
+                epss_percentile: None,
+                in_kev: None,
+            }],
+        };
+        let recommendations = UpgradeRecommendationView {
+            entries: vec![UpgradeEntryView::Upgradable {
+                direct_dep: "requests".to_string(),
+                target_version: "2.32.3".to_string(),
+                transitive_dep: "urllib3".to_string(),
+                resolved_version: "2.2.1".to_string(),
+                vulnerability_id: "CVE-2024-XXXXX".to_string(),
+            }],
+        };
+
+        let mut output = String::new();
+        super::render(
+            Messages::for_locale(Locale::Ja),
+            &mut output,
+            &guide,
+            Some(&recommendations),
+        );
+
+        assert!(output.contains("推奨アクション"));
+        assert!(output.contains("⬆️ requestsを2.32.3にアップグレード（urllib3が2.2.1に解決）"));
+        assert!(!output.contains("⬆️ Upgrade"));
     }
 }

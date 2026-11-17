@@ -495,33 +495,6 @@ mod tests {
     }
 
     #[test]
-    fn test_summary_vuln_skipped_note_when_no_network() {
-        let model = test_fixtures::base_model(); // vulnerabilities: None
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("_Vulnerability check skipped._"));
-    }
-
-    #[test]
-    fn test_summary_overall_action_required_when_critical_vuln() {
-        let model = test_fixtures::with_critical_vuln();
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-        assert!(markdown.contains("**Overall: Action required**"));
-    }
-
-    #[test]
-    fn test_summary_overall_no_issues_when_clean() {
-        let model = test_fixtures::base_model(); // no vulns, no license violations
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("**Overall: No issues found** ✅"));
-    }
-
-    #[test]
     fn test_format_vulnerability_section_ordering() {
         let model = test_fixtures::with_actionable_and_informational_vulns();
         let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
@@ -567,116 +540,6 @@ mod tests {
         let model = test_fixtures::with_empty_vuln_report();
         assert_ja_output_contains(&model, "*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*");
         assert_ja_output_excludes(&model, "*Vulnerability data provided by");
-    }
-
-    #[test]
-    fn test_lang_ja_no_license_violations_is_japanese() {
-        use crate::application::read_models::{LicenseComplianceSummary, LicenseComplianceView};
-
-        let mut model = test_fixtures::base_model();
-        model.license_compliance = Some(LicenseComplianceView {
-            has_violations: false,
-            violations: vec![],
-            warnings: vec![],
-            summary: LicenseComplianceSummary {
-                violation_count: 0,
-                warning_count: 0,
-            },
-        });
-        assert_ja_output_contains(&model, "**ライセンス違反は見つかりませんでした。**");
-        assert_ja_output_excludes(&model, "**No license violations found.**");
-    }
-
-    #[test]
-    fn test_lang_ja_license_violations_count_is_japanese() {
-        use crate::application::read_models::{
-            LicenseComplianceSummary, LicenseComplianceView, LicenseViolationView,
-        };
-
-        let mut model = test_fixtures::base_model();
-        model.license_compliance = Some(LicenseComplianceView {
-            has_violations: true,
-            violations: vec![
-                LicenseViolationView {
-                    package_name: "chardet".to_string(),
-                    package_version: "3.0.4".to_string(),
-                    license: "LGPL-2.1-only".to_string(),
-                    reason: "Denied by policy".to_string(),
-                    matched_pattern: Some("LGPL-*".to_string()),
-                },
-                LicenseViolationView {
-                    package_name: "foo".to_string(),
-                    package_version: "1.0.0".to_string(),
-                    license: "GPL-3.0-only".to_string(),
-                    reason: "Denied by policy".to_string(),
-                    matched_pattern: Some("GPL-*".to_string()),
-                },
-                LicenseViolationView {
-                    package_name: "bar".to_string(),
-                    package_version: "2.0.0".to_string(),
-                    license: "AGPL-3.0-only".to_string(),
-                    reason: "Denied by policy".to_string(),
-                    matched_pattern: Some("AGPL-*".to_string()),
-                },
-                LicenseViolationView {
-                    package_name: "baz".to_string(),
-                    package_version: "0.1.0".to_string(),
-                    license: "GPL-2.0-only".to_string(),
-                    reason: "Denied by policy".to_string(),
-                    matched_pattern: Some("GPL-*".to_string()),
-                },
-            ],
-            warnings: vec![],
-            summary: LicenseComplianceSummary {
-                violation_count: 4,
-                warning_count: 0,
-            },
-        });
-
-        assert_ja_output_contains(&model, "**4 件のライセンス違反が見つかりました。**");
-        assert_ja_output_excludes(&model, "license violations found");
-    }
-
-    #[test]
-    fn test_lang_ja_resolution_guide_action_is_japanese() {
-        use crate::application::read_models::{
-            IntroducedByView, ResolutionEntryView, ResolutionGuideView, UpgradeEntryView,
-            UpgradeRecommendationView,
-        };
-
-        let mut model = test_fixtures::base_model();
-        model.resolution_guide = Some(ResolutionGuideView {
-            entries: vec![ResolutionEntryView {
-                vulnerable_package: "urllib3".to_string(),
-                current_version: "1.26.15".to_string(),
-                fixed_version: Some(">= 2.0.7".to_string()),
-                severity: SeverityView::High,
-                vulnerability_id: "CVE-2024-XXXXX".to_string(),
-                introduced_by: vec![IntroducedByView {
-                    package_name: "requests".to_string(),
-                    version: "2.31.0".to_string(),
-                }],
-                dependency_chains: vec![],
-                epss_percentile: None,
-                in_kev: None,
-            }],
-        });
-        model.upgrade_recommendations = Some(UpgradeRecommendationView {
-            entries: vec![UpgradeEntryView::Upgradable {
-                direct_dep: "requests".to_string(),
-                target_version: "2.32.3".to_string(),
-                transitive_dep: "urllib3".to_string(),
-                resolved_version: "2.2.1".to_string(),
-                vulnerability_id: "CVE-2024-XXXXX".to_string(),
-            }],
-        });
-
-        assert_ja_output_contains(&model, "推奨アクション");
-        assert_ja_output_contains(
-            &model,
-            "⬆️ requestsを2.32.3にアップグレード（urllib3が2.2.1に解決）",
-        );
-        assert_ja_output_excludes(&model, "⬆️ Upgrade");
     }
 
     #[test]
@@ -789,21 +652,6 @@ mod tests {
         let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
         assert!(markdown.contains("## 廃止パッケージ"));
         assert!(markdown.contains("old-pkg-0"));
-    }
-
-    #[test]
-    fn test_summary_shows_abandoned_skipped_when_none() {
-        let model = test_fixtures::base_model();
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-        assert!(markdown.contains("_Abandoned package check skipped._"));
-    }
-
-    #[test]
-    fn test_summary_shows_abandoned_row_when_report_present() {
-        let model = test_fixtures::with_abandoned_packages(2);
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-        assert!(markdown.contains("| Abandoned packages | 2 | ⚠️ |"));
-        assert!(!markdown.contains("_Abandoned package check skipped._"));
     }
 
     // ===== Non-PyPI packages section tests =====
