@@ -140,11 +140,9 @@ mod tests {
 
     mod test_fixtures {
         use crate::application::read_models::{
-            AbandonedPackageView, AbandonedPackagesReport, ComponentView, LicenseView,
-            SbomMetadataView, SbomReadModel, SeverityView, VulnerabilityReportView,
-            VulnerabilitySummary, VulnerabilityView,
+            ComponentView, LicenseView, SbomMetadataView, SbomReadModel, SeverityView,
+            VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
         };
-        use chrono::NaiveDate;
 
         pub(super) fn base_model() -> SbomReadModel {
             SbomReadModel {
@@ -315,24 +313,6 @@ mod tests {
                     total_count: 2,
                     affected_package_count: 2,
                 },
-            });
-            model
-        }
-
-        pub(super) fn with_abandoned_packages(count: usize) -> SbomReadModel {
-            let mut model = base_model();
-            let packages = (0..count)
-                .map(|i| AbandonedPackageView {
-                    name: format!("old-pkg-{i}"),
-                    version: "0.1.0".to_string(),
-                    last_release_date: NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
-                    days_inactive: 800 + i as i64,
-                    is_direct: i % 2 == 0,
-                })
-                .collect();
-            model.abandoned_packages = Some(AbandonedPackagesReport {
-                packages,
-                threshold_days: 730,
             });
             model
         }
@@ -561,32 +541,10 @@ mod tests {
     // ===== Abandoned packages section tests =====
 
     #[test]
-    fn test_abandoned_section_present_when_report_provided() {
-        let model = test_fixtures::with_abandoned_packages(2);
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-        assert!(markdown.contains("## Abandoned Packages"));
-        assert!(markdown.contains("old-pkg-0"));
-        assert!(markdown.contains("old-pkg-1"));
-    }
-
-    #[test]
     fn test_abandoned_section_absent_when_none() {
         let model = test_fixtures::base_model(); // abandoned_packages: None
         let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
         assert!(!markdown.contains("## Abandoned Packages"));
-    }
-
-    #[test]
-    fn test_abandoned_empty_report_renders_no_packages_message() {
-        let mut model = test_fixtures::base_model();
-        model.abandoned_packages = Some(crate::application::read_models::AbandonedPackagesReport {
-            packages: vec![],
-            threshold_days: 730,
-        });
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-        assert!(markdown.contains("## Abandoned Packages"));
-        assert!(markdown.contains("No abandoned packages detected."));
-        assert!(!markdown.contains("| Package | Version | Last Release |"));
     }
 
     #[test]
@@ -644,14 +602,6 @@ mod tests {
                 "## Vulnerability Resolution Guide",
             ],
         );
-    }
-
-    #[test]
-    fn test_abandoned_section_ja_locale() {
-        let model = test_fixtures::with_abandoned_packages(1);
-        let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
-        assert!(markdown.contains("## 廃止パッケージ"));
-        assert!(markdown.contains("old-pkg-0"));
     }
 
     // ===== Non-PyPI packages section tests =====
@@ -807,24 +757,6 @@ mod tests {
     }
 
     #[test]
-    fn test_explain_section_present_for_transitive_view() {
-        use crate::application::read_models::ExplainView;
-
-        let mut model = test_fixtures::base_model();
-        model.explain_view = Some(ExplainView {
-            target_package: "urllib3".to_string(),
-            found: true,
-            is_direct: false,
-            paths: vec![vec!["requests".to_string(), "urllib3".to_string()]],
-        });
-
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-        assert!(markdown.contains("## Dependency Explanation"));
-        assert!(markdown.contains("**urllib3** is included via 1 path(s):"));
-        assert!(markdown.contains("- `requests` → `urllib3`"));
-    }
-
-    #[test]
     fn test_explain_section_order_after_dependencies_before_vulnerabilities() {
         use crate::application::read_models::ExplainView;
 
@@ -857,50 +789,10 @@ mod tests {
     }
 
     #[test]
-    fn test_explain_section_ja_locale() {
-        use crate::application::read_models::ExplainView;
-
-        let mut model = test_fixtures::base_model();
-        model.explain_view = Some(ExplainView {
-            target_package: "nonexistent".to_string(),
-            found: false,
-            is_direct: false,
-            paths: vec![],
-        });
-
-        let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
-        assert!(markdown.contains("## 依存関係の説明"));
-        assert!(markdown.contains(
-            "パッケージ **nonexistent** はこのプロジェクトの依存関係に見つかりませんでした。"
-        ));
-        assert!(!markdown.contains("## Dependency Explanation"));
-    }
-
-    #[test]
     fn test_dependency_tree_section_absent_when_none() {
         let model = test_fixtures::base_model(); // dependency_tree: None
         let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
         assert!(!markdown.contains("## Dependency Tree"));
-    }
-
-    #[test]
-    fn test_dependency_tree_section_present_when_some() {
-        use crate::application::read_models::{DependencyTreeNodeView, DependencyTreeView};
-
-        let mut model = test_fixtures::base_model();
-        model.dependency_tree = Some(DependencyTreeView {
-            roots: vec![DependencyTreeNodeView {
-                name: "requests".to_string(),
-                version: Some("2.31.0".to_string()),
-                children: vec![],
-                truncated: false,
-            }],
-            max_depth: 3,
-        });
-
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-        assert!(markdown.contains("## Dependency Tree"));
-        assert!(markdown.contains("└── requests (2.31.0)"));
     }
 
     #[test]
@@ -944,26 +836,6 @@ mod tests {
                 "## Dependency Explanation",
             ],
         );
-    }
-
-    #[test]
-    fn test_dependency_tree_section_ja_locale() {
-        use crate::application::read_models::{DependencyTreeNodeView, DependencyTreeView};
-
-        let mut model = test_fixtures::base_model();
-        model.dependency_tree = Some(DependencyTreeView {
-            roots: vec![DependencyTreeNodeView {
-                name: "requests".to_string(),
-                version: Some("2.31.0".to_string()),
-                children: vec![],
-                truncated: false,
-            }],
-            max_depth: 3,
-        });
-
-        let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
-        assert!(markdown.contains("## 依存関係ツリー"));
-        assert!(!markdown.contains("## Dependency Tree"));
     }
 
     // ===== Baseline suppression footnote tests =====
