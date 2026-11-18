@@ -134,9 +134,7 @@ impl SbomFormatter for MarkdownFormatter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::read_models::{
-        ComponentView, DependencyView, LicenseView, SeverityView,
-    };
+    use crate::application::read_models::{DependencyView, SeverityView};
     use crate::i18n::Locale;
     use std::collections::HashMap;
 
@@ -430,31 +428,6 @@ mod tests {
     }
 
     #[test]
-    fn test_format_with_dependencies() {
-        let mut model = test_fixtures::base_model();
-        let mut transitive = HashMap::new();
-        transitive.insert(
-            "pkg:pypi/requests@2.31.0".to_string(),
-            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
-        );
-
-        model.dependencies = Some(DependencyView {
-            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
-            transitive,
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let result = formatter.format(&model);
-
-        assert!(result.is_ok());
-        let markdown = result.unwrap();
-        assert!(markdown.contains("## Direct Dependencies"));
-        assert!(markdown.contains("## Transitive Dependencies"));
-        assert!(markdown.contains("### Dependencies for requests"));
-        assert!(markdown.contains("urllib3"));
-    }
-
-    #[test]
     fn test_format_with_vulnerabilities() {
         // Informational-only rendering (ℹ️Info section, "No vulnerabilities found above
         // threshold.") is covered by test_format_vulnerability_section_ordering, which uses
@@ -565,91 +538,6 @@ mod tests {
     }
 
     // ===== Tests for --lang option (i18n) =====
-
-    #[test]
-    fn test_lang_ja_markdown_output_contains_japanese_headers() {
-        let model = test_fixtures::base_model();
-        assert_ja_output_contains(&model, "# ソフトウェア部品表 (SBOM)");
-        assert_ja_output_contains(&model, "## コンポーネント一覧");
-        assert_ja_output_excludes(&model, "# Software Bill of Materials (SBOM)");
-        assert_ja_output_excludes(&model, "## Component Inventory");
-    }
-
-    #[test]
-    fn test_lang_ja_markdown_output_contains_japanese_table_column() {
-        let model = test_fixtures::base_model();
-        assert_ja_output_contains(&model, "パッケージ");
-        assert_ja_output_contains(&model, "バージョン");
-        assert_ja_output_contains(&model, "ライセンス");
-    }
-
-    #[test]
-    fn test_lang_en_markdown_output_unchanged() {
-        let model = test_fixtures::base_model();
-        let formatter = MarkdownFormatter::new(Locale::En);
-
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("# Software Bill of Materials (SBOM)"));
-        assert!(markdown.contains("## Component Inventory"));
-        assert!(markdown.contains("Package"));
-        assert!(markdown.contains("Version"));
-        assert!(markdown.contains("License"));
-        assert!(!markdown.contains("パッケージ"));
-        assert!(!markdown.contains("ソフトウェア部品表"));
-    }
-
-    #[test]
-    fn test_lang_ja_with_dependencies_contains_japanese_dep_headers() {
-        let mut model = test_fixtures::base_model();
-        let mut transitive = HashMap::new();
-        transitive.insert(
-            "pkg:pypi/requests@2.31.0".to_string(),
-            vec!["pkg:pypi/urllib3@1.26.0".to_string()],
-        );
-        model.dependencies = Some(DependencyView {
-            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
-            transitive,
-        });
-        assert_ja_output_contains(&model, "## 直接依存パッケージ");
-        assert_ja_output_contains(&model, "## 間接依存パッケージ");
-        assert_ja_output_excludes(&model, "## Direct Dependencies");
-        assert_ja_output_excludes(&model, "## Transitive Dependencies");
-        assert_ja_output_contains(&model, "### requestsの依存パッケージ");
-        assert_ja_output_excludes(&model, "### Dependencies for requests");
-    }
-
-    #[test]
-    fn test_lang_ja_section_descriptions_are_japanese() {
-        let model = test_fixtures::base_model();
-        assert_ja_output_contains(
-            &model,
-            "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。",
-        );
-        assert_ja_output_excludes(&model, "A comprehensive list of all software components");
-    }
-
-    #[test]
-    fn test_lang_ja_no_direct_deps_label_is_japanese() {
-        let mut model = test_fixtures::base_model();
-        model.dependencies = Some(DependencyView {
-            direct: vec![],
-            transitive: HashMap::new(),
-        });
-        assert_ja_output_contains(&model, "*直接依存パッケージなし*");
-        assert_ja_output_excludes(&model, "*No direct dependencies*");
-    }
-
-    #[test]
-    fn test_lang_ja_no_transitive_deps_label_is_japanese() {
-        let mut model = test_fixtures::base_model();
-        model.dependencies = Some(DependencyView {
-            direct: vec!["pkg:pypi/requests@2.31.0".to_string()],
-            transitive: HashMap::new(),
-        });
-        assert_ja_output_contains(&model, "*間接依存パッケージなし*");
-        assert_ja_output_excludes(&model, "*No transitive dependencies*");
-    }
 
     #[test]
     fn test_lang_ja_vuln_above_threshold_warning_is_japanese() {
@@ -805,29 +693,6 @@ mod tests {
         let model = test_fixtures::with_two_actionable_vulns();
         assert_ja_output_contains(&model, "**2件の脆弱性が1個のパッケージで見つかりました。**");
         assert_ja_output_excludes(&model, "**Found");
-    }
-
-    #[test]
-    fn test_format_license_falls_back_to_name_when_spdx_id_is_none() {
-        let mut model = test_fixtures::base_model();
-        model.components.push(ComponentView {
-            bom_ref: "pkg:pypi/somelib@1.0.0".to_string(),
-            name: "somelib".to_string(),
-            version: "1.0.0".to_string(),
-            purl: "pkg:pypi/somelib@1.0.0".to_string(),
-            license: Some(LicenseView {
-                spdx_id: None,
-                name: "Some Custom License".to_string(),
-            }),
-            description: None,
-            sha256_hash: None,
-            is_direct_dependency: false,
-        });
-
-        let formatter = MarkdownFormatter::new(Locale::En);
-        let markdown = formatter.format(&model).unwrap();
-
-        assert!(markdown.contains("Some Custom License"));
     }
 
     // ===== Abandoned packages section tests =====

@@ -139,6 +139,36 @@ mod tests {
     }
 
     // ============================================================
+    // i18n section heading and description
+    // ============================================================
+
+    #[test]
+    fn test_en_section_heading_and_description() {
+        let msgs = Messages::for_locale(Locale::En);
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[]);
+        assert!(output.contains("## Component Inventory"));
+        assert!(output.contains(
+            "A comprehensive list of all software components and libraries included in this project."
+        ));
+        assert!(!output.contains("コンポーネント一覧"));
+        assert!(!output.contains("パッケージ"));
+    }
+
+    #[test]
+    fn test_ja_section_heading_and_description() {
+        let msgs = Messages::for_locale(Locale::Ja);
+        let mut output = String::new();
+        render(msgs, None, &mut output, &[]);
+        assert!(output.contains("## コンポーネント一覧"));
+        assert!(output.contains(
+            "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。"
+        ));
+        assert!(!output.contains("## Component Inventory"));
+        assert!(!output.contains("A comprehensive list of all software components"));
+    }
+
+    // ============================================================
     // Verified packages (link vs plain text)
     // ============================================================
 
