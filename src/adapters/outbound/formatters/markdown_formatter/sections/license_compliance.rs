@@ -184,6 +184,7 @@ mod tests {
         let compliance = make_compliance(vec![], vec![]);
         let output = call_render(Locale::Ja, &compliance);
         assert!(output.contains("**ライセンス違反は見つかりませんでした。**"));
+        assert!(!output.contains("**No license violations found.**"));
     }
 
     #[test]
@@ -227,6 +228,7 @@ mod tests {
         let compliance = make_compliance(vec![v1, v2], vec![]);
         let output = call_render(Locale::Ja, &compliance);
         assert!(output.contains("**2 件のライセンス違反が見つかりました。**"));
+        assert!(!output.contains("license violations found"));
     }
 
     // --- violations table rows ---
