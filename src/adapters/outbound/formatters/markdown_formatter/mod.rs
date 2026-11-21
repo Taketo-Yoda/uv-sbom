@@ -6,7 +6,7 @@ mod vuln_render;
 
 use crate::application::read_models::SbomReadModel;
 use crate::i18n::{Locale, Messages};
-use crate::ports::outbound::SbomFormatter;
+use crate::application::ports::SbomFormatter;
 use crate::shared::Result;
 use std::collections::HashSet;
 

@@ -3,7 +3,7 @@ mod schema;
 use schema::*;
 
 use crate::application::read_models::SbomReadModel;
-use crate::ports::outbound::SbomFormatter;
+use crate::application::ports::SbomFormatter;
 use crate::shared::Result;
 
 /// CycloneDxFormatter adapter for generating CycloneDX 1.6 JSON format

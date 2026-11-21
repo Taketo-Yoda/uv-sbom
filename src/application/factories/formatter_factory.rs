@@ -1,7 +1,7 @@
 use crate::adapters::outbound::formatters::{CycloneDxFormatter, MarkdownFormatter};
 use crate::application::dto::OutputFormat;
 use crate::i18n::{Locale, Messages};
-use crate::ports::outbound::SbomFormatter;
+use crate::application::ports::SbomFormatter;
 use std::collections::HashSet;
 
 /// Factory for creating SBOM formatters

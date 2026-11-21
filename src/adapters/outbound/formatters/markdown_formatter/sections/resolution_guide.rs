@@ -156,7 +156,7 @@ mod tests {
         SbomMetadataView, SbomReadModel, SeverityView, UpgradeEntryView, UpgradeRecommendationView,
     };
     use crate::i18n::{Locale, Messages};
-    use crate::ports::outbound::SbomFormatter;
+    use crate::application::ports::SbomFormatter;
 
     fn create_test_read_model() -> SbomReadModel {
         SbomReadModel {
