@@ -43,6 +43,7 @@ use ports::outbound::{
     PackageSourceMap, ProjectConfigReader, WorkspaceMember, WorkspaceReader,
 };
 use sbom_generation::domain::incident_target::IncidentTarget;
+use sbom_generation::domain::CveIgnoreRule;
 use shared::error::ExitCode;
 use shared::Result;
 use std::path::{Path, PathBuf};
@@ -293,7 +294,7 @@ fn build_sbom_request(
         .check_cve(merged.check_cve)
         .severity_threshold_opt(merged.severity_threshold)
         .cvss_threshold_opt(merged.cvss_threshold)
-        .ignore_cves(merged.ignore_cves.clone())
+        .ignore_cves(merged.ignore_cves.iter().map(CveIgnoreRule::from).collect())
         .check_license(merged.check_license)
         .license_policy(merged.license_policy.clone())
         .suggest_fix(suggest_fix)

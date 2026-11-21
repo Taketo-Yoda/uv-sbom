@@ -1,5 +1,5 @@
 use super::super::vulnerability::PackageVulnerabilities;
-use crate::config::IgnoreCve;
+use crate::sbom_generation::domain::CveIgnoreRule;
 
 /// A single CVE that was excluded from a vulnerability report by the ignore list.
 ///
@@ -37,7 +37,7 @@ impl CveFilter {
     /// * The list of `IgnoredCveRecord`s describing every CVE that was ignored
     pub fn apply(
         vulnerabilities: Vec<PackageVulnerabilities>,
-        ignore_cves: &[IgnoreCve],
+        ignore_cves: &[CveIgnoreRule],
     ) -> (Vec<PackageVulnerabilities>, Vec<IgnoredCveRecord>) {
         if ignore_cves.is_empty() {
             return (vulnerabilities, Vec::new());
@@ -85,7 +85,6 @@ impl CveFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::IgnoreCve;
     use crate::sbom_generation::domain::vulnerability::{
         PackageVulnerabilities, Severity, Vulnerability,
     };
@@ -98,15 +97,15 @@ mod tests {
         PackageVulnerabilities::new(name.to_string(), "1.0.0".to_string(), vulns)
     }
 
-    fn ignore(id: &str) -> IgnoreCve {
-        IgnoreCve {
+    fn ignore(id: &str) -> CveIgnoreRule {
+        CveIgnoreRule {
             id: id.to_string(),
             reason: None,
         }
     }
 
-    fn ignore_with_reason(id: &str, reason: &str) -> IgnoreCve {
-        IgnoreCve {
+    fn ignore_with_reason(id: &str, reason: &str) -> CveIgnoreRule {
+        CveIgnoreRule {
             id: id.to_string(),
             reason: Some(reason.to_string()),
         }

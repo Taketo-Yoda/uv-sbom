@@ -3,6 +3,7 @@ use crate::i18n::Locale;
 use crate::sbom_generation::domain::baseline::VulnerabilityBaseline;
 use crate::sbom_generation::domain::license_policy::LicensePolicy;
 use crate::sbom_generation::domain::vulnerability::Severity;
+use crate::sbom_generation::domain::CveIgnoreRule;
 use crate::shared::error::SbomError;
 use crate::shared::Result;
 use std::path::PathBuf;
@@ -28,7 +29,7 @@ pub struct SbomRequest {
     /// CVSS threshold for vulnerability filtering
     pub cvss_threshold: Option<f32>,
     /// CVE IDs to ignore during vulnerability checks
-    pub ignore_cves: Vec<IgnoreCve>,
+    pub ignore_cves: Vec<CveIgnoreRule>,
     /// Whether to check license compliance
     pub check_license: bool,
     /// License compliance policy (only used when check_license is true)
@@ -123,7 +124,7 @@ pub struct SbomRequestBuilder {
     check_cve: bool,
     severity_threshold: Option<Severity>,
     cvss_threshold: Option<f32>,
-    ignore_cves: Vec<IgnoreCve>,
+    ignore_cves: Vec<CveIgnoreRule>,
     check_license: bool,
     license_policy: Option<LicensePolicy>,
     suggest_fix: bool,
@@ -231,7 +232,7 @@ impl SbomRequestBuilder {
     }
 
     /// Sets the CVE IDs to ignore during vulnerability checks.
-    pub fn ignore_cves(mut self, cves: Vec<IgnoreCve>) -> Self {
+    pub fn ignore_cves(mut self, cves: Vec<CveIgnoreRule>) -> Self {
         self.ignore_cves = cves;
         self
     }
@@ -370,10 +371,45 @@ impl Default for SbomRequestBuilder {
     }
 }
 
+/// Converts a config-file ignore entry into the domain's ignore rule.
+impl From<&IgnoreCve> for CveIgnoreRule {
+    fn from(entry: &IgnoreCve) -> Self {
+        Self {
+            id: entry.id.clone(),
+            reason: entry.reason.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::IgnoreCve;
+
+    #[test]
+    fn test_cve_ignore_rule_from_ignore_cve_copies_id_and_reason() {
+        let with_reason = IgnoreCve {
+            id: "CVE-2024-1".to_string(),
+            reason: Some("not reachable".to_string()),
+        };
+        let without_reason = IgnoreCve {
+            id: "CVE-2024-2".to_string(),
+            reason: None,
+        };
+        assert_eq!(
+            CveIgnoreRule::from(&with_reason),
+            CveIgnoreRule {
+                id: "CVE-2024-1".to_string(),
+                reason: Some("not reachable".to_string()),
+            }
+        );
+        assert_eq!(
+            CveIgnoreRule::from(&without_reason),
+            CveIgnoreRule {
+                id: "CVE-2024-2".to_string(),
+                reason: None,
+            }
+        );
+    }
 
     #[test]
     fn test_builder_with_only_project_path() {
@@ -439,7 +475,7 @@ mod tests {
             .check_cve(true)
             .severity_threshold_opt(Some(Severity::High))
             .cvss_threshold_opt(Some(7.5))
-            .ignore_cves(vec![IgnoreCve {
+            .ignore_cves(vec![CveIgnoreRule {
                 id: "CVE-2024-1234".to_string(),
                 reason: Some("test".to_string()),
             }])

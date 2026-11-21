@@ -114,16 +114,6 @@ struct ArchException {
 }
 
 const ARCH_EXCEPTIONS: &[ArchException] = &[
-    // ARCH-EXCEPTION(#1149): remove when the domain no longer imports `config::IgnoreCve`
-    ArchException {
-        source: "sbom_generation::domain::services::cve_filter",
-        targets: &["config::IgnoreCve"],
-    },
-    // ARCH-EXCEPTION(#1149): remove when the domain no longer imports `config::IgnoreCve`
-    ArchException {
-        source: "sbom_generation::domain::services::vulnerability_checker",
-        targets: &["config::IgnoreCve"],
-    },
     // ARCH-EXCEPTION(#1150): remove when the `SbomFormatter` port no longer imports `SbomReadModel`
     ArchException {
         source: "ports::outbound::formatter",
@@ -274,8 +264,7 @@ fn test_layer_rules_without_exceptions_reports_exactly_allowlisted() {
         "ARCH_EXCEPTIONS must list exactly the existing violations; \
          delete an entry once its Issue removes the violation\n{violations}"
     );
-    // cve_filter.rs imports `config::IgnoreCve` twice (module and test module).
-    assert_eq!(violations.len(), 8, "{violations}");
+    assert_eq!(violations.len(), 5, "{violations}");
 }
 
 #[test]
