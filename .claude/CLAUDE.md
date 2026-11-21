@@ -288,7 +288,10 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
   clap default (#968), so an explicit `--format json` beats a config `format`; the `json`
   default is applied in `resolve_format`. This order is enforced in
   `config_resolver/mod.rs` and must not be changed without updating tests.
-- **Domain layer has no I/O**: `src/sbom_generation/` must never import from `adapters` or `ports`.
+- **Domain layer has no I/O**: the cross-layer import rules are enforced by `tests/architecture.rs`
+  (archaven, run by `cargo test`), which holds the layer rule table and the allowlisted existing
+  violations (`ARCH-EXCEPTION(#N)`); in particular, `src/sbom_generation/` must never import from
+  `adapters` or `ports`.
   `UpgradeAdvisor` was historically the one exception — it consumed `UvLockSimulator` as a generic
   bound and awaited it directly — but as of #716 it is a pure, synchronous comparator like every
   other domain service; the simulation-running loop now lives in `SimulateUpgradesUseCase`

@@ -15,7 +15,8 @@ rule was previously restated independently in `.claude/agents/qa.md` and twice i
   sub-modules by responsibility, each with its own `#[cfg(test)] mod tests` at the
   bottom — do not split the tests out.
 - The crate-root `tests/` directory is reserved for integration tests that exercise
-  the public API or the binary.
+  the public API or the binary, and for static architecture tests over the source
+  tree (`tests/architecture.rs`).
 
 ## Consumers
 

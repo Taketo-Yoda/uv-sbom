@@ -41,6 +41,7 @@ pep440_rs = "0.7"
 cvss = { version = "3", default-features = false, features = ["std", "v4"] }
 
 [dev-dependencies]
+archaven = "=1.1.0"
 assert_cmd = "2.2"
 predicates = "3"
 wiremock = "0.6"

@@ -22,7 +22,8 @@ Before responding to any architecture question, read:
 - Verify that new code is placed in the correct layer (CLI, application, domain, ports,
   adapters, shared)
 - Enforce the hexagonal architecture invariants, particularly:
-  - `src/sbom_generation/` must never import from `adapters/` or `ports/`
+  - The cross-layer import rules in `.claude/CLAUDE.md` → "Important Invariants"
+    (enforced by `tests/architecture.rs`)
   - Config resolution order (CLI args > config file > defaults; no environment-variable
     layer) must not change without updating tests
 - Identify when a proposed change would introduce an inappropriate dependency between layers

@@ -87,7 +87,8 @@ Do NOT check formatting or linting — those are handled by CI.
 ### 1. Hexagonal Architecture Compliance
 
 Layer boundary violations (🔴 MUST FIX if any):
-- Does src/sbom_generation/ import from src/adapters/ or src/ports/?
+- Does the change add a cross-layer import forbidden by .claude/CLAUDE.md →
+  "Important Invariants" (enforced by tests/architecture.rs)?
 - Does new I/O logic (file, network, console) exist outside src/adapters/?
 - Is a domain object (Package, Vulnerability, etc.) passed across a layer boundary
   without being converted to a DTO first?
@@ -97,7 +98,8 @@ Port/Adapter structure:
   Exception: a port trait consumed directly by a domain service as a generic
   bound (e.g. a domain service function like `fn advise<S: SomeTrait>(...)`)
   is domain-owned and belongs under src/sbom_generation/domain/ instead — the
-  domain layer must never import from src/ports/, so the port cannot live
+  layer import rules (.claude/CLAUDE.md → "Important Invariants") forbid
+  domain → src/ports/ imports, so the port cannot live
   there if a domain service needs the trait in scope. See UvLockSimulator in
   src/sbom_generation/domain/uv_lock_simulator.rs (#703) as the reference
   example. This exception does not apply to traits only consumed from
