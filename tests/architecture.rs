@@ -114,11 +114,6 @@ struct ArchException {
 }
 
 const ARCH_EXCEPTIONS: &[ArchException] = &[
-    // ARCH-EXCEPTION(#1150): remove when the `SbomFormatter` port no longer imports `SbomReadModel`
-    ArchException {
-        source: "ports::outbound::formatter",
-        targets: &["application::read_models::SbomReadModel"],
-    },
     // ARCH-EXCEPTION(#1151): remove when `FormatterFactory` no longer constructs adapters
     ArchException {
         source: "application::factories::formatter_factory",
@@ -264,7 +259,7 @@ fn test_layer_rules_without_exceptions_reports_exactly_allowlisted() {
         "ARCH_EXCEPTIONS must list exactly the existing violations; \
          delete an entry once its Issue removes the violation\n{violations}"
     );
-    assert_eq!(violations.len(), 5, "{violations}");
+    assert_eq!(violations.len(), 4, "{violations}");
 }
 
 #[test]

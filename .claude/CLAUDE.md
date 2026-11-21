@@ -224,6 +224,7 @@ Hexagonal Architecture (Ports & Adapters) with Domain-Driven Design principles.
 | `src/cli/config_resolver/` | Merges CLI args / config file into `MergedConfig` (no environment-variable layer — `uv-sbom` reads no environment variables during config resolution); split into `mod.rs` (struct + orchestrator only) since #788, `loader.rs` (config file I/O), `list_merge.rs` (generic list-merge helpers), `field_resolvers.rs` (the eight simple per-field resolvers + `DEFAULT_ABANDONED_THRESHOLD_DAYS`, extracted from `mod.rs` in #789), `license_policy_resolver.rs` (`resolve_unknown_license_handling`, `resolve_license_policy`, extracted from `mod.rs` in #790); `MergedConfig`, `merge_config`, and `load_config` are the only items visible outside the module |
 | `src/application/` | Use cases, DTOs, factories, read models |
 | `src/sbom_generation/` | Pure domain logic (no I/O dependencies) |
+| `src/application/ports/` | Application-owned output port traits whose signatures reference application-layer types (e.g. `SbomFormatter` takes `SbomReadModel`); moved from `src/ports/outbound/` in #1150 to fix a ports→application dependency |
 | `src/ports/` | Trait definitions for infrastructure (inbound/outbound) |
 | `src/ports/inbound/` | Inbound port traits (e.g. use case interfaces) |
 | `src/ports/outbound/` | Outbound port traits (e.g. repository, network interfaces) |

@@ -6,7 +6,6 @@ pub mod advisory_repository;
 pub mod baseline_repository;
 pub mod diff_lockfile_reader;
 pub mod exploitability_repository;
-pub mod formatter;
 pub mod license_repository;
 pub mod lockfile_reader;
 pub mod maintenance_repository;
@@ -32,7 +31,6 @@ pub use advisory_repository::AdvisoryRepository;
 pub use baseline_repository::BaselineRepository;
 pub use diff_lockfile_reader::{DiffLockfileReader, DiffSource};
 pub use exploitability_repository::ExploitabilityRepository;
-pub use formatter::SbomFormatter;
 pub use license_repository::{LicenseRepository, PyPiMetadata};
 pub use lockfile_reader::{
     GroupRoots, LockfileParseResult, LockfileReader, PackageSourceKind, PackageSourceMap,
