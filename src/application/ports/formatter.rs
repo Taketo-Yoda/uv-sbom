@@ -1,12 +1,15 @@
 use crate::application::read_models::SbomReadModel;
 use crate::shared::Result;
 
-/// SbomFormatter port for formatting SBOM output
+/// Application-owned output port for formatting SBOM output.
 ///
-/// This port abstracts the formatting logic for different SBOM formats
-/// (CycloneDX JSON, Markdown, etc.).
+/// This trait lives in the application layer rather than `crate::ports::outbound`
+/// because its only parameter is an application read model (`SbomReadModel`).
+/// Placing it here keeps the dependency direction valid: adapters depend on
+/// the application layer, and this trait depends on a sibling module within
+/// the same layer.
 pub trait SbomFormatter {
-    /// Formats SBOM output using the unified read model
+    /// Formats SBOM output using the unified read model.
     ///
     /// # Arguments
     /// * `model` - The unified SBOM read model containing metadata, components,

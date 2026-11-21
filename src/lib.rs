@@ -92,9 +92,10 @@ pub mod prelude {
     };
     pub use crate::application::factories::{FormatterFactory, PresenterFactory, PresenterType};
     pub use crate::application::use_cases::GenerateSbomUseCase;
+    pub use crate::application::ports::SbomFormatter;
     pub use crate::ports::outbound::{
         GroupRoots, LicenseRepository, LockfileParseResult, LockfileReader, OutputPresenter,
-        PackageSourceKind, PackageSourceMap, ProgressReporter, ProjectConfigReader, SbomFormatter,
+        PackageSourceKind, PackageSourceMap, ProgressReporter, ProjectConfigReader,
     };
     pub use crate::sbom_generation::domain::{
         DependencyGraph, LicenseInfo, Package, PackageName, SbomMetadata,

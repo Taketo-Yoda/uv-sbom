@@ -61,7 +61,7 @@ mod tests {
         VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
     };
     use crate::i18n::Locale;
-    use crate::ports::outbound::SbomFormatter;
+    use crate::application::ports::SbomFormatter;
     use std::collections::HashMap;
 
     fn create_test_read_model() -> SbomReadModel {
