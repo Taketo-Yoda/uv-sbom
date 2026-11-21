@@ -151,12 +151,12 @@ pub(in super::super) fn render(
 
 #[cfg(test)]
 mod tests {
+    use crate::application::ports::SbomFormatter;
     use crate::application::read_models::{
         ComponentView, IntroducedByView, LicenseView, ResolutionEntryView, ResolutionGuideView,
         SbomMetadataView, SbomReadModel, SeverityView, UpgradeEntryView, UpgradeRecommendationView,
     };
     use crate::i18n::{Locale, Messages};
-    use crate::application::ports::SbomFormatter;
 
     fn create_test_read_model() -> SbomReadModel {
         SbomReadModel {

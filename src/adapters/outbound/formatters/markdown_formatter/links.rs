@@ -56,12 +56,12 @@ pub(super) fn format_package_name(
 mod tests {
     use super::super::MarkdownFormatter;
     use super::*;
+    use crate::application::ports::SbomFormatter;
     use crate::application::read_models::{
         ComponentView, DependencyView, LicenseView, SbomMetadataView, SbomReadModel, SeverityView,
         VulnerabilityReportView, VulnerabilitySummary, VulnerabilityView,
     };
     use crate::i18n::Locale;
-    use crate::application::ports::SbomFormatter;
     use std::collections::HashMap;
 
     fn create_test_read_model() -> SbomReadModel {
