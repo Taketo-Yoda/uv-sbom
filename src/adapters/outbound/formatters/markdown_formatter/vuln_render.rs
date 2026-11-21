@@ -589,8 +589,22 @@ mod tests {
     }
 
     fn render(messages: &'static Messages, vulns: &VulnerabilityReportView) -> String {
+        render_with_baseline(messages, vulns, 0)
+    }
+
+    fn render_with_baseline(
+        messages: &'static Messages,
+        vulns: &VulnerabilityReportView,
+        baseline_suppressed_count: usize,
+    ) -> String {
         let mut output = String::new();
-        render_vulnerabilities(messages, None, &mut output, vulns, 0);
+        render_vulnerabilities(
+            messages,
+            None,
+            &mut output,
+            vulns,
+            baseline_suppressed_count,
+        );
         output
     }
 
@@ -916,5 +930,80 @@ Malicious code in evil-pkg (PyPI) |\n"
         assert_eq!(format_epss_percentile(0.21), "21st percentile");
         assert_eq!(format_epss_percentile(1.0), "100th percentile");
         assert_eq!(format_epss_percentile(0.0), "0th percentile");
+    }
+
+    #[test]
+    fn test_render_vulnerabilities_empty_report_ja() {
+        let output = render(Messages::for_locale(Locale::Ja), &report(vec![], vec![]));
+        assert!(output.contains("## 脆弱性レポート"));
+        assert!(output.contains("### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。"));
+        assert!(output.contains(
+            "*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*"
+        ));
+        assert!(!output.contains("## Vulnerability Report"));
+        assert!(!output.contains("No vulnerabilities found above threshold."));
+        assert!(!output.contains("*Vulnerability data provided by"));
+    }
+
+    #[test]
+    fn test_render_vulnerabilities_actionable_ja() {
+        let vulns = report(
+            vec![
+                make_vuln(
+                    "CVE-2024-1234",
+                    "requests",
+                    "2.31.0",
+                    SeverityView::Critical,
+                    false,
+                    None,
+                ),
+                make_vuln(
+                    "CVE-2024-5678",
+                    "requests",
+                    "2.31.0",
+                    SeverityView::High,
+                    false,
+                    None,
+                ),
+            ],
+            vec![],
+        );
+        let output = render(Messages::for_locale(Locale::Ja), &vulns);
+        assert!(output.contains("## 脆弱性レポート"));
+        assert!(output.contains("**2件の脆弱性が1個のパッケージで見つかりました。**"));
+        assert!(output.contains("### ⚠️警告 2件の脆弱性が1個のパッケージで見つかりました。"));
+        // CVE IDs stay in their original form regardless of locale
+        assert!(output.contains("CVE-2024-1234"));
+        assert!(!output.contains("## Vulnerability Report"));
+        assert!(!output.contains("**Found"));
+        assert!(!output.contains("### ⚠️Warning Found"));
+    }
+
+    #[test]
+    fn test_render_baseline_footnote_present_when_count_positive() {
+        let output = render_with_baseline(messages(), &report(vec![], vec![]), 3);
+        assert!(output.contains("_Note: 3 previously-baselined finding(s) suppressed._"));
+    }
+
+    #[test]
+    fn test_render_baseline_footnote_ja() {
+        let output =
+            render_with_baseline(Messages::for_locale(Locale::Ja), &report(vec![], vec![]), 2);
+        assert!(
+            output.contains("_注: ベースラインにより 2 件の既知の検出結果が抑制されています。_")
+        );
+        assert!(!output.contains("previously-baselined"));
+    }
+
+    #[test]
+    fn test_render_baseline_footnote_before_attribution() {
+        let output = render_with_baseline(messages(), &report(vec![], vec![]), 1);
+        let footnote_pos = output
+            .find("previously-baselined")
+            .expect("footnote must be present");
+        let attribution_pos = output
+            .find(messages().label_osv_attribution)
+            .expect("attribution must be present");
+        assert!(footnote_pos < attribution_pos);
     }
 }

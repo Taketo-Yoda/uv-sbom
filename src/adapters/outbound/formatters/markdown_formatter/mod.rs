@@ -196,19 +196,9 @@ mod tests {
             }
         }
 
-        pub(super) fn with_vulnerabilities(severity: SeverityView) -> SbomReadModel {
+        /// Returns a model with one Critical-severity actionable vulnerability (CVE-2024-1234).
+        pub(super) fn with_critical_vuln() -> SbomReadModel {
             let mut model = base_model();
-            let cvss_score = match severity {
-                SeverityView::Critical => Some(9.8),
-                SeverityView::High => Some(7.5),
-                SeverityView::Medium => Some(5.0),
-                SeverityView::Low => Some(3.1),
-                SeverityView::None => None,
-            };
-            let fixed_version = match severity {
-                SeverityView::Critical | SeverityView::High => Some("2.32.0".to_string()),
-                _ => None,
-            };
             model.vulnerabilities = Some(VulnerabilityReportView {
                 actionable: vec![VulnerabilityView {
                     bom_ref: "vuln-001".to_string(),
@@ -216,10 +206,10 @@ mod tests {
                     affected_component: "pkg:pypi/requests@2.31.0".to_string(),
                     affected_component_name: "requests".to_string(),
                     affected_version: "2.31.0".to_string(),
-                    cvss_score,
+                    cvss_score: Some(9.8),
                     cvss_vector: None,
-                    severity,
-                    fixed_version,
+                    severity: SeverityView::Critical,
+                    fixed_version: Some("2.32.0".to_string()),
                     description: None,
                     source_url: None,
                     epss_percentile: None,
@@ -234,139 +224,6 @@ mod tests {
             });
             model
         }
-
-        /// Returns a model with one Critical-severity actionable vulnerability (CVE-2024-1234).
-        pub(super) fn with_critical_vuln() -> SbomReadModel {
-            with_vulnerabilities(SeverityView::Critical)
-        }
-
-        /// Returns a model with an empty vulnerability report (no actionable or informational).
-        pub(super) fn with_empty_vuln_report() -> SbomReadModel {
-            let mut model = base_model();
-            model.vulnerabilities = Some(VulnerabilityReportView {
-                actionable: vec![],
-                informational: vec![],
-                summary: VulnerabilitySummary {
-                    total_count: 0,
-                    affected_package_count: 0,
-                },
-            });
-            model
-        }
-
-        /// Returns a model with two actionable vulnerabilities on the same package (Critical + High).
-        pub(super) fn with_two_actionable_vulns() -> SbomReadModel {
-            let mut model = base_model();
-            model.vulnerabilities = Some(VulnerabilityReportView {
-                actionable: vec![
-                    make_vuln(
-                        "CVE-2024-1234",
-                        "pkg:pypi/requests@2.31.0",
-                        "requests",
-                        "2.31.0",
-                        SeverityView::Critical,
-                        Some(9.8_f32),
-                        Some("2.32.0"),
-                    ),
-                    make_vuln(
-                        "CVE-2024-5678",
-                        "pkg:pypi/requests@2.31.0",
-                        "requests",
-                        "2.31.0",
-                        SeverityView::High,
-                        Some(7.5_f32),
-                        None,
-                    ),
-                ],
-                informational: vec![],
-                summary: VulnerabilitySummary {
-                    total_count: 2,
-                    affected_package_count: 1,
-                },
-            });
-            model
-        }
-
-        /// Returns a model with one Critical actionable and one Low informational vulnerability.
-        pub(super) fn with_actionable_and_informational_vulns() -> SbomReadModel {
-            let mut model = base_model();
-            model.vulnerabilities = Some(VulnerabilityReportView {
-                actionable: vec![make_vuln(
-                    "CVE-2024-1234",
-                    "pkg:pypi/requests@2.31.0",
-                    "requests",
-                    "2.31.0",
-                    SeverityView::Critical,
-                    Some(9.8_f32),
-                    Some("2.32.0"),
-                )],
-                informational: vec![make_vuln(
-                    "CVE-2024-5678",
-                    "pkg:pypi/urllib3@1.26.0",
-                    "urllib3",
-                    "1.26.0",
-                    SeverityView::Low,
-                    Some(2.0_f32),
-                    None,
-                )],
-                summary: VulnerabilitySummary {
-                    total_count: 2,
-                    affected_package_count: 2,
-                },
-            });
-            model
-        }
-
-        fn make_vuln(
-            id: &str,
-            affected_component: &str,
-            name: &str,
-            version: &str,
-            severity: SeverityView,
-            cvss_score: Option<f32>,
-            fixed_version: Option<&str>,
-        ) -> VulnerabilityView {
-            VulnerabilityView {
-                bom_ref: id.to_string(),
-                id: id.to_string(),
-                affected_component: affected_component.to_string(),
-                affected_component_name: name.to_string(),
-                affected_version: version.to_string(),
-                cvss_score,
-                cvss_vector: None,
-                severity,
-                fixed_version: fixed_version.map(str::to_string),
-                description: None,
-                source_url: None,
-                epss_percentile: None,
-                in_kev: None,
-                is_malicious: false,
-            }
-        }
-    }
-
-    fn assert_ja_output_contains(
-        model: &crate::application::read_models::SbomReadModel,
-        expected: &str,
-    ) {
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let output = formatter.format(model).unwrap();
-        assert!(
-            output.contains(expected),
-            "Expected ja output to contain {expected:?}, got:\n{output}"
-        );
-    }
-
-    fn assert_ja_output_excludes(
-        model: &crate::application::read_models::SbomReadModel,
-        unexpected: &str,
-    ) {
-        let formatter = MarkdownFormatter::new(Locale::Ja);
-        let output = formatter.format(model).unwrap();
-        assert!(
-            !output.contains(unexpected),
-            "Expected ja output to NOT contain {unexpected:?}, got:\n{output}"
-        );
     }
 
     fn assert_section_order(markdown: &str, sections: &[&str]) {
@@ -408,46 +265,6 @@ mod tests {
     }
 
     #[test]
-    fn test_format_with_vulnerabilities() {
-        // Informational-only rendering (ℹ️Info section, "No vulnerabilities found above
-        // threshold.") is covered by test_format_vulnerability_section_ordering, which uses
-        // a model with both actionable and informational vulns.
-        for severity in [SeverityView::Critical, SeverityView::Low] {
-            let model = test_fixtures::with_vulnerabilities(severity);
-            let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-
-            assert!(
-                markdown.contains("## Vulnerability Report"),
-                "severity={severity:?}"
-            );
-            assert!(
-                markdown.contains("### ⚠️Warning Found 1 vulnerability in 1 package."),
-                "severity={severity:?}"
-            );
-            assert!(
-                markdown
-                    .contains("[CVE-2024-1234](https://nvd.nist.gov/vuln/detail/CVE-2024-1234)"),
-                "severity={severity:?}"
-            );
-
-            match severity {
-                SeverityView::Critical => {
-                    assert!(markdown.contains("🔴"));
-                    assert!(markdown.contains("CRITICAL"));
-                    assert!(markdown.contains("9.8"));
-                    assert!(markdown.contains("2.32.0"));
-                }
-                SeverityView::Low => {
-                    assert!(markdown.contains("🟢"));
-                    assert!(markdown.contains("LOW"));
-                    assert!(markdown.contains("3.1"));
-                }
-                _ => unreachable!(),
-            }
-        }
-    }
-
-    #[test]
     fn test_format_output_section_ordering() {
         let mut model = test_fixtures::base_model();
         let mut transitive = HashMap::new();
@@ -472,70 +289,6 @@ mod tests {
                 "## Transitive Dependencies",
             ],
         );
-    }
-
-    #[test]
-    fn test_format_vulnerability_section_ordering() {
-        let model = test_fixtures::with_actionable_and_informational_vulns();
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-
-        assert_section_order(
-            &markdown,
-            &[
-                "**Found 2 vulnerabilities in 2 packages.**",
-                "### ⚠️Warning",
-                "### ℹ️Info",
-                "*Vulnerability data provided by",
-            ],
-        );
-    }
-
-    // ===== Tests for --lang option (i18n) =====
-
-    #[test]
-    fn test_lang_ja_vuln_above_threshold_warning_is_japanese() {
-        let model = test_fixtures::with_empty_vuln_report();
-        assert_ja_output_contains(
-            &model,
-            "### ⚠️警告 閾値を超える脆弱性は見つかりませんでした。",
-        );
-        assert_ja_output_excludes(
-            &model,
-            "### ⚠️Warning No vulnerabilities found above threshold.",
-        );
-    }
-
-    #[test]
-    fn test_lang_ja_actionable_vuln_count_is_japanese() {
-        let model = test_fixtures::with_critical_vuln();
-        assert_ja_output_contains(
-            &model,
-            "### ⚠️警告 1件の脆弱性が1個のパッケージで見つかりました。",
-        );
-        assert_ja_output_excludes(&model, "### ⚠️Warning Found");
-    }
-
-    #[test]
-    fn test_lang_ja_osv_attribution_is_japanese() {
-        let model = test_fixtures::with_empty_vuln_report();
-        assert_ja_output_contains(&model, "*脆弱性データは [OSV](https://osv.dev) より CC-BY 4.0 ライセンスの下で提供されています*");
-        assert_ja_output_excludes(&model, "*Vulnerability data provided by");
-    }
-
-    #[test]
-    fn test_lang_ja_with_vulnerabilities_contains_japanese_vuln_headers() {
-        let model = test_fixtures::with_critical_vuln();
-        // CVE ID remains in its original form regardless of locale
-        assert_ja_output_contains(&model, "## 脆弱性レポート");
-        assert_ja_output_excludes(&model, "## Vulnerability Report");
-        assert_ja_output_contains(&model, "CVE-2024-1234");
-    }
-
-    #[test]
-    fn test_lang_ja_vuln_summary_is_japanese() {
-        let model = test_fixtures::with_two_actionable_vulns();
-        assert_ja_output_contains(&model, "**2件の脆弱性が1個のパッケージで見つかりました。**");
-        assert_ja_output_excludes(&model, "**Found");
     }
 
     // ===== Abandoned packages section tests =====
@@ -842,22 +595,14 @@ mod tests {
 
     #[test]
     fn test_baseline_footnote_present_when_suppressed_count_positive() {
-        let mut model = test_fixtures::with_empty_vuln_report();
+        // Integration check: the formatter must pass the model's count through to
+        // the vulnerability renderer (footnote text itself is tested in vuln_render.rs).
+        let mut model = test_fixtures::with_critical_vuln();
         model.baseline_suppressed_count = 3;
         let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
         assert!(
             markdown.contains("_Note: 3 previously-baselined finding(s) suppressed._"),
             "Expected baseline footnote, got:\n{markdown}"
-        );
-    }
-
-    #[test]
-    fn test_baseline_footnote_absent_when_zero() {
-        let model = test_fixtures::with_empty_vuln_report();
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-        assert!(
-            !markdown.contains("previously-baselined"),
-            "Should not contain baseline footnote when count is 0"
         );
     }
 
@@ -869,35 +614,6 @@ mod tests {
         assert!(
             !markdown.contains("previously-baselined"),
             "Should not contain baseline footnote when no vulnerability section"
-        );
-    }
-
-    #[test]
-    fn test_baseline_footnote_ja_locale() {
-        let mut model = test_fixtures::with_empty_vuln_report();
-        model.baseline_suppressed_count = 2;
-        let markdown = MarkdownFormatter::new(Locale::Ja).format(&model).unwrap();
-        assert!(
-            markdown.contains("_注: ベースラインにより 2 件の既知の検出結果が抑制されています。_"),
-            "Expected Japanese baseline footnote, got:\n{markdown}"
-        );
-        assert!(!markdown.contains("previously-baselined"));
-    }
-
-    #[test]
-    fn test_baseline_footnote_before_attribution() {
-        let mut model = test_fixtures::with_empty_vuln_report();
-        model.baseline_suppressed_count = 1;
-        let markdown = MarkdownFormatter::new(Locale::En).format(&model).unwrap();
-        let footnote_pos = markdown
-            .find("previously-baselined")
-            .expect("footnote must be present");
-        let attribution_pos = markdown
-            .find("Vulnerability data provided by")
-            .expect("attribution must be present");
-        assert!(
-            footnote_pos < attribution_pos,
-            "Baseline footnote should appear before OSV attribution"
         );
     }
 }
