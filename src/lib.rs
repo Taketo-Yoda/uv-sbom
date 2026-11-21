@@ -82,6 +82,9 @@ pub mod shared;
 /// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::adapters::outbound::console::StderrProgressReporter;
+    pub use crate::adapters::outbound::factories::{
+        FormatterFactory, PresenterFactory, PresenterType,
+    };
     pub use crate::adapters::outbound::filesystem::{
         FileSystemReader, FileSystemWriter, StdoutPresenter,
     };
@@ -90,7 +93,6 @@ pub mod prelude {
     pub use crate::application::dto::{
         OutputFormat, SbomRequest, SbomRequestBuilder, SbomResponse,
     };
-    pub use crate::application::factories::{FormatterFactory, PresenterFactory, PresenterType};
     pub use crate::application::ports::SbomFormatter;
     pub use crate::application::use_cases::GenerateSbomUseCase;
     pub use crate::ports::outbound::{

@@ -7,6 +7,7 @@ mod sbom_generation;
 mod shared;
 
 use adapters::outbound::console::StderrProgressReporter;
+use adapters::outbound::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use adapters::outbound::filesystem::{
     determine_diff_source, BaselineFileRepository, FileSystemReader, GitLockfileReader,
 };
@@ -21,7 +22,6 @@ use adapters::outbound::uv::{UvLockAdapter, UvWorkspaceReader};
 use application::dto::{
     DiffRequest, IncidentRequest, OutputFormat, SbomRequest, SbomResponse, WorkspaceIncidentRequest,
 };
-use application::factories::{FormatterFactory, PresenterFactory, PresenterType};
 use application::read_models::incident_report::IncidentVerdictView;
 use application::read_models::SbomReadModelBuilder;
 use application::use_cases::{GenerateDiffUseCase, GenerateSbomUseCase, RespondToIncidentUseCase};
