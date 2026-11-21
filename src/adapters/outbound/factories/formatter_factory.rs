@@ -7,8 +7,8 @@ use std::collections::HashSet;
 /// Factory for creating SBOM formatters
 ///
 /// This factory encapsulates the creation logic for different formatter implementations,
-/// following the Factory Pattern. It belongs in the application layer as it orchestrates
-/// the selection of infrastructure adapters based on application needs.
+/// following the Factory Pattern. It belongs in the adapters layer because it constructs
+/// concrete adapter implementations (formatters) based on application configuration.
 pub struct FormatterFactory;
 
 impl FormatterFactory {
@@ -101,10 +101,8 @@ mod tests {
 
     #[test]
     fn test_lang_does_not_affect_json_formatter_creation() {
-        // JSON formatter is always CycloneDX regardless of locale
         let formatter_en = FormatterFactory::create(OutputFormat::Json, None, Locale::En);
         let formatter_ja = FormatterFactory::create(OutputFormat::Json, None, Locale::Ja);
-        // Both should produce valid formatters (same type, locale-independent)
         assert!(std::mem::size_of_val(&formatter_en) > 0);
         assert!(std::mem::size_of_val(&formatter_ja) > 0);
     }

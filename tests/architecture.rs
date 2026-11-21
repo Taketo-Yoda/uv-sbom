@@ -113,24 +113,7 @@ struct ArchException {
     targets: &'static [&'static str],
 }
 
-const ARCH_EXCEPTIONS: &[ArchException] = &[
-    // ARCH-EXCEPTION(#1151): remove when `FormatterFactory` no longer constructs adapters
-    ArchException {
-        source: "application::factories::formatter_factory",
-        targets: &[
-            "adapters::outbound::formatters::CycloneDxFormatter",
-            "adapters::outbound::formatters::MarkdownFormatter",
-        ],
-    },
-    // ARCH-EXCEPTION(#1151): remove when `PresenterFactory` no longer constructs adapters
-    ArchException {
-        source: "application::factories::presenter_factory",
-        targets: &[
-            "adapters::outbound::filesystem::FileSystemWriter",
-            "adapters::outbound::filesystem::StdoutPresenter",
-        ],
-    },
-];
+const ARCH_EXCEPTIONS: &[ArchException] = &[];
 
 /// Runs `rule` only over the dependencies whose source matches `sources`.
 struct Scoped {
@@ -259,7 +242,7 @@ fn test_layer_rules_without_exceptions_reports_exactly_allowlisted() {
         "ARCH_EXCEPTIONS must list exactly the existing violations; \
          delete an entry once its Issue removes the violation\n{violations}"
     );
-    assert_eq!(violations.len(), 4, "{violations}");
+    assert_eq!(violations.len(), 0, "{violations}");
 }
 
 #[test]
