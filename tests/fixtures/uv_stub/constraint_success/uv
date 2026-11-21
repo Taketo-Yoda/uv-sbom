@@ -1,0 +1,15 @@
+#!/bin/sh
+# Stub `uv` for UvLockAdapter::simulate_with_constraints tests (#1115).
+# `uv --version` succeeds. `uv lock` (single argument, no --upgrade-package)
+# succeeds and writes the "after" fixture lock into the working directory,
+# simulating a successful constraint resolution.
+if [ "$1" = "--version" ]; then
+    echo "uv 0.0.0-stub"
+    exit 0
+fi
+if [ "$#" -eq 1 ] && [ "$1" = "lock" ]; then
+    cp "$(dirname "$0")/../../sample_uv_lock_after.lock" uv.lock
+    exit 0
+fi
+echo "uv stub: unexpected arguments: $*" >&2
+exit 97

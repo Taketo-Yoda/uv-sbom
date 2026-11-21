@@ -247,5 +247,6 @@ mod tests {
         assert!(output.contains(
             "パッケージ **nonexistent** はこのプロジェクトの依存関係に見つかりませんでした。"
         ));
+        assert!(!output.contains("## Dependency Explanation"));
     }
 }

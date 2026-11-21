@@ -10,7 +10,8 @@ use crate::shared::Result;
 use field_resolvers::{
     resolve_abandoned_threshold_days, resolve_baseline_file, resolve_check_cve,
     resolve_cvss_threshold, resolve_exclude_groups, resolve_flag, resolve_format,
-    resolve_severity_threshold, resolve_target_python,
+    resolve_severity_threshold, resolve_target_python, validate_config_format,
+    validate_config_severity_threshold,
 };
 use license_policy_resolver::resolve_license_policy;
 use list_merge::{merge_ignore_cves, merge_string_lists};
@@ -63,6 +64,12 @@ pub struct MergedConfig {
 /// as a valid PEP 440 version.
 pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedConfig> {
     let cfg = config.as_ref();
+
+    // Validate config-file-only fields that delegate to domain value objects.
+    // These run after validate_config (ignore_cves, license_policy.unknown),
+    // preserving the original error priority order.
+    validate_config_format(cfg.and_then(|c| c.format.as_deref()))?;
+    validate_config_severity_threshold(cfg.and_then(|c| c.severity_threshold.as_deref()))?;
 
     let target_python = resolve_target_python(
         args.target_python.as_ref(),
@@ -328,25 +335,37 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_config_format_no_cli_invalid_config_defaults_to_json() {
+    fn test_merge_config_rejects_invalid_config_format() {
         let args = Args::parse_from(["uv-sbom"]);
         let config = Some(ConfigFile {
-            format: Some("not-a-format".to_string()),
+            format: Some("xml".to_string()),
             ..Default::default()
         });
-        let result = merge_config(&args, &config).unwrap();
-        assert_eq!(result.format, OutputFormat::Json);
+        let result = merge_config(&args, &config);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let config_err = err.downcast_ref::<uv_sbom::config::ConfigError>().unwrap();
+        assert!(matches!(
+            config_err,
+            uv_sbom::config::ConfigError::InvalidFormat { value } if value == "xml"
+        ));
     }
 
     #[test]
-    fn test_merge_config_format_invalid_config_value_falls_back_to_cli() {
-        let args = Args::parse_from(["uv-sbom", "--format", "markdown"]);
+    fn test_merge_config_rejects_invalid_config_severity_threshold() {
+        let args = Args::parse_from(["uv-sbom"]);
         let config = Some(ConfigFile {
-            format: Some("not-a-format".to_string()),
+            severity_threshold: Some("HIHG".to_string()),
             ..Default::default()
         });
-        let result = merge_config(&args, &config).unwrap();
-        assert_eq!(result.format, OutputFormat::Markdown);
+        let result = merge_config(&args, &config);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let config_err = err.downcast_ref::<uv_sbom::config::ConfigError>().unwrap();
+        assert!(matches!(
+            config_err,
+            uv_sbom::config::ConfigError::InvalidSeverityThreshold { value } if value == "HIHG"
+        ));
     }
 
     // --- early-return branch (no config file) coverage for fields not yet exercised ---

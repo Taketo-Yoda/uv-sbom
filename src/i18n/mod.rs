@@ -110,6 +110,7 @@ pub struct Messages {
     pub error_config_empty_ignore_cve_id: &'static str,
     pub error_config_invalid_unknown_license_handling: &'static str,
     pub error_config_invalid_format: &'static str,
+    pub error_config_invalid_severity_threshold: &'static str,
 
     // Progress messages (use case layer)
     pub progress_loading_lockfile: &'static str,
@@ -219,6 +220,11 @@ pub struct Messages {
     pub action_upgrade: &'static str,
     pub action_cannot_resolve: &'static str,
     pub action_could_not_analyze: &'static str,
+
+    // Constraint suggestion action strings (3 placeholders each: package, version, detail)
+    pub action_constraint_verified: &'static str,
+    pub action_constraint_does_not_resolve: &'static str,
+    pub action_constraint_simulation_failed: &'static str,
 
     // Transitive dependency sub-header (1 placeholder: package name)
     pub deps_for_header: &'static str,
@@ -506,6 +512,11 @@ mod tests {
                 JA_MESSAGES.error_config_invalid_format,
                 1,
             ),
+            (
+                EN_MESSAGES.error_config_invalid_severity_threshold,
+                JA_MESSAGES.error_config_invalid_severity_threshold,
+                1,
+            ),
         ];
         for (en, ja, expected_count) in pairs {
             let en_count = en.matches("{}").count();
@@ -601,6 +612,7 @@ mod tests {
             error_config_empty_ignore_cve_id,
             error_config_invalid_unknown_license_handling,
             error_config_invalid_format,
+            error_config_invalid_severity_threshold,
             progress_loading_lockfile,
             progress_detected_packages,
             progress_parsing_deps,
@@ -681,6 +693,9 @@ mod tests {
             action_upgrade,
             action_cannot_resolve,
             action_could_not_analyze,
+            action_constraint_verified,
+            action_constraint_does_not_resolve,
+            action_constraint_simulation_failed,
             deps_for_header,
             summary_vuln_found,
             output_complete,

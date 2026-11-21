@@ -119,6 +119,7 @@ When a new advisory drops, one command tells you whether your project is affecte
 - **Explain** (`--explain <PACKAGE>`) — Trace every path from a direct dependency to any package. [Details →](docs/dependency-insight.md#dependency-explanation---explain)
 - **Tree** (`--show-dependency-tree`) — ASCII tree visualization of your dependency graph. [Details →](docs/dependency-insight.md#dependency-tree-visualization---show-dependency-tree)
 - **Diff** (`--diff <REF>`) — Compare lock file versions with a CVE delta. [Details →](docs/dependency-insight.md#dependency-diff---diff)
+- **Upgrade Advisor** (`--suggest-fix`) — Simulates upgrades and suggests `constraint-dependencies` workarounds for unresolvable transitive vulnerabilities. [Details →](docs/dependency-insight.md#upgrade-advisor---suggest-fix)
 
 ### Workspace Support
 

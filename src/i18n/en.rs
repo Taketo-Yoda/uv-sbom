@@ -69,6 +69,7 @@ pub(super) static EN_MESSAGES: Messages = Messages {
     error_config_empty_ignore_cve_id: "Invalid config: ignore_cves[{}].id must not be empty.\n\n💡 Hint: Each ignore_cves entry must have a non-empty 'id' field (e.g., \"CVE-2024-1234\").",
     error_config_invalid_unknown_license_handling: "Invalid config: license_policy.unknown must be one of: warn, deny, allow. Got: \"{}\"",
     error_config_invalid_format: "Invalid config: format must be one of: json, markdown. Got: \"{}\"",
+    error_config_invalid_severity_threshold: "Invalid config: severity_threshold must be one of: low, medium, high, critical. Got: \"{}\"",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 Loading uv.lock file from: {}",
@@ -178,6 +179,11 @@ pub(super) static EN_MESSAGES: Messages = Messages {
     action_upgrade: "⬆️ Upgrade {} → {} (resolves {} to {})",
     action_cannot_resolve: "⚠️ Cannot resolve: {}",
     action_could_not_analyze: "❓ Could not analyze: {}",
+
+    // Constraint suggestion action strings
+    action_constraint_verified: "💡 Workaround: add `\"{}>={}\"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to {})",
+    action_constraint_does_not_resolve: "💡 Tried constraint `\"{}>={}\"` — does not resolve: {}",
+    action_constraint_simulation_failed: "⚠️ Could not verify constraint `\"{}>={}\"`: {}",
 
     // Transitive dependency sub-header
     deps_for_header: "### Dependencies for {}",
@@ -524,6 +530,10 @@ mod tests {
         assert_eq!(
             Messages::format(msgs.error_config_invalid_format, &["xml"]),
             "Invalid config: format must be one of: json, markdown. Got: \"xml\""
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_invalid_severity_threshold, &["HIHG"]),
+            "Invalid config: severity_threshold must be one of: low, medium, high, critical. Got: \"HIHG\""
         );
     }
 

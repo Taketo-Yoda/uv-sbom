@@ -1,3 +1,27 @@
+/// Outcome of simulating resolution with a `>=fixed_version` constraint
+/// injected into `[tool.uv].constraint-dependencies`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConstraintOutcome {
+    /// The constraint resolved successfully and the vulnerable package
+    /// reached the required fixed version (or newer).
+    Verified { resolved_version: String },
+    /// `uv lock` could not resolve with the constraint, or the resolved
+    /// version still did not satisfy the fixed version.
+    DoesNotResolve { reason: String },
+    /// The simulation infrastructure failed (e.g. uv not available,
+    /// temp-dir I/O error, timeout).
+    SimulationFailed { error: String },
+}
+
+/// A suggestion to add a `>=fixed_version` constraint-dependency to
+/// work around an unresolvable transitive vulnerability.
+#[derive(Debug, Clone)]
+pub struct ConstraintSuggestion {
+    pub package_name: String,
+    pub min_version: String,
+    pub outcome: ConstraintOutcome,
+}
+
 /// Result of analyzing whether upgrading a direct dep fixes a transitive vulnerability
 #[derive(Debug, Clone)]
 pub enum UpgradeRecommendation {
@@ -17,9 +41,17 @@ pub enum UpgradeRecommendation {
     /// Upgrading the direct dep does NOT resolve the vulnerability
     Unresolvable {
         direct_dep_name: String,
-        /// Why upgrade doesn't help (e.g., "latest httpx still pins idna < 3.7")
+        /// Vulnerable transitive dep name (e.g., "idna")
+        transitive_dep_name: String,
+        /// Version that would fix the vulnerability (e.g., "3.7")
+        fixed_version: String,
+        /// Why upgrade doesn't help (e.g., "upgrading httpx still resolves idna to 3.6 which does not satisfy >= 3.7")
         reason: String,
         vulnerability_id: String,
+        /// Populated by the constraint simulation loop when constraint
+        /// simulation completes. `None` when the advisor first produces the
+        /// Unresolvable; set to `Some` by `run_constraint_simulations`.
+        constraint_suggestion: Option<ConstraintSuggestion>,
     },
     /// Simulation could not be performed (uv not available, timeout, etc.)
     SimulationFailed {

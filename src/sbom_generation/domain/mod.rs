@@ -49,7 +49,7 @@ pub use services::DependencyDiffAnalyzer;
 pub use services::{ThresholdConfig, VulnerabilityCheckResult, VulnerabilityChecker};
 // Note: These will be used in subsequent subtasks (Subtask 2-8)
 #[allow(unused_imports)]
-pub use upgrade_recommendation::UpgradeRecommendation;
+pub use upgrade_recommendation::{ConstraintOutcome, ConstraintSuggestion, UpgradeRecommendation};
 pub use uv_lock_simulator::{SimulationResult, TargetedSimulationOutcome, UvLockSimulator};
 // Note: These will be used in subsequent subtasks (Subtask 2-8)
 #[allow(unused_imports)]

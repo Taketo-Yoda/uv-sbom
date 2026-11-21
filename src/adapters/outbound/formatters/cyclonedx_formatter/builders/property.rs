@@ -52,10 +52,19 @@ pub(in super::super) fn from_resolution_guide(
                     break;
                 }
                 UpgradeEntryView::Unresolvable {
+                    direct_dep_name,
+                    transitive_dep_name,
+                    fixed_version,
                     reason,
                     vulnerability_id,
-                    ..
+                    constraint_suggestion,
                 } if vulnerability_id == &vuln.id => {
+                    let _ = (
+                        direct_dep_name,
+                        transitive_dep_name,
+                        fixed_version,
+                        constraint_suggestion,
+                    );
                     properties.push(Property {
                         name: "uv-sbom:recommended-action".to_string(),
                         value: format!("cannot resolve: {}", reason),

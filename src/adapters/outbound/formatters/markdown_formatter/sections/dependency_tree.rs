@@ -177,6 +177,7 @@ mod tests {
             max_depth: 3,
         };
         let output = render_en(&view);
+        assert!(output.contains("## Dependency Tree"));
         assert!(output.contains("```text\n└── requests (2.31.0)\n```\n"));
     }
 
@@ -318,6 +319,8 @@ mod tests {
             max_depth: 1,
         };
         let output = render_ja(&view);
+        assert!(output.contains("## 依存関係ツリー"));
+        assert!(!output.contains("## Dependency Tree"));
         assert!(output.contains("└── ... (省略)"));
         assert!(output.contains("_深さ 1 で省略されています。"));
     }

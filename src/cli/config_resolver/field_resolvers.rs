@@ -3,6 +3,7 @@ use crate::sbom_generation::domain::vulnerability::Severity;
 use crate::shared::Result;
 use pep440_rs::Version;
 use std::str::FromStr;
+use uv_sbom::config::ConfigError;
 
 /// Resolve `target_python` from CLI (highest priority) or config file, then validate
 /// that the resolved value parses as a PEP 440 version. This is the single point where
@@ -37,13 +38,32 @@ pub(super) fn resolve_flag(cli_flag: bool, config_value: Option<bool>) -> bool {
     cli_flag || config_value.unwrap_or(false)
 }
 
+/// Validates that a config-file `format` value is parseable as `OutputFormat`.
+///
+/// Returns `Ok(())` when the value is `None` (absent from config) or parses
+/// successfully. Returns `Err(ConfigError::InvalidFormat)` otherwise.
+/// Called from `merge_config` before `resolve_format`, so an invalid config
+/// value surfaces as a typed `ConfigError` rather than silently falling back
+/// to the default.
+pub(super) fn validate_config_format(
+    config_value: Option<&str>,
+) -> std::result::Result<(), ConfigError> {
+    if let Some(value) = config_value {
+        value
+            .parse::<OutputFormat>()
+            .map_err(|_| ConfigError::InvalidFormat {
+                value: value.to_string(),
+            })?;
+    }
+    Ok(())
+}
+
 /// Resolve `format`: CLI > config > default (json).
 ///
 /// `--format` has no clap default (#968), so `cli` is `None` exactly when the
 /// user passed no `--format` flag, and an explicit `--format json` wins over a
-/// config value. Config values are validated at load time (`validate_config`,
-/// #1072), so an unparseable value cannot reach this from the CLI; the
-/// fallback to the default is kept as a safety net.
+/// config value. Config values are validated by `validate_config_format` before
+/// this function is called; the `.ok()` fallback is kept as a safety net.
 /// Incident mode does not use this resolver: it never reads the config `format`.
 pub(super) fn resolve_format(cli: Option<OutputFormat>, config: Option<&str>) -> OutputFormat {
     cli.or_else(|| config.and_then(|c| c.parse::<OutputFormat>().ok()))
@@ -60,7 +80,29 @@ pub(super) fn resolve_check_cve(cli_opt_out: bool, config: Option<bool>) -> bool
     }
 }
 
+/// Validates that a config-file `severity_threshold` value matches a
+/// `Severity` variant used for threshold filtering.
+///
+/// Returns `Ok(())` when the value is `None` (absent from config) or matches
+/// a known variant. Returns `Err(ConfigError::InvalidSeverityThreshold)`
+/// otherwise. Called from `merge_config` before `resolve_severity_threshold`.
+pub(super) fn validate_config_severity_threshold(
+    config_value: Option<&str>,
+) -> std::result::Result<(), ConfigError> {
+    if let Some(value) = config_value {
+        if resolve_severity_threshold(None, Some(value)).is_none() {
+            return Err(ConfigError::InvalidSeverityThreshold {
+                value: value.to_string(),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// Resolve `severity_threshold`: CLI > config > `None`.
+///
+/// Config values are validated by `validate_config_severity_threshold` before
+/// this function is called; the `_ => None` fallback is kept as a safety net.
 pub(super) fn resolve_severity_threshold(
     cli: Option<Severity>,
     config: Option<&str>,
@@ -220,7 +262,8 @@ mod tests {
 
     #[test]
     fn test_resolve_format_unparseable_config_falls_back_to_default() {
-        // Pins the safety net; `validate_config` makes this unreachable from the CLI (#1072).
+        // Pins the safety net; `validate_config_format` makes this unreachable from the
+        // normal config path (#1113).
         assert_eq!(
             resolve_format(None, Some("not-a-format")),
             OutputFormat::Json
@@ -264,6 +307,8 @@ mod tests {
 
     #[test]
     fn test_resolve_severity_threshold_unknown_string_is_none() {
+        // Unreachable from the config path after #1113 (validate_config_severity_threshold
+        // rejects unknown values). Kept as a safety-net pin for the `_ => None` arm.
         assert_eq!(
             resolve_severity_threshold(None, Some("not-a-severity")),
             None
@@ -334,5 +379,67 @@ mod tests {
     fn test_resolve_exclude_groups_both_empty() {
         let result = resolve_exclude_groups(&[], None);
         assert!(result.is_empty());
+    }
+
+    // --- validate_config_format ---
+
+    #[test]
+    fn test_validate_config_format_accepts_valid_values() {
+        for value in ["json", "JSON", "Json", "markdown", "Markdown", "md", "MD"] {
+            assert!(
+                validate_config_format(Some(value)).is_ok(),
+                "rejected valid format: {value}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_config_format_rejects_invalid_values() {
+        for value in ["xml", "markdwon", "", " json"] {
+            assert!(
+                matches!(
+                    validate_config_format(Some(value)),
+                    Err(ConfigError::InvalidFormat { .. })
+                ),
+                "accepted invalid format: {value}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_config_format_accepts_none() {
+        assert!(validate_config_format(None).is_ok());
+    }
+
+    // --- validate_config_severity_threshold ---
+
+    #[test]
+    fn test_validate_config_severity_threshold_accepts_valid_values() {
+        for value in [
+            "low", "LOW", "Low", "medium", "MEDIUM", "high", "HIGH", "critical", "CRITICAL",
+        ] {
+            assert!(
+                validate_config_severity_threshold(Some(value)).is_ok(),
+                "rejected valid severity: {value}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_config_severity_threshold_rejects_invalid_values() {
+        for value in ["HIHG", "extreme", "none", "", "1"] {
+            assert!(
+                matches!(
+                    validate_config_severity_threshold(Some(value)),
+                    Err(ConfigError::InvalidSeverityThreshold { .. })
+                ),
+                "accepted invalid severity: {value}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_config_severity_threshold_accepts_none() {
+        assert!(validate_config_severity_threshold(None).is_ok());
     }
 }

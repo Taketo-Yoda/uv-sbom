@@ -69,6 +69,7 @@ pub(super) static JA_MESSAGES: Messages = Messages {
     error_config_empty_ignore_cve_id: "設定が不正です: ignore_cves[{}].id は空にできません。\n\n💡 ヒント: ignore_cves の各エントリには空でない 'id' フィールドが必要です（例: \"CVE-2024-1234\"）。",
     error_config_invalid_unknown_license_handling: "設定が不正です: license_policy.unknown は warn, deny, allow のいずれかである必要があります。指定値: \"{}\"",
     error_config_invalid_format: "設定が不正です: format は json, markdown のいずれかである必要があります。指定値: \"{}\"",
+    error_config_invalid_severity_threshold: "設定が不正です: severity_threshold は low, medium, high, critical のいずれかである必要があります。指定値: \"{}\"",
 
     // Progress messages (use case layer)
     progress_loading_lockfile: "📖 uv.lockファイルを読み込み中: {}",
@@ -181,6 +182,11 @@ pub(super) static JA_MESSAGES: Messages = Messages {
     action_upgrade: "⬆️ {}を{}にアップグレード（{}が{}に解決）",
     action_cannot_resolve: "⚠️ 解決不可: {}",
     action_could_not_analyze: "❓ 分析不可: {}",
+
+    // Constraint suggestion action strings
+    action_constraint_verified: "💡 回避策: `[tool.uv].constraint-dependencies`に`\"{}>={}\"` を追加（✅ 検証済み: {}に解決）",
+    action_constraint_does_not_resolve: "💡 制約`\"{}>={}\"` を試行 — 解決不可: {}",
+    action_constraint_simulation_failed: "⚠️ 制約`\"{}>={}\"` を検証できません: {}",
 
     // Transitive dependency sub-header
     deps_for_header: "### {}の依存パッケージ",
@@ -533,6 +539,10 @@ mod tests {
         assert_eq!(
             Messages::format(msgs.error_config_invalid_format, &["xml"]),
             "設定が不正です: format は json, markdown のいずれかである必要があります。指定値: \"xml\""
+        );
+        assert_eq!(
+            Messages::format(msgs.error_config_invalid_severity_threshold, &["HIHG"]),
+            "設定が不正です: severity_threshold は low, medium, high, critical のいずれかである必要があります。指定値: \"HIHG\""
         );
     }
 
