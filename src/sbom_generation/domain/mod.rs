@@ -1,5 +1,6 @@
 pub mod advisory;
 pub mod baseline;
+pub mod cve_ignore_rule;
 pub mod dependency_diff;
 pub mod dependency_graph;
 pub mod enriched_package;
@@ -18,6 +19,7 @@ pub mod vulnerability;
 #[allow(unused_imports)]
 pub use baseline::{BaselineEntry, VulnerabilityBaseline};
 // Note: These will be used in subsequent subtasks of the dependency-diff feature (#224)
+pub use cve_ignore_rule::CveIgnoreRule;
 #[allow(unused_imports)]
 pub use dependency_diff::{ChangeType, DependencyDiff, DiffSummary, PackageChange};
 pub use dependency_graph::DependencyGraph;
