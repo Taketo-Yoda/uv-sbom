@@ -13,8 +13,8 @@ pub enum PresenterType {
 /// Factory for creating output presenters
 ///
 /// This factory encapsulates the creation logic for different presenter implementations,
-/// following the Factory Pattern. It belongs in the application layer as it orchestrates
-/// the selection of infrastructure adapters based on application needs.
+/// following the Factory Pattern. It belongs in the adapters layer because it constructs
+/// concrete adapter implementations (presenters) based on application configuration.
 pub struct PresenterFactory;
 
 impl PresenterFactory {
@@ -29,7 +29,7 @@ impl PresenterFactory {
     ///
     /// # Examples
     /// ```
-    /// use uv_sbom::application::factories::{PresenterFactory, PresenterType};
+    /// use uv_sbom::adapters::outbound::factories::{PresenterFactory, PresenterType};
     /// use uv_sbom::i18n::Locale;
     ///
     /// let presenter = PresenterFactory::create(PresenterType::Stdout, Locale::En);
@@ -50,7 +50,6 @@ mod tests {
     #[test]
     fn test_create_stdout_presenter() {
         let presenter = PresenterFactory::create(PresenterType::Stdout, Locale::En);
-        // Verify it doesn't panic when created
         assert!(std::mem::size_of_val(&presenter) > 0);
     }
 
