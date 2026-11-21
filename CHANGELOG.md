@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-11-21
+
 ### Added
 - **Suggest `constraint-dependencies` entry for unresolvable transitive vulnerabilities under `--suggest-fix`** — when a direct dependency upgrade cannot resolve a transitive CVE, the tool now suggests adding a `[tool.uv] constraint-dependencies` entry and verifies it via `uv lock` dry-run simulation (#956, #1117)
 
