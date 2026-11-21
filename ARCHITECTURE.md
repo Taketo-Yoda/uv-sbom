@@ -89,6 +89,7 @@ src/
 
 **Key Principles:**
 - ✅ No infrastructure dependencies (no `std::fs`, `reqwest`, etc.)
+- ✅ Cross-layer import rules enforced by `tests/architecture.rs` (runs with `cargo test`)
 - ✅ Pure functions where possible
 - ✅ Rich domain model with validation
 - ✅ Business logic explicitly expressed
