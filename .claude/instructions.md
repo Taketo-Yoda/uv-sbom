@@ -36,7 +36,7 @@
 1. **Branch from `origin/develop` in Normal Mode (the default)** — never from `main`; Stacked Mode (opt-in, never inferred) is the one exception — see `.claude/conventions/branching.md`
 2. **`cargo clippy` MUST include `--all-targets --all-features -- -D warnings`** — CI enforces this (Issue #59); see `.claude/conventions/ci-checks.md`
 3. **Never bypass skills** for commit/PR/push — skills encode CI-equivalent checks
-4. **Domain layer has zero I/O** — no `std::fs`, no `reqwest`, no network
+4. **Domain layer has zero I/O** — no `std::fs`, no `reqwest`, no network (see `.claude/CLAUDE.md` → "Important Invariants")
 5. **All GitHub artifacts in English** — Issues, PRs, commits, comments
 
 ---
@@ -58,6 +58,8 @@ Adapters → Application → Domain
     ↓           ↓
   Ports   ←   Ports
 ```
+
+Quick reference only: `.claude/CLAUDE.md` → "Important Invariants" (enforced by `tests/architecture.rs`) owns the layer import rules and wins on conflict.
 
 ---
 
