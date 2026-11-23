@@ -48,16 +48,7 @@ impl Default for MarkdownFormatter {
 impl MarkdownFormatter {
     /// Renders the three always-present sections in fixed order: summary, header, components.
     fn render_required_sections(&self, output: &mut String, model: &SbomReadModel) {
-        sections::summary::render(
-            self.messages,
-            output,
-            &model.components,
-            model.vulnerabilities.as_ref(),
-            model.license_compliance.as_ref(),
-            model.abandoned_packages.as_ref(),
-            model.yanked_packages.as_ref(),
-            &model.applied_group_filter,
-        );
+        sections::summary::render(self.messages, output, model);
         sections::header::render(self.messages, output);
         sections::components::render(
             self.messages,
