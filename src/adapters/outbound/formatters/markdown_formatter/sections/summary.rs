@@ -268,7 +268,13 @@ mod tests {
         vulnerabilities: Option<VulnerabilityReportView>,
         license_compliance: Option<LicenseComplianceView>,
     ) -> String {
-        render_summary_with_abandoned(locale, components, vulnerabilities, license_compliance, None)
+        render_summary_with_abandoned(
+            locale,
+            components,
+            vulnerabilities,
+            license_compliance,
+            None,
+        )
     }
 
     fn render_summary_with_abandoned(
