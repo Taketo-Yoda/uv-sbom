@@ -258,6 +258,15 @@ pub(super) static JA_MESSAGES: Messages = Messages {
     label_python_compat_all_clear: "すべてのパッケージがターゲットPythonバージョンと互換性があります。",
     col_requires_python: "Requires-Python",
 
+    // Yanked packages section
+    section_yanked_packages: "## 取り下げ済みパッケージ",
+    desc_yanked_packages: "ロックされたバージョンがPyPIから取り下げられたパッケージです。取り下げは通常、重大なバグ、セキュリティ上の問題、または誤った公開を示しています。取り下げられていないバージョンに更新してください。",
+    label_yanked_packages: "取り下げ済みパッケージ",
+    label_yanked_check_skipped: "_取り下げ済みパッケージチェックはスキップされました。_",
+    label_no_yanked_packages: "取り下げ済みパッケージは検出されませんでした。",
+    col_yanked_reason: "理由",
+    label_yanked_no_reason: "（理由なし）",
+
     // Dependency explanation section
     section_explain: "## 依存関係の説明",
     summary_explain_paths: "**{}** は {} 個の経路で含まれています:",

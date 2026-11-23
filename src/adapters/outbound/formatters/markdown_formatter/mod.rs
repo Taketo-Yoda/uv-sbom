@@ -55,6 +55,7 @@ impl MarkdownFormatter {
             model.vulnerabilities.as_ref(),
             model.license_compliance.as_ref(),
             model.abandoned_packages.as_ref(),
+            model.yanked_packages.as_ref(),
             &model.applied_group_filter,
         );
         sections::header::render(self.messages, output);
@@ -100,6 +101,9 @@ impl MarkdownFormatter {
         }
         if let Some(report) = &model.abandoned_packages {
             sections::abandoned_packages::render(self.messages, output, report);
+        }
+        if let Some(report) = &model.yanked_packages {
+            sections::yanked_packages::render(self.messages, output, report);
         }
         if let Some(report) = &model.non_pypi_packages {
             if !report.is_empty() {

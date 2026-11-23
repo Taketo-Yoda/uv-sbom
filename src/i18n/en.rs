@@ -255,6 +255,15 @@ pub(super) static EN_MESSAGES: Messages = Messages {
     label_python_compat_all_clear: "All packages are compatible with the target Python version.",
     col_requires_python: "Requires-Python",
 
+    // Yanked packages section
+    section_yanked_packages: "## Yanked Packages",
+    desc_yanked_packages: "Packages whose locked versions have been yanked from PyPI. Yanked releases typically indicate critical bugs, security issues, or accidental publishes. Update to a non-yanked version.",
+    label_yanked_packages: "Yanked packages",
+    label_yanked_check_skipped: "_Yanked package check skipped._",
+    label_no_yanked_packages: "No yanked packages detected.",
+    col_yanked_reason: "Reason",
+    label_yanked_no_reason: "(no reason given)",
+
     // Dependency explanation section
     section_explain: "## Dependency Explanation",
     summary_explain_paths: "**{}** is included via {} path(s):",
