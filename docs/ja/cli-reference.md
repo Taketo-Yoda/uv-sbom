@@ -38,6 +38,7 @@ Options:
       --check-license                ポリシーに対するライセンスコンプライアンスをチェック
       --check-abandoned              放置/メンテナンスされていないパッケージをチェック（しきい値日数以内にアップストリームリリースなし）
       --abandoned-threshold-days <DAYS>  放置パッケージ検出の非アクティブしきい値（日数）（デフォルト: 730）
+      --check-yanked                 PyPI で取り下げ（yanked）されたロック済みバージョンをチェック
       --check-non-pypi               非 PyPI オリジン（git、ダイレクト URL、プライベートレジストリ）からのパッケージをチェック
       --check-exploitability         CVE 結果を EPSS スコアと CISA KEV ステータスで強化
                                      --no-check-cve とは併用不可

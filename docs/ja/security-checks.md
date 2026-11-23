@@ -13,6 +13,7 @@ uv-sbom は、SBOM 生成と同時に実行できる包括的なセキュリテ�
 - [脆弱性ベースライン](#脆弱性ベースライン)
 - [ライセンスコンプライアンスチェック](#ライセンスコンプライアンスチェック)
 - [放置パッケージ検出](#放置パッケージ検出)
+- [取り下げバージョン検出](#取り下げバージョン検出)
 - [非 PyPI ソース検出](#非-pypi-ソース検出)
 - [Python バージョン互換性チェック](#python-バージョン互換性チェック)
 - [悪用可能性の優先順位付け (`--check-exploitability`)](#悪用可能性の優先順位付け---check-exploitability)
@@ -226,6 +227,66 @@ uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
 ```
 
 詳細なウォークスルーは [`examples/abandoned-packages-project/README.md`](../../examples/abandoned-packages-project/README.md) を参照してください。
+
+## 取り下げバージョン検出
+
+`--check-yanked` オプションを使用して、ロックされたバージョンが **PyPI で取り下げ（yanked）** されているパッケージを特定します。取り下げは通常、重大なバグ、セキュリティ上の問題、または誤った公開を示しています。ロックファイルに取り下げ済みバージョンを保持しているということは、メンテナーが明示的に撤回したリリースを使用していることを意味します。
+
+```bash
+# 取り下げバージョン検出を有効化
+uv-sbom --check-yanked --format markdown
+
+# 脆弱性チェックとライセンスチェックと組み合わせ
+uv-sbom --check-yanked --check-license --severity-threshold high
+```
+
+**仕組み:**
+- 各ロック済みパッケージの PyPI バージョンエンドポイント（`https://pypi.org/pypi/{name}/{version}/json`）にクエリします
+- バージョンのメタデータが取り下げを示しているか（`info.yanked`）を確認します
+- 取り下げ済みパッケージは Markdown 出力の **Yanked Packages** セクションに、メンテナーが提供した理由（ある場合）とともに表示されます
+- パッケージの PyPI メタデータが取得できない場合、実行を中断せずにスキップします
+- ネットワークアクセスが必要です。パッケージごとに 1 回の API 呼び出しが追加されます
+
+**出力:**
+- **サマリーテーブル行**: カウント > 0 の場合 `| Yanked packages | N | ⚠️ |`、カウント == 0 の場合 `✅`
+- **Yanked Packages セクション**: Package、Version、Type（Direct / Transitive）、Reason、Status のテーブル
+- `--check-yanked` が渡されない場合、セクションは完全に省略され、サマリー行は `_Yanked package check skipped._` を表示します
+
+**設定ファイルでの指定:**
+```yaml
+check_yanked: true
+```
+
+**CI 連携の例:**
+```yaml
+# GitHub Actions - 取り下げバージョンチェック
+- name: Yanked Version Detection
+  run: uv-sbom --check-yanked --format markdown
+```
+
+> **注意:** 取り下げバージョンデータは現在 Markdown のみです。CycloneDX JSON 出力には影響しません。
+
+出力が保証されるデモを実行するには：
+
+```bash
+uv-sbom -p examples/yanked-versions-project --check-yanked --no-check-cve -f markdown
+```
+
+**出力例（取り下げ済みパッケージセクション）：**
+
+```markdown
+## 取り下げ済みパッケージ
+
+ロックされたバージョンがPyPIから取り下げられたパッケージです。取り下げは通常、重大なバグ、セキュリティ上の問題、または誤った公開を示しています。取り下げられていないバージョンに更新してください。
+
+| パッケージ | バージョン | 種別 | 理由 | 状態 |
+|-------|-------|----|----|----|
+| requests | 2.32.0 | 直接依存パッケージ | Yanked due to conflicts with CVE-2024-35195 mitigation | ⚠️ |
+```
+
+取り下げ済みパッケージが検出されたため、終了コードは **1** になります。
+
+詳細なウォークスルーは [`examples/yanked-versions-project/README.md`](../../examples/yanked-versions-project/README.md) を参照してください。
 
 ## 非 PyPI ソース検出
 

@@ -13,6 +13,7 @@ uv-sbom provides a comprehensive suite of security and supply chain checks that 
 - [Vulnerability Baseline](#vulnerability-baseline)
 - [License Compliance Check](#license-compliance-check)
 - [Abandoned Package Detection](#abandoned-package-detection)
+- [Yanked Version Detection](#yanked-version-detection)
 - [Non-PyPI Source Detection](#non-pypi-source-detection)
 - [Python Version Compatibility Check](#python-version-compatibility-check)
 - [Exploitability Prioritization (`--check-exploitability`)](#exploitability-prioritization---check-exploitability)
@@ -226,6 +227,66 @@ uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
 ```
 
 See [`examples/abandoned-packages-project/README.md`](../examples/abandoned-packages-project/README.md) for a full walkthrough.
+
+## Yanked Version Detection
+
+Use the `--check-yanked` option to identify packages whose locked versions have been **yanked on PyPI**. Yanked releases typically indicate critical bugs, security issues, or accidental publishes — keeping a yanked version in your lock file means you are running a release the maintainer has explicitly retracted.
+
+```bash
+# Enable yanked version detection
+uv-sbom --check-yanked --format markdown
+
+# Combined with vulnerability and license checks
+uv-sbom --check-yanked --check-license --severity-threshold high
+```
+
+**How it works:**
+- Queries the PyPI per-version endpoint (`https://pypi.org/pypi/{name}/{version}/json`) for each locked package
+- Checks whether the version's metadata indicates it has been yanked (`info.yanked`)
+- Yanked packages appear in the **Yanked Packages** section of the Markdown output, with the maintainer-supplied reason (if any)
+- If a package's PyPI metadata cannot be fetched, it is skipped without aborting the run
+- Requires network access; adds one API call per package
+
+**Output:**
+- **Summary table row**: `| Yanked packages | N | ⚠️ |` when count > 0, `✅` when count == 0
+- **Yanked Packages section**: Table with Package, Version, Type (Direct / Transitive), Reason, and Status
+- When `--check-yanked` is not passed, the section is omitted entirely and the Summary row shows `_Yanked package check skipped._`
+
+**Config file equivalent:**
+```yaml
+check_yanked: true
+```
+
+**CI Integration example:**
+```yaml
+# GitHub Actions - Yanked Version Check
+- name: Yanked Version Detection
+  run: uv-sbom --check-yanked --format markdown
+```
+
+> **Note:** Yanked version data is currently Markdown-only. CycloneDX JSON output is not affected.
+
+For a demo with guaranteed output, run:
+
+```bash
+uv-sbom -p examples/yanked-versions-project --check-yanked --no-check-cve -f markdown
+```
+
+**Example output (Yanked Packages section):**
+
+```markdown
+## Yanked Packages
+
+Packages whose locked versions have been yanked from PyPI. Yanked releases typically indicate critical bugs, security issues, or accidental publishes. Update to a non-yanked version.
+
+| Package | Version | Type | Reason | Status |
+|---------|---------|------|--------|--------|
+| requests | 2.32.0 | Direct dependencies | Yanked due to conflicts with CVE-2024-35195 mitigation | ⚠️ |
+```
+
+The process exits with code **1** because a yanked package was detected.
+
+See [`examples/yanked-versions-project/README.md`](../examples/yanked-versions-project/README.md) for a full walkthrough.
 
 ## Non-PyPI Source Detection
 

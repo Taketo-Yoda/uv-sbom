@@ -48,6 +48,12 @@ Use vulnerability thresholds for CI/CD pipeline integration:
 ```
 
 ```yaml
+# GitHub Actions - Yanked Version Check
+- name: Yanked Version Detection
+  run: uv-sbom --check-yanked --format markdown
+```
+
+```yaml
 # GitLab CI example
 security_scan:
   script:
@@ -105,7 +111,7 @@ uv-sbom returns the following exit codes:
 | Exit Code | Description | Examples |
 |-----------|-------------|----------|
 | 0 | Success | SBOM generated successfully, no vulnerabilities above threshold, `--help` or `--version` displayed |
-| 1 | Vulnerabilities or license violations detected | Vulnerabilities above threshold detected, license policy violations found |
+| 1 | Vulnerabilities or policy violations detected | Vulnerabilities above threshold detected, license policy violations found, abandoned or yanked packages found |
 | 2 | Invalid command-line arguments | Unknown option, invalid argument type, malformed `--incident` advisory ID or range |
 | 3 | Application error | Missing uv.lock file, invalid project path, invalid exclude pattern, network error, file write error, unknown `--incident` advisory ID |
 | 4 | Affected, no released fix (`--incident` only) | The project is affected by the advisory, but the fix is not yet released on PyPI or no fix exists |
