@@ -109,6 +109,7 @@ mod tests {
             abandoned_packages: None,
             non_pypi_packages: None,
             python_compatibility: None,
+            yanked_packages: None,
             explain_view: None,
             dependency_tree: None,
             baseline_suppressed_count: 0,

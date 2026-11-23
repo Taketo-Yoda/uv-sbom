@@ -45,6 +45,7 @@ async fn test_non_pypi_section_rendered_when_check_non_pypi_enabled() {
         None,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -70,6 +71,7 @@ async fn test_non_pypi_section_rendered_when_check_non_pypi_enabled() {
         None,
         None,
         response.non_pypi_packages_report.as_ref(),
+        None,
         None,
         None,
         None,
@@ -126,6 +128,7 @@ async fn test_non_pypi_section_absent_when_check_non_pypi_disabled() {
         None,
         None,
         None,
+        None,
         uv_sbom::i18n::Locale::En,
     );
 
@@ -152,6 +155,7 @@ async fn test_non_pypi_section_absent_when_check_non_pypi_disabled() {
         None,
         None,
         response.non_pypi_packages_report.as_ref(),
+        None,
         None,
         None,
         None,

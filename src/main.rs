@@ -192,6 +192,7 @@ fn build_use_case<LR: LockfileReader>(
         compatibility_repository,
         uv_lock_simulator,
         exploitability_repository,
+        None::<()>,
         locale,
     ))
 }
@@ -378,6 +379,7 @@ async fn render_and_present(
         response.abandoned_packages_report.as_ref(),
         response.non_pypi_packages_report.as_ref(),
         response.python_compatibility_report.as_ref(),
+        response.yanked_packages_report.as_ref(),
         response.explain_view.as_ref(),
         response.dependency_tree.as_ref(),
         response.baseline_suppressed_count,

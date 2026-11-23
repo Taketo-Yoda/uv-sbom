@@ -8,6 +8,7 @@ use crate::i18n::{Locale, Messages};
 use crate::ports::outbound::{
     ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
     ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    YankedStatusRepository,
 };
 use crate::sbom_generation::domain::services::{BaselineFilter, VulnerabilityChecker};
 use crate::sbom_generation::domain::UvLockSimulator;
@@ -28,8 +29,19 @@ use crate::shared::Result;
 /// * `PCREPO` - PythonCompatibilityRepository implementation (optional)
 /// * `USIM` - UvLockSimulator implementation (optional)
 /// * `EREPO` - ExploitabilityRepository implementation (optional)
-pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = (), USIM = (), EREPO = ()>
-{
+/// * `YREPO` - YankedStatusRepository implementation (optional)
+pub struct GenerateSbomUseCase<
+    LR,
+    PCR,
+    LREPO,
+    PR,
+    VREPO,
+    MREPO,
+    PCREPO = (),
+    USIM = (),
+    EREPO = (),
+    YREPO = (),
+> {
     lockfile_reader: LR,
     project_config_reader: PCR,
     license_repository: LREPO,
@@ -39,11 +51,12 @@ pub struct GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO = (), US
     compatibility_repository: Option<PCREPO>,
     uv_lock_simulator: Option<USIM>,
     exploitability_repository: Option<EREPO>,
+    yanked_repository: Option<YREPO>,
     locale: Locale,
 }
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO, YREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO, YREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -54,6 +67,7 @@ where
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
     EREPO: ExploitabilityRepository,
+    YREPO: YankedStatusRepository + Clone,
 {
     /// Creates a new GenerateSbomUseCase with injected dependencies
     #[allow(clippy::too_many_arguments)]
@@ -67,6 +81,7 @@ where
         compatibility_repository: Option<PCREPO>,
         uv_lock_simulator: Option<USIM>,
         exploitability_repository: Option<EREPO>,
+        yanked_repository: Option<YREPO>,
         locale: Locale,
     ) -> Self {
         Self {
@@ -79,6 +94,7 @@ where
             compatibility_repository,
             uv_lock_simulator,
             exploitability_repository,
+            yanked_repository,
             locale,
         }
     }
@@ -214,6 +230,11 @@ where
             )
             .await?;
 
+        // Step 11.1: Yanked version check if requested
+        let yanked_packages_report = self
+            .check_yanked_if_requested(&request, &filtered_packages, dependency_graph.as_ref())
+            .await?;
+
         // Step 11.5: Build the --explain dependency-path view if requested.
         // Must run before build_response, which takes ownership of dependency_graph.
         let explain_view =
@@ -238,6 +259,7 @@ where
             abandoned_packages_report,
             non_pypi_packages_report,
             python_compatibility_report,
+            yanked_packages_report,
             explain_view,
             dependency_tree,
             baseline_suppressed_count,
@@ -298,6 +320,7 @@ mod tests {
             MockMaintenanceRepository,
             MockPythonCompatibilityRepository,
             MockUvLockSimulator,
+            (),
             (),
         >;
 
@@ -427,6 +450,7 @@ mod tests {
                     self.maint,
                     self.pyc,
                     self.sim,
+                    None::<()>,
                     None::<()>,
                     self.locale,
                 )

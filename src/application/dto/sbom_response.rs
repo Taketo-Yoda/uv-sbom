@@ -3,6 +3,7 @@ use crate::application::read_models::dependency_tree_view::DependencyTreeView;
 use crate::application::read_models::explain_view::ExplainView;
 use crate::application::read_models::non_pypi_package::NonPyPiPackagesReport;
 use crate::application::read_models::python_compatibility::PythonCompatibilityReport;
+use crate::application::read_models::yanked_package::YankedPackagesReport;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
 use crate::sbom_generation::domain::{
@@ -44,6 +45,9 @@ pub struct SbomResponse {
     /// Python version compatibility report.
     /// Populated only when `target_python` was set in the request.
     pub python_compatibility_report: Option<PythonCompatibilityReport>,
+    /// Yanked packages report.
+    /// Populated only when `check_yanked` was true in the request.
+    pub yanked_packages_report: Option<YankedPackagesReport>,
     /// Dependency path trace for `--explain`.
     /// Populated only when `explain_package` was set in the request AND a
     /// dependency graph was built (`include_dependency_info` was true).
@@ -78,6 +82,7 @@ pub struct SbomResponseBuilder {
     abandoned_packages_report: Option<AbandonedPackagesReport>,
     non_pypi_packages_report: Option<NonPyPiPackagesReport>,
     python_compatibility_report: Option<PythonCompatibilityReport>,
+    yanked_packages_report: Option<YankedPackagesReport>,
     explain_view: Option<ExplainView>,
     dependency_tree: Option<DependencyTreeView>,
     baseline_suppressed_count: usize,
@@ -98,6 +103,7 @@ impl SbomResponseBuilder {
             abandoned_packages_report: None,
             non_pypi_packages_report: None,
             python_compatibility_report: None,
+            yanked_packages_report: None,
             explain_view: None,
             dependency_tree: None,
             baseline_suppressed_count: 0,
@@ -167,6 +173,12 @@ impl SbomResponseBuilder {
         self
     }
 
+    /// Sets the yanked packages report.
+    pub fn yanked_packages_report(mut self, report: YankedPackagesReport) -> Self {
+        self.yanked_packages_report = Some(report);
+        self
+    }
+
     /// Sets the `--explain` dependency-path view.
     pub fn explain_view(mut self, view: ExplainView) -> Self {
         self.explain_view = Some(view);
@@ -207,6 +219,7 @@ impl SbomResponseBuilder {
             abandoned_packages_report: self.abandoned_packages_report,
             non_pypi_packages_report: self.non_pypi_packages_report,
             python_compatibility_report: self.python_compatibility_report,
+            yanked_packages_report: self.yanked_packages_report,
             explain_view: self.explain_view,
             dependency_tree: self.dependency_tree,
             baseline_suppressed_count: self.baseline_suppressed_count,

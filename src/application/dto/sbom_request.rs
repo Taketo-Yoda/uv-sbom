@@ -44,6 +44,8 @@ pub struct SbomRequest {
     pub abandoned_threshold_days: u64,
     /// Whether to detect packages sourced from non-PyPI origins.
     pub check_non_pypi: bool,
+    /// Whether to check for yanked package versions on PyPI.
+    pub check_yanked: bool,
     /// Whether to enrich CVE results with EPSS scores and CISA KEV status.
     pub check_exploitability: bool,
     /// Dependency group names to exclude from the SBOM (e.g. ["dev", "lint"]).
@@ -131,6 +133,7 @@ pub struct SbomRequestBuilder {
     check_abandoned: bool,
     abandoned_threshold_days: u64,
     check_non_pypi: bool,
+    check_yanked: bool,
     check_exploitability: bool,
     exclude_groups: Vec<String>,
     workspace_member: Option<String>,
@@ -169,6 +172,7 @@ impl SbomRequestBuilder {
             check_abandoned: false,
             abandoned_threshold_days: 730,
             check_non_pypi: false,
+            check_yanked: false,
             check_exploitability: false,
             exclude_groups: Vec::new(),
             workspace_member: None,
@@ -273,6 +277,13 @@ impl SbomRequestBuilder {
         self
     }
 
+    /// Sets whether to check for yanked package versions on PyPI.
+    #[allow(dead_code)] // WIRE(#1157): remove when CLI flag wires check_yanked
+    pub fn check_yanked(mut self, check: bool) -> Self {
+        self.check_yanked = check;
+        self
+    }
+
     /// Sets whether to enrich CVE results with EPSS scores and CISA KEV status.
     pub fn check_exploitability(mut self, check: bool) -> Self {
         self.check_exploitability = check;
@@ -352,6 +363,7 @@ impl SbomRequestBuilder {
             check_abandoned: self.check_abandoned,
             abandoned_threshold_days: self.abandoned_threshold_days,
             check_non_pypi: self.check_non_pypi,
+            check_yanked: self.check_yanked,
             check_exploitability: self.check_exploitability,
             exclude_groups: self.exclude_groups,
             workspace_member: self.workspace_member,

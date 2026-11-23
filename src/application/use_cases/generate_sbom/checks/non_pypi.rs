@@ -6,12 +6,13 @@ use crate::application::read_models::non_pypi_package::{
 use crate::ports::outbound::{
     ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
     ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    YankedStatusRepository,
 };
 use crate::sbom_generation::domain::{DependencyGraph, Package, UvLockSimulator};
 use crate::shared::Result;
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO, YREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO, YREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -22,6 +23,7 @@ where
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
     EREPO: ExploitabilityRepository,
+    YREPO: YankedStatusRepository + Clone,
 {
     /// Detects packages sourced from non-PyPI origins when `check_non_pypi` is enabled.
     ///

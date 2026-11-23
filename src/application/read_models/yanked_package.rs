@@ -5,7 +5,6 @@
 //! is fetched.
 
 /// View representation of a single package whose locked version is yanked
-#[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase calls CheckYankedPackagesUseCase
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct YankedPackageView {
     /// Package name as listed in the lockfile
@@ -21,7 +20,6 @@ pub struct YankedPackageView {
 /// View representation of a yanked packages report
 ///
 /// Holds the list of packages whose locked versions are yanked on PyPI.
-#[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase calls CheckYankedPackagesUseCase
 #[derive(Debug, Clone)]
 pub struct YankedPackagesReport {
     /// Packages whose locked versions are yanked, sorted: direct first, then alphabetically
@@ -30,25 +28,21 @@ pub struct YankedPackagesReport {
 
 impl YankedPackagesReport {
     /// Returns `true` when no yanked packages were found.
-    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase calls CheckYankedPackagesUseCase
     pub fn is_empty(&self) -> bool {
         self.packages.is_empty()
     }
 
     /// Returns the total number of yanked packages.
-    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase calls CheckYankedPackagesUseCase
     pub fn total_count(&self) -> usize {
         self.packages.len()
     }
 
     /// Returns the number of yanked packages that are direct dependencies.
-    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase calls CheckYankedPackagesUseCase
     pub fn direct_count(&self) -> usize {
         self.packages.iter().filter(|p| p.is_direct).count()
     }
 
     /// Returns the number of yanked packages that are transitive dependencies.
-    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase calls CheckYankedPackagesUseCase
     pub fn transitive_count(&self) -> usize {
         self.packages.iter().filter(|p| !p.is_direct).count()
     }

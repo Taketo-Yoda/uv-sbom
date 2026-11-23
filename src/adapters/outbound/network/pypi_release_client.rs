@@ -128,7 +128,6 @@ impl ReleaseRepository for PyPiReleaseClient {
 }
 
 #[async_trait]
-#[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes YankedStatusRepository
 impl YankedStatusRepository for PyPiReleaseClient {
     async fn fetch_yanked_status(&self, package_name: &str, version: &str) -> Result<YankedStatus> {
         let response = crate::shared::http_retry::fetch_with_retry(Self::MAX_RETRIES, || {

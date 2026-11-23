@@ -18,6 +18,7 @@ use super::non_pypi_package::NonPyPiPackagesReport;
 use super::python_compatibility::PythonCompatibilityReport;
 use super::resolution_guide_view::ResolutionGuideView;
 use super::sbom_read_model::SbomReadModel;
+use super::yanked_package::YankedPackagesReport;
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::{ResolutionAnalyzer, VulnerabilityCheckResult};
 use crate::sbom_generation::domain::vulnerability::PackageVulnerabilities;
@@ -46,6 +47,7 @@ impl SbomReadModelBuilder {
         abandoned_packages_report: Option<&AbandonedPackagesReport>,
         non_pypi_packages_report: Option<&NonPyPiPackagesReport>,
         python_compatibility_report: Option<&PythonCompatibilityReport>,
+        yanked_packages_report: Option<&YankedPackagesReport>,
         explain_view: Option<&ExplainView>,
         dependency_tree: Option<&DependencyTreeView>,
         baseline_suppressed_count: usize,
@@ -73,6 +75,7 @@ impl SbomReadModelBuilder {
         let abandoned_packages = abandoned_packages_report.cloned();
         let non_pypi_packages = non_pypi_packages_report.cloned();
         let python_compatibility = python_compatibility_report.cloned();
+        let yanked_packages = yanked_packages_report.cloned();
         let explain_view = explain_view.cloned();
         let dependency_tree = dependency_tree.cloned();
 
@@ -87,6 +90,7 @@ impl SbomReadModelBuilder {
             abandoned_packages,
             non_pypi_packages,
             python_compatibility,
+            yanked_packages,
             explain_view,
             dependency_tree,
             baseline_suppressed_count,
@@ -235,6 +239,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             0,
             &[],
         );
@@ -256,6 +261,7 @@ mod tests {
         let read_model = SbomReadModelBuilder::build_with_project(
             packages,
             &metadata,
+            None,
             None,
             None,
             None,
@@ -302,6 +308,7 @@ mod tests {
             Some(&report),
             None,
             None,
+            None,
             0,
             &[],
         );
@@ -328,6 +335,7 @@ mod tests {
         let read_model = SbomReadModelBuilder::build_with_project(
             packages,
             &metadata,
+            None,
             None,
             None,
             None,
@@ -377,6 +385,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             Some(&tree),
             0,
             &[],
@@ -410,6 +419,7 @@ mod tests {
             &metadata,
             None,
             Some(&vuln_result),
+            None,
             None,
             None,
             None,
@@ -469,6 +479,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             0,
             &[],
         );
@@ -507,6 +518,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             0,
             &[],
         );
@@ -524,6 +536,7 @@ mod tests {
             packages,
             &metadata,
             Some(&graph),
+            None,
             None,
             None,
             None,
@@ -568,6 +581,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             0,
             &[],
         );
@@ -588,6 +602,7 @@ mod tests {
             None,
             None,
             Some(("my-project", "1.0.0")),
+            None,
             None,
             None,
             None,
