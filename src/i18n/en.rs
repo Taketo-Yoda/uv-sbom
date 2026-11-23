@@ -129,6 +129,10 @@ pub(super) static EN_MESSAGES: Messages = Messages {
     progress_fetching_python_compat: "🔍 Checking Python version compatibility...",
     progress_python_compat_found: "✅ Python compatibility check complete: {} package(s) incompatible with Python {} ({} direct, {} transitive)",
     progress_python_compat_none: "✅ Python compatibility check complete: All packages compatible with Python {}",
+    warn_yanked_fetch_failed: "⚠️  Warning: Failed to fetch yanked status for {}: {}",
+    progress_fetching_yanked: "🔍 Checking for yanked package versions...",
+    progress_yanked_found: "✅ Yanked check complete: {} package(s) yanked ({} direct, {} transitive)",
+    progress_yanked_none: "✅ Yanked check complete: No yanked packages found",
 
     // Section description paragraphs
     desc_sbom_report: "A comprehensive list of all software components and libraries included in this project.",

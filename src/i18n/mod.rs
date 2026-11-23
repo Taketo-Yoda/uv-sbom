@@ -169,6 +169,14 @@ pub struct Messages {
     pub progress_fetching_python_compat: &'static str,
     pub progress_python_compat_found: &'static str,
     pub progress_python_compat_none: &'static str,
+    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes yanked check
+    pub warn_yanked_fetch_failed: &'static str,
+    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes yanked check
+    pub progress_fetching_yanked: &'static str,
+    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes yanked check
+    pub progress_yanked_found: &'static str,
+    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes yanked check
+    pub progress_yanked_none: &'static str,
 
     // Section description paragraphs
     pub desc_sbom_report: &'static str,
@@ -661,6 +669,10 @@ mod tests {
             progress_fetching_python_compat,
             progress_python_compat_found,
             progress_python_compat_none,
+            warn_yanked_fetch_failed,
+            progress_fetching_yanked,
+            progress_yanked_found,
+            progress_yanked_none,
             desc_sbom_report,
             desc_direct_deps,
             desc_transitive_deps,
