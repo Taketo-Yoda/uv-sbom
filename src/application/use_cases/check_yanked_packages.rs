@@ -103,9 +103,7 @@ impl<YR: YankedStatusRepository> CheckYankedPackagesUseCase<YR> {
             })
             .collect();
 
-        yanked.sort_by(|a, b| {
-            b.is_direct.cmp(&a.is_direct).then(a.name.cmp(&b.name))
-        });
+        yanked.sort_by(|a, b| b.is_direct.cmp(&a.is_direct).then(a.name.cmp(&b.name)));
 
         YankedPackagesReport { packages: yanked }
     }
@@ -287,9 +285,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_pypi_packages_looked_up() {
-        let repo = MockYankedStatusRepository::with_responses([
-            ("pypi-pkg".to_string(), Ok(yanked(Some("bad release")))),
-        ]);
+        let repo = MockYankedStatusRepository::with_responses([(
+            "pypi-pkg".to_string(),
+            Ok(yanked(Some("bad release"))),
+        )]);
         let uc = CheckYankedPackagesUseCase::new(repo);
         let mut source_map = PackageSourceMap::new();
         source_map.insert("pypi-pkg".to_string(), PackageSourceKind::PyPi);

@@ -69,9 +69,7 @@ mod tests {
 
     #[test]
     fn test_empty_report() {
-        let report = YankedPackagesReport {
-            packages: vec![],
-        };
+        let report = YankedPackagesReport { packages: vec![] };
         assert!(report.is_empty());
         assert_eq!(report.total_count(), 0);
         assert_eq!(report.direct_count(), 0);
