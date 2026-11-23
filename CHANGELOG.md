@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`--check-yanked` / `check_yanked`: report locked versions that were yanked on PyPI** — lists each yanked package with version, direct/transitive status, and the maintainer's reason; exits 1 when any are found (#1157, #957)
+
 ## [4.1.0] - 2026-11-21
 
 ### Added

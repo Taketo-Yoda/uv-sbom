@@ -140,6 +140,9 @@ const CONFIG_TEMPLATE: &str = r#"# uv-sbom configuration file
 # Inactivity threshold in days for abandoned-package detection (default: 730)
 # abandoned_threshold_days: 730
 
+# Check for locked package versions yanked on PyPI
+# check_yanked: false
+
 # Detect packages sourced from non-PyPI origins (git, path, url, private registries)
 # check_non_pypi: false
 
@@ -200,6 +203,7 @@ pub struct ConfigFile {
     pub suggest_fix: Option<bool>,
     pub check_abandoned: Option<bool>,
     pub abandoned_threshold_days: Option<u64>,
+    pub check_yanked: Option<bool>,
     pub check_non_pypi: Option<bool>,
     pub check_exploitability: Option<bool>,
     pub exclude_groups: Option<Vec<String>>,
