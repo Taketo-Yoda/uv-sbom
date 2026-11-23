@@ -1,4 +1,5 @@
 use super::pypi_version_endpoint;
+use crate::ports::outbound::yanked_status_repository::{YankedStatus, YankedStatusRepository};
 use crate::ports::outbound::ReleaseRepository;
 use crate::sbom_generation::domain::advisory::ReleaseStatus;
 use crate::shared::Result;
@@ -9,6 +10,8 @@ use serde::Deserialize;
 struct PyPiReleaseInfo {
     #[serde(default)]
     yanked: bool,
+    #[serde(default)]
+    yanked_reason: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -124,6 +127,29 @@ impl ReleaseRepository for PyPiReleaseClient {
     }
 }
 
+#[async_trait]
+#[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes YankedStatusRepository
+impl YankedStatusRepository for PyPiReleaseClient {
+    async fn fetch_yanked_status(&self, package_name: &str, version: &str) -> Result<YankedStatus> {
+        let response = crate::shared::http_retry::fetch_with_retry(Self::MAX_RETRIES, || {
+            self.fetch_from_pypi(package_name, version)
+        })
+        .await?;
+        match response {
+            Some(r) => {
+                let reason = r.info.yanked_reason.filter(|s| !s.is_empty());
+                Ok(YankedStatus {
+                    yanked: r.info.yanked,
+                    reason,
+                })
+            }
+            None => Err(anyhow::anyhow!(
+                "Package version not found on PyPI: {package_name}=={version}"
+            )),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,6 +157,7 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     const RELEASE_PATH: &str = "/pypi/requests/2.31.0/json";
+    const YANKED_PATH: &str = "/pypi/requests/2.32.0/json";
 
     /// Small limit for the response-size tests, so they never serve the
     /// production-sized (10 MiB) bodies that made them flaky (#1004).
@@ -282,5 +309,103 @@ mod tests {
             msg.contains("PyPI release metadata"),
             "unexpected error: {msg}"
         );
+    }
+
+    // --- YankedStatusRepository tests ---
+
+    async fn yanked_status_for(body: serde_json::Value) -> YankedStatus {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(YANKED_PATH))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body))
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiReleaseClient::new_with_base_url(mock_server.uri()).unwrap();
+        client
+            .fetch_yanked_status("requests", "2.32.0")
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_yanked_status_yanked_with_reason() {
+        let status = yanked_status_for(serde_json::json!({
+            "info": {
+                "yanked": true,
+                "yanked_reason": "Yanked due to conflicts with CVE-2024-35195 mitigation"
+            },
+            "urls": []
+        }))
+        .await;
+        assert!(status.yanked);
+        assert_eq!(
+            status.reason.as_deref(),
+            Some("Yanked due to conflicts with CVE-2024-35195 mitigation")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_yanked_status_yanked_with_null_reason() {
+        let status = yanked_status_for(serde_json::json!({
+            "info": { "yanked": true, "yanked_reason": null },
+            "urls": []
+        }))
+        .await;
+        assert!(status.yanked);
+        assert!(status.reason.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_yanked_status_yanked_with_empty_reason() {
+        let status = yanked_status_for(serde_json::json!({
+            "info": { "yanked": true, "yanked_reason": "" },
+            "urls": []
+        }))
+        .await;
+        assert!(status.yanked);
+        assert!(status.reason.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_yanked_status_not_yanked() {
+        let status = yanked_status_for(serde_json::json!({
+            "info": { "yanked": false, "yanked_reason": null },
+            "urls": []
+        }))
+        .await;
+        assert!(!status.yanked);
+        assert!(status.reason.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_yanked_status_404_is_error() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(YANKED_PATH))
+            .respond_with(ResponseTemplate::new(404))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = PyPiReleaseClient::new_with_base_url(mock_server.uri()).unwrap();
+        let err = client
+            .fetch_yanked_status("requests", "2.32.0")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("not found"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_yanked_status_existing_release_status_unchanged() {
+        let status = status_for(serde_json::json!({
+            "info": { "name": "requests", "version": "2.31.0", "yanked": true, "yanked_reason": "some reason" },
+            "urls": [{ "filename": "a.whl", "yanked": true }]
+        }))
+        .await;
+        assert_eq!(status, ReleaseStatus::Yanked);
     }
 }
