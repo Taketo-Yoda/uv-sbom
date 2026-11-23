@@ -50,11 +50,7 @@ pub trait YankedStatusRepository: Send + Sync {
     /// - Network request fails or times out
     /// - The version is not found on PyPI (HTTP 404)
     /// - API response is invalid
-    async fn fetch_yanked_status(
-        &self,
-        package_name: &str,
-        version: &str,
-    ) -> Result<YankedStatus>;
+    async fn fetch_yanked_status(&self, package_name: &str, version: &str) -> Result<YankedStatus>;
 }
 
 /// Dummy implementation for the unit type, mirroring `impl ReleaseRepository for ()`.
