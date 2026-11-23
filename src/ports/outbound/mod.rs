@@ -16,6 +16,7 @@ pub mod python_compatibility_repository;
 pub mod release_repository;
 pub mod vulnerability_repository;
 pub mod workspace_reader;
+pub mod yanked_status_repository;
 
 // `EnrichedPackage`, `UvLockSimulator` / `SimulationResult` are defined in
 // `crate::sbom_generation::domain`, not here: `ResolutionAnalyzer` consumes
@@ -49,3 +50,5 @@ pub use vulnerability_repository::VulnerabilityRepository;
 // Note: Will be used in a subsequent subtask for workspace detection
 #[allow(unused_imports)]
 pub use workspace_reader::{WorkspaceMember, WorkspaceReader};
+#[allow(unused_imports)]
+pub use yanked_status_repository::{YankedStatus, YankedStatusRepository};

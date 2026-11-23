@@ -5,8 +5,11 @@ use async_trait::async_trait;
 /// Port for querying the release status of a specific package version
 ///
 /// Used by `--incident` mode to answer "is the fixed version installable?".
-/// `--check-yanked` (#957) needs the same per-version data and should reuse
-/// this port rather than introducing its own.
+/// `--check-yanked` (#957) reuses the same `PyPiReleaseClient` adapter but
+/// through a separate `YankedStatusRepository` port, because (a)
+/// `ReleaseStatus::Yanked` carries no reason, while `YankedStatus` does, and
+/// (b) incident mode classifies "yanked" as `info.yanked || all files yanked`,
+/// while `--check-yanked` uses only the version-level `info.yanked`.
 ///
 /// # Security Considerations
 /// - Callers must pass only packages sourced from the public index; an
