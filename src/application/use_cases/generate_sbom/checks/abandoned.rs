@@ -8,14 +8,15 @@ use crate::i18n::Messages;
 use crate::ports::outbound::{
     ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
     ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    YankedStatusRepository,
 };
 use crate::sbom_generation::domain::{DependencyGraph, Package, UvLockSimulator};
 use crate::shared::Result;
 use chrono::Utc;
 use std::cmp::Reverse;
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO, YREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO, YREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -26,6 +27,7 @@ where
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
     EREPO: ExploitabilityRepository,
+    YREPO: YankedStatusRepository + Clone,
 {
     /// Checks for abandoned packages if `check_abandoned` is enabled.
     ///

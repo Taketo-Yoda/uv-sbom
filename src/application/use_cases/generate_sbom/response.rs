@@ -5,9 +5,11 @@ use crate::application::read_models::dependency_tree_view::DependencyTreeView;
 use crate::application::read_models::explain_view::ExplainView;
 use crate::application::read_models::non_pypi_package::NonPyPiPackagesReport;
 use crate::application::read_models::python_compatibility::PythonCompatibilityReport;
+use crate::application::read_models::yanked_package::YankedPackagesReport;
 use crate::ports::outbound::{
     ExploitabilityRepository, LicenseRepository, LockfileReader, MaintenanceRepository,
     ProgressReporter, ProjectConfigReader, PythonCompatibilityRepository, VulnerabilityRepository,
+    YankedStatusRepository,
 };
 use crate::sbom_generation::domain::license_policy::LicenseComplianceResult;
 use crate::sbom_generation::domain::services::VulnerabilityCheckResult;
@@ -17,8 +19,8 @@ use crate::sbom_generation::domain::{
 use crate::sbom_generation::services::SbomGenerator;
 use crate::shared::Result;
 
-impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
-    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO>
+impl<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO, YREPO>
+    GenerateSbomUseCase<LR, PCR, LREPO, PR, VREPO, MREPO, PCREPO, USIM, EREPO, YREPO>
 where
     LR: LockfileReader,
     PCR: ProjectConfigReader,
@@ -29,6 +31,7 @@ where
     PCREPO: PythonCompatibilityRepository + Clone,
     USIM: UvLockSimulator,
     EREPO: ExploitabilityRepository,
+    YREPO: YankedStatusRepository + Clone,
 {
     /// Builds a response for dry-run mode (validation only)
     pub(super) fn build_dry_run_response(&self) -> Result<SbomResponse> {
@@ -53,6 +56,7 @@ where
         abandoned_packages_report: Option<AbandonedPackagesReport>,
         non_pypi_packages_report: Option<NonPyPiPackagesReport>,
         python_compatibility_report: Option<PythonCompatibilityReport>,
+        yanked_packages_report: Option<YankedPackagesReport>,
         explain_view: Option<ExplainView>,
         dependency_tree: Option<DependencyTreeView>,
         baseline_suppressed_count: usize,
@@ -100,6 +104,9 @@ where
         if let Some(report) = python_compatibility_report {
             builder = builder.python_compatibility_report(report);
         }
+        if let Some(report) = yanked_packages_report {
+            builder = builder.yanked_packages_report(report);
+        }
         if let Some(view) = explain_view {
             builder = builder.explain_view(view);
         }
@@ -130,6 +137,7 @@ mod tests {
 
             let response = use_case.build_response(
                 enriched_packages,
+                None,
                 None,
                 None,
                 None,
@@ -196,6 +204,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
                 0,
                 vec![],
             );
@@ -246,6 +255,7 @@ mod tests {
                 enriched_packages,
                 None,
                 Some(check_result),
+                None,
                 None,
                 None,
                 None,

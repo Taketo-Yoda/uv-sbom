@@ -36,7 +36,6 @@ pub struct YankedStatus {
 ///   `YankedStatus { yanked: false, .. }`. A locked version PyPI does not
 ///   know about is not "not yanked".
 #[async_trait]
-#[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes YankedStatusRepository
 pub trait YankedStatusRepository: Send + Sync {
     /// Returns whether `version` of `package_name` is yanked, with the reason
     ///

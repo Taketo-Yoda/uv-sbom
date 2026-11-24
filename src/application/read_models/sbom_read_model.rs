@@ -14,6 +14,7 @@ use super::python_compatibility::PythonCompatibilityReport;
 use super::resolution_guide_view::ResolutionGuideView;
 use super::upgrade_recommendation_view::UpgradeRecommendationView;
 use super::vulnerability_view::VulnerabilityReportView;
+use super::yanked_package::YankedPackagesReport;
 
 /// Main read model for SBOM data
 ///
@@ -45,6 +46,10 @@ pub struct SbomReadModel {
     /// Python version compatibility report.
     /// Populated only when `target_python` was set in the request.
     pub python_compatibility: Option<PythonCompatibilityReport>,
+    /// Yanked packages report.
+    /// Populated only when `check_yanked` was true in the request.
+    #[allow(dead_code)] // WIRE(#1156): remove when Markdown formatter renders yanked section
+    pub yanked_packages: Option<YankedPackagesReport>,
     /// Dependency path trace for `--explain`.
     /// Populated only when `explain_package` was set in the request AND a
     /// dependency graph was built.

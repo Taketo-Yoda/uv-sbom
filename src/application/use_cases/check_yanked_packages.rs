@@ -20,12 +20,10 @@ type FetchOutcome = (Package, std::result::Result<YankedStatus, String>);
 ///
 /// # Type Parameters
 /// * `YR` - `YankedStatusRepository` implementation
-#[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase calls CheckYankedPackagesUseCase
 pub struct CheckYankedPackagesUseCase<YR: YankedStatusRepository> {
     yanked_repository: YR,
 }
 
-#[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase calls CheckYankedPackagesUseCase
 impl<YR: YankedStatusRepository> CheckYankedPackagesUseCase<YR> {
     pub fn new(yanked_repository: YR) -> Self {
         Self { yanked_repository }

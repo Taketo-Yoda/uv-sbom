@@ -169,13 +169,10 @@ pub struct Messages {
     pub progress_fetching_python_compat: &'static str,
     pub progress_python_compat_found: &'static str,
     pub progress_python_compat_none: &'static str,
-    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes yanked check
+    #[allow(dead_code)] // WIRE(#1157): remove when CLI wires per-package fetch-failure warnings
     pub warn_yanked_fetch_failed: &'static str,
-    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes yanked check
     pub progress_fetching_yanked: &'static str,
-    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes yanked check
     pub progress_yanked_found: &'static str,
-    #[allow(dead_code)] // WIRE(#1155): remove when GenerateSbomUseCase consumes yanked check
     pub progress_yanked_none: &'static str,
 
     // Section description paragraphs
