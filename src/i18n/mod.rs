@@ -297,6 +297,15 @@ pub struct Messages {
     pub label_python_compat_all_clear: &'static str,
     pub col_requires_python: &'static str,
 
+    // Yanked packages section
+    pub section_yanked_packages: &'static str,
+    pub desc_yanked_packages: &'static str,
+    pub label_yanked_packages: &'static str,
+    pub label_yanked_check_skipped: &'static str,
+    pub label_no_yanked_packages: &'static str,
+    pub col_yanked_reason: &'static str,
+    pub label_yanked_no_reason: &'static str,
+
     // Dependency explanation section
     pub section_explain: &'static str,
     pub summary_explain_paths: &'static str,
@@ -757,6 +766,13 @@ mod tests {
             summary_python_compat_issues,
             label_python_compat_all_clear,
             col_requires_python,
+            section_yanked_packages,
+            desc_yanked_packages,
+            label_yanked_packages,
+            label_yanked_check_skipped,
+            label_no_yanked_packages,
+            col_yanked_reason,
+            label_yanked_no_reason,
             section_explain,
             summary_explain_paths,
             summary_explain_direct,

@@ -48,7 +48,6 @@ pub struct SbomReadModel {
     pub python_compatibility: Option<PythonCompatibilityReport>,
     /// Yanked packages report.
     /// Populated only when `check_yanked` was true in the request.
-    #[allow(dead_code)] // WIRE(#1156): remove when Markdown formatter renders yanked section
     pub yanked_packages: Option<YankedPackagesReport>,
     /// Dependency path trace for `--explain`.
     /// Populated only when `explain_package` was set in the request AND a

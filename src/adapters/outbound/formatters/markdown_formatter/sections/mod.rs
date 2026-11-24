@@ -9,3 +9,4 @@ pub(super) mod non_pypi_packages;
 pub(super) mod python_compatibility;
 pub(super) mod resolution_guide;
 pub(super) mod summary;
+pub(super) mod yanked_packages;

@@ -1,9 +1,11 @@
 use crate::application::read_models::{
     AbandonedPackagesReport, ComponentView, LicenseComplianceView, VulnerabilityReportView,
+    YankedPackagesReport,
 };
 use crate::i18n::Messages;
 
 /// Renders the executive summary section
+#[allow(clippy::too_many_arguments)]
 pub(in super::super) fn render(
     messages: &'static Messages,
     output: &mut String,
@@ -11,6 +13,7 @@ pub(in super::super) fn render(
     vulnerabilities: Option<&VulnerabilityReportView>,
     license_compliance: Option<&LicenseComplianceView>,
     abandoned_packages: Option<&AbandonedPackagesReport>,
+    yanked_packages: Option<&YankedPackagesReport>,
     group_filter: &[String],
 ) {
     output.push_str(messages.section_summary);
@@ -146,6 +149,28 @@ pub(in super::super) fn render(
         }
     }
 
+    // Yanked packages row
+    match yanked_packages {
+        Some(report) => {
+            let n = report.total_count();
+            let yanked_status = if n > 0 {
+                has_warning = true;
+                "⚠️"
+            } else {
+                "✅"
+            };
+            output.push_str(&format!(
+                "| {} | {} | {} |\n",
+                messages.label_yanked_packages, n, yanked_status
+            ));
+        }
+        None => {
+            output.push('\n');
+            output.push_str(messages.label_yanked_check_skipped);
+            output.push('\n');
+        }
+    }
+
     // Overall line
     output.push('\n');
     let overall = if has_critical {
@@ -244,6 +269,7 @@ mod tests {
             vulnerabilities,
             license_compliance,
             abandoned_packages,
+            None,
             &[],
         );
         output
@@ -262,6 +288,7 @@ mod tests {
             &mut output,
             components,
             vulnerabilities,
+            None,
             None,
             None,
             group_filter,
