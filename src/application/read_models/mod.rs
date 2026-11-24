@@ -18,6 +18,7 @@ pub mod sbom_read_model;
 pub mod sbom_read_model_builder;
 pub mod upgrade_recommendation_view;
 pub mod vulnerability_view;
+pub mod yanked_package;
 
 #[allow(unused_imports)]
 pub use abandoned_package::{AbandonedPackageView, AbandonedPackagesReport};
@@ -54,3 +55,5 @@ pub use vulnerability_view::{
     SeverityView, VulnerabilityCountsBySeverity, VulnerabilityReportView, VulnerabilitySummary,
     VulnerabilityView,
 };
+#[allow(unused_imports)]
+pub use yanked_package::{YankedPackageView, YankedPackagesReport};

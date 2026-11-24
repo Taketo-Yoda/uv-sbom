@@ -2,6 +2,7 @@
 mod check_abandoned_packages;
 mod check_python_compatibility;
 mod check_vulnerabilities;
+mod check_yanked_packages;
 mod fetch_licenses;
 mod generate_diff;
 mod generate_sbom;
@@ -16,6 +17,8 @@ pub(crate) mod test_doubles;
 pub use check_abandoned_packages::CheckAbandonedPackagesUseCase;
 pub use check_python_compatibility::CheckPythonCompatibilityUseCase;
 pub use check_vulnerabilities::CheckVulnerabilitiesUseCase;
+#[allow(unused_imports)]
+pub use check_yanked_packages::CheckYankedPackagesUseCase;
 pub use fetch_licenses::FetchLicensesUseCase;
 pub use generate_diff::GenerateDiffUseCase;
 pub use generate_sbom::GenerateSbomUseCase;

@@ -129,6 +129,10 @@ pub(super) static JA_MESSAGES: Messages = Messages {
     progress_fetching_python_compat: "🔍 Pythonバージョン互換性を確認中...",
     progress_python_compat_found: "✅ Python互換性チェック完了: {}件のパッケージがPython {}と互換性がありません（直接: {}件、間接: {}件）",
     progress_python_compat_none: "✅ Python互換性チェック完了: すべてのパッケージがPython {}と互換性があります",
+    warn_yanked_fetch_failed: "⚠️  警告: {}のyankedステータス取得に失敗: {}",
+    progress_fetching_yanked: "🔍 yankedパッケージバージョンを確認中...",
+    progress_yanked_found: "✅ yankedチェック完了: {}件のパッケージがyanked（直接: {}件、間接: {}件）",
+    progress_yanked_none: "✅ yankedチェック完了: yankedパッケージはありません",
 
     // Section description paragraphs
     desc_sbom_report: "このプロジェクトに含まれるすべてのソフトウェアコンポーネントとライブラリの一覧です。",
