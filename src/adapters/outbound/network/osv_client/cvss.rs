@@ -59,113 +59,32 @@ fn parse_cvss_v4_score(cvss_vector: &str) -> Option<CvssScore> {
     CvssScore::new(score as f32).ok()
 }
 
-/// Computes the CVSS v3.x Base Score.
+/// Computes the CVSS v3.0 / v3.1 Base Score using the RustSec `cvss` crate,
+/// which implements the FIRST CVSS v3.0 and v3.1 specifications, including the
+/// version-specific rounding (v3.0 rounds up to one decimal; v3.1 uses the
+/// integer-based `Roundup` from Appendix A of the v3.1 specification).
 ///
-/// Note: This is a simplified implementation that extracts the score from
-/// the vector components. For the initial implementation, we calculate
-/// the score based on the metrics in the vector string.
+/// The full vector is validated, so an unknown, duplicate, or malformed metric
+/// (Base, Temporal, or Environmental) yields `None`. Only the eight Base metrics
+/// are scored: `base_score()` ignores Temporal and Environmental metrics.
 fn parse_cvss_v3_score(cvss_vector: &str) -> Option<CvssScore> {
-    // CVSS v3.1 metric values and their scores
-    // This is a simplified scoring algorithm based on the Base Score formula
+    let vector = cvss_vector.parse::<::cvss::v3::Vector>().ok()?;
 
-    // Parse metrics from vector string
-    let metrics: std::collections::HashMap<&str, &str> = cvss_vector
-        .split('/')
-        .skip(1) // Skip "CVSS:3.1" or "CVSS:3.0"
-        .filter_map(|part| {
-            let mut split = part.split(':');
-            Some((split.next()?, split.next()?))
-        })
-        .collect();
+    // The crate scores an absent Base metric as 0.0 instead of rejecting the
+    // vector, so require all eight Base metrics explicitly.
+    let has_all_base_metrics = vector.av.is_some()
+        && vector.ac.is_some()
+        && vector.pr.is_some()
+        && vector.ui.is_some()
+        && vector.s.is_some()
+        && vector.c.is_some()
+        && vector.i.is_some()
+        && vector.a.is_some();
+    if !has_all_base_metrics {
+        return None;
+    }
 
-    // Extract metric values
-    let av = metrics.get("AV")?;
-    let ac = metrics.get("AC")?;
-    let pr = metrics.get("PR")?;
-    let ui = metrics.get("UI")?;
-    let s = metrics.get("S")?;
-    let c = metrics.get("C")?;
-    let i = metrics.get("I")?;
-    let a = metrics.get("A")?;
-
-    // Calculate exploitability sub-score
-    let av_score = match *av {
-        "N" => 0.85, // Network
-        "A" => 0.62, // Adjacent
-        "L" => 0.55, // Local
-        "P" => 0.2,  // Physical
-        _ => return None,
-    };
-
-    let ac_score = match *ac {
-        "L" => 0.77, // Low
-        "H" => 0.44, // High
-        _ => return None,
-    };
-
-    let pr_score = match (*pr, *s) {
-        ("N", _) => 0.85,   // None
-        ("L", "U") => 0.62, // Low, Unchanged
-        ("L", "C") => 0.68, // Low, Changed
-        ("H", "U") => 0.27, // High, Unchanged
-        ("H", "C") => 0.5,  // High, Changed
-        _ => return None,
-    };
-
-    let ui_score = match *ui {
-        "N" => 0.85, // None
-        "R" => 0.62, // Required
-        _ => return None,
-    };
-
-    // Calculate impact sub-score
-    let c_score = match *c {
-        "N" => 0.0,  // None
-        "L" => 0.22, // Low
-        "H" => 0.56, // High
-        _ => return None,
-    };
-
-    let i_score = match *i {
-        "N" => 0.0,  // None
-        "L" => 0.22, // Low
-        "H" => 0.56, // High
-        _ => return None,
-    };
-
-    let a_score = match *a {
-        "N" => 0.0,  // None
-        "L" => 0.22, // Low
-        "H" => 0.56, // High
-        _ => return None,
-    };
-
-    // Calculate ISS (Impact Sub-Score)
-    let iss = 1.0_f64 - ((1.0 - c_score) * (1.0 - i_score) * (1.0 - a_score));
-
-    // Calculate Impact
-    let impact = if *s == "U" {
-        6.42 * iss
-    } else {
-        7.52 * (iss - 0.029) - 3.25 * (iss - 0.02_f64).powi(15)
-    };
-
-    // Calculate Exploitability
-    let exploitability = 8.22 * av_score * ac_score * pr_score * ui_score;
-
-    // Calculate Base Score
-    let base_score = if impact <= 0.0 {
-        0.0
-    } else if *s == "U" {
-        f64::min(impact + exploitability, 10.0)
-    } else {
-        f64::min(1.08 * (impact + exploitability), 10.0)
-    };
-
-    // Round up to one decimal place
-    let rounded_score = (base_score * 10.0).ceil() / 10.0;
-
-    CvssScore::new(rounded_score as f32).ok()
+    CvssScore::new(vector.base_score().value() as f32).ok()
 }
 
 /// Parses severity string from OSV database_specific field
@@ -190,58 +109,106 @@ pub(super) fn parse_severity_string(severity: &str) -> Severity {
 mod tests {
     use super::*;
 
+    // CVSS v3.x expected scores are those of the FIRST CVSS v3.0 / v3.1 calculators
+    // (https://www.first.org/cvss/calculator/3.0, https://www.first.org/cvss/calculator/3.1),
+    // never the `cvss` crate's own output.
+
     #[test]
-    fn test_parse_cvss_score_critical() {
-        // High severity example (network, low complexity, no privileges, no interaction)
-        let vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H";
-        let score = parse_cvss_score(vector);
-        assert!(score.is_some());
-        let score = score.unwrap();
-        // This should be around 9.8 (Critical)
-        assert!(score.value() >= 9.0 && score.value() <= 10.0);
+    fn test_parse_cvss_v3_table() {
+        let cases = [
+            ("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H", 10.0),
+            ("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", 9.8),
+            ("CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", 9.8),
+            ("CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H", 8.8),
+            ("CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H", 7.8),
+            ("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H", 7.5),
+            ("CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N", 6.1),
+            ("CVSS:3.0/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N", 6.1),
+            ("CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N", 5.9),
+            ("CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:L", 5.5),
+            ("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+            ("CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:L/I:N/A:N", 3.3),
+            ("CVSS:3.1/AV:L/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N", 1.8),
+            ("CVSS:3.0/AV:P/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N", 1.6),
+            ("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N", 0.0),
+        ];
+        for (vector, expected) in cases {
+            let score = parse_cvss_score(vector).unwrap_or_else(|| panic!("{vector} should score"));
+            assert_eq!(score.value(), expected, "{vector}");
+        }
     }
 
     #[test]
-    fn test_parse_cvss_score_high() {
-        // High severity example
-        let vector = "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H";
-        let score = parse_cvss_score(vector);
-        assert!(score.is_some());
-        let score = score.unwrap();
-        // This should be around 8.8 (High)
-        assert!(score.value() >= 7.0 && score.value() < 9.0);
+    fn test_parse_cvss_v3_severity_bands() {
+        let cases = [
+            (
+                "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                Severity::Critical,
+            ),
+            (
+                "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+                Severity::High,
+            ),
+            (
+                "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
+                Severity::Medium,
+            ),
+            (
+                "CVSS:3.1/AV:L/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N",
+                Severity::Low,
+            ),
+            (
+                "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N",
+                Severity::None,
+            ),
+        ];
+        for (vector, expected) in cases {
+            let score = parse_cvss_score(vector).expect("v3 vector should score");
+            assert_eq!(Severity::from_cvss_score(score), expected, "{vector}");
+        }
     }
 
     #[test]
-    fn test_parse_cvss_score_medium() {
-        // Medium severity example
-        let vector = "CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:L";
-        let score = parse_cvss_score(vector);
-        assert!(score.is_some());
-        let score = score.unwrap();
-        // This should be in the Medium range (4.0-6.9)
-        assert!(score.value() >= 4.0 && score.value() < 7.0);
+    fn test_parse_cvss_v3_ignores_temporal_and_environmental_metrics() {
+        // With these Temporal metrics the FIRST calculator's Temporal Score would be 8.8;
+        // with the Environmental metric the Environmental Score would be 0.0.
+        // Only the Base Score (9.8) is reported.
+        let cases = [
+            "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:P/RL:O/RC:C",
+            "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/MC:N/MI:N/MA:N",
+        ];
+        for vector in cases {
+            let score = parse_cvss_score(vector).unwrap_or_else(|| panic!("{vector} should score"));
+            assert_eq!(score.value(), 9.8, "{vector}");
+        }
     }
 
     #[test]
-    fn test_parse_cvss_score_low() {
-        // Low severity example
-        let vector = "CVSS:3.1/AV:L/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N";
-        let score = parse_cvss_score(vector);
-        assert!(score.is_some());
-        let score = score.unwrap();
-        // This should be in the Low range (0.1-3.9)
-        assert!(score.value() > 0.0 && score.value() < 4.0);
+    fn test_parse_cvss_v3_lowercase_accepted() {
+        let vector = "CVSS:3.1/av:n/ac:l/pr:n/ui:n/s:u/c:h/i:h/a:h";
+        let score = parse_cvss_score(vector).expect("lowercase v3 vector should score");
+        assert_eq!(score.value(), 9.8);
     }
 
     #[test]
-    fn test_parse_cvss_score_none() {
-        // No impact
-        let vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N";
-        let score = parse_cvss_score(vector);
-        assert!(score.is_some());
-        let score = score.unwrap();
-        assert_eq!(score.value(), 0.0);
+    fn test_parse_cvss_v3_malformed() {
+        let cases = [
+            // Missing mandatory Base metric (A)
+            "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H",
+            // Invalid metric value
+            "CVSS:3.1/AV:X/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            // Duplicate metric
+            "CVSS:3.1/AV:N/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            // Unknown metric
+            "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/ZZ:N",
+            // Trailing slash
+            "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/",
+            // Malformed Temporal metric
+            "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:Z",
+        ];
+        for vector in cases {
+            assert!(parse_cvss_score(vector).is_none(), "{vector}");
+        }
     }
 
     #[test]

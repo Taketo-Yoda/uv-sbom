@@ -38,7 +38,7 @@ dashmap = "6"
 owo-colors = "4.3"
 futures = "0.3"
 pep440_rs = "0.7"
-cvss = { version = "3", default-features = false, features = ["std", "v4"] }
+cvss = { version = "3", default-features = false, features = ["std", "v3", "v4"] }
 
 [dev-dependencies]
 archaven = "=1.1.0"

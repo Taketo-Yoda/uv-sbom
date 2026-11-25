@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **CVSS v3 scores are now computed with the RustSec `cvss` crate per the FIRST specification** — v3.0 and v3.1 vectors use the same specification-conformant implementation as v4.0, including the version-specific rounding (v3.1's integer-based `Roundup`). Some scores could differ by 0.1 from earlier releases where the previous implementation's float rounding deviated from the spec; an exhaustive comparison over every v3.0/v3.1 Base vector found no such case. Parsing is now as strict as for v4.0: lowercase metrics are accepted, and a vector with an unknown, duplicate, or malformed metric is no longer scored, so the next severity source is used instead (#960)
+
 ## [4.1.0] - 2026-11-21
 
 ### Added
