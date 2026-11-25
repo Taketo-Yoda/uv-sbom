@@ -1,21 +1,18 @@
-use crate::application::read_models::{
-    AbandonedPackagesReport, ComponentView, LicenseComplianceView, VulnerabilityReportView,
-    YankedPackagesReport,
-};
+use crate::application::read_models::SbomReadModel;
 use crate::i18n::Messages;
 
 /// Renders the executive summary section
-#[allow(clippy::too_many_arguments)]
 pub(in super::super) fn render(
     messages: &'static Messages,
     output: &mut String,
-    components: &[ComponentView],
-    vulnerabilities: Option<&VulnerabilityReportView>,
-    license_compliance: Option<&LicenseComplianceView>,
-    abandoned_packages: Option<&AbandonedPackagesReport>,
-    yanked_packages: Option<&YankedPackagesReport>,
-    group_filter: &[String],
+    model: &SbomReadModel,
 ) {
+    let components = &model.components;
+    let vulnerabilities = model.vulnerabilities.as_ref();
+    let license_compliance = model.license_compliance.as_ref();
+    let abandoned_packages = model.abandoned_packages.as_ref();
+    let yanked_packages = model.yanked_packages.as_ref();
+    let group_filter = &model.applied_group_filter;
     output.push_str(messages.section_summary);
     output.push_str("\n\n");
 
@@ -188,11 +185,38 @@ pub(in super::super) fn render(
 mod tests {
     use super::*;
     use crate::application::read_models::{
-        AbandonedPackageView, AbandonedPackagesReport, LicenseComplianceSummary,
-        LicenseComplianceView, SeverityView, VulnerabilityReportView, VulnerabilityView,
+        AbandonedPackageView, AbandonedPackagesReport, ComponentView, LicenseComplianceSummary,
+        LicenseComplianceView, SbomMetadataView, SeverityView, VulnerabilityReportView,
+        VulnerabilityView,
     };
     use crate::i18n::{Locale, Messages};
     use chrono::NaiveDate;
+
+    fn base_model() -> SbomReadModel {
+        SbomReadModel {
+            metadata: SbomMetadataView {
+                timestamp: String::new(),
+                tool_name: String::new(),
+                tool_version: String::new(),
+                serial_number: String::new(),
+                component: None,
+            },
+            components: vec![],
+            dependencies: None,
+            vulnerabilities: None,
+            license_compliance: None,
+            resolution_guide: None,
+            upgrade_recommendations: None,
+            abandoned_packages: None,
+            non_pypi_packages: None,
+            python_compatibility: None,
+            yanked_packages: None,
+            explain_view: None,
+            dependency_tree: None,
+            baseline_suppressed_count: 0,
+            applied_group_filter: vec![],
+        }
+    }
 
     fn make_component(is_direct: bool) -> ComponentView {
         ComponentView {
@@ -241,8 +265,8 @@ mod tests {
     fn render_summary(
         locale: Locale,
         components: &[ComponentView],
-        vulnerabilities: Option<&VulnerabilityReportView>,
-        license_compliance: Option<&LicenseComplianceView>,
+        vulnerabilities: Option<VulnerabilityReportView>,
+        license_compliance: Option<LicenseComplianceView>,
     ) -> String {
         render_summary_with_abandoned(
             locale,
@@ -256,43 +280,34 @@ mod tests {
     fn render_summary_with_abandoned(
         locale: Locale,
         components: &[ComponentView],
-        vulnerabilities: Option<&VulnerabilityReportView>,
-        license_compliance: Option<&LicenseComplianceView>,
-        abandoned_packages: Option<&AbandonedPackagesReport>,
+        vulnerabilities: Option<VulnerabilityReportView>,
+        license_compliance: Option<LicenseComplianceView>,
+        abandoned_packages: Option<AbandonedPackagesReport>,
     ) -> String {
+        let mut model = base_model();
+        model.components = components.to_vec();
+        model.vulnerabilities = vulnerabilities;
+        model.license_compliance = license_compliance;
+        model.abandoned_packages = abandoned_packages;
         let messages = Messages::for_locale(locale);
         let mut output = String::new();
-        render(
-            messages,
-            &mut output,
-            components,
-            vulnerabilities,
-            license_compliance,
-            abandoned_packages,
-            None,
-            &[],
-        );
+        render(messages, &mut output, &model);
         output
     }
 
     fn render_summary_with_groups(
         locale: Locale,
         components: &[ComponentView],
-        vulnerabilities: Option<&VulnerabilityReportView>,
+        vulnerabilities: Option<VulnerabilityReportView>,
         group_filter: &[String],
     ) -> String {
+        let mut model = base_model();
+        model.components = components.to_vec();
+        model.vulnerabilities = vulnerabilities;
+        model.applied_group_filter = group_filter.to_vec();
         let messages = Messages::for_locale(locale);
         let mut output = String::new();
-        render(
-            messages,
-            &mut output,
-            components,
-            vulnerabilities,
-            None,
-            None,
-            None,
-            group_filter,
-        );
+        render(messages, &mut output, &model);
         output
     }
 
@@ -349,7 +364,7 @@ mod tests {
     #[test]
     fn test_vuln_rows_present_when_check_enabled() {
         let report = VulnerabilityReportView::default();
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         assert!(output.contains("| Vulnerabilities (CRITICAL) | 0 | ✅ |"));
         assert!(output.contains("| Vulnerabilities (HIGH) | 0 | ✅ |"));
         assert!(output.contains("| Vulnerabilities (MEDIUM) | 0 | ✅ |"));
@@ -363,7 +378,7 @@ mod tests {
             actionable: vec![make_vuln(SeverityView::Critical)],
             ..Default::default()
         };
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         assert!(output.contains("| Vulnerabilities (CRITICAL) | 1 | ❌ |"));
         assert!(output.contains("**Overall: Action required**"));
     }
@@ -381,7 +396,7 @@ mod tests {
             actionable: vec![make_malicious_vuln()],
             ..Default::default()
         };
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         assert!(output.contains("| Malicious packages | 1 | ❌ |"));
         assert!(output.contains("**Overall: Action required**"));
     }
@@ -392,7 +407,7 @@ mod tests {
             informational: vec![make_malicious_vuln()],
             ..Default::default()
         };
-        let output = render_summary(Locale::Ja, &[], Some(&report), None);
+        let output = render_summary(Locale::Ja, &[], Some(report), None);
         assert!(output.contains("| 悪意のあるパッケージ | 1 | ❌ |"));
         assert!(output.contains(Messages::for_locale(Locale::Ja).overall_action_required));
     }
@@ -403,7 +418,7 @@ mod tests {
             actionable: vec![make_malicious_vuln()],
             ..Default::default()
         };
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         let malicious = output.find("| Malicious packages |").unwrap();
         let critical = output.find("| Vulnerabilities (CRITICAL) |").unwrap();
         assert!(malicious < critical);
@@ -415,7 +430,7 @@ mod tests {
             actionable: vec![make_vuln(SeverityView::Critical)],
             ..Default::default()
         };
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         assert!(!output.contains("Malicious"));
     }
 
@@ -425,7 +440,7 @@ mod tests {
             actionable: vec![make_malicious_vuln(), make_vuln(SeverityView::Critical)],
             ..Default::default()
         };
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         assert!(output.contains("| Malicious packages | 1 | ❌ |"));
         assert!(output.contains("| Vulnerabilities (CRITICAL) | 1 | ❌ |"));
     }
@@ -436,7 +451,7 @@ mod tests {
             actionable: vec![make_vuln(SeverityView::High)],
             ..Default::default()
         };
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         assert!(output.contains("| Vulnerabilities (HIGH) | 1 | ⚠️ |"));
         assert!(output.contains("**Overall: Attention recommended**"));
     }
@@ -447,7 +462,7 @@ mod tests {
             actionable: vec![make_vuln(SeverityView::Medium)],
             ..Default::default()
         };
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         assert!(output.contains("| Vulnerabilities (MEDIUM) | 1 | ⚠️ |"));
         assert!(output.contains("**Overall: Attention recommended**"));
     }
@@ -458,7 +473,7 @@ mod tests {
             informational: vec![make_vuln(SeverityView::Low)],
             ..Default::default()
         };
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         assert!(output.contains("| Vulnerabilities (LOW) | 1 | ⚠️ |"));
         assert!(output.contains("**Overall: Attention recommended**"));
     }
@@ -466,7 +481,7 @@ mod tests {
     #[test]
     fn test_license_violation_status_is_error() {
         let license = make_license_compliance(2);
-        let output = render_summary(Locale::En, &[], None, Some(&license));
+        let output = render_summary(Locale::En, &[], None, Some(license));
         assert!(output.contains("| License violations | 2 | ❌ |"));
         assert!(output.contains("**Overall: Action required**"));
     }
@@ -474,7 +489,7 @@ mod tests {
     #[test]
     fn test_license_no_violation_status_is_ok() {
         let license = make_license_compliance(0);
-        let output = render_summary(Locale::En, &[], None, Some(&license));
+        let output = render_summary(Locale::En, &[], None, Some(license));
         assert!(output.contains("| License violations | 0 | ✅ |"));
     }
 
@@ -482,7 +497,7 @@ mod tests {
     fn test_overall_no_issues_en() {
         let report = VulnerabilityReportView::default();
         let license = make_license_compliance(0);
-        let output = render_summary(Locale::En, &[], Some(&report), Some(&license));
+        let output = render_summary(Locale::En, &[], Some(report), Some(license));
         assert!(output.contains("**Overall: No issues found** ✅"));
     }
 
@@ -496,7 +511,7 @@ mod tests {
     fn test_overall_no_issues_ja() {
         let report = VulnerabilityReportView::default();
         let license = make_license_compliance(0);
-        let output = render_summary(Locale::Ja, &[], Some(&report), Some(&license));
+        let output = render_summary(Locale::Ja, &[], Some(report), Some(license));
         assert!(output.contains("**総合判定: 問題なし** ✅"));
     }
 
@@ -506,7 +521,7 @@ mod tests {
             actionable: vec![make_vuln(SeverityView::Critical)],
             ..Default::default()
         };
-        let output = render_summary(Locale::Ja, &[], Some(&report), None);
+        let output = render_summary(Locale::Ja, &[], Some(report), None);
         assert!(output.contains("**総合判定: 対応が必要です**"));
     }
 
@@ -516,7 +531,7 @@ mod tests {
             actionable: vec![make_vuln(SeverityView::High)],
             ..Default::default()
         };
-        let output = render_summary(Locale::Ja, &[], Some(&report), None);
+        let output = render_summary(Locale::Ja, &[], Some(report), None);
         assert!(output.contains("**総合判定: 注意が必要です**"));
     }
 
@@ -535,7 +550,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let output = render_summary(Locale::En, &[], Some(&report), None);
+        let output = render_summary(Locale::En, &[], Some(report), None);
         assert!(output.contains("**Overall: Action required**"));
         assert!(!output.contains("**Overall: Attention recommended**"));
     }
@@ -572,7 +587,7 @@ mod tests {
     #[test]
     fn test_abandoned_zero_shows_ok_en() {
         let report = make_abandoned_report(0);
-        let output = render_summary_with_abandoned(Locale::En, &[], None, None, Some(&report));
+        let output = render_summary_with_abandoned(Locale::En, &[], None, None, Some(report));
         assert!(output.contains("| Abandoned packages | 0 | ✅ |"));
         assert!(!output.contains("_Abandoned package check skipped._"));
     }
@@ -580,7 +595,7 @@ mod tests {
     #[test]
     fn test_abandoned_nonzero_shows_warning_en() {
         let report = make_abandoned_report(3);
-        let output = render_summary_with_abandoned(Locale::En, &[], None, None, Some(&report));
+        let output = render_summary_with_abandoned(Locale::En, &[], None, None, Some(report));
         assert!(output.contains("| Abandoned packages | 3 | ⚠️ |"));
         assert!(output.contains("**Overall: Attention recommended**"));
     }
@@ -588,7 +603,7 @@ mod tests {
     #[test]
     fn test_abandoned_nonzero_shows_warning_ja() {
         let report = make_abandoned_report(2);
-        let output = render_summary_with_abandoned(Locale::Ja, &[], None, None, Some(&report));
+        let output = render_summary_with_abandoned(Locale::Ja, &[], None, None, Some(report));
         assert!(output.contains("| 廃止パッケージ | 2 | ⚠️ |"));
         assert!(output.contains("**総合判定: 注意が必要です**"));
     }
@@ -603,9 +618,9 @@ mod tests {
         let output = render_summary_with_abandoned(
             Locale::En,
             &[],
-            Some(&vuln_report),
+            Some(vuln_report),
             None,
-            Some(&abandoned),
+            Some(abandoned),
         );
         assert!(output.contains("**Overall: Action required**"));
         assert!(!output.contains("**Overall: Attention recommended**"));
@@ -636,7 +651,7 @@ mod tests {
     fn test_group_filter_row_after_transitive_before_vuln() {
         let groups = vec!["dev".to_string()];
         let report = VulnerabilityReportView::default();
-        let output = render_summary_with_groups(Locale::En, &[], Some(&report), &groups);
+        let output = render_summary_with_groups(Locale::En, &[], Some(report), &groups);
         let transitive_pos = output.find("Transitive dependencies").unwrap();
         let group_filter_pos = output.find("Dependency group filter").unwrap();
         let vuln_pos = output.find("Vulnerabilities (CRITICAL)").unwrap();
