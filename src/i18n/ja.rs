@@ -209,6 +209,7 @@ pub(super) static JA_MESSAGES: Messages = Messages {
     workspace_aggregate_total_cves: "対応が必要なCVE合計: {}",
     workspace_aggregate_license_violations: "ライセンスポリシー違反があるメンバー: {}",
     workspace_aggregate_abandoned: "メンテナンス停止パッケージがあるメンバー: {}",
+    workspace_aggregate_yanked: "取り下げ済みパッケージがあるメンバー: {}",
     workspace_aggregate_non_pypi: "非PyPIパッケージがあるメンバー: {}",
     workspace_aggregate_python_incompatible: "Python非互換パッケージがあるメンバー: {}",
     workspace_aggregate_none: "なし",

@@ -278,7 +278,6 @@ impl SbomRequestBuilder {
     }
 
     /// Sets whether to check for yanked package versions on PyPI.
-    #[allow(dead_code)] // WIRE(#1157): remove when CLI flag wires check_yanked
     pub fn check_yanked(mut self, check: bool) -> Self {
         self.check_yanked = check;
         self

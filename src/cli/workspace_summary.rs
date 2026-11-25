@@ -23,6 +23,7 @@ pub struct MemberFindings {
     pub actionable_cve_count: usize,
     pub has_license_violations: bool,
     pub has_abandoned_packages: bool,
+    pub has_yanked_packages: bool,
     pub has_non_pypi_packages: bool,
     pub has_python_incompatibilities: bool,
 }
@@ -41,6 +42,10 @@ impl MemberFindings {
             has_license_violations: response.has_license_violations,
             has_abandoned_packages: response
                 .abandoned_packages_report
+                .as_ref()
+                .is_some_and(|r| !r.is_empty()),
+            has_yanked_packages: response
+                .yanked_packages_report
                 .as_ref()
                 .is_some_and(|r| !r.is_empty()),
             has_non_pypi_packages: response
@@ -68,6 +73,7 @@ pub struct EnabledChecks {
     pub cve: bool,
     pub license: bool,
     pub abandoned: bool,
+    pub yanked: bool,
     pub non_pypi: bool,
     pub python_compatibility: bool,
 }
@@ -79,13 +85,19 @@ impl EnabledChecks {
             cve: merged.check_cve,
             license: merged.check_license,
             abandoned: merged.check_abandoned,
+            yanked: merged.check_yanked,
             non_pypi: merged.check_non_pypi,
             python_compatibility: merged.target_python.is_some(),
         }
     }
 
     fn any_enabled(&self) -> bool {
-        self.cve || self.license || self.abandoned || self.non_pypi || self.python_compatibility
+        self.cve
+            || self.license
+            || self.abandoned
+            || self.yanked
+            || self.non_pypi
+            || self.python_compatibility
     }
 }
 
@@ -153,6 +165,14 @@ pub fn render_workspace_aggregate(
             findings,
             |f| f.has_abandoned_packages,
             msgs.workspace_aggregate_abandoned,
+            msgs,
+        ));
+    }
+    if enabled.yanked {
+        lines.push(render_member_list_line(
+            findings,
+            |f| f.has_yanked_packages,
+            msgs.workspace_aggregate_yanked,
             msgs,
         ));
     }
@@ -227,6 +247,7 @@ mod tests {
             actionable_cve_count: cve,
             has_license_violations: license,
             has_abandoned_packages: false,
+            has_yanked_packages: false,
             has_non_pypi_packages: false,
             has_python_incompatibilities: false,
         }
@@ -237,6 +258,7 @@ mod tests {
             cve: false,
             license: false,
             abandoned: false,
+            yanked: false,
             non_pypi: false,
             python_compatibility: false,
         }
@@ -400,6 +422,7 @@ mod tests {
             cve: true,
             license: false,
             abandoned: true,
+            yanked: false,
             non_pypi: false,
             python_compatibility: true,
         };
