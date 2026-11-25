@@ -130,6 +130,7 @@ type WiredSbomUseCase<LR> = GenerateSbomUseCase<
     PyPiCompatibilityClient,
     UvLockAdapter,
     EpssKevClient,
+    PyPiReleaseClient,
 >;
 
 /// Builds a fully-wired `GenerateSbomUseCase` from the resolved config.
@@ -182,6 +183,13 @@ fn build_use_case<LR: LockfileReader>(
         None
     };
 
+    // Create yanked status repository if yanked check is requested
+    let yanked_repository = if merged.check_yanked {
+        Some(PyPiReleaseClient::new()?)
+    } else {
+        None
+    };
+
     Ok(GenerateSbomUseCase::new(
         lockfile_reader,
         project_config_reader,
@@ -192,7 +200,7 @@ fn build_use_case<LR: LockfileReader>(
         compatibility_repository,
         uv_lock_simulator,
         exploitability_repository,
-        None::<()>,
+        yanked_repository,
         locale,
     ))
 }
@@ -301,6 +309,7 @@ fn build_sbom_request(
         .suggest_fix(suggest_fix)
         .check_abandoned(merged.check_abandoned)
         .abandoned_threshold_days(merged.abandoned_threshold_days)
+        .check_yanked(merged.check_yanked)
         .check_non_pypi(merged.check_non_pypi)
         .check_exploitability(merged.check_exploitability)
         .exclude_groups(exclude_groups)
@@ -409,15 +418,21 @@ async fn render_and_present(
     let presenter = PresenterFactory::create(presenter_type, locale);
     presenter.present(&formatted_output)?;
 
-    // Determine if vulnerabilities, license violations, or abandoned packages were detected
+    // Determine if vulnerabilities, license violations, abandoned or yanked packages were detected
     let has_abandoned = response
         .abandoned_packages_report
         .as_ref()
         .map(|r| !r.is_empty())
         .unwrap_or(false);
+    let has_yanked = response
+        .yanked_packages_report
+        .as_ref()
+        .map(|r| !r.is_empty())
+        .unwrap_or(false);
     let has_issues = response.has_vulnerabilities_above_threshold
         || response.has_license_violations
-        || has_abandoned;
+        || has_abandoned
+        || has_yanked;
 
     Ok(has_issues)
 }

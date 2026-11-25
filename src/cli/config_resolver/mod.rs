@@ -35,6 +35,7 @@ pub struct MergedConfig {
     pub suggest_fix: bool,
     pub check_abandoned: bool,
     pub abandoned_threshold_days: u64,
+    pub check_yanked: bool,
     pub check_non_pypi: bool,
     /// Whether to enrich CVE results with EPSS scores and CISA KEV status.
     pub check_exploitability: bool,
@@ -108,6 +109,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedCo
     );
     let suggest_fix = resolve_flag(args.suggest_fix, cfg.and_then(|c| c.suggest_fix));
     let check_abandoned = resolve_flag(args.check_abandoned, cfg.and_then(|c| c.check_abandoned));
+    let check_yanked = resolve_flag(args.check_yanked, cfg.and_then(|c| c.check_yanked));
     let check_non_pypi = resolve_flag(args.check_non_pypi, cfg.and_then(|c| c.check_non_pypi));
     let check_exploitability = resolve_flag(
         args.check_exploitability,
@@ -138,6 +140,7 @@ pub fn merge_config(args: &Args, config: &Option<ConfigFile>) -> Result<MergedCo
         suggest_fix,
         check_abandoned,
         abandoned_threshold_days,
+        check_yanked,
         check_non_pypi,
         check_exploitability,
         exclude_groups,

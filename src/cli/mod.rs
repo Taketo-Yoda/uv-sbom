@@ -83,6 +83,10 @@ pub struct Args {
     #[arg(long, value_name = "DAYS", requires = "check_abandoned")]
     pub abandoned_threshold_days: Option<u64>,
 
+    /// Check for locked package versions that have been yanked on PyPI
+    #[arg(long)]
+    pub check_yanked: bool,
+
     /// Check for packages sourced from non-PyPI origins (git, path, url, private registries)
     #[arg(long)]
     pub check_non_pypi: bool,
@@ -189,7 +193,7 @@ pub struct Args {
 /// Flags rejected together with `--incident`: other modes, and checks or
 /// filters that do not apply to a single-advisory report. `--workspace` is
 /// allowed (#969); it still rejects `--output` on its own.
-const INCIDENT_CONFLICTS: [&str; 18] = [
+const INCIDENT_CONFLICTS: [&str; 19] = [
     "diff",
     "init",
     "dry_run",
@@ -201,6 +205,7 @@ const INCIDENT_CONFLICTS: [&str; 18] = [
     "suggest_fix",
     "check_license",
     "check_abandoned",
+    "check_yanked",
     "check_non_pypi",
     "check_exploitability",
     "target_python",
@@ -433,7 +438,7 @@ mod tests {
     fn test_incident_conflicts_with_each_listed_flag() {
         use clap::error::ErrorKind;
 
-        let cases: [&[&str]; 18] = [
+        let cases: [&[&str]; 19] = [
             &["--diff", "HEAD"],
             &["--init"],
             &["--dry-run"],
@@ -445,6 +450,7 @@ mod tests {
             &["--suggest-fix"],
             &["--check-license"],
             &["--check-abandoned"],
+            &["--check-yanked"],
             &["--check-non-pypi"],
             &["--check-exploitability"],
             &["--target-python", "3.13"],

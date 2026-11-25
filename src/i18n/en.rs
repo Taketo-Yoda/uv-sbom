@@ -206,6 +206,7 @@ pub(super) static EN_MESSAGES: Messages = Messages {
     workspace_aggregate_total_cves: "Total actionable CVEs: {}",
     workspace_aggregate_license_violations: "Members with license policy violations: {}",
     workspace_aggregate_abandoned: "Members with abandoned packages: {}",
+    workspace_aggregate_yanked: "Members with yanked packages: {}",
     workspace_aggregate_non_pypi: "Members with non-PyPI packages: {}",
     workspace_aggregate_python_incompatible: "Members with Python-incompatible packages: {}",
     workspace_aggregate_none: "none",
