@@ -80,6 +80,9 @@ license_policy:
   deny: ["GPL-3.0-only", "GPL-3.0-or-later", "AGPL-*"]
   unknown: "warn"  # "warn" | "deny" | "allow"
 
+# Check for yanked versions on PyPI
+# check_yanked: false
+
 # Enrich CVE results with EPSS scores and CISA KEV status
 # check_exploitability: false
 
@@ -105,6 +108,7 @@ license_policy:
 | `license_policy.unknown` | string | No | Unknown license handling (`warn` / `deny` / `allow`) |
 | `check_abandoned` | bool | No | Enable abandoned package detection (opt-in, default: false) |
 | `abandoned_threshold_days` | integer | No | Inactivity threshold in days for abandoned package detection (default: 730) |
+| `check_yanked` | bool | No | Enable yanked version detection (opt-in, default: false) |
 | `check_non_pypi` | bool | No | Enable non-PyPI source detection (opt-in, default: false) |
 | `exclude_groups` | string[] | No | Dependency groups whose exclusively-reachable packages are excluded from the SBOM |
 | `check_exploitability` | bool | No | Enrich CVE results with EPSS scores and CISA KEV status (opt-in, default: false) |
@@ -121,6 +125,7 @@ license_policy:
 - **`check_license`** is enabled if set via CLI flag OR config file (logical OR, same as `check_cve`)
 - **`--license-allow`** and **`--license-deny`** CLI options **override** config file `license_policy.allow` / `license_policy.deny` entirely (not merged)
 - **`check_abandoned`** is opt-in (default: false). Enable via CLI flag `--check-abandoned` or config file `check_abandoned: true`. The `abandoned_threshold_days` value follows CLI > config file > default (730) resolution order.
+- **`check_yanked`** is opt-in (default: false). Enable via CLI flag `--check-yanked` or config file `check_yanked: true`.
 - **`check_non_pypi`** is opt-in (default: false). Enable via CLI flag `--check-non-pypi` or config file `check_non_pypi: true`.
 - **`check_exploitability`** is opt-in (default: false). Enable via CLI flag `--check-exploitability` or config file `check_exploitability: true`. Requires CVE checking (conflicts with `--no-check-cve`).
 - **`exclude_groups`**: CLI `--exclude-groups` **overrides** the config file value entirely (not merged). `--production-only` resolves all group names from the lockfile at runtime and takes precedence over both CLI and config.

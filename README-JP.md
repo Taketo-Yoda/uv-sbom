@@ -49,7 +49,7 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 
 - **uv.lock ネイティブ** — `uv.lock` を直接読み取り、本番ランタイム依存関係のみを対象とします。仮想環境やビルド時依存は不要です。
 - **Markdown ファースト、アクション可能な出力** — コピーして PR に貼り付けたりレポートに使える表形式。脆弱性ごとに、どの直接依存が原因か、完全な依存チェーンを表示します。
-- **オールインワンのサプライチェーンカバレッジ** — CVE スキャン、ライセンスコンプライアンス、放棄パッケージ検出、非 PyPI ソース検出、Python バージョン互換性、悪用可能性の優先度付け（EPSS + CISA KEV）、インシデント対応、依存差分 — すべて1つのツールで。
+- **オールインワンのサプライチェーンカバレッジ** — CVE スキャン、ライセンスコンプライアンス、放棄パッケージ検出、取り下げバージョン検出、非 PyPI ソース検出、Python バージョン互換性、悪用可能性の優先度付け（EPSS + CISA KEV）、インシデント対応、依存差分 — すべて1つのツールで。
 
 ## クイックスタート
 
@@ -110,6 +110,7 @@ uv-sbom --format markdown --lang ja
 
 - **ライセンスコンプライアンス** (`--check-license`) — ワイルドカード対応の許可/拒否リスト。[詳細 →](docs/ja/security-checks.md#ライセンスコンプライアンスチェック)
 - **放棄パッケージ検出** (`--check-abandoned`) — 設定可能な期間内に PyPI リリースがないパッケージを検出。[詳細 →](docs/ja/security-checks.md#放置パッケージ検出)
+- **取り下げバージョン検出** (`--check-yanked`) — PyPI で取り下げられたロック済みバージョンを報告。[詳細 →](docs/ja/security-checks.md#取り下げバージョン検出)
 - **非 PyPI ソース検出** (`--check-non-pypi`) — git、URL、プライベートレジストリからのソースを識別。[詳細 →](docs/ja/security-checks.md#非-pypi-ソース検出)
 - **Python バージョン互換性** (`--target-python`) — ターゲットバージョンに対する `Requires-Python` 制約をチェック。[詳細 →](docs/ja/security-checks.md#python-バージョン互換性チェック)
 - **悪用可能性の優先度付け** (`--check-exploitability`) — EPSS スコアと CISA KEV ステータスで CVE を拡充。[詳細 →](docs/ja/security-checks.md#悪用可能性の優先順位付け---check-exploitability)
@@ -172,7 +173,7 @@ uv-sbom --format markdown --lang ja
 
 | ドキュメント | 説明 |
 |-------------|------|
-| [セキュリティチェック](docs/ja/security-checks.md) | CVE スキャン、閾値、ベースライン、ライセンス、放棄、非 PyPI、Python 互換性、悪用可能性 |
+| [セキュリティチェック](docs/ja/security-checks.md) | CVE スキャン、閾値、ベースライン、ライセンス、放棄、取り下げ、非 PyPI、Python 互換性、悪用可能性 |
 | [インシデント対応](docs/ja/incident-response.md) | `--incident` モード：アドバイザリ検索、ワークスペース、手動範囲、終了コード、パッチ待ち |
 | [依存関係インサイト](docs/ja/dependency-insight.md) | `--explain`、`--show-dependency-tree`、`--diff`、解決ガイド、アップグレードアドバイザー |
 | [設定](docs/ja/configuration.md) | 設定ファイル、スキーマリファレンス、マージルール、除外パターン、依存グループ |

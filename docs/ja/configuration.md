@@ -80,6 +80,9 @@ license_policy:
   deny: ["GPL-3.0-only", "GPL-3.0-or-later", "AGPL-*"]
   unknown: "warn"  # "warn" | "deny" | "allow"
 
+# PyPI で取り下げられたロック済みバージョンを検出
+# check_yanked: false
+
 # CVE 結果を EPSS スコアと CISA KEV ステータスで強化
 # check_exploitability: false
 
@@ -105,6 +108,7 @@ license_policy:
 | `license_policy.unknown` | string | いいえ | 不明なライセンスの処理（`warn` / `deny` / `allow`） |
 | `check_abandoned` | bool | いいえ | 放置パッケージ検出を有効化（オプトイン、デフォルト：false） |
 | `abandoned_threshold_days` | integer | いいえ | 放置パッケージ検出の非アクティブしきい値（日数）（デフォルト：730） |
+| `check_yanked` | bool | いいえ | 取り下げバージョン検出を有効化（オプトイン、デフォルト：false） |
 | `check_non_pypi` | bool | いいえ | 非 PyPI ソース検出を有効化（オプトイン、デフォルト：false） |
 | `exclude_groups` | string[] | いいえ | 排他的に到達可能なパッケージを SBOM から除外する依存グループ |
 | `check_exploitability` | bool | いいえ | CVE 結果を EPSS スコアと CISA KEV ステータスで強化（オプトイン、デフォルト：false） |
@@ -121,6 +125,7 @@ license_policy:
 - **`check_license`** は CLI フラグまたは設定ファイルで設定されている場合に有効化されます（論理 OR、`check_cve` と同様）
 - **`--license-allow`** と **`--license-deny`** の CLI オプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を**完全に上書き**します（マージではない）
 - **`check_abandoned`** はオプトイン（デフォルト：false）。CLI フラグ `--check-abandoned` または設定ファイル `check_abandoned: true` で有効化。`abandoned_threshold_days` の値は CLI > 設定ファイル > デフォルト（730）の解決順序に従います
+- **`check_yanked`** はオプトイン（デフォルト：false）。CLI フラグ `--check-yanked` または設定ファイル `check_yanked: true` で有効化
 - **`check_non_pypi`** はオプトイン（デフォルト：false）。CLI フラグ `--check-non-pypi` または設定ファイル `check_non_pypi: true` で有効化
 - **`check_exploitability`** はオプトイン（デフォルト：false）。CLI フラグ `--check-exploitability` または設定ファイル `check_exploitability: true` で有効化。CVE チェックが必要（`--no-check-cve` と競合）
 - **`exclude_groups`**: CLI `--exclude-groups` は設定ファイルの値を**完全に上書き**します（マージではない）。`--production-only` は実行時にロックファイルからすべてのグループ名を解決し、CLI と設定の両方より優先されます

@@ -57,7 +57,7 @@ Each member gets its own `sbom.json` containing only the packages reachable from
 
 ## Aggregate Summary
 
-After the per-member table, `--workspace` also prints an aggregate summary showing monorepo-wide health without opening every member's SBOM file — total CVE count, which members have license policy violations, and which members have abandoned / non-PyPI / Python-incompatible packages flagged. A line only appears for a check that was actually enabled for the run (e.g. `--check-license`); a check that wasn't run never prints a line, even an empty one.
+After the per-member table, `--workspace` also prints an aggregate summary showing monorepo-wide health without opening every member's SBOM file — total CVE count, which members have license policy violations, and which members have abandoned / yanked / non-PyPI / Python-incompatible packages flagged. A line only appears for a check that was actually enabled for the run (e.g. `--check-license`); a check that wasn't run never prints a line, even an empty one.
 
 ## Workspace Root Dependency Groups
 

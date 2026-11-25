@@ -49,7 +49,7 @@ A single run produces a component inventory, a vulnerability report with resolut
 
 - **uv.lock-native** — Reads `uv.lock` directly, capturing only production runtime dependencies. No virtual environment needed, no build-time noise.
 - **Markdown-first, actionable output** — Tables you can read, copy into a PR, or drop into a report. Every vulnerability shows which direct dependency introduced it, with the full dependency chain.
-- **All-in-one supply chain coverage** — CVE scanning, license compliance, abandoned package detection, non-PyPI source detection, Python version compatibility, exploitability prioritization (EPSS + CISA KEV), incident response, and dependency diff — in a single tool.
+- **All-in-one supply chain coverage** — CVE scanning, license compliance, abandoned package detection, yanked version detection, non-PyPI source detection, Python version compatibility, exploitability prioritization (EPSS + CISA KEV), incident response, and dependency diff — in a single tool.
 
 ## Quick Start
 
@@ -110,6 +110,7 @@ When a new advisory drops, one command tells you whether your project is affecte
 
 - **License compliance** (`--check-license`) — Allow/deny lists with wildcard support. [Details →](docs/security-checks.md#license-compliance-check)
 - **Abandoned package detection** (`--check-abandoned`) — Flags packages with no PyPI release within a configurable threshold. [Details →](docs/security-checks.md#abandoned-package-detection)
+- **Yanked version detection** (`--check-yanked`) — Reports locked versions that have been yanked on PyPI. [Details →](docs/security-checks.md#yanked-version-detection)
 - **Non-PyPI source detection** (`--check-non-pypi`) — Identifies git, URL, and private registry sources. [Details →](docs/security-checks.md#non-pypi-source-detection)
 - **Python version compatibility** (`--target-python`) — Checks `Requires-Python` constraints against a target version. [Details →](docs/security-checks.md#python-version-compatibility-check)
 - **Exploitability prioritization** (`--check-exploitability`) — Enriches CVEs with EPSS scores and CISA KEV status. [Details →](docs/security-checks.md#exploitability-prioritization---check-exploitability)
@@ -172,7 +173,7 @@ The focused approach of `uv-sbom` reduces noise in security vulnerability scanni
 
 | Document | Description |
 |----------|-------------|
-| [Security Checks](docs/security-checks.md) | CVE scanning, thresholds, baseline, license, abandoned, non-PyPI, Python compat, exploitability |
+| [Security Checks](docs/security-checks.md) | CVE scanning, thresholds, baseline, license, abandoned, yanked, non-PyPI, Python compat, exploitability |
 | [Incident Response](docs/incident-response.md) | `--incident` mode: advisory lookup, workspace, manual range, exit codes, wait-for-patch |
 | [Dependency Insight](docs/dependency-insight.md) | `--explain`, `--show-dependency-tree`, `--diff`, resolution guide, upgrade advisor |
 | [Configuration](docs/configuration.md) | Config file, schema reference, merge rules, exclude patterns, dependency groups |

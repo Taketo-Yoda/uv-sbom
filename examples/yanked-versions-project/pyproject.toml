@@ -1,0 +1,10 @@
+[project]
+name = "yanked-versions-project"
+version = "0.1.0"
+description = "Example project demonstrating --check-yanked with a genuinely yanked PyPI version"
+requires-python = ">=3.11"
+dependencies = [
+    # requests 2.32.0 is yanked on PyPI due to conflicts with CVE-2024-35195 mitigation.
+    # NOTE: This version is intentionally pinned for demonstration — DO NOT use in production.
+    "requests==2.32.0",
+]

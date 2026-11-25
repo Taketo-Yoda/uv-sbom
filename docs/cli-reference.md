@@ -38,6 +38,7 @@ Options:
       --check-license                Check license compliance against policy
       --check-abandoned              Check for abandoned/unmaintained packages (no upstream release within threshold days)
       --abandoned-threshold-days <DAYS>  Inactivity threshold in days for abandoned-package detection (default: 730)
+      --check-yanked                 Check for locked versions that have been yanked on PyPI
       --check-non-pypi               Check for packages sourced from non-PyPI origins (git, direct URL, private registries)
       --check-exploitability         Enrich CVE results with EPSS scores and CISA KEV status
                                      Cannot be used with --no-check-cve
