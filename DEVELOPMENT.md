@@ -59,6 +59,18 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 `--all-targets` also lints tests, benches, and examples, `--all-features` lints feature-gated code, and `-D warnings` turns warnings into errors, as CI does.
 
+### Japanese doc lint
+
+`README-JP.md` and `docs/ja/` are checked by the [yomiyasu](https://github.com/nanaism/yomiyasu) linter in `.github/workflows/docs-lint.yml`. The job is warn-only for now: findings appear in the job log and do not fail it. To run it locally, clone yomiyasu outside this repository at the commit pinned in that workflow (Python 3.9+, no dependencies), then run the script from this repository's root so it picks up the project word list in `.yomiyasu-words/`:
+
+```bash
+git clone https://github.com/nanaism/yomiyasu ../yomiyasu
+git -C ../yomiyasu checkout <sha-from-docs-lint.yml>
+python ../yomiyasu/scripts/yomiyasu_lint.py README-JP.md
+```
+
+Add established project terms that should not be reported (one per line) to `.yomiyasu-words/allow.txt`. The writing rules themselves live in `.claude/conventions/docs-structure.md` → "Japanese Writing Style".
+
 ## Pre-push hook
 
 Run `make setup` once after cloning. It enables `.githooks/pre-push`, which runs the CI fmt, clippy, and test checks before every push (CI additionally runs release-mode tests and a release build):
