@@ -10,7 +10,7 @@
 
 **Human-readable SBOMs with actionable supply chain insights for Python projects managed by [uv](https://github.com/astral-sh/uv).**
 
-uv-sbom reads your `uv.lock` and generates a Markdown or CycloneDX 1.6 JSON SBOM focused on production runtime dependencies — then layers on vulnerability scanning, license compliance, incident response, and a suite of supply chain health checks, all in one command.
+uv-sbom reads your `uv.lock` and generates a Markdown or CycloneDX 1.6 JSON SBOM focused on production runtime dependencies. It also provides vulnerability scanning, license compliance checks, incident response, and supply chain health checks.
 
 ## What It Does
 
@@ -47,9 +47,9 @@ A single run produces a component inventory, a vulnerability report with resolut
 
 ## Why uv-sbom?
 
-- **uv.lock-native** — Reads `uv.lock` directly, capturing only production runtime dependencies. No virtual environment needed, no build-time noise.
-- **Markdown-first, actionable output** — Tables you can read, copy into a PR, or drop into a report. Every vulnerability shows which direct dependency introduced it, with the full dependency chain.
-- **All-in-one supply chain coverage** — CVE scanning, license compliance, abandoned package detection, yanked version detection, non-PyPI source detection, Python version compatibility, exploitability prioritization (EPSS + CISA KEV), incident response, and dependency diff — in a single tool.
+- **uv.lock-native**: Reads `uv.lock` directly, capturing only production runtime dependencies. No virtual environment needed, no build-time noise.
+- **Markdown-first, actionable output**: Tables you can read, copy into a PR, or drop into a report. Every vulnerability shows which direct dependency introduced it, with the full dependency chain.
+- **All-in-one supply chain coverage**: CVE scanning, license compliance, abandoned package detection, yanked version detection, non-PyPI source detection, Python version compatibility, exploitability prioritization (EPSS + CISA KEV), incident response, and dependency diff.
 
 ## Quick Start
 
@@ -104,7 +104,7 @@ CVE vulnerability checking via the [OSV database](https://osv.dev) is **enabled 
 
 ### Incident Response (`--incident`)
 
-When a new advisory drops, one command tells you whether your project is affected, whether the fix is on PyPI yet, and gives you a dry-run-verified `uv lock --upgrade-package` command to run — or guidance when the upgrade can't resolve. Exit codes make it easy to script waiting for a patch. [Incident response →](docs/incident-response.md)
+When a new advisory drops, one command tells you whether your project is affected, whether the fix is on PyPI yet, and gives you a dry-run-verified `uv lock --upgrade-package` command to run, or guidance when the upgrade can't resolve. Exit codes make it easy to script waiting for a patch. [Incident response →](docs/incident-response.md)
 
 ### Supply Chain Checks
 
@@ -165,7 +165,7 @@ The official cyclonedx-python library reads from `.venv` and does not support `u
 - **For production security scanning**: Use `uv-sbom` to focus on dependencies that will be deployed to production, with Markdown reports, CVE checking, and upgrade paths
 - **For CycloneDX SBOM from uv.lock**: Use `uv export --format cyclonedx1.5` for a CycloneDX-format SBOM generated directly from your lockfile
 - **For comprehensive supply chain audit**: Use CycloneDX official tools to include all development and build-time dependencies from the installed environment
-- **For regulatory compliance**: Check your specific requirements - some regulations may require the comprehensive approach
+- **For regulatory compliance**: Check your specific requirements. Some regulations may require the comprehensive approach
 
 The focused approach of `uv-sbom` reduces noise in security vulnerability scanning by excluding build-time dependencies that don't ship with the final application.
 
@@ -207,11 +207,11 @@ This enables `pre-commit` (auto-format) and `pre-push` (fmt check, clippy, tests
 
 ### Reference
 
-- [DEVELOPMENT.md](DEVELOPMENT.md) — Development guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal Architecture + DDD implementation details
-- [CHANGELOG.md](CHANGELOG.md) — Change history
-- [.claude/project-context.md](.claude/project-context.md) — Complete project context for Claude Code
-- [.claude/instructions.md](.claude/instructions.md) — Coding guidelines and instructions for Claude Code
+- [DEVELOPMENT.md](DEVELOPMENT.md): Development guide
+- [ARCHITECTURE.md](ARCHITECTURE.md): Hexagonal Architecture + DDD implementation details
+- [CHANGELOG.md](CHANGELOG.md): Change history
+- [.claude/project-context.md](.claude/project-context.md): Complete project context for Claude Code
+- [.claude/instructions.md](.claude/instructions.md): Coding guidelines and instructions for Claude Code
 
 ## Attribution
 
@@ -224,14 +224,12 @@ By default, this tool retrieves vulnerability data from [OSV (Open Source Vulner
 - Available at: https://osv.dev
 - License: CC-BY 4.0
 
-The OSV database is a collaborative effort to provide comprehensive, accurate, and accessible vulnerability information for open source software.
-
 ### Exploitability Data
 
 When `--check-exploitability` is used, this tool retrieves data from:
 
-- **EPSS (Exploit Prediction Scoring System)** by [FIRST.org](https://www.first.org/epss/) — probabilistic scoring of CVE exploitation likelihood. See EPSS at https://www.first.org/epss
-- **CISA KEV (Known Exploited Vulnerabilities)** catalog by [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — authoritative list of CVEs with confirmed active exploitation (public domain, CC0)
+- **EPSS (Exploit Prediction Scoring System)** by [FIRST.org](https://www.first.org/epss/): probabilistic scoring of CVE exploitation likelihood. See EPSS at https://www.first.org/epss
+- **CISA KEV (Known Exploited Vulnerabilities)** catalog by [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog): authoritative list of CVEs with confirmed active exploitation (public domain, CC0)
 
 ## License
 

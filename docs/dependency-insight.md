@@ -28,14 +28,14 @@ uv-sbom --explain idna --no-check-cve --format markdown
 ```
 
 **How it works:**
-- Reuses the dependency graph already built for the Markdown report — no network access and no additional traversal
+- Reuses the dependency graph already built for the Markdown report (no network access and no additional traversal)
 - Reports the package as a **direct dependency** when it appears in `[project.dependencies]`, and lists every transitive path otherwise (a package can be both)
 - Paths read left to right, from the direct dependency to the target, using the same backtick-and-arrow notation as the Dependency Chains subsection
 - An unknown or invalid package name is reported as "not found"; it never aborts SBOM generation
 - The graph is built only from `[project.dependencies]`. Packages reachable only through `[dependency-groups]` (dev, test, lint, …) are reported as not found, even though they still appear in the component inventory and license tables
 
 **Output:**
-- **Dependency Explanation section**: a single `## Dependency Explanation` section in the Markdown output, rendered in one of three states — transitive paths, direct dependency, or not found
+- **Dependency Explanation section**: a single `## Dependency Explanation` section in the Markdown output, rendered in one of three states: transitive paths, direct dependency, or not found
 - When `--explain` is not passed, the section is omitted entirely
 
 **Example output (transitive package reached by several paths):**
@@ -77,7 +77,7 @@ Package **definitely-not-a-real-package** was not found in this project's depend
 uv-sbom -p examples/suggest-fix-project --explain definitely-not-a-real-package --no-check-cve -f markdown
 ```
 
-> **Note:** These examples use `examples/suggest-fix-project` rather than `examples/sample-project` (used elsewhere in this README) because it is the shipped example that actually contains a diamond dependency — `idna` is required by both `httpx` and `requests`.
+> **Note:** These examples use `examples/suggest-fix-project` rather than `examples/sample-project` (used elsewhere in this README) because it is the shipped example that actually contains a diamond dependency: `idna` is required by both `httpx` and `requests`.
 
 **Config file equivalent:**
 
@@ -103,14 +103,14 @@ uv-sbom --show-dependency-tree --dependency-tree-depth 2 --format markdown
 ```
 
 **How it works:**
-- Reuses the dependency graph already built for the Markdown report — no network access and no additional traversal
+- Reuses the dependency graph already built for the Markdown report (no network access and no additional traversal)
 - One root per direct dependency, in the same order as the Direct Dependencies list; children follow the lock file's own dependency order
-- Diamond dependencies (a package reachable through more than one path) are shown once under each parent, not deduplicated — the tree mirrors graph shape, not a flattened package list
+- Diamond dependencies (a package reachable through more than one path) are shown once under each parent, not deduplicated. The tree mirrors graph shape, not a flattened package list
 - `--dependency-tree-depth` counts levels *below* each root: `0` shows roots only, `1` shows roots plus their immediate children, and so on
 - When a branch has children that were not expanded because the depth limit was reached, a `... (truncated)` marker is shown in their place, followed by a note naming the depth that was applied
 
 **Output:**
-- **Dependency Tree section**: a single `## Dependency Tree` section in the Markdown output, containing only package name and version — license, description, and hash data are not repeated here since they already appear in the Component Inventory
+- **Dependency Tree section**: a single `## Dependency Tree` section in the Markdown output, containing only package name and version. License, description, and hash data are not repeated here since they already appear in the Component Inventory
 - When `--show-dependency-tree` is not passed, the section is omitted entirely
 
 **Example output (full tree, no truncation):**
@@ -213,8 +213,8 @@ uv-sbom --diff main --format json
 
 By default, `--diff` also runs vulnerability checks on both the base and current lock files and appends a **CVE Delta** section to the report showing which vulnerabilities were introduced or resolved:
 
-- **New vulnerabilities** — CVEs that affect packages in the current lock but were not present in the base.
-- **Resolved vulnerabilities** — CVEs that affected packages in the base lock but no longer apply.
+- **New vulnerabilities**: CVEs that affect packages in the current lock but were not present in the base.
+- **Resolved vulnerabilities**: CVEs that affected packages in the base lock but no longer apply.
 
 ```bash
 # Diff with CVE delta (default — CVE checking is on)
@@ -302,9 +302,9 @@ uv-sbom generate --suggest-fix
 ```
 
 **Output**: Adds a "Recommended Action" column to the Vulnerability Resolution Guide showing:
-- `⬆️ Upgrade requests → 2.32.3 (resolves urllib3 to 2.2.1)` — when an upgrade fixes the vulnerability
-- `⚠️ Cannot resolve: latest httpx still pins idna < 3.7` — when no upgrade helps (see [Constraint-Dependencies Workaround](#constraint-dependencies-workaround) below for what happens next)
-- `❓ Could not analyze: <error>` — when simulation failed
+- `⬆️ Upgrade requests → 2.32.3 (resolves urllib3 to 2.2.1)`: when an upgrade fixes the vulnerability
+- `⚠️ Cannot resolve: latest httpx still pins idna < 3.7`: when no upgrade helps (see [Constraint-Dependencies Workaround](#constraint-dependencies-workaround) below for what happens next)
+- `❓ Could not analyze: <error>`: when simulation failed
 
 **Try it with the included example**:
 
@@ -351,7 +351,7 @@ uv-sbom -p examples/suggest-fix-project --suggest-fix -f markdown
 | idna | 3.4 | 3.7 | 🟡 MEDIUM | httpx (0.24.1), requests (2.31.0) | ⚠️ Cannot resolve: upgrading httpx still resolves idna to 3.4 which does not satisfy >= 3.7 💡 Workaround: add `"idna>=3.7"` to `[tool.uv].constraint-dependencies` (✅ verified: resolves to 3.20) | GHSA-jjg7-2v4v-x38h |
 ```
 
-_(Excerpt — vulnerability counts and resolved versions may change as new CVEs are published.)_
+_(Excerpt. Vulnerability counts and resolved versions may change as new CVEs are published.)_
 
 **Applying the workaround:**
 
@@ -372,6 +372,6 @@ uv lock
 uv sync
 ```
 
-> **Note:** `constraint-dependencies` applies a lower bound without changing which packages are selected — it only constrains the version resolver. This is different from adding the package as a direct dependency. See the [uv documentation](https://docs.astral.sh/uv/concepts/dependencies/#constraint-dependencies) for details.
+> **Note:** `constraint-dependencies` applies a lower bound without changing which packages are selected; it only constrains the version resolver. This is different from adding the package as a direct dependency. See the [uv documentation](https://docs.astral.sh/uv/concepts/dependencies/#constraint-dependencies) for details.
 
 > **Workspace limitation:** The constraint simulation copies only the root `pyproject.toml` into its temporary environment. In a workspace with member-level `pyproject.toml` files, the simulation may not reflect member-specific constraints.

@@ -2,7 +2,7 @@
 
 [Back to README](../README.md)
 
-uv-sbom provides a comprehensive suite of security and supply chain checks that run alongside SBOM generation. This document covers every check, its configuration, and its output format.
+uv-sbom provides security and supply chain checks that run alongside SBOM generation. This document covers every check, its configuration, and its output format.
 
 ## Table of Contents
 
@@ -91,7 +91,7 @@ OSV malicious-package advisories (IDs starting with `MAL-`, either as the primar
 
 ## Vulnerability Baseline
 
-Use `--baseline` to suppress previously-accepted vulnerability findings. A baseline file records `(package, version, vulnerability_id)` tuples. Only exact matches are suppressed — bumping a package version makes its previously-baselined findings count as new.
+Use `--baseline` to suppress previously-accepted vulnerability findings. A baseline file records `(package, version, vulnerability_id)` tuples. Only exact matches are suppressed: bumping a package version makes its previously-baselined findings count as new.
 
 ```bash
 # First run: generate a baseline file from the current findings
@@ -230,7 +230,7 @@ See [`examples/abandoned-packages-project/README.md`](../examples/abandoned-pack
 
 ## Yanked Version Detection
 
-Use the `--check-yanked` option to identify packages whose locked versions have been **yanked on PyPI**. Yanked releases typically indicate critical bugs, security issues, or accidental publishes — keeping a yanked version in your lock file means you are running a release the maintainer has explicitly retracted.
+Use the `--check-yanked` option to identify packages whose locked versions have been **yanked on PyPI**. Yanked releases typically indicate critical bugs, security issues, or accidental publishes. Keeping a yanked version in your lock file means you are running a release the maintainer has explicitly retracted.
 
 ```bash
 # Enable yanked version detection
@@ -300,7 +300,7 @@ uv-sbom --check-non-pypi --format markdown
 **How it works:**
 - Reads the source classification directly from `uv.lock` (no network access, no PyPI API calls)
 - Flags packages sourced from a **Private Registry**, **Git** repository, or **Direct URL**
-- Local filesystem paths (`path = "..."`) and workspace members are not flagged — these are expected in uv workspace layouts and are not considered external supply chain risk
+- Local filesystem paths (`path = "..."`) and workspace members are not flagged. These are expected in uv workspace layouts and are not considered external supply chain risk
 
 **Output:**
 - **Non-PyPI Package Sources section**: Appears in the Markdown output listing the total count (direct vs. transitive) followed by a table of Package, Version, Source Type, and Source
@@ -326,7 +326,7 @@ uv-sbom --check-non-pypi --format markdown
 check_non_pypi: true
 ```
 
-> **Note:** Non-PyPI source detection requires no network access — all data is read directly from `uv.lock`.
+> **Note:** Non-PyPI source detection requires no network access: all data is read directly from `uv.lock`.
 
 For a demo with guaranteed output, run:
 
@@ -396,8 +396,8 @@ target_python: "3.8"
 
 Use the `--check-exploitability` option to enrich CVE results with real-world exploitation data from two authoritative sources:
 
-- **EPSS** (Exploit Prediction Scoring System) from [FIRST.org](https://www.first.org/epss/) — a percentile ranking indicating the likelihood that a CVE will be exploited in the wild within the next 30 days
-- **CISA KEV** (Known Exploited Vulnerabilities) catalog from [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — a curated list of CVEs with confirmed active exploitation
+- **EPSS** (Exploit Prediction Scoring System) from [FIRST.org](https://www.first.org/epss/): a percentile ranking indicating the likelihood that a CVE will be exploited in the wild within the next 30 days
+- **CISA KEV** (Known Exploited Vulnerabilities) catalog from [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog): a curated list of CVEs with confirmed active exploitation
 
 ```bash
 # Enrich vulnerability results with EPSS and KEV data
@@ -438,7 +438,7 @@ uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
 | anyio | 4.0.0 | 4.14.2 | N/A | 🔴 CRITICAL | GHSA-82r6-8w77-94w6 | No | 19th percentile |
 ```
 
-_(32 vulnerabilities total — excerpt sorted by EPSS percentile. EPSS values are live data and may change over time.)_
+_(32 vulnerabilities total; excerpt sorted by EPSS percentile. EPSS values are live data and may change over time.)_
 
 **Config file equivalent:**
 ```yaml
