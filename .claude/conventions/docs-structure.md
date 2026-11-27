@@ -1,8 +1,9 @@
 # Documentation Structure (canonical)
 
-Single source of truth for where user-facing documentation lives and how new
-content is routed after the README restructuring in #1064. Japanese translation
-directory (`docs/ja/`) added in #1088.
+Single source of truth for where user-facing documentation lives, how new
+content is routed after the README restructuring in #1064, and how English and
+Japanese documentation is written (#1160). Japanese translation directory
+(`docs/ja/`) added in #1088.
 
 ## Structure
 
@@ -101,8 +102,96 @@ When a new `docs/<file>.md` is created:
 - [ ] A row is added to the Japanese Translation Routing table above
 - [ ] Both README.md and README-JP.md documentation tables are updated
 
+## Japanese Writing Style
+
+Applies to `README-JP.md` and `docs/ja/*.md`. The `src/i18n/` message catalog
+is not covered by this section.
+
+### Approach
+
+- Write each page as a native Japanese technical document, not a
+  sentence-by-sentence translation. Carry over the meaning of each section;
+  reorder, merge, or split sentences when that reads more naturally. Headings,
+  code blocks, examples, and tables still mirror the English source mapped in
+  "Japanese Translation Routing".
+
+### Punctuation and Spacing
+
+- Use 「、」 and 「。」 in Japanese sentences.
+- No em dash (—) in Japanese text, including list items. Break the sentence,
+  use parentheses, or, for a name + description list item, separate with 「：」
+  (`` **ライセンスコンプライアンス** (`--check-license`)：ワイルドカード対応の許可/拒否リスト。 ``).
+- No colon (「：」 or `:`) at the end of a line that introduces a list, table,
+  or code block. End the sentence with 「。」 instead (「次のように設定します。」).
+  Bold labels drop the colon (「**出力例**」, not 「**出力例:**」). A colon inside a
+  line (「デフォルト：730」, the list-item separator above) is not affected.
+- Put a half-width space between Japanese and Latin words, numbers, or inline
+  code (「CVE スキャン」「`uv.lock` を読み取る」). Exception: no space between a
+  digit and a Japanese counter or unit (「1つ」「3件」「2回」「730日」). Latin
+  units keep the space (「10 MB」).
+
+### Wording
+
+- Avoid katakana calques when a plain Japanese term exists (「実用的」, not
+  「アクション可能」). Established loanwords (ライセンス, ワークスペース) are fine;
+  "Terminology" decides contested cases.
+- Keep parallel lists grammatically parallel: every item ends in the same form.
+- Do not address the reader as 「あなた」; omit the subject. Do not personify
+  tools (「uv-sbom が教えてくれます」 → 「uv-sbom は〜を表示します」).
+- Do not add marketing closers (「すべて1つのツールで」); see
+  "English Writing Style".
+- Keep CLI flags, config keys, package names, file names, CVE/GHSA IDs, and
+  SPDX license IDs untranslated. Example output stays in the language the tool
+  emits.
+
+### Terminology
+
+Use the Japanese term in this table. For a term not listed, use the form
+dominant in `docs/ja/` unless it is a katakana calque, and add a row in the
+same change.
+
+| English term | Japanese term | Avoid | Note |
+|---|---|---|---|
+| abandoned package | 放置パッケージ | 放棄パッケージ | Matches the `docs/ja/security-checks.md` heading and anchor |
+| prioritization | 優先順位付け | 優先度付け | Matches the `docs/ja/security-checks.md` heading and anchor |
+| direct dependency | 直接依存 | — | 「直接依存関係」 is also correct; same form as CLI output |
+| transitive dependency | 間接依存 | 推移的依存、推移的依存関係 | Same form as CLI output; as a modifier, 間接依存パッケージ, 間接依存の脆弱性 |
+| dependency (general) | 依存関係 | 依存性 | |
+| vulnerability | 脆弱性 | バルネラビリティ | |
+| advisory | アドバイザリ | アドバイザリー | |
+| fixed version | 修正バージョン | 修正版 | |
+| workspace | ワークスペース | — | Feature name for `--workspace` |
+| lockfile | ロックファイル | ロック ファイル | The file name stays `uv.lock` |
+| threshold | しきい値 | 閾値 | 「閾」 is not a jōyō kanji |
+| actionable | 実用的、すぐ対応できる | アクション可能 | Calque example |
+
+### Mechanical Check
+
+The planned mechanical check is the yomiyasu lint
+(https://github.com/nanaism/yomiyasu): `scripts/yomiyasu_lint.py --fail-on warn`
+with the project word list in `.yomiyasu-words/`, run by
+`.github/workflows/docs-lint.yml` (#1161). Until that workflow exists, these
+rules are checked in review. When the lint and this section disagree, this
+section wins.
+
+## English Writing Style
+
+Applies to `README.md` and `docs/*.md`.
+
+- Use em dashes sparingly. The list-item pattern
+  `` **Name** (`--flag`) — description `` is allowed. In running prose, prefer a
+  period, comma, colon, or parentheses; do not use an em dash as a general
+  clause joiner.
+- No filler sentences that stack adjectives without stating a fact
+  ("Fast, reliable, and comprehensive."). Each sentence states what the tool
+  does or how to use it.
+- No marketing closers such as "all in one" or "everything you need in one
+  tool" at the end of a list or section. End on the last concrete fact.
+
 ## Consumers
 
 - `/implement` Step 4.3 — CLI Flag Documentation Gate (sub-checks A and B)
 - `/pr` Step 4.6 — CLI Flag Documentation Backstop (sub-checks A and B)
 - `CLAUDE.md` → "README Update Checklist" (links here)
+- `.claude/agents/i18n.md` → Surface 2 — reviews `README-JP.md` and `docs/ja/*.md` against "Japanese Writing Style"
+- `.claude/agents/devrel.md` → Responsibilities — reviews `README.md` and `docs/*.md` against "English Writing Style"
