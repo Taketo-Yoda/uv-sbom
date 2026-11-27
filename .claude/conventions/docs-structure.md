@@ -167,12 +167,14 @@ same change.
 
 ### Mechanical Check
 
-The planned mechanical check is the yomiyasu lint
-(https://github.com/nanaism/yomiyasu): `scripts/yomiyasu_lint.py --fail-on warn`
-with the project word list in `.yomiyasu-words/`, run by
-`.github/workflows/docs-lint.yml` (#1161). Until that workflow exists, these
-rules are checked in review. When the lint and this section disagree, this
-section wins.
+The mechanical check is the yomiyasu lint
+(https://github.com/nanaism/yomiyasu): `scripts/yomiyasu_lint.py` with the
+project word list in `.yomiyasu-words/`, run on `README-JP.md` and `docs/ja/` by
+`.github/workflows/docs-lint.yml` (#1161). It is warn-only until #1165 switches
+it to `--fail-on warn`, so until then these rules are also checked in review.
+Add a term to `.yomiyasu-words/allow.txt` only when "Terminology" (or an
+established project name) allows it. When the lint and this section disagree,
+this section wins.
 
 ## English Writing Style
 

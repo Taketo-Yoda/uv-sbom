@@ -1,0 +1,30 @@
+# yomiyasu project word list: terms the lint must not report.
+# One term per line (UTF-8). Lines starting with # and empty lines are ignored.
+# Keep consistent with .claude/conventions/docs-structure.md -> "Terminology";
+# that table decides which Japanese term to use. Add a term here only when it
+# is established in this project, not to silence a finding the rules would fix.
+
+# Standards, ecosystems, and formats
+SBOM
+CVE
+GHSA
+OSV
+PyPI
+CycloneDX
+SPDX
+EPSS
+KEV
+CVSS
+PEP 440
+
+# Tools and project names
+uv
+uv-sbom
+uv.lock
+pyproject.toml
+
+# Established katakana loanwords (see "Terminology")
+ライセンス
+ワークスペース
+ロックファイル
+アドバイザリ
