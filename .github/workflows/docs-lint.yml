@@ -5,10 +5,10 @@ name: Docs Lint
 # so Rust CI skips doc-only PRs, which means a step added there would never run
 # on the PRs this lint checks. Same pattern as claude-conventions.yml (#901 / #911).
 #
-# Warn-only (#1161): findings are printed to the job log and the job stays
-# green. #1165 switches this to `--fail-on warn` once every file is clean.
-# The rules the lint approximates live in .claude/conventions/docs-structure.md
-# -> "Japanese Writing Style"; that section wins when the two disagree.
+# Fail-on-warn (#1165): every Japanese doc is clean, so the lint now blocks
+# on warnings. The rules the lint approximates live in
+# .claude/conventions/docs-structure.md -> "Japanese Writing Style"; that
+# section wins when the two disagree.
 
 concurrency:
   group: docs-lint-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref }}
@@ -47,7 +47,7 @@ permissions:
 
 jobs:
   yomiyasu:
-    name: Lint Japanese docs (yomiyasu, warn-only)
+    name: Lint Japanese docs (yomiyasu)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -69,16 +69,15 @@ jobs:
 
       # Runs from the repository root: the script looks for .yomiyasu-words/ at
       # the git top level of the working directory, which is this repository.
-      # Without --fail-on the script exits 0 even when it reports findings, so
-      # a non-zero exit means the tool itself failed (unreadable file or word
-      # list) and fails the job.
+      # --fail-on warn exits non-zero when any finding is reported; a non-zero
+      # exit also covers tool-level failures (unreadable file or word list).
       - name: Run yomiyasu lint
         run: |
           shopt -s nullglob globstar
           status=0
           for file in README-JP.md docs/ja/**/*.md; do
             echo "::group::${file}"
-            python .yomiyasu-tool/scripts/yomiyasu_lint.py "${file}" || status=$?
+            python .yomiyasu-tool/scripts/yomiyasu_lint.py --doc-type manual --fail-on warn "${file}" || status=$?
             echo "::endgroup::"
           done
           exit "${status}"

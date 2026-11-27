@@ -30,13 +30,13 @@ Options:
                                      --no-check-cve とは併用不可
       --cvss-threshold <SCORE>       脆弱性チェックの CVSS しきい値（0.0-10.0）
                                      --no-check-cve とは併用不可
-      --suggest-fix                  推移的脆弱性を解決するための直接依存関係アップグレードバージョンを提案
+      --suggest-fix                  間接依存の脆弱性を解決するための直接依存関係アップグレードバージョンを提案
                                      uv CLI のインストールとプロジェクトディレクトリに pyproject.toml が必要
-      --workspace                    ワークスペースメンバーごとに 1 つの SBOM を生成
+      --workspace                    ワークスペースメンバーごとに1つの SBOM を生成
                                      --output とは併用不可
       --diff <REF_OR_PATH>           現在の uv.lock をベースと比較（git ref、タグ、コミット SHA、または uv.lock ファイルのパス）
       --check-license                ポリシーに対するライセンスコンプライアンスをチェック
-      --check-abandoned              放置/メンテナンスされていないパッケージをチェック（しきい値日数以内にアップストリームリリースなし）
+      --check-abandoned              放置・メンテナンスされていないパッケージをチェック（しきい値日数以内にアップストリームリリースなし）
       --abandoned-threshold-days <DAYS>  放置パッケージ検出の非アクティブしきい値（日数）（デフォルト: 730）
       --check-yanked                 PyPI で取り下げ（yanked）されたロック済みバージョンをチェック
       --check-non-pypi               非 PyPI オリジン（git、ダイレクト URL、プライベートレジストリ）からのパッケージをチェック
@@ -58,11 +58,11 @@ Options:
       --show-dependency-tree        依存関係グラフを ASCII ツリーとしてレンダリング（Markdown 形式のみ）
       --dependency-tree-depth <DEPTH>  依存関係ツリー可視化の最大深度（デフォルト: 3）
                                      --show-dependency-tree が必要
-      --incident <ID_OR_RANGE>       1 つのアドバイザリ（GHSA-/PYSEC-/CVE-/OSV-/MAL- ID）がプロジェクトに影響するかチェック、
+      --incident <ID_OR_RANGE>       1つのアドバイザリ（GHSA-/PYSEC-/CVE-/OSV-/MAL- ID）がプロジェクトに影響するかチェック、
                                      修正がリリース済みか、実行するコマンドは何か（デフォルト Markdown）
                                      OSV に未登録のアドバイザリには "foo>=2.0,<2.3.2" のようなクォートされた範囲を渡す
                                      （演算子 >=, <, <= のみ）
-                                     --workspace と併用で、1 つの統合レポートですべてのメンバーをレポート
+                                     --workspace と併用で、1つの統合レポートですべてのメンバーをレポート
                                      --diff やチェックフラグとは併用不可（インシデント対応を参照）
   -h, --help                         ヘルプを表示
   -V, --version                      バージョンを表示
