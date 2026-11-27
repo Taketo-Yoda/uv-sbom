@@ -2,7 +2,7 @@
 
 [メインページに戻る](../../README-JP.md)
 
-uv-sbom は、SBOM 生成と同時に実行できる包括的なセキュリティおよびサプライチェーンチェック機能を提供します。このドキュメントでは、各チェックの設定と出力形式について説明します。
+uv-sbom は SBOM 生成と同時にセキュリティおよびサプライチェーンの各種チェックを実行できます。ここでは各チェックの設定と出力形式を説明します。
 
 ## 目次
 
@@ -24,7 +24,7 @@ uv-sbom は、SBOM 生成と同時に実行できる包括的なセキュリテ�
 
 ## 脆弱性チェック
 
-CVE 脆弱性チェックは、[OSV (Open Source Vulnerability) データベース](https://osv.dev) を使用して**デフォルトで有効**です。特別なフラグは不要です：
+CVE 脆弱性チェックは [OSV (Open Source Vulnerability) データベース](https://osv.dev) を使用して**デフォルトで有効**です。特別なフラグは不要です。
 
 ```bash
 # Markdown 出力で脆弱性をチェック（CVE チェックは自動実行）
@@ -42,7 +42,7 @@ uv-sbom --format markdown --no-check-cve
 
 ## CVE チェックの無効化
 
-CVE 脆弱性チェックはデフォルトで有効です。無効にするには `--no-check-cve` フラグを使用します：
+CVE 脆弱性チェックはデフォルトで有効です。無効にするには `--no-check-cve` フラグを使用します。
 
 ```bash
 # CVE チェックなしで SBOM を生成
@@ -56,7 +56,7 @@ uv-sbom --format markdown --no-check-cve
 
 ## 脆弱性しきい値オプション
 
-しきい値オプションを使用して、非ゼロ終了コードをトリガーする脆弱性を制御できます：
+しきい値を指定すると、条件を満たす脆弱性が見つかった場合にのみ終了コード 1 が返されます。
 
 ```bash
 # すべての脆弱性をチェック（見つかった場合は終了コード 1）
@@ -75,23 +75,27 @@ uv-sbom --format markdown --cvss-threshold 7.0
 uv-sbom --format markdown --cvss-threshold 9.0
 ```
 
-**しきい値オプション:**
-- `--severity-threshold <LEVEL>`: 重大度レベルでフィルタリング（low, medium, high, critical）
-- `--cvss-threshold <SCORE>`: CVSS スコアでフィルタリング（0.0-10.0）
+**しきい値オプション**
+- `--severity-threshold <LEVEL>`：重大度レベルでフィルタリング（low, medium, high, critical）
+- `--cvss-threshold <SCORE>`：CVSS スコアでフィルタリング（0.0–10.0）
 
-**注意事項:**
-- しきい値オプションは同時に 1 つしか使用できません
+**注意事項**
+- しきい値オプションは同時に1つしか使用できません
 - `--no-check-cve` とは併用できません
-- しきい値未満の脆弱性はレポートに表示されますが、終了コード 1 はトリガーされません
+- しきい値未満の脆弱性はレポートに表示されますが、終了コード 1 にはなりません
 - `--cvss-threshold` 使用時、CVSS スコアのない脆弱性（N/A）はしきい値評価から除外されます
 
 ## 悪意のあるパッケージ
 
-OSV の悪意のあるパッケージアドバイザリ（ID が `MAL-` で始まる、プライマリ ID またはエイリアスとして）は、`--severity-threshold` や `--cvss-threshold` に関係なく、常に終了コード 1 で実行を失敗させます。マルウェアには CVSS スコアがないため、そうしなければすべてのしきい値を下回ってしまいます。これらのアドバイザリは[脆弱性ベースライン](#脆弱性ベースライン)に書き込まれることはなく、既存のベースラインエントリがあっても抑制されません。意図的に受け入れるには、`--ignore-cve` または `ignore_cves` で正確なプライマリ ID を指定して無視します。Markdown レポートでは、脆弱性セクションの先頭に専用ブロックとして、各アドバイザリのサマリーとパッケージ削除の指示が表示され、通常の脆弱性テーブルには重複表示されません。
+OSV の悪意のあるパッケージアドバイザリ（ID が `MAL-` で始まるもの。プライマリ ID またはエイリアスのいずれか）は、`--severity-threshold` や `--cvss-threshold` の設定に関係なく、常に終了コード 1 で実行を失敗させます。マルウェアには CVSS スコアがないため、しきい値フィルタリングではすべて通過してしまうからです。
+
+これらのアドバイザリは[脆弱性ベースライン](#脆弱性ベースライン)に書き込まれず、既存のベースラインエントリがあっても抑制されません。意図的に受け入れるには `--ignore-cve` または `ignore_cves` で正確なプライマリ ID を指定してください。
+
+Markdown レポートでは、脆弱性セクションの先頭に専用ブロックとして表示されます。各アドバイザリのサマリーとパッケージ削除の指示が記載され、通常の脆弱性テーブルには重複表示されません。
 
 ## 脆弱性ベースライン
 
-`--baseline` を使用して、以前に受け入れた脆弱性の検出結果を抑制します。ベースラインファイルは `(package, version, vulnerability_id)` のタプルを記録します。完全一致のみが抑制されます — パッケージバージョンを更新すると、以前ベースラインに登録された検出結果は新規として扱われます。
+`--baseline` を使用すると、以前に受け入れた脆弱性の検出結果を抑制できます。ベースラインファイルは `(package, version, vulnerability_id)` のタプルを記録します。完全一致のみが抑制対象です。パッケージバージョンを更新すると、以前ベースラインに登録された検出結果も新規として扱われます。
 
 ```bash
 # 初回実行：現在の検出結果からベースラインファイルを生成
@@ -101,7 +105,7 @@ uv-sbom --baseline .uv-sbom-baseline.json --update-baseline
 uv-sbom --baseline .uv-sbom-baseline.json
 ```
 
-ベースラインファイルは `version` キーと `entries` 配列を持つ JSON ドキュメントです：
+ベースラインファイルは `version` キーと `entries` 配列を持つ JSON ドキュメントです。
 
 ```json
 {
@@ -116,21 +120,26 @@ uv-sbom --baseline .uv-sbom-baseline.json
 }
 ```
 
-**`--update-baseline`** は、現在の（フィルタリングされていない）すべての検出結果でベースラインファイルを書き換えます。既知の CVE の新しいバッチを受け入れる際に使用します。`--baseline` が必要です。悪意のあるパッケージアドバイザリ（`MAL-`）は記録も抑制もされません。[悪意のあるパッケージ](#悪意のあるパッケージ)を参照してください。
+**`--update-baseline`** は、現在の（フィルタリングされていない）すべての検出結果でベースラインファイルを書き換えます。既知の CVE をまとめて受け入れる際に使用してください。`--baseline` が必要です。悪意のあるパッケージアドバイザリ（`MAL-`）は記録も抑制もされません。[悪意のあるパッケージ](#悪意のあるパッケージ)を参照してください。
 
-検出結果が抑制された場合、Markdown の脆弱性セクションに脚注が含まれます：
+検出結果が抑制された場合、Markdown の脆弱性セクションに脚注が含まれます。
 
 > _Note: 3 previously-baselined finding(s) suppressed._
 
-**設定ファイル:** `--baseline` を毎回渡す代わりに、`uv-sbom.config.yml` で `baseline_file` を設定します：
+**設定ファイルでの指定**
+
+`--baseline` を毎回渡す代わりに、`uv-sbom.config.yml` で `baseline_file` を設定できます。
 
 ```yaml
 baseline_file: .uv-sbom-baseline.json
 ```
 
-**相互排他:** `--baseline` は `--no-check-cve` と併用できません（ベースラインには脆弱性チェックが必要です）。
+**相互排他**
 
-**CI ワークフロー:**
+`--baseline` は `--no-check-cve` と併用できません。ベースラインの照合には脆弱性チェックが必要です。
+
+**CI ワークフロー**
+
 ```bash
 # 受け入れ済みの検出結果を抑制しつつ、新しい脆弱性をチェック
 uv-sbom --baseline .uv-sbom-baseline.json --severity-threshold high -f markdown -o report.md
@@ -141,7 +150,7 @@ uv-sbom --baseline .uv-sbom-baseline.json --update-baseline
 
 ## ライセンスコンプライアンスチェック
 
-`--check-license` オプションを使用して、設定可能なライセンスポリシーに対してパッケージをチェックします：
+`--check-license` オプションで、設定可能なライセンスポリシーに対してパッケージを検査します。
 
 ```bash
 # ライセンスコンプライアンスチェックを有効化（設定ファイルのポリシーを使用）
@@ -154,16 +163,16 @@ uv-sbom --check-license --license-allow "MIT,Apache-2.0,BSD-*" --license-deny "G
 uv-sbom --check-license --severity-threshold high
 ```
 
-**仕組み:**
-- **拒否が許可より優先**: ライセンスが両方のリストに一致する場合、拒否されます
-- **ワイルドカードパターン**: `BSD-*`、`AGPL-*` などのパターンマッチングが可能（大文字小文字を区別しません）
-- **不明なライセンスの処理**: どちらのリストにもないライセンスの扱いを設定：
+**仕組み**
+- **拒否が許可より優先**：ライセンスが両方のリストに一致する場合、拒否されます
+- **ワイルドカードパターン**：`BSD-*`、`AGPL-*` などのパターンマッチングが可能（大文字小文字を区別しません）
+- **不明なライセンスの処理**：どちらのリストにもないライセンスの扱いを設定できます
   - `warn`（デフォルト）：警告として報告するが失敗しない
   - `deny`：不明なライセンスを違反として扱う
-  - `allow`：不明なライセンスを黙って許可する
-- **終了コード**: ポリシー違反が検出された場合、終了コード 1 を返します
+  - `allow`：不明なライセンスを許可する
+- **終了コード**：ポリシー違反が検出された場合、終了コード 1 を返します
 
-**出力例:**
+**出力例**
 
 ```markdown
 ## License Compliance Check
@@ -180,38 +189,40 @@ Policy: 3 allowed patterns, 1 denied pattern | Unknown: warn
 
 ## 放置パッケージ検出
 
-`--check-abandoned` オプションを使用して、PyPI で設定可能な日数以内に新しいリリースがないパッケージを特定します。CVE がまだ報告されていなくても、長期的なリスクをもたらす可能性のあるメンテナンスされていない依存関係を検出します。
+`--check-abandoned` オプションで、PyPI で一定期間内に新しいリリースがないパッケージを検出します。CVE がまだ報告されていなくても、メンテナンスされていない依存関係は長期的なリスクとなる可能性があります。
 
 ```bash
-# 放置パッケージ検出を有効化（デフォルトしきい値：730 日 / 約 2 年）
+# 放置パッケージ検出を有効化（デフォルトしきい値：730日 / 約2年）
 uv-sbom --check-abandoned --format markdown
 
-# カスタムの非アクティブしきい値を使用（例：365 日 / 1 年）
+# しきい値をカスタム指定（例：365日 / 1年）
 uv-sbom --check-abandoned --abandoned-threshold-days 365
 
 # 脆弱性チェックとライセンスチェックと組み合わせ
 uv-sbom --check-abandoned --check-license --severity-threshold high
 ```
 
-**仕組み:**
-- 各パッケージの PyPI パッケージレベルエンドポイント（`https://pypi.org/pypi/{name}/json`）にクエリします
-- 最新リリース日を今日からしきい値を引いた日付と比較します
+**仕組み**
+- 各パッケージの PyPI パッケージレベルエンドポイント（`https://pypi.org/pypi/{name}/json`）に問い合わせます
+- 最新リリース日を「今日からしきい値を引いた日付」と比較します
 - しきい値を超えたパッケージは Markdown 出力の **Abandoned Packages** セクションに表示されます
-- パッケージの PyPI メタデータが取得できない場合、実行を中断せずにスキップします
-- ネットワークアクセスが必要です。パッケージごとに 1 回の API 呼び出しが追加されます
+- パッケージの PyPI メタデータが取得できない場合、そのパッケージをスキップして実行を継続します
+- ネットワークアクセスが必要です。パッケージごとに1回の API 呼び出しが追加されます
 
-**出力:**
-- **サマリーテーブル行**: カウント > 0 の場合 `| Abandoned packages | N | ⚠️ |`、カウント == 0 の場合 `✅`
-- **Abandoned Packages セクション**: Package、Version、Last Release 日、Days Inactive、Type（Direct / Transitive）のテーブル
-- `--check-abandoned` が渡されない場合、セクションは完全に省略され、サマリー行は `_Abandoned package check skipped._` を表示します
+**出力**
+- **サマリーテーブル行**：カウント > 0 の場合 `| Abandoned packages | N | ⚠️ |`、カウント == 0 の場合 `✅`
+- **Abandoned Packages セクション**：Package、Version、Last Release 日、Days Inactive、Type（Direct / Transitive）のテーブル
+- `--check-abandoned` を指定しない場合、セクションは省略され、サマリー行は `_Abandoned package check skipped._` と表示されます
 
-**設定ファイルでの指定:**
+**設定ファイルでの指定**
+
 ```yaml
 check_abandoned: true
 abandoned_threshold_days: 365  # オプション、デフォルト：730
 ```
 
-**CI 連携の例:**
+**CI 連携の例**
+
 ```yaml
 # GitHub Actions - 放置パッケージチェック
 - name: Abandoned Package Detection
@@ -220,7 +231,7 @@ abandoned_threshold_days: 365  # オプション、デフォルト：730
 
 > **注意:** 放置パッケージデータは現在 Markdown のみです。CycloneDX JSON 出力には影響しません。
 
-出力が保証されるデモを実行するには：
+出力が保証されるデモを実行するには以下を実行してください。
 
 ```bash
 uv-sbom -p examples/abandoned-packages-project --check-abandoned -f markdown
@@ -290,23 +301,24 @@ uv-sbom -p examples/yanked-versions-project --check-yanked --no-check-cve -f mar
 
 ## 非 PyPI ソース検出
 
-`--check-non-pypi` オプションを使用して、公式 PyPI レジストリ以外のソース（Git リポジトリ、ダイレクト URL、プライベートレジストリ）からインストールされたパッケージを特定します。uv.lock はすべてのパッケージのソースタイプを明示的に記録するため、uv プロジェクト固有の潜在的なサプライチェーンリスクを検出するのに役立ちます。
+`--check-non-pypi` オプションで、公式 PyPI レジストリ以外のソース（Git リポジトリ、ダイレクト URL、プライベートレジストリ）からインストールされたパッケージを検出します。uv.lock はすべてのパッケージのソースタイプを明示的に記録しているため、uv プロジェクト固有のサプライチェーンリスクを特定するのに役立ちます。
 
 ```bash
 # 非 PyPI ソース検出を有効化
 uv-sbom --check-non-pypi --format markdown
 ```
 
-**仕組み:**
+**仕組み**
 - `uv.lock` からソース分類を直接読み取ります（ネットワークアクセス不要、PyPI API 呼び出しなし）
-- **プライベートレジストリ**、**Git** リポジトリ、**ダイレクト URL** からソースされたパッケージをフラグします
-- ローカルファイルシステムパス（`path = "..."`）とワークスペースメンバーはフラグされません — これらは uv ワークスペースレイアウトで想定されるものであり、外部サプライチェーンリスクとはみなされません
+- **プライベートレジストリ**、**Git** リポジトリ、**ダイレクト URL** からのパッケージを検出します
+- ローカルファイルシステムパス（`path = "..."`）とワークスペースメンバーは検出対象外です。これらは uv ワークスペースレイアウトで想定されるものであり、外部サプライチェーンリスクとはみなされません
 
-**出力:**
-- **Non-PyPI Package Sources セクション**: 合計数（direct vs. transitive）に続くパッケージテーブル（Package、Version、Source Type、Source）が Markdown 出力に表示されます
-- `--check-non-pypi` が渡されない場合、またはマッチするパッケージがない場合、セクションは完全に省略されます
+**出力**
+- **Non-PyPI Package Sources セクション**：合計数（direct vs. transitive）とパッケージテーブル（Package、Version、Source Type、Source）が Markdown 出力に表示されます
+- `--check-non-pypi` を指定しない場合、またはマッチするパッケージがない場合、セクションは省略されます
 
-**出力例:**
+**出力例**
+
 ```markdown
 ## ⚠️ Non-PyPI Package Sources
 
@@ -321,14 +333,15 @@ uv-sbom --check-non-pypi --format markdown
 > Packages from non-PyPI sources may not be subject to PyPI's security policies. Review each package's origin before production deployment.
 ```
 
-**設定ファイルでの指定:**
+**設定ファイルでの指定**
+
 ```yaml
 check_non_pypi: true
 ```
 
-> **注意:** 非 PyPI ソース検出にはネットワークアクセスは不要です — すべてのデータは `uv.lock` から直接読み取られます。
+> **注意:** 非 PyPI ソース検出にネットワークアクセスは不要です。すべてのデータは `uv.lock` から直接読み取られます。
 
-出力が保証されるデモを実行するには：
+出力が保証されるデモを実行するには以下を実行してください。
 
 ```bash
 uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f markdown
@@ -338,7 +351,7 @@ uv-sbom -p examples/non-pypi-sources-project --check-non-pypi --no-check-cve -f 
 
 ## Python バージョン互換性チェック
 
-`--target-python` オプションを使用して、依存関係が PyPI メタデータで宣言した `Requires-Python` 制約がターゲット Python バージョンと互換性があるかチェックします。プロジェクトの Python バージョンをアップグレード（またはダウングレード）した場合に壊れる依存関係を検出するのに役立ちます。
+`--target-python` オプションで、依存関係が PyPI メタデータで宣言した `Requires-Python` 制約がターゲット Python バージョンと互換性があるか検査します。Python バージョンのアップグレード（またはダウングレード）で壊れる依存関係を事前に検出できます。
 
 ```bash
 # Python 3.8 との互換性をチェック
@@ -348,19 +361,20 @@ uv-sbom --target-python 3.8 --format markdown
 uv-sbom --target-python 3.8 --check-license --severity-threshold high
 ```
 
-**仕組み:**
-- ロックされた各パッケージバージョンについて、PyPI バージョンレベルエンドポイント（`https://pypi.org/pypi/{name}/{version}/json`）にクエリします
+**仕組み**
+- ロックされた各パッケージバージョンについて、PyPI バージョンレベルエンドポイント（`https://pypi.org/pypi/{name}/{version}/json`）に問い合わせます
 - パッケージが宣言した `Requires-Python` 制約（PEP 440）をターゲットバージョンと比較します
 - 制約が宣言されていないパッケージや、パースできない制約を持つパッケージは互換ありとして扱われます
-- パッケージの PyPI メタデータが取得できない場合、実行を中断せずにスキップします
-- ネットワークアクセスが必要です。パッケージごとに 1 回の API 呼び出しが追加されます
+- パッケージの PyPI メタデータが取得できない場合、そのパッケージをスキップして実行を継続します
+- ネットワークアクセスが必要です。パッケージごとに1回の API 呼び出しが追加されます
 
-**出力:**
-- **Python Compatibility Issues セクション**: 非互換パッケージが見つかった場合、合計数（direct vs. transitive）に続くパッケージテーブル（Package、Version、Requires-Python、Type）が Markdown 出力に表示されます
-- **Python Compatibility セクション（問題なし）**: すべてのパッケージがターゲットバージョンと互換性がある場合に代わりに表示されます
-- `--target-python` が渡されない場合、互換性セクションは表示されません
+**出力**
+- **Python Compatibility Issues セクション**：非互換パッケージが見つかった場合、合計数（direct vs. transitive）とパッケージテーブル（Package、Version、Requires-Python、Type）が Markdown 出力に表示されます
+- **Python Compatibility セクション（問題なし）**：すべてのパッケージがターゲットバージョンと互換性がある場合に表示されます
+- `--target-python` を指定しない場合、互換性セクションは表示されません
 
-**出力例:**
+**出力例**
+
 ```markdown
 ## ⚠️ Python 3.8 Compatibility Issues
 
@@ -381,46 +395,47 @@ uv-sbom --target-python 3.8 --check-license --severity-threshold high
 | typing-extensions | 4.15.0 | >=3.9 | Transitive dependencies |
 ```
 
-[`examples/sample-project`](../../examples/sample-project) に対して実行した結果です：
+[`examples/sample-project`](../../examples/sample-project) に対して実行した結果です。
 
 ```bash
 uv-sbom -p examples/sample-project --target-python 3.8 --no-check-cve -f markdown
 ```
 
-**設定ファイルでの指定:**
+**設定ファイルでの指定**
+
 ```yaml
 target_python: "3.8"
 ```
 
 ## 悪用可能性の優先順位付け (`--check-exploitability`)
 
-`--check-exploitability` オプションを使用して、CVE 結果を 2 つの権威あるソースからの実際の悪用データで強化します：
+`--check-exploitability` オプションで、CVE の検出結果を実際の悪用データで補強します。データソースは以下の2つです。
 
-- **EPSS** (Exploit Prediction Scoring System) — [FIRST.org](https://www.first.org/epss/) 提供 — 今後 30 日以内に CVE が悪用される可能性を示すパーセンタイルランキング
-- **CISA KEV** (Known Exploited Vulnerabilities) カタログ — [CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) 提供 — 確認済みの活発な悪用がある CVE のキュレーションリスト
+- **EPSS** (Exploit Prediction Scoring System)（[FIRST.org](https://www.first.org/epss/) 提供）：今後 30日以内に CVE が悪用される可能性を示すパーセンタイルランキング
+- **CISA KEV** (Known Exploited Vulnerabilities) カタログ（[CISA](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) 提供）：活発な悪用が確認された CVE の公式リスト
 
 ```bash
-# 脆弱性結果を EPSS と KEV データで強化
+# 脆弱性結果を EPSS と KEV データで補強
 uv-sbom --check-exploitability --format markdown
 
 # 他のチェックと組み合わせ
 uv-sbom --check-exploitability --severity-threshold high --check-license
 ```
 
-**仕組み:**
+**仕組み**
 - FIRST.org EPSS API（`https://api.first.org/data/v1/epss`）から EPSS スコアとパーセンタイルを取得します
-- CISA KEV JSON フィードをダウンロードして、各 CVE に確認済みの活発な悪用があるかチェックします
-- 結果は脆弱性テーブルとレゾリューションガイドに 2 つの追加列として表示されます
-- いずれの CVE にも悪用可能性データがない場合、列は完全に省略されます
+- CISA KEV JSON フィードをダウンロードして、各 CVE に活発な悪用が確認されているかチェックします
+- 結果は脆弱性テーブルと解決ガイドに2つの追加列として表示されます
+- いずれの CVE にも悪用可能性データがない場合、列は省略されます
 
-**出力:**
-- **Exploited (KEV) 列**: CISA KEV カタログにある CVE は "Yes"、それ以外は "No"
-- **EPSS 列**: EPSS パーセンタイルを序数文字列で表示（例："97th percentile"）
-- これらの列は少なくとも 1 つの CVE に悪用可能性データがある場合のみ表示されます
+**出力**
+- **Exploited (KEV) 列**：CISA KEV カタログにある CVE は "Yes"、それ以外は "No"
+- **EPSS 列**：EPSS パーセンタイルを序数文字列で表示（例："97th percentile"）
+- これらの列は少なくとも1つの CVE に悪用可能性データがある場合のみ表示されます
 
-**出力例:**
+**出力例**
 
-[`examples/suggest-fix-project`](../../examples/suggest-fix-project) に対して実行した結果です：
+[`examples/suggest-fix-project`](../../examples/suggest-fix-project) に対して実行した結果です。
 
 ```bash
 uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
@@ -438,18 +453,19 @@ uv-sbom -p examples/suggest-fix-project --check-exploitability -f markdown
 | anyio | 4.0.0 | 4.14.2 | N/A | 🔴 CRITICAL | GHSA-82r6-8w77-94w6 | No | 19th percentile |
 ```
 
-_（全 32 件の脆弱性 — EPSS パーセンタイルでソートされた抜粋。EPSS の値はライブデータであり、時間とともに変動する場合があります。）_
+_（全 32件の脆弱性から EPSS パーセンタイルでソートした抜粋。EPSS の値はライブデータのため変動します。）_
 
-**設定ファイルでの指定:**
+**設定ファイルでの指定**
+
 ```yaml
 check_exploitability: true
 ```
 
-> **注意:** `--check-exploitability` は CVE チェックが有効である必要があり、`--no-check-cve` と併用できません。SBOM 生成ごとに 2 つのネットワークリクエスト（FIRST.org EPSS API と CISA KEV カタログフィード）が追加されます。
+> **注意:** `--check-exploitability` は CVE チェックが有効である必要があり、`--no-check-cve` と併用できません。SBOM 生成ごとに2つのネットワークリクエスト（FIRST.org EPSS API と CISA KEV カタログフィード）が追加されます。
 
 ## PyPI リンク検証
 
-`--verify-links` オプションを使用して、ハイパーリンクを生成する前にパッケージが PyPI に存在するか検証します。PyPI に存在しないパッケージはプレーンテキストとしてレンダリングされます：
+`--verify-links` オプションで、ハイパーリンクを生成する前にパッケージが PyPI に存在するか検証します。PyPI に存在しないパッケージはプレーンテキストとしてレンダリングされます。
 
 ```bash
 # 検証済み PyPI リンク付きで Markdown を生成
@@ -459,42 +475,46 @@ uv-sbom --format markdown --verify-links
 uv-sbom --format markdown --verify-links --output SBOM.md
 ```
 
-**動作:**
+**動作**
 - `--verify-links` なし：すべてのパッケージ名に PyPI ハイパーリンクが付きます（デフォルト、高速）
 - `--verify-links` あり：検証済みパッケージのみハイパーリンクが付き、未検証パッケージはプレーンテキスト
-- ネットワークエラーはプレーンテキストにグレースフルにフォールバック（クラッシュなし）
-- リクエストはパフォーマンスのため並列実行（最大 10 同時接続）
+- ネットワークエラー時はプレーンテキストにフォールバックします（クラッシュなし）
+- リクエストはパフォーマンスのため並列実行されます（最大 10 同時接続）
 
 ## 除外パターンの入力バリデーション
 
-`-e`/`--exclude` オプションは、悪意のある入力から保護するために以下のセキュリティ対策を実装しています：
+`-e`/`--exclude` オプションは、悪意のある入力から保護するために以下のセキュリティ対策を実装しています。
 
 ### 文字制限
 
-パターンに使用できる文字：
-- **英数字**: a-z, A-Z, 0-9, Unicode 文字/数字
-- **ハイフン** (`-`)、**アンダースコア** (`_`)、**ドット** (`.`): パッケージ名で一般的
-- **角括弧** (`[`, `]`): パッケージエクストラ用（例：`requests[security]`）
-- **アスタリスク** (`*`): ワイルドカードマッチング用
+パターンに使用できる文字は以下のとおりです。
 
-制御文字、シェルメタ文字、パス区切り文字はブロックされ、以下を防止します：
+- **英数字**：a-z, A-Z, 0-9, Unicode 文字/数字
+- **ハイフン** (`-`)、**アンダースコア** (`_`)、**ドット** (`.`)：パッケージ名で一般的
+- **角括弧** (`[`, `]`)：パッケージエクストラ用（例：`requests[security]`）
+- **アスタリスク** (`*`)：ワイルドカードマッチング用
+
+制御文字、シェルメタ文字、パス区切り文字はブロックされ、以下を防止します。
+
 - ターミナルエスケープシーケンスインジェクション
 - ログインジェクション攻撃
 - コマンドインジェクション（多層防御）
 
 ### パターン制限
 
-- **最大パターン数**: 1 回の実行で 64 パターン
-- **最大長**: パターンあたり 255 文字
-- **最小内容**: パターンには少なくとも 1 つの非ワイルドカード文字が必要
+- **最大パターン数**：1回の実行で 64 パターン
+- **最大長**：パターンあたり 255 文字
+- **最小内容**：パターンには少なくとも1つの非ワイルドカード文字が必要
 
-これらの制限は以下によるサービス拒否攻撃を防止します：
+これらの制限は以下によるサービス拒否攻撃を防止します。
+
 - 過剰なメモリ消費
 - 複雑なパターンマッチングによる CPU 枯渇
 
 ### 使用例
 
-**有効なパターン**:
+**有効なパターン**
+
 ```bash
 uv-sbom -e 'pytest'           # 完全一致
 uv-sbom -e 'test-*'           # プレフィックスワイルドカード
@@ -502,7 +522,8 @@ uv-sbom -e '*-dev'            # サフィックスワイルドカード
 uv-sbom -e 'package[extra]'   # パッケージエクストラ付き
 ```
 
-**無効なパターン**（エラーで拒否）:
+**無効なパターン**（エラーで拒否）
+
 ```bash
 uv-sbom -e ''                 # 空のパターン
 uv-sbom -e '***'              # ワイルドカードのみ
