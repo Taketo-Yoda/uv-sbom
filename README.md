@@ -10,7 +10,7 @@
 
 **Human-readable SBOMs with actionable supply chain insights for Python projects managed by [uv](https://github.com/astral-sh/uv).**
 
-uv-sbom reads your `uv.lock` and generates a Markdown or CycloneDX 1.6 JSON SBOM focused on production runtime dependencies — then layers on vulnerability scanning, license compliance, incident response, and a suite of supply chain health checks, all in one command.
+uv-sbom reads your `uv.lock` and generates a Markdown or CycloneDX 1.6 JSON SBOM focused on production runtime dependencies. It also runs vulnerability scanning, license compliance, incident response, and a suite of supply chain health checks.
 
 ## What It Does
 
@@ -49,7 +49,7 @@ A single run produces a component inventory, a vulnerability report with resolut
 
 - **uv.lock-native** — Reads `uv.lock` directly, capturing only production runtime dependencies. No virtual environment needed, no build-time noise.
 - **Markdown-first, actionable output** — Tables you can read, copy into a PR, or drop into a report. Every vulnerability shows which direct dependency introduced it, with the full dependency chain.
-- **All-in-one supply chain coverage** — CVE scanning, license compliance, abandoned package detection, yanked version detection, non-PyPI source detection, Python version compatibility, exploitability prioritization (EPSS + CISA KEV), incident response, and dependency diff — in a single tool.
+- **All-in-one supply chain coverage** — CVE scanning, license compliance, abandoned package detection, yanked version detection, non-PyPI source detection, Python version compatibility, exploitability prioritization (EPSS + CISA KEV), incident response, and dependency diff.
 
 ## Quick Start
 
@@ -104,7 +104,7 @@ CVE vulnerability checking via the [OSV database](https://osv.dev) is **enabled 
 
 ### Incident Response (`--incident`)
 
-When a new advisory drops, one command tells you whether your project is affected, whether the fix is on PyPI yet, and gives you a dry-run-verified `uv lock --upgrade-package` command to run — or guidance when the upgrade can't resolve. Exit codes make it easy to script waiting for a patch. [Incident response →](docs/incident-response.md)
+When a new advisory drops, one command tells you whether your project is affected, whether the fix is on PyPI yet, and gives you a dry-run-verified `uv lock --upgrade-package` command to run (or guidance when the upgrade can't resolve). Exit codes make it easy to script waiting for a patch. [Incident response →](docs/incident-response.md)
 
 ### Supply Chain Checks
 
@@ -224,7 +224,7 @@ By default, this tool retrieves vulnerability data from [OSV (Open Source Vulner
 - Available at: https://osv.dev
 - License: CC-BY 4.0
 
-The OSV database is a collaborative effort to provide comprehensive, accurate, and accessible vulnerability information for open source software.
+The OSV database aggregates vulnerability records from language-ecosystem databases and distributes them in a machine-readable format.
 
 ### Exploitability Data
 
