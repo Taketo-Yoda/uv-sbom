@@ -100,7 +100,7 @@ uv-sbom --format markdown --lang ja
 
 ### セキュリティスキャン
 
-[OSV データベース](https://osv.dev) 経由の CVE 脆弱性チェックが**デフォルトで有効**です。深刻度や CVSS スコアによるフィルタリング、脆弱性ベースラインによる既知の検出結果の抑制、どの直接依存をアップグレードすべきかの解決ガイドを提供します。[セキュリティチェック →](docs/ja/security-checks.md)
+[OSV データベース](https://osv.dev) 経由の CVE 脆弱性チェックがデフォルトで有効です。深刻度や CVSS スコアによるフィルタリング、脆弱性ベースラインによる既知の検出結果の抑制、どの直接依存をアップグレードすべきかの解決ガイドを提供します。[セキュリティチェック →](docs/ja/security-checks.md)
 
 ### インシデント対応 (`--incident`)
 
@@ -108,19 +108,19 @@ uv-sbom --format markdown --lang ja
 
 ### サプライチェーンチェック
 
-- **ライセンスコンプライアンス** (`--check-license`)：ワイルドカード対応の許可/拒否リスト。[詳細 →](docs/ja/security-checks.md#ライセンスコンプライアンスチェック)
-- **放置パッケージ検出** (`--check-abandoned`)：設定可能な期間内に PyPI リリースがないパッケージを検出。[詳細 →](docs/ja/security-checks.md#放置パッケージ検出)
-- **取り下げバージョン検出** (`--check-yanked`)：PyPI で取り下げられたロック済みバージョンを報告。[詳細 →](docs/ja/security-checks.md#取り下げバージョン検出)
-- **非 PyPI ソース検出** (`--check-non-pypi`)：git、URL、プライベートレジストリからのソースを識別。[詳細 →](docs/ja/security-checks.md#非-pypi-ソース検出)
-- **Python バージョン互換性** (`--target-python`)：ターゲット Python バージョンに対する `Requires-Python` 制約を検査。[詳細 →](docs/ja/security-checks.md#python-バージョン互換性チェック)
-- **悪用可能性の優先順位付け** (`--check-exploitability`)：EPSS スコアと CISA KEV ステータスで CVE を補強。[詳細 →](docs/ja/security-checks.md#悪用可能性の優先順位付け---check-exploitability)
+- ライセンスコンプライアンス（`--check-license`）：ワイルドカード対応の許可/拒否リスト。[詳細 →](docs/ja/security-checks.md#ライセンスコンプライアンスチェック)
+- 放置パッケージ検出（`--check-abandoned`）：設定可能な期間内に PyPI リリースがないパッケージを検出。[詳細 →](docs/ja/security-checks.md#放置パッケージ検出)
+- 取り下げバージョン検出（`--check-yanked`）：PyPI で取り下げられたロック済みバージョンを報告。[詳細 →](docs/ja/security-checks.md#取り下げバージョン検出)
+- 非 PyPI ソース検出（`--check-non-pypi`）：git、URL、プライベートレジストリからのソースを識別。[詳細 →](docs/ja/security-checks.md#非-pypi-ソース検出)
+- Python バージョン互換性（`--target-python`）：ターゲット Python バージョンに対する `Requires-Python` 制約を検査。[詳細 →](docs/ja/security-checks.md#python-バージョン互換性チェック)
+- 悪用可能性の優先順位付け（`--check-exploitability`）：EPSS スコアと CISA KEV ステータスで CVE を補強。[詳細 →](docs/ja/security-checks.md#悪用可能性の優先順位付け---check-exploitability)
 
 ### 依存関係インサイト
 
-- **Explain** (`--explain <PACKAGE>`)：直接依存からの全パスをトレース。[詳細 →](docs/ja/dependency-insight.md#依存関係の説明---explain)
-- **ツリー** (`--show-dependency-tree`)：依存グラフの ASCII ツリー表示。[詳細 →](docs/ja/dependency-insight.md#依存関係ツリーの可視化---show-dependency-tree)
-- **差分** (`--diff <REF>`)：ロックファイルのバージョン比較（CVE デルタ付き）。[詳細 →](docs/ja/dependency-insight.md#依存関係の差分---diff)
-- **アップグレードアドバイザー** (`--suggest-fix`)：アップグレードをシミュレーションし、解決できない間接依存の脆弱性に `constraint-dependencies` による回避策を提案。[詳細 →](docs/ja/dependency-insight.md#アップグレードアドバイザー---suggest-fix)
+- Explain（`--explain <PACKAGE>`）：直接依存からの全パスをトレース。[詳細 →](docs/ja/dependency-insight.md#依存関係の説明---explain)
+- ツリー（`--show-dependency-tree`）：依存グラフの ASCII ツリー表示。[詳細 →](docs/ja/dependency-insight.md#依存関係ツリーの可視化---show-dependency-tree)
+- 差分（`--diff <REF>`）：ロックファイルのバージョン比較（CVE デルタ付き）。[詳細 →](docs/ja/dependency-insight.md#依存関係の差分---diff)
+- アップグレードアドバイザー（`--suggest-fix`）：アップグレードをシミュレーションし、解決できない間接依存の脆弱性に `constraint-dependencies` による回避策を提案。[詳細 →](docs/ja/dependency-insight.md#アップグレードアドバイザー---suggest-fix)
 
 ### ワークスペースサポート
 
@@ -132,19 +132,19 @@ uv-sbom --format markdown --lang ja
 
 ### 設定
 
-`uv-sbom.config.yml` ファイルで全オプションのデフォルト値を設定できます。`--init` でテンプレートを生成できます。CLI 引数は常に設定ファイルより優先されます。[設定 →](docs/ja/configuration.md)
+`uv-sbom.config.yml` ファイルで全オプションのデフォルト値を設定可能。`--init` でテンプレートを生成し、CLI 引数は常に設定ファイルより優先されます。[設定 →](docs/ja/configuration.md)
 
 ## スコープと CycloneDX との主な違い
 
 ### SBOM スコープ
 
-本ツールは **uv.lock** ファイルの内容に基づいて SBOM を生成します。以下の依存関係を含みます。
+本ツールは `uv.lock` ファイルの内容に基づいて SBOM を生成します。以下の依存関係を含みます。
 
 - 直接ランタイム依存
 - 間接ランタイム依存
 - 開発依存（uv.lock にロックされている場合）
 
-**含まれないもの**
+含まれないもの
 
 - ビルドシステム依存（例：hatchling、setuptools）
 - 公開ツール（例：twine、build）
@@ -156,18 +156,18 @@ uv-sbom --format markdown --lang ja
 
 | 観点 | uv-sbom（本ツール） | CycloneDX 公式ツール |
 |------|---------------------|---------------------|
-| **データソース** | `uv.lock` ファイル | `.venv` 仮想環境 |
-| **スコープ** | 本番ランタイム依存のみ | ビルド/開発ツール含む全サプライチェーン |
-| **パッケージ数** | 少ない（例：16 パッケージ） | 多い（例：38+ パッケージ） |
-| **ユースケース** | 本番セキュリティスキャン | 包括的サプライチェーン監査 |
-| **精度** | ロックされた依存を反映 | インストール済みパッケージを反映 |
+| データソース | `uv.lock` ファイル | `.venv` 仮想環境 |
+| スコープ | 本番ランタイム依存のみ | ビルド/開発ツール含む全サプライチェーン |
+| パッケージ数 | 少ない（例：16 パッケージ） | 多い（例：38+ パッケージ） |
+| ユースケース | 本番セキュリティスキャン | 包括的サプライチェーン監査 |
+| 精度 | ロックされた依存を反映 | インストール済みパッケージを反映 |
 
 ### 用途別のツール選択
 
-- **本番セキュリティスキャン**：`uv-sbom` で本番にデプロイされる依存のみに注目。Markdown レポート、CVE チェック、アップグレードパスを提供します。
-- **uv.lock からの CycloneDX SBOM**：`uv export --format cyclonedx1.5` でロックファイルから直接 CycloneDX 形式の SBOM を生成できます。
-- **包括的サプライチェーン監査**：CycloneDX 公式ツールでインストール済み環境から開発・ビルド時依存をすべて含めます。
-- **規制コンプライアンス**：要件を確認してください。場合によっては包括的なアプローチが必要です。
+- 本番セキュリティスキャン：`uv-sbom` で本番にデプロイされる依存のみに注目。Markdown レポート、CVE チェック、アップグレードパスを提供。
+- uv.lock からの CycloneDX SBOM：`uv export --format cyclonedx1.5` でロックファイルから直接 CycloneDX 形式の SBOM を生成可能。
+- 包括的サプライチェーン監査：CycloneDX 公式ツールでインストール済み環境から開発・ビルド時依存をすべて含む。
+- 規制コンプライアンス：要件を確認の上、必要に応じて包括的なアプローチを検討。
 
 uv-sbom は本番アプリケーションに同梱されないビルド時依存を除外することで、セキュリティスキャンのノイズを低減します。
 

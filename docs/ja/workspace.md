@@ -22,11 +22,11 @@
 ## 使用方法
 
 ```bash
-# ワークスペースメンバーごとに 1 つの SBOM を生成（CycloneDX JSON、デフォルト）
+# ワークスペースメンバーごとに1つの SBOM を生成（CycloneDX JSON、デフォルト）
 uv-sbom --workspace --path /path/to/workspace
 ```
 
-**期待される出力:**
+**期待される出力**
 
 ```
 Workspace mode: 2 members found
@@ -53,11 +53,11 @@ Total actionable CVEs: 28
    Packages reachable only through these groups are not in any SBOM. Add them to --exclude-groups to silence this warning.
 ```
 
-各メンバーは、そのメンバーから到達可能なパッケージのみを含む独自の `sbom.json` を取得します。推移的依存関係は含まれますが、他のメンバーに属するパッケージは除外されます。
+各メンバーは、そのメンバーから到達可能なパッケージのみを含む独自の `sbom.json` を取得します。間接依存は含まれますが、他のメンバーに属するパッケージは除外されます。
 
 ## 集計サマリー
 
-メンバーごとのテーブルの後に、`--workspace` はモノレポ全体の健全性を各メンバーの SBOM ファイルを開かずに把握できる集計サマリーも出力します — CVE の合計数、ライセンスポリシー違反があるメンバー、放置 / 取り下げ / 非 PyPI / Python 非互換パッケージがフラグされたメンバーが表示されます。実行で実際に有効化されたチェック（例：`--check-license`）の行のみ表示されます。実行されなかったチェックの行は、空の行であっても表示されません。
+メンバーごとのテーブルの後に、`--workspace` はモノレポ全体の健全性を各メンバーの SBOM ファイルを開かずに把握できる集計サマリーも出力します。CVE の合計数、ライセンスポリシー違反があるメンバー、放置・取り下げ・非 PyPI・Python 非互換パッケージがフラグされたメンバーが確認できます。実行で実際に有効化されたチェック（例：`--check-license`）の行だけが表示対象であり、実行されなかったチェックの行は空であっても省略される仕組みです。
 
 ## ワークスペースルート依存グループ
 
@@ -86,4 +86,4 @@ Members with license policy violations: none
 
 > **注意:** `--workspace` と `--output` は相互排他です。ワークスペースモードでは、各メンバーの SBOM は自動的にメンバー自身のディレクトリ内の `sbom.json`（Markdown の場合は `sbom.md`）に書き込まれます。
 
-実行可能なデモ（2 つのメンバーパッケージ `api` と `worker`）は [`examples/workspace/`](../../examples/workspace/) を参照してください。
+実行可能なデモ（2つのメンバーパッケージ `api` と `worker`）は [`examples/workspace/`](../../examples/workspace/) を参照してください。
