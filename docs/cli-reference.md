@@ -68,6 +68,8 @@ Options:
   -V, --version                      Print version
 ```
 
+> **Note:** All output — whether written to stdout or to a file via `--output` — is encoded as UTF-8 without a BOM (Byte Order Mark).
+
 ## Output Examples
 
 ### Markdown Format
