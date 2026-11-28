@@ -22,7 +22,7 @@ uv-sbom は YAML 設定ファイル（`uv-sbom.config.yml`）をサポートし�
 
 ### 設定テンプレートの生成
 
-`--init` オプションを使用して、すべての利用可能なフィールドがコメント付きの例として含まれるテンプレート設定ファイルを生成します：
+`--init` オプションを使用して、すべての利用可能なフィールドがコメント付きの例として含まれるテンプレート設定ファイルを生成します。
 
 ```bash
 # カレントディレクトリにテンプレートを生成
@@ -34,9 +34,13 @@ uv-sbom --init --path ./my-project
 
 これにより、すべてのオプションに関するインラインドキュメント付きの `uv-sbom.config.yml` ファイルが作成されます。ファイルが既に存在する場合、誤って上書きしないようにエラーで終了します。
 
-**自動検出**: プロジェクトディレクトリ（`uv.lock` がある場所）に `uv-sbom.config.yml` ファイルを配置します。ツールは自動的に検出してロードします。
+自動検出
 
-**明示的なパス**: `--config` / `-c` を使用して、カスタムの場所にある設定ファイルを指定します。
+プロジェクトディレクトリ（`uv.lock` がある場所）に `uv-sbom.config.yml` ファイルを配置します。ツールは自動的に検出してロードします。
+
+明示的なパス
+
+`--config` / `-c` を使用して、カスタムの場所にある設定ファイルを指定します。
 
 ```bash
 # 自動検出される設定ファイル（プロジェクトディレクトリに配置）
@@ -46,7 +50,7 @@ uv-sbom
 uv-sbom --config ./custom-config.yml
 ```
 
-**設定ファイルの例**（`uv-sbom.config.yml`）：
+設定ファイルの例（`uv-sbom.config.yml`）
 
 ```yaml
 # 出力形式：json、markdown、または md
@@ -117,23 +121,23 @@ license_policy:
 
 ## 優先順位とマージルール
 
-- **`format` の検証**: 受け入れられる値は `json`、`markdown`、`md`（大文字小文字を区別しない）です。その他の値は設定エラーとなり、終了コード `3` で終了します。エラーメッセージ: `設定が不正です: format は json, markdown のいずれかである必要があります。指定値: "<値>"`
-- **CLI 引数が設定ファイルの値を上書きします**（スカラーフィールド：`format`、`severity_threshold`、`cvss_threshold`）。明示的な `--format json` は設定の `format: markdown` も上書きします
-- **`check_cve`** は未設定時のデフォルトが true。設定で false にして無効化。CLI フラグ `--no-check-cve` でオプトアウト
-- **`exclude_packages`** は CLI と設定ファイルの両方から**マージ**され、重複排除されます
-- **`ignore_cves`** は CLI（`--ignore-cve`）と設定ファイルの両方から**マージ**され、ID で重複排除されます（重複時は CLI エントリが優先）
-- **`check_license`** は CLI フラグまたは設定ファイルで設定されている場合に有効化されます（論理 OR、`check_cve` と同様）
-- **`--license-allow`** と **`--license-deny`** の CLI オプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を**完全に上書き**します（マージではない）
-- **`check_abandoned`** はオプトイン（デフォルト：false）。CLI フラグ `--check-abandoned` または設定ファイル `check_abandoned: true` で有効化。`abandoned_threshold_days` の値は CLI > 設定ファイル > デフォルト（730）の解決順序に従います
-- **`check_yanked`** はオプトイン（デフォルト：false）。CLI フラグ `--check-yanked` または設定ファイル `check_yanked: true` で有効化
-- **`check_non_pypi`** はオプトイン（デフォルト：false）。CLI フラグ `--check-non-pypi` または設定ファイル `check_non_pypi: true` で有効化
-- **`check_exploitability`** はオプトイン（デフォルト：false）。CLI フラグ `--check-exploitability` または設定ファイル `check_exploitability: true` で有効化。CVE チェックが必要（`--no-check-cve` と競合）
-- **`exclude_groups`**: CLI `--exclude-groups` は設定ファイルの値を**完全に上書き**します（マージではない）。`--production-only` は実行時にロックファイルからすべてのグループ名を解決し、CLI と設定の両方より優先されます
-- **`target_python`** はオプトイン（デフォルト：未設定、チェックなし）。CLI フラグ `--target-python 3.8` または設定ファイル `target_python: "3.8"` で有効化。CLI 値が設定ファイルより優先
+- `format` の検証：受け入れられる値は `json`、`markdown`、`md`（大文字小文字を区別しない）。その他の値は設定エラーとなり、終了コード `3` で終了する。エラーメッセージ：`設定が不正です: format は json, markdown のいずれかである必要があります。指定値: "<値>"`
+- CLI 引数が設定ファイルの値を上書き（スカラーフィールド：`format`、`severity_threshold`、`cvss_threshold`）。明示的な `--format json` は設定の `format: markdown` も上書きする
+- `check_cve` は未設定時のデフォルトが true。設定で false にして無効化。CLI フラグ `--no-check-cve` でオプトアウト
+- `exclude_packages` は CLI と設定ファイルの両方からマージされ、重複排除される
+- `ignore_cves` は CLI（`--ignore-cve`）と設定ファイルの両方からマージされ、ID で重複排除（重複時は CLI エントリが優先）
+- `check_license` は CLI フラグまたは設定ファイルで設定されている場合に有効化（論理 OR、`check_cve` と同様）
+- `--license-allow` と `--license-deny` の CLI オプションは設定ファイルの `license_policy.allow` / `license_policy.deny` を完全に上書き（マージではない）
+- `check_abandoned` はオプトイン（デフォルト：false）。CLI フラグ `--check-abandoned` または設定ファイル `check_abandoned: true` で有効化。`abandoned_threshold_days` の値は CLI > 設定ファイル > デフォルト（730）の解決順序に従う
+- `check_yanked` はオプトイン（デフォルト：false）。CLI フラグ `--check-yanked` または設定ファイル `check_yanked: true` で有効化
+- `check_non_pypi` はオプトイン（デフォルト：false）。CLI フラグ `--check-non-pypi` または設定ファイル `check_non_pypi: true` で有効化
+- `check_exploitability` はオプトイン（デフォルト：false）。CLI フラグ `--check-exploitability` または設定ファイル `check_exploitability: true` で有効化。CVE チェックが必要（`--no-check-cve` と競合）
+- `exclude_groups`：CLI `--exclude-groups` は設定ファイルの値を完全に上書き（マージではない）。`--production-only` は実行時にロックファイルからすべてのグループ名を解決し、CLI と設定の両方より優先される
+- `target_python` はオプトイン（デフォルト：未設定、チェックなし）。CLI フラグ `--target-python 3.8` または設定ファイル `target_python: "3.8"` で有効化。CLI 値が設定ファイルより優先
 
 ## パッケージの除外
 
-`--exclude` または `-e` オプションを使用して、SBOM から特定のパッケージを除外できます：
+`--exclude` または `-e` オプションを使用して、SBOM から特定のパッケージを除外できます。
 
 ```bash
 # 単一のパッケージを除外
@@ -151,17 +155,18 @@ uv-sbom -e "*-test-*"       # "-test-" を含むすべてのパッケージを�
 uv-sbom --format json --output sbom.json -e "pytest" -e "*-dev"
 ```
 
-**パターン構文:**
-- ワイルドカードとして `*` を使用（0 文字以上にマッチ）
+パターン構文
+- ワイルドカードとして `*` を使用（0文字以上にマッチ）
 - パターンは大文字小文字を区別します
-- 1 回の実行で最大 64 パターン
+- 1回の実行で最大 64 パターン
 
-**情報漏洩の防止:**
+情報漏洩の防止
+
 `--exclude` オプションを使用して、特定の内部または独自ライブラリをスキップします。これにより、メタデータ取得時に外部レジストリ（PyPI など）にそれらの名前が送信されるのを防ぎ、内部プロジェクト構造のプライバシーが保護されます。
 
 ## 依存グループによるパッケージの除外
 
-`--exclude-groups` を使用して、指定した[依存グループ](https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups)（例：`dev`、`test`、`lint`）を通じて**排他的に到達可能な**パッケージを除外します。本番依存関係と共有されるパッケージは常に保持されます。グループ名は大文字小文字と区切り文字を区別せずにマッチングされます（[PEP 735](https://peps.python.org/pep-0735/)）。`--exclude-groups Lint` や `--exclude-groups type_check` はそれぞれ `lint` と `type-check` グループを除外します。設定ファイルの `exclude_groups` も同様です。
+`--exclude-groups` を使用して、指定した[依存グループ](https://docs.astral.sh/uv/concepts/dependencies/#dependency-groups)（例：`dev`、`test`、`lint`）を通じて排他的に到達可能なパッケージを除外します。本番依存関係と共有されるパッケージは常に保持されます。グループ名は大文字小文字と区切り文字を区別せずにマッチングされます（[PEP 735](https://peps.python.org/pep-0735/)）。`--exclude-groups Lint` や `--exclude-groups type_check` はそれぞれ `lint` と `type-check` グループを除外します。設定ファイルの `exclude_groups` も同様です。
 
 ```bash
 # "dev" グループ経由でのみ到達可能なパッケージを除外
@@ -176,9 +181,9 @@ uv-sbom --production-only --format markdown
 
 `--production-only` は `uv.lock` ファイルの `[manifest.dependency-groups]` セクションを実行時に読み取り、見つかったすべてのグループに `--exclude-groups` を設定します。すべてのグループを明示的にリストするのと同等ですが、より簡潔で、グループの追加や削除に自動的に対応します。
 
-> **注意:** `--exclude-groups` と `--production-only` は相互排他です。
+> `--exclude-groups` と `--production-only` は相互排他です。
 
-設定ファイルでも設定できます：
+設定ファイルでも設定できます。
 
 ```yaml
 # これらの依存グループ経由でのみ到達可能なパッケージを除外
@@ -190,7 +195,7 @@ exclude_groups:
 
 ## 特定の CVE の無視
 
-コマンドラインから `--ignore-cve` / `-i` を使用して特定の CVE を無視できます：
+コマンドラインから `--ignore-cve` / `-i` を使用して特定の CVE を無視できます。
 
 ```bash
 # CLI から特定の CVE を無視
@@ -205,7 +210,7 @@ uv-sbom --config ./config.yml -i CVE-2024-9999
 
 ## ドライランによる設定の検証
 
-`--dry-run` オプションを使用して、ツールが外部レジストリと通信する前に設定を検証します：
+`--dry-run` オプションを使用して、ツールが外部レジストリと通信する前に設定を検証します。
 
 ```bash
 # 除外パターンが正しく動作するか確認
@@ -215,16 +220,16 @@ uv-sbom --dry-run -e "internal-*" -e "proprietary-pkg"
 uv-sbom --dry-run --path /path/to/project --format json -e "*-dev"
 ```
 
-**--dry-run を使用する理由:**
-- **除外パターンの検証**: `--exclude` パターンがスキップしたいパッケージに正しくマッチするか確認
-- **情報漏洩の防止**: ツールが PyPI レジストリと通信する前に、機密の内部パッケージが除外されていることを確認
-- **高速な検証**: すべての入力検証がネットワークオーバーヘッドなしで実行
-- **早期エラー検出**: 設定の問題（uv.lock の欠落、無効なパターンなど）を即座にキャッチ
+`--dry-run` を使用する理由
+- 除外パターンの検証：`--exclude` パターンがスキップしたいパッケージに正しくマッチするか確認
+- 情報漏洩の防止：ツールが PyPI レジストリと通信する前に、機密の内部パッケージが除外されていることを確認
+- 高速な検証：すべての入力検証がネットワークオーバーヘッドなしで実行
+- 早期エラー検出：設定の問題（uv.lock の欠落、無効なパターンなど）を即座にキャッチ
 
-**ドライランモードの動作:**
-- ✅ `uv.lock` ファイルの読み取りとパース
-- ✅ すべてのコマンドライン引数の検証
-- ✅ 除外パターンのチェックとマッチしないパターンの警告
-- ✅ 問題がなければ成功メッセージを出力
-- ❌ PyPI からのライセンス取得をスキップ（ネットワーク通信なし）
-- ❌ SBOM 出力生成をスキップ
+ドライランモードの動作
+- 実行する：`uv.lock` ファイルの読み取りとパース
+- 実行する：すべてのコマンドライン引数の検証
+- 実行する：除外パターンのチェックとマッチしないパターンの警告
+- 実行する：問題がなければ成功メッセージを出力
+- スキップ：PyPI からのライセンス取得（ネットワーク通信なし）
+- スキップ：SBOM 出力生成
